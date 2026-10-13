@@ -147,12 +147,20 @@ def ref_jpeg(path, rel):
              "mode": im.mode, "progressive": bool(im.info.get("progressive") or im.info.get("progression")),
              "animated": False, "frames": [{"sha256": sha(rgba.tobytes()), "duration": 0}], "decoder": "pillow",
              "referencePng": os.path.relpath(out, ROOT)}
-    dpi = im.info.get("dpi")
-    if dpi:
-        entry["dpi"] = [round(dpi[0], 2), round(dpi[1], 2)]
     exif = im.getexif()
+    # Pillow reports 72 DPI when EXIF lacks a resolution; only densities stored in the file are references.
+    dpi = im.info.get("dpi")
+    if dpi and (im.info.get("jfif_unit") == 1 or 0x011A in exif):
+        entry["dpi"] = [round(float(dpi[0]), 2), round(float(dpi[1]), 2)]
     if exif.get(0x112):
         entry["orientation"] = exif[0x112]
+    if im.info.get("icc_profile"):
+        entry["iccSha256"] = sha(im.info["icc_profile"])
+    xmp_header = b"http://ns.adobe.com/xap/1.0/\0"
+    for app, content in im.applist:
+        if app == "APP1" and content.startswith(xmp_header):
+            entry["xmpSha256"] = sha(content[len(xmp_header):])
+            break
     return entry
 
 

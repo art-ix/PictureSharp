@@ -510,6 +510,227 @@
   "decoder": "pillow",
   "referencePng": "reference/jpeg/cmyk.png"
  },
+ "jpeg/cmyk_progressive.jpg": {
+  "format": "JPEG",
+  "width": 256,
+  "height": 192,
+  "hasAlpha": false,
+  "mode": "CMYK",
+  "progressive": true,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "2b4c19f1b24e0e7dae8149e070d8f8298feae2ef195a232cf4fa9ce4c9eee842",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/cmyk_progressive.png"
+ },
+ "jpeg/crafted_adobe_rgb.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "2d3639c004e83487716f80862f9d1fadd7b74deb68c28d3be734f25b3d6ece75",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_adobe_rgb.png"
+ },
+ "jpeg/crafted_cmyk_no_adobe.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "CMYK",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "daad6734fa4b329f140d7eaf37d07df4e03f4f6e57c73ccfca6d25eec176791d",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_cmyk_no_adobe.png"
+ },
+ "jpeg/crafted_dqt16.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "a48550dd5824f80a7fb765c505e62594f29e1a9f2d7b62caa531ed12dff859f0",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_dqt16.png"
+ },
+ "jpeg/crafted_gray_sampled.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "L",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "3e22f3d1589f6a1a9c2dc5bfd3dd5421d978ad82fae1ff5bac9e94fd09bd44d6",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_gray_sampled.png"
+ },
+ "jpeg/crafted_luma_subsampled.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "cf885513b3ed44df6616adcce14e1c7818486fdebaaf022d46397383fad4b641",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_luma_subsampled.png"
+ },
+ "jpeg/crafted_mixed_sampling.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "f25ae7749184ca0191940067f9259969abae75529fecbf50715bff23f538be04",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_mixed_sampling.png"
+ },
+ "jpeg/crafted_no_dht.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "336a8cc628071665e0366f70fc1ea564c366597a307ccc79ccf524066351998a",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_no_dht.png"
+ },
+ "jpeg/crafted_noninterleaved.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "336a8cc628071665e0366f70fc1ea564c366597a307ccc79ccf524066351998a",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_noninterleaved.png"
+ },
+ "jpeg/crafted_rgb_ids.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "2d3639c004e83487716f80862f9d1fadd7b74deb68c28d3be734f25b3d6ece75",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_rgb_ids.png"
+ },
+ "jpeg/crafted_sampling_4x2.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "2ad8f223d6c730a7f145ff8b9ab63f3d4627b366271d932f12f3df43bd577ba5",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_sampling_4x2.png"
+ },
+ "jpeg/crafted_ycck.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "CMYK",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "215ddbe6368a43b998f4b819c2ffd713d20ce5accf64aa27f01a07b7de3494dc",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/crafted_ycck.png"
+ },
+ "jpeg/dpcm.jpg": {
+  "format": "JPEG",
+  "width": 256,
+  "height": 192,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "db52955df5aeaa6d6dd2efa5b2c243f4a6e5094f50c296078882e6b0b95d2232",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/dpcm.png"
+ },
  "jpeg/dpi.jpg": {
   "format": "JPEG",
   "width": 256,
@@ -527,8 +748,29 @@
   "decoder": "pillow",
   "referencePng": "reference/jpeg/dpi.png",
   "dpi": [
-   72,
-   72
+   72.0,
+   72.0
+  ]
+ },
+ "jpeg/exif_resolution.jpg": {
+  "format": "JPEG",
+  "width": 256,
+  "height": 192,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "05d5ea051cca6600d890b5d9538942ac48107e9f73d8ee9248def8512c04c18f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/exif_resolution.png",
+  "dpi": [
+   300.0,
+   300.0
   ]
  },
  "jpeg/gray.jpg": {
@@ -564,6 +806,24 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/gray_progressive.png"
+ },
+ "jpeg/icc_multi.jpg": {
+  "format": "JPEG",
+  "width": 256,
+  "height": 192,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "05d5ea051cca6600d890b5d9538942ac48107e9f73d8ee9248def8512c04c18f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/icc_multi.png",
+  "iccSha256": "8b194882fd4c9ac21acde9b27f7fcc891f2e2a65844ecea7eceea46fd3c19142"
  },
  "jpeg/odd_420.jpg": {
   "format": "JPEG",
@@ -632,10 +892,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_1.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 1
  },
  "jpeg/orientation_2.jpg": {
@@ -654,10 +910,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_2.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 2
  },
  "jpeg/orientation_3.jpg": {
@@ -676,10 +928,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_3.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 3
  },
  "jpeg/orientation_4.jpg": {
@@ -698,10 +946,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_4.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 4
  },
  "jpeg/orientation_5.jpg": {
@@ -720,10 +964,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_5.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 5
  },
  "jpeg/orientation_6.jpg": {
@@ -742,10 +982,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_6.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 6
  },
  "jpeg/orientation_7.jpg": {
@@ -764,10 +1000,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_7.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 7
  },
  "jpeg/orientation_8.jpg": {
@@ -786,10 +1018,6 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/orientation_8.png",
-  "dpi": [
-   72,
-   72
-  ],
   "orientation": 8
  },
  "jpeg/progressive_420.jpg": {
@@ -978,6 +1206,92 @@
   ],
   "decoder": "pillow",
   "referencePng": "reference/jpeg/restart_rows_progressive.png"
+ },
+ "jpeg/tiny_1x1_420.jpg": {
+  "format": "JPEG",
+  "width": 1,
+  "height": 1,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "e9f0a7bcdbdde18cf494978f0a70f2285602dc783e7200ac6198d7a96294ac8f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/tiny_1x1_420.png"
+ },
+ "jpeg/tiny_2x3_420.jpg": {
+  "format": "JPEG",
+  "width": 2,
+  "height": 3,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "c650c35cf979183adbe07dda2f4bde30443b3f3c249164744cc397c5e12e3b08",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/tiny_2x3_420.png"
+ },
+ "jpeg/tiny_3x7_422.jpg": {
+  "format": "JPEG",
+  "width": 3,
+  "height": 7,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "422da9aa09eed1ef523a16caae0a4ac7e760e20a51d85bb30db216bdb4e92924",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/tiny_3x7_422.png"
+ },
+ "jpeg/tiny_5x2_420.jpg": {
+  "format": "JPEG",
+  "width": 5,
+  "height": 2,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "717a9d1514d08b0dd61b5522d543379ceb318c01d8076c221fb627ef678ae444",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/tiny_5x2_420.png"
+ },
+ "jpeg/xmp.jpg": {
+  "format": "JPEG",
+  "width": 61,
+  "height": 45,
+  "hasAlpha": false,
+  "mode": "RGB",
+  "progressive": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "3246b3e1a65d36e638fcfe0200dbc2e0df1e5e1c2bed6fc85ce690ac7275315d",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "referencePng": "reference/jpeg/xmp.png",
+  "xmpSha256": "744c1ed785771961e8cd904c797170b63927118622f0c69f77d7bb4b05900a63"
  },
  "png/apng_alpha.png": {
   "format": "PNG",

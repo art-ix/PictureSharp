@@ -285,10 +285,17 @@ public class BmpDecoderTests
     }
 
     [Fact]
-    public void EmbeddedJpeg_IsNotSupportedYet()
+    public void EmbeddedJpeg_IsDecoded()
     {
-        byte[] bmp = new BmpBuilder { Width = 1, Height = 1, Bits = 0, Compression = 4, Data = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0] }.Build();
-        Assert.Throws<NotSupportedException>(() => Image.FromBytes(bmp));
+        byte[] jpeg = Corpus.Read("jpeg/odd_420.jpg");
+        byte[] bmp = new BmpBuilder { Width = 171, Height = 93, Bits = 0, Compression = 4, Data = jpeg }.Build();
+        using Image image = Image.FromBytes(bmp);
+        using Image direct = Image.FromBytes(jpeg);
+        Assert.Equal(ImageFormat.Bmp, image.RawFormat);
+        Assert.Equal(direct.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
+
+        byte[] broken = new BmpBuilder { Width = 1, Height = 1, Bits = 0, Compression = 4, Data = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0] }.Build();
+        Assert.Throws<ImageFormatException>(() => Image.FromBytes(broken));
     }
 
     public static TheoryData<string, byte[]> InvalidFiles() => new()

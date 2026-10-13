@@ -290,6 +290,209 @@ def generate_jpeg():
     img.save(path("jpeg", "restart_rows_progressive.jpg"), quality=85, restart_marker_rows=1, progressive=True)
     for o in range(1, 9):
         img.save(path("jpeg", f"orientation_{o}.jpg"), quality=85, exif=b"Exif\0\0" + make_exif(orientation=o))
+    generate_jpeg_variants(img)
+
+
+# Baseline JPEG writer for variants no tool produces (component layouts, color transforms, table forms).
+
+def std_huffman_tables():
+    """The Annex K tables, taken from the DHT segments libjpeg writes when it does not optimize coding."""
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16)).save(buf, "JPEG", quality=90)
+    data = buf.getvalue()
+    tables, pos = {}, 2
+    while data[pos + 1] != 0xDA:
+        marker, length = data[pos + 1], struct.unpack(">H", data[pos + 2:pos + 4])[0]
+        seg = data[pos + 4:pos + 2 + length]
+        while marker == 0xC4 and seg:
+            counts = list(seg[1:17])
+            n = sum(counts)
+            tables[seg[0]] = (counts, list(seg[17:17 + n]))
+            seg = seg[17 + n:]
+        pos += 2 + length
+    return tables  # keys: 0x00/0x01 DC, 0x10/0x11 AC
+
+
+def huffman_codes(counts, values):
+    codes, code, k = {}, 0, 0
+    for length in range(1, 17):
+        for _ in range(counts[length - 1]):
+            codes[values[k]] = (code, length)
+            code += 1
+            k += 1
+        code <<= 1
+    return codes
+
+
+def zigzag():
+    order = sorted(((i + j, (i if (i + j) % 2 else j), i * 8 + j) for i in range(8) for j in range(8)))
+    return [n for _, _, n in order]
+
+
+DCT = np.array([[np.sqrt((1 if k == 0 else 2) / 8) * np.cos((2 * n + 1) * k * np.pi / 16) for n in range(8)]
+                for k in range(8)])
+
+
+class BitWriter:
+    def __init__(self):
+        self.out, self.acc, self.n = bytearray(), 0, 0
+
+    def write(self, value, length):
+        self.acc, self.n = (self.acc << length) | (value & ((1 << length) - 1)), self.n + length
+        while self.n >= 8:
+            self.n -= 8
+            byte = (self.acc >> self.n) & 0xFF
+            self.out.append(byte)
+            if byte == 0xFF:
+                self.out.append(0)
+        self.acc &= (1 << self.n) - 1
+
+    def flush(self):
+        if self.n:
+            self.write((1 << (8 - self.n)) - 1, 8 - self.n)
+
+
+def segment(marker, payload):
+    return bytes([0xFF, marker]) + struct.pack(">H", len(payload) + 2) + payload
+
+
+def write_jpeg(out, channels, comps, apps=(), interleaved=True, restart=0, quant_scale=1, sof=0xC0, dht=True):
+    """channels: full-size planes (h x w); comps: (id, h, v, table) per plane. Writes one scan per component
+    unless interleaved. quant_scale > 1 produces 16-bit quantization tables."""
+    height, width = channels[0].shape
+    max_h, max_v = max(c[1] for c in comps), max(c[2] for c in comps)
+    mcus_x, mcus_y = -(-width // (8 * max_h)), -(-height // (8 * max_v))
+    zz = zigzag()
+    quant = [np.array([[(1 + i + j) * (2 if t else 1) * quant_scale for j in range(8)] for i in range(8)]) for t in (0, 1)]
+    precision = 1 if quant_scale > 1 else 0
+    huff = std_huffman_tables()
+
+    blocks = []
+    for plane, (_, h, v, t) in zip(channels, comps):
+        fx, fy = max_h // h, max_v // v
+        dw, dh = -(-width * h // max_h), -(-height * v // max_v)
+        padded = np.pad(plane.astype(np.float64), ((0, dh * fy - height), (0, dw * fx - width)), mode="edge")
+        small = padded.reshape(dh, fy, dw, fx).mean(axis=(1, 3)).round()
+        grid = np.pad(small, ((0, mcus_y * v * 8 - dh), (0, mcus_x * h * 8 - dw)), mode="edge") - 128
+        coefs = {}
+        for by in range(mcus_y * v):
+            for bx in range(mcus_x * h):
+                b = DCT @ grid[by * 8:by * 8 + 8, bx * 8:bx * 8 + 8] @ DCT.T
+                coefs[bx, by] = np.round(b / quant[t]).astype(int).flatten()
+        blocks.append((coefs, -(-dw // 8), -(-dh // 8)))
+
+    def encode_block(bw, coef, t, pred):
+        dc_codes, ac_codes = huffman_codes(*huff[t]), huffman_codes(*huff[0x10 | t])
+        def put(codes, symbol, value, size):
+            bw.write(*codes[symbol])
+            if size:
+                bw.write(value if value >= 0 else value + (1 << size) - 1, size)
+        diff = coef[0] - pred
+        size = int(abs(diff)).bit_length()
+        put(dc_codes, size, diff, size)
+        run = 0
+        for k in range(1, 64):
+            c = coef[zz[k]]
+            if c == 0:
+                run += 1
+                continue
+            while run > 15:
+                put(ac_codes, 0xF0, 0, 0)
+                run -= 16
+            size = int(abs(c)).bit_length()
+            put(ac_codes, (run << 4) | size, c, size)
+            run = 0
+        if run:
+            put(ac_codes, 0x00, 0, 0)
+        return coef[0]
+
+    def scan(indices):
+        bw, preds, rst = BitWriter(), [0] * len(comps), 0
+        if len(indices) == 1:
+            coefs, wb, hb = blocks[indices[0]]
+            units = [[(indices[0], bx, by)] for by in range(hb) for bx in range(wb)]
+        else:
+            units = [[(i, mx * comps[i][1] + x, my * comps[i][2] + y) for i in indices
+                      for y in range(comps[i][2]) for x in range(comps[i][1])]
+                     for my in range(mcus_y) for mx in range(mcus_x)]
+        for n, unit in enumerate(units):
+            if restart and n and n % restart == 0:
+                bw.flush()
+                bw.out += bytes([0xFF, 0xD0 + rst])
+                rst, preds = (rst + 1) & 7, [0] * len(comps)
+            for i, bx, by in unit:
+                preds[i] = encode_block(bw, blocks[i][0][bx, by], comps[i][3], preds[i])
+        bw.flush()
+        header = bytes([len(indices)]) + b"".join(bytes([comps[i][0], (comps[i][3] << 4) | comps[i][3]]) for i in indices)
+        return segment(0xDA, header + bytes([0, 63, 0])) + bytes(bw.out)
+
+    data = bytearray(b"\xFF\xD8")
+    for marker, payload in apps:
+        data += segment(marker, payload)
+    for t in (0, 1):
+        data += segment(0xDB, bytes([(precision << 4) | t]) + b"".join(
+            struct.pack(">H" if precision else "B", int(quant[t].flatten()[zz[k]])) for k in range(64)))
+    data += segment(sof, bytes([8]) + struct.pack(">HH", height, width) + bytes([len(comps)]) +
+                    b"".join(bytes([c[0], (c[1] << 4) | c[2], c[3]]) for c in comps))
+    if dht:
+        for key in (0x00, 0x10, 0x01, 0x11):
+            counts, values = huff[key]
+            data += segment(0xC4, bytes([key] + counts + values))
+    if restart:
+        data += segment(0xDD, struct.pack(">H", restart))
+    if interleaved:
+        data += scan(list(range(len(comps))))
+    else:
+        for i in range(len(comps)):
+            data += scan([i])
+    data += b"\xFF\xD9"
+    with open(out, "wb") as f:
+        f.write(bytes(data))
+
+
+def generate_jpeg_variants(img):
+    small = img.resize((61, 45), Image.LANCZOS)  # odd size: partial MCUs everywhere
+    rgb = np.asarray(small, dtype=np.float64)
+    ycc = np.asarray(small.convert("YCbCr"), dtype=np.float64)
+    y, cb, cr = ycc[..., 0], ycc[..., 1], ycc[..., 2]
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    k = np.tile(np.linspace(0, 255, 61), (45, 1))
+    jfif = (0xE0, b"JFIF\0\x01\x01\x00\x00\x01\x00\x01\x00\x00")
+    adobe = lambda transform: (0xEE, b"Adobe\0\x64\0\0\0\0" + bytes([transform]))
+    ycc_ids = [(1, 2, 2, 0), (2, 1, 1, 1), (3, 1, 1, 1)]
+    variants = [
+        ("crafted_ycck", [y, cb, cr, k], [(1, 2, 2, 0), (2, 1, 1, 1), (3, 1, 1, 1), (4, 2, 2, 0)], [adobe(2)], {}),
+        ("crafted_cmyk_no_adobe", [255 - r, 255 - g, 255 - b, k], [(1, 1, 1, 0), (2, 1, 1, 0), (3, 1, 1, 0), (4, 1, 1, 0)], [], {}),
+        ("crafted_adobe_rgb", [r, g, b], [(1, 1, 1, 0), (2, 1, 1, 0), (3, 1, 1, 0)], [adobe(0)], {}),
+        ("crafted_rgb_ids", [r, g, b], [(82, 1, 1, 0), (71, 1, 1, 0), (66, 1, 1, 0)], [], {}),
+        ("crafted_luma_subsampled", [y, cb, cr], [(1, 1, 1, 0), (2, 2, 2, 1), (3, 2, 2, 1)], [jfif], {}),
+        ("crafted_mixed_sampling", [y, cb, cr], [(1, 2, 2, 0), (2, 2, 1, 1), (3, 1, 2, 1)], [jfif], {}),
+        ("crafted_sampling_4x2", [y, cb, cr], [(1, 4, 2, 0), (2, 1, 1, 1), (3, 1, 1, 1)], [jfif], {}),
+        ("crafted_noninterleaved", [y, cb, cr], ycc_ids, [jfif], {"interleaved": False, "restart": 7}),
+        ("crafted_no_dht", [y, cb, cr], ycc_ids, [jfif], {"dht": False}),
+        ("crafted_dqt16", [y, cb, cr], ycc_ids, [jfif], {"quant_scale": 40, "sof": 0xC1}),
+        ("crafted_gray_sampled", [y], [(1, 2, 2, 0)], [jfif], {}),
+    ]
+    for name, channels, comps, apps, kwargs in variants:
+        write_jpeg(path("jpeg", name + ".jpg"), channels, comps, apps, **kwargs)
+
+    # Tiny images: chroma rows of 1-2 samples use plain replication instead of fancy upsampling.
+    for w, h, sub in ((1, 1, 2), (2, 3, 2), (5, 2, 2), (3, 7, 1)):
+        small.resize((w, h)).save(path("jpeg", f"tiny_{w}x{h}_{('444', '422', '420')[sub]}.jpg"), quality=90, subsampling=sub)
+
+    run("convert", os.path.join(SRC, "photo.png"), "-quality", "85", "-colorspace", "CMYK", "-interlace", "JPEG",
+        path("jpeg", "cmyk_progressive.jpg"))
+    run("convert", os.path.join(SRC, "photo.png"), "-quality", "85", "-units", "PixelsPerCentimeter", "-density", "28",
+        path("jpeg", "dpcm.jpg"))
+    img.save(path("jpeg", "exif_resolution.jpg"), quality=85, exif=b"Exif\0\0" + make_exif(resolution=(300, 300)))
+    icc = bytes((i * 7 + i // 256) & 0xFF for i in range(150000))  # spans three APP2 chunks
+    img.save(path("jpeg", "icc_multi.jpg"), quality=85, icc_profile=icc)
+    buf = io.BytesIO()
+    small.save(buf, "JPEG", quality=85)
+    xmp = b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF/></x:xmpmeta>'
+    data = buf.getvalue()
+    with open(path("jpeg", "xmp.jpg"), "wb") as f:
+        f.write(data[:2] + segment(0xE1, b"http://ns.adobe.com/xap/1.0/\0" + xmp) + data[2:])
 
 
 # --------------------------------------------------------------------------- BMP
@@ -431,15 +634,26 @@ def generate_bmp():
 
 # --------------------------------------------------------------------------- EXIF helper
 
-def make_exif(orientation):
-    """Minimal little-endian TIFF with IFD0: Orientation (and nothing else)."""
-    entries = [(0x0112, 3, 1, orientation)]
+def make_exif(orientation=None, resolution=None):
+    """Minimal little-endian TIFF with IFD0: Orientation and/or X/YResolution (inches)."""
+    entries = []
+    if orientation is not None:
+        entries.append((0x0112, 3, 1, struct.pack("<HH", orientation, 0)))
+    rationals = b""
+    if resolution is not None:
+        count = len(entries) + 3
+        base = 8 + 2 + 12 * count + 4
+        for i, tag in enumerate((0x011A, 0x011B)):
+            entries.append((tag, 5, 1, struct.pack("<I", base + 8 * i)))
+            rationals += struct.pack("<II", resolution[i], 1)
+        entries.append((0x0128, 3, 1, struct.pack("<HH", 2, 0)))
     out = io.BytesIO()
     out.write(b"II*\0" + struct.pack("<I", 8))
     out.write(struct.pack("<H", len(entries)))
     for tag, typ, count, value in entries:
-        out.write(struct.pack("<HHIHH", tag, typ, count, value, 0))
+        out.write(struct.pack("<HHI", tag, typ, count) + value)
     out.write(struct.pack("<I", 0))
+    out.write(rationals)
     return out.getvalue()
 
 

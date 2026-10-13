@@ -17,9 +17,9 @@ internal sealed class BmpDecoder : IImageDecoder
     {
         BmpHeader h = BmpHeader.Parse(data.Span);
         bool hasAlpha = h.HasAlpha;
-        if (h.Compression == BmpCompression.Embedded && EmbeddedDecoder(data.Span, h) is { } decoder)
+        if (h.Compression == BmpCompression.Embedded)
         {
-            hasAlpha = decoder.Identify(EmbeddedData(data, h), options).HasAlpha;
+            hasAlpha = EmbeddedDecoder(data.Span, h).Identify(EmbeddedData(data, h), options).HasAlpha;
         }
 
         (float dpiX, float dpiY) = Resolution(h);
@@ -96,7 +96,7 @@ internal sealed class BmpDecoder : IImageDecoder
         return data.Slice(start, length);
     }
 
-    private static IImageDecoder? EmbeddedDecoder(ReadOnlySpan<byte> file, BmpHeader h)
+    private static IImageDecoder EmbeddedDecoder(ReadOnlySpan<byte> file, BmpHeader h)
     {
         ImageFormat expected = h.RawCompression == BmpConstants.Png ? ImageFormat.Png : ImageFormat.Jpeg;
         ImageFormat? actual = FormatDetector.Detect(file[(int)h.DataOffset..]);
@@ -105,14 +105,12 @@ internal sealed class BmpDecoder : IImageDecoder
             throw Error($"The BMP does not contain the {expected.Name} data its header declares.");
         }
 
-        return CodecRegistry.GetDecoder(expected);
+        return CodecRegistry.GetDecoder(expected)!;
     }
 
     private static Image DecodeEmbedded(ReadOnlyMemory<byte> data, BmpHeader h, DecoderOptions options)
     {
-        IImageDecoder decoder = EmbeddedDecoder(data.Span, h)
-            ?? throw new NotSupportedException("JPEG-compressed bitmaps are not supported yet.");
-        return decoder.Decode(EmbeddedData(data, h), options);
+        return EmbeddedDecoder(data.Span, h).Decode(EmbeddedData(data, h), options);
     }
 
     // ------------------------------------------------------------------ palette

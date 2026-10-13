@@ -3,7 +3,7 @@ namespace WebpSharp.Formats;
 /// <summary>Maps image formats to their decoder and encoder implementations.</summary>
 internal static class CodecRegistry
 {
-    private static readonly IImageDecoder[] Decoders = [WebP.WebPDecoder.Instance, Png.PngDecoder.Instance, Bmp.BmpDecoder.Instance];
+    private static readonly IImageDecoder[] Decoders = [WebP.WebPDecoder.Instance, Png.PngDecoder.Instance, Jpeg.JpegDecoder.Instance, Bmp.BmpDecoder.Instance];
 
     private static readonly IImageEncoder[] Encoders = [Png.PngEncoder.Instance, Bmp.BmpEncoder.Instance];
 

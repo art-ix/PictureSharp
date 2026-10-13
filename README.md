@@ -2,7 +2,7 @@
 
 A pure managed .NET 10 library for encoding and decoding **WebP**, with **PNG/BMP/JPEG import** and **PNG/BMP export**. It has no NuGet dependencies and no native code. The `Image` class works like `System.Drawing.Image`/`Bitmap`.
 
-> Status: **work in progress**. See [plan.md](plan.md) for the roadmap. Done: phase 0 (core types, `Image` API, test corpus), phase 1 (WebP container parsing, lossless VP8L decoder), phase 2 (lossy VP8 decoder, alpha, animation, metadata), phase 3 (own zlib inflate/deflate, PNG/APNG decoder and encoder) and phase 4 (BMP decoder and encoder). The WebP decoder is bit-exact with libwebp 1.3.2.
+> Status: **work in progress**. See [plan.md](plan.md) for the roadmap. Done: phase 0 (core types, `Image` API, test corpus), phase 1 (WebP container parsing, lossless VP8L decoder), phase 2 (lossy VP8 decoder, alpha, animation, metadata), phase 3 (own zlib inflate/deflate, PNG/APNG decoder and encoder), phase 4 (BMP decoder and encoder) and phase 5 (JPEG decoder). The WebP decoder is bit-exact with libwebp 1.3.2, the JPEG decoder with libjpeg-turbo (as used by Pillow).
 
 ```csharp
 using WebpSharp;
@@ -28,8 +28,11 @@ Console.WriteLine($"{info.Width}x{info.Height}, frames: {info.FrameCount}");
   - reading 1/2/4/8/16/24/32-bit files, RLE4/RLE8 (and OS/2 RLE24), arbitrary bit fields, alpha, OS/2 and V2–V5 headers, embedded ICC and PNG
   - writing 1/4/8-bit palette, 24-bit and 32-bit (alpha) files, with automatic bit depth
 - **JPEG:**
-  - decoding of baseline and progressive files, CMYK/YCCK
-  - EXIF orientation
+  - decoding of baseline, extended and progressive Huffman files, any integral sampling factors, restart markers
+  - grayscale, YCbCr, RGB, CMYK and YCCK
+  - EXIF/XMP/ICC metadata, JFIF/EXIF resolution, EXIF orientation
+  - tolerant decoding of truncated or damaged files
+  - not supported: arithmetic coding, lossless, hierarchical and 12-bit files
 - **`Image`:**
   - frames
   - pixel access (`GetPixel`, `LockBits`, `Span<Rgba32>`)
@@ -47,4 +50,4 @@ The test corpus in `tests/assets/corpus` is generated with `tests/assets/generat
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Parts of the code are ported from libwebp (Copyright Google Inc.); its copyright notice and patent grant are kept in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+MIT, see [LICENSE](LICENSE). Parts of the code are ported from libwebp (Copyright Google Inc.) and libjpeg-turbo; this software is based in part on the work of the Independent JPEG Group. The original copyright notices are kept in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).

@@ -77,6 +77,8 @@ public sealed class ReferenceEntry
     public int Orientation { get; set; }
     public string Decoder { get; set; } = "";
     public string? ReferencePng { get; set; }
+    public string? IccSha256 { get; set; }
+    public string? XmpSha256 { get; set; }
     public List<ReferenceFrame> Frames { get; set; } = [];
 }
 

@@ -6,7 +6,11 @@ namespace WebpSharp.Formats.Metadata;
 internal static class ExifReader
 {
     private const ushort OrientationTag = 0x0112;
+    private const ushort XResolutionTag = 0x011A;
+    private const ushort YResolutionTag = 0x011B;
+    private const ushort ResolutionUnitTag = 0x0128;
     private const ushort TypeShort = 3;
+    private const ushort TypeRational = 5;
 
     private static ReadOnlySpan<byte> JpegPrefix => "Exif\0\0"u8;
 
@@ -23,6 +27,49 @@ internal static class ExifReader
 
         int value = ReadUInt16(exif[offset..], bigEndian);
         return value is >= 1 and <= 8 ? (ExifOrientation)value : ExifOrientation.Unknown;
+    }
+
+    /// <summary>XResolution/YResolution of IFD0 in DPI, or null when absent or not in inches/centimeters.</summary>
+    public static (float X, float Y)? GetResolution(ReadOnlySpan<byte> exif)
+    {
+        int unit = 2;   // inches unless stated otherwise
+        if (FindEntry(exif, ResolutionUnitTag, out bool bigEndian) is int u)
+        {
+            if (ReadUInt16(exif[(u + 2)..], bigEndian) != TypeShort)
+            {
+                return null;
+            }
+
+            unit = ReadUInt16(exif[(u + 8)..], bigEndian);
+        }
+
+        if (unit is not (2 or 3) || Rational(exif, XResolutionTag) is not double x || Rational(exif, YResolutionTag) is not double y
+            || !(x > 0) || !(y > 0) || double.IsInfinity(x) || double.IsInfinity(y))
+        {
+            return null;
+        }
+
+        double scale = unit == 3 ? 2.54 : 1;
+        return ((float)(x * scale), (float)(y * scale));
+    }
+
+    private static double? Rational(ReadOnlySpan<byte> tiff, ushort tag)
+    {
+        if (FindEntry(tiff, tag, out bool bigEndian) is not int entry || ReadUInt16(tiff[(entry + 2)..], bigEndian) != TypeRational)
+        {
+            return null;
+        }
+
+        int start = tiff.StartsWith(JpegPrefix) ? JpegPrefix.Length : 0;
+        long offset = start + (long)ReadUInt32(tiff[(entry + 8)..], bigEndian);
+        if (offset + 8 > tiff.Length)
+        {
+            return null;
+        }
+
+        uint num = ReadUInt32(tiff[(int)offset..], bigEndian);
+        uint den = ReadUInt32(tiff[((int)offset + 4)..], bigEndian);
+        return den == 0 ? null : (double)num / den;
     }
 
     public static bool TrySetOrientation(Span<byte> exif, ExifOrientation orientation)
@@ -46,18 +93,24 @@ internal static class ExifReader
     }
 
     // Returns the offset of the 2-byte orientation value within the TIFF stream, or -1.
-    private static int FindOrientationValueOffset(ReadOnlySpan<byte> tiff, out bool bigEndian)
+    private static int FindOrientationValueOffset(ReadOnlySpan<byte> tiff, out bool bigEndian) =>
+        FindEntry(tiff, OrientationTag, out bigEndian) is int entry && ReadUInt16(tiff[(entry + 2)..], bigEndian) == TypeShort
+            ? entry + 8
+            : -1;
+
+    // Returns the offset of the 12-byte IFD0 entry with the given tag, or null.
+    private static int? FindEntry(ReadOnlySpan<byte> tiff, ushort tag, out bool bigEndian)
     {
         bigEndian = false;
         if (tiff.StartsWith(JpegPrefix))
         {
-            int inner = FindOrientationValueOffset(tiff[JpegPrefix.Length..], out bigEndian);
-            return inner < 0 ? -1 : inner + JpegPrefix.Length;
+            int? inner = FindEntry(tiff[JpegPrefix.Length..], tag, out bigEndian);
+            return inner + JpegPrefix.Length;
         }
 
         if (tiff.Length < 8)
         {
-            return -1;
+            return null;
         }
 
         if (tiff[0] == 'I' && tiff[1] == 'I')
@@ -70,18 +123,18 @@ internal static class ExifReader
         }
         else
         {
-            return -1;
+            return null;
         }
 
         if (ReadUInt16(tiff[2..], bigEndian) != 42)
         {
-            return -1;
+            return null;
         }
 
         long ifd = ReadUInt32(tiff[4..], bigEndian);
         if (ifd < 8 || ifd + 2 > tiff.Length)
         {
-            return -1;
+            return null;
         }
 
         int count = ReadUInt16(tiff[(int)ifd..], bigEndian);
@@ -90,17 +143,16 @@ internal static class ExifReader
             long entry = ifd + 2 + (12L * i);
             if (entry + 12 > tiff.Length)
             {
-                return -1;
+                return null;
             }
 
-            ReadOnlySpan<byte> e = tiff.Slice((int)entry, 12);
-            if (ReadUInt16(e, bigEndian) == OrientationTag)
+            if (ReadUInt16(tiff[(int)entry..], bigEndian) == tag)
             {
-                return ReadUInt16(e[2..], bigEndian) == TypeShort ? (int)entry + 8 : -1;
+                return (int)entry;
             }
         }
 
-        return -1;
+        return null;
     }
 
     private static ushort ReadUInt16(ReadOnlySpan<byte> s, bool bigEndian) =>

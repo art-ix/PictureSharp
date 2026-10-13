@@ -291,6 +291,10 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
 - Tryb tolerancyjny dla obciętych plików.
 - Nieobsługiwane (rzucają `NotSupportedException`): kodowanie arytmetyczne, SOF3 lossless, 12-bit.
 - **DoD:** różnica względem Pillow (libjpeg-turbo, islow) ≤1 na kanał, docelowo 0.
+- Weryfikacja:
+  - korpus JPEG (ImageMagick, Pillow i pliki generowane własnym koderem w `generate_corpus.py`: YCCK, Adobe RGB, nietypowe próbkowanie, skany nieprzeplatane, brak DHT, 16-bitowe DQT) zgodny z Pillow piksel w piksel;
+  - uszkodzone pliki (obcięte skany, błędne markery RST) zgodne z Pillow (`Category=Oracle`);
+  - lokalne zdjęcia z `samples/` porównywane z Pillow (`Category=Local`).
 
 ### Faza 6: enkoder lossless VP8L (ok. 5k LOC)
 Źródła: `src/enc/vp8l_enc.c`, `backward_references_enc.c`, `backward_references_cost_enc.c`, `histogram_enc.c`, `predictor_enc.c`, `near_lossless_enc.c`, `src/utils/huffman_encode_utils.c`, `bit_writer_utils.c`, `src/dsp/lossless_enc.c`.
