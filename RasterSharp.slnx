@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/RasterSharp.Benchmarks/RasterSharp.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/RasterSharp.Cli/RasterSharp.Cli.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/RasterSharp/RasterSharp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RasterSharp.Tests/RasterSharp.Tests.csproj" />
+  </Folder>
+</Solution>

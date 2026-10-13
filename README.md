@@ -1,6 +1,8 @@
-# WebpSharp
+# RasterSharp
 
-WebpSharp is a **pure C# image library for .NET 10 and later**. It reads WebP, PNG, BMP and JPEG, and writes lossy and lossless WebP, PNG, BMP and JPEG. The library has no NuGet dependencies, native libraries or P/Invoke calls. PNG compression uses its own managed deflate/inflate implementation.
+**A pure managed image processing library for .NET. No native dependencies.**
+
+RasterSharp is a **pure C# image library for .NET 10 and later**. It reads WebP, PNG, BMP and JPEG, and writes lossy and lossless WebP, PNG, BMP and JPEG. The library has no NuGet dependencies, native libraries or P/Invoke calls. PNG compression uses its own managed deflate/inflate implementation.
 
 The `Image` API provides file and stream I/O, animation frames, metadata, pixel access and basic geometry operations. It uses `System.Drawing.Primitives` for types such as `Color` and `Rectangle`, without requiring `System.Drawing.Common`.
 
@@ -20,7 +22,7 @@ Decoded pixels use 8-bit `Rgba32` channels with straight (unpremultiplied) alpha
 ## Reading and writing images
 
 ```csharp
-using WebpSharp;
+using RasterSharp;
 
 using var image = Image.FromFile("input.png", new DecoderOptions
 {
@@ -74,7 +76,7 @@ JPEG EXIF and XMP must each fit in one APP1 segment; ICC profiles can span multi
 ## Pixels, frames and geometry
 
 ```csharp
-using WebpSharp;
+using RasterSharp;
 
 using var image = new Image(64, 32);
 Span<Rgba32> pixels = image.GetPixelSpan();
@@ -100,16 +102,16 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-To use the library from a source checkout, add a project reference from your application to `src/WebpSharp/WebpSharp.csproj`. The library version is defined in [VERSION](VERSION).
+To use the library from a source checkout, add a project reference from your application to `src/RasterSharp/RasterSharp.csproj`. The library version is defined in [VERSION](VERSION).
 
 The sample CLI supports image inspection, conversion and decode timing:
 
 ```bash
-dotnet run -c Release --project samples/WebpSharp.Cli -- info input.webp
-dotnet run -c Release --project samples/WebpSharp.Cli -- convert input.png output.webp -q 85 -m 4
-dotnet run -c Release --project samples/WebpSharp.Cli -- convert input.png exact.webp -lossless -q 75 -m 4
-dotnet run -c Release --project samples/WebpSharp.Cli -- convert input.webp output.jpg -q 90
-dotnet run -c Release --project samples/WebpSharp.Cli -- decode input.webp 10
+dotnet run -c Release --project samples/RasterSharp.Cli -- info input.webp
+dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.png output.webp -q 85 -m 4
+dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.png exact.webp -lossless -q 75 -m 4
+dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.webp output.jpg -q 90
+dotnet run -c Release --project samples/RasterSharp.Cli -- decode input.webp 10
 ```
 
 ## Testing and reference tools
@@ -123,7 +125,7 @@ New WebP ports and encoder comparisons use **libwebp 1.6.0**. Build its pinned s
 dotnet test -c Release --filter Category=Oracle
 ```
 
-Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `WEBPSHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.
+Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `RASTERSHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.
 
 The WebP decoder ports originated from libwebp 1.3.2. Recomputing the existing corpus references with 1.6.0 left all 248 entries unchanged. At completion of phase 7, all 2023 tests passed. The nine WebP encoder source images round-trip exactly through both decoders and meet the size limit of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless WebP output is not guaranteed. Lossy WebP was checked across 252 corpus configurations (nine images, four quality values, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and output size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks. JPEG encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
 
@@ -139,4 +141,4 @@ Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder 
 
 ## License
 
-WebpSharp is licensed under [MIT](LICENSE). It includes ports from libwebp, libjpeg-turbo and zlib, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+RasterSharp is licensed under [MIT](LICENSE). It includes ports from libwebp, libjpeg-turbo and zlib, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).

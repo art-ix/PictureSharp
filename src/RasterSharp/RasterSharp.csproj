@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>RasterSharp</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <PackageId>RasterSharp</PackageId>
+    <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
+    <PackageTags>webp;image;png;jpeg;codec;encoder;decoder</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RasterSharp.Tests" />
+    <InternalsVisibleTo Include="RasterSharp.Benchmarks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

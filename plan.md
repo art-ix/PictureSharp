@@ -1,4 +1,4 @@
-# WebpSharp: plan implementacji
+# RasterSharp: plan implementacji
 
 ## Kontekst
 
@@ -11,9 +11,9 @@ Ustalenia z użytkownikiem:
 - **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli i proste operacje na kolorach.
 
 Stan środowiska (aktualizacja w fazie 6):
-- Repozytorium znajduje się w `/home/artur/Projekty/ai/webpsharp`; target to .NET 10.
+- Lokalny katalog roboczy pozostaje `/home/artur/Projekty/ai/webpsharp`; projekt i repozytorium GitHub noszą nazwę `RasterSharp`. Target to .NET 10.
 - Nowa referencja to **libwebp 1.6.0**, tag `v1.6.0`, commit `4fa21912338357f89e4fd51cf2368325b59e9bd9`.
-- `scripts/build-webp-reference.sh` pobiera źródła do `reference/libwebp-1.6.0/` i buduje narzędzia wyroczni w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają je automatycznie; można ustawić `WEBPSHARP_WEBP_TOOLS`.
+- `scripts/build-webp-reference.sh` pobiera źródła do `reference/libwebp-1.6.0/` i buduje narzędzia wyroczni w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają je automatycznie; można ustawić `RASTERSHARP_WEBP_TOOLS`.
 - Systemowe narzędzia 1.3.2 i stara kopia `reference/libwebp/` pozostają do porównań. ImageMagick i Pillow służą jako pozostałe wyrocznie.
 
 **Kluczowa decyzja:** od fazy 6 nowe porty bazują na **libwebp v1.6.0**. Enkoder lossless używa kosztów stałoprzecinkowych tej wersji (23 bity ułamkowe). Dekodery faz 1–3 pochodzą z 1.3.2; ponowne obliczenie 248 wpisów `reference.json` z `dwebp` 1.6.0 nie zmieniło wyników. Historycznego korpusu nie regenerujemy przy samej zmianie wyroczni.
@@ -25,14 +25,14 @@ Stan środowiska (aktualizacja w fazie 6):
 ## Struktura rozwiązania
 
 ```
-webpsharp/
-  WebpSharp.slnx
+RasterSharp/
+  RasterSharp.slnx
   Directory.Build.props          # net10.0, Nullable, LangVersion latest, TreatWarningsAsErrors,
                                  # IsAotCompatible, IsTrimmable, GenerateDocumentationFile
   THIRD-PARTY-NOTICES.txt        # licencja BSD-3 libwebp (kod portowany = praca pochodna) + inne źródła
   .gitignore                     # reference/, tests/assets/external/, bin/obj
   reference/libwebp-1.6.0/       # źródła tagu v1.6.0 (tylko do czytania, poza buildem)
-  src/WebpSharp/                 # biblioteka, ZERO PackageReference
+  src/RasterSharp/                 # biblioteka, ZERO PackageReference
     Image.cs, ImageFrame.cs, ImageFrameCollection.cs, ImageInfo.cs, ImageFormat.cs,
     Rgba32.cs, PixelFormat.cs, ImageMetadata.cs, BitmapData.cs, enums (RotateFlipType,
     ResizeMode, ResamplingFilter, ImageLockMode, ExifOrientation), DecoderOptions.cs,
@@ -57,14 +57,14 @@ webpsharp/
     Compression/ (Inflater, Deflater, Adler32, Crc32)
     Processing/  (Resizer, Kernels, Geometry, ColorOps, Compositor, PixelConverter)
     Internal/    (BitHelpers, pooling, SIMD helpers)
-  tests/WebpSharp.Tests/         # xUnit (zależności tylko w testach)
+  tests/RasterSharp.Tests/         # xUnit (zależności tylko w testach)
     assets/ generate_corpus.py, make_reference.py, fetch-external.sh, reference.json, corpus/, reference/
-  benchmarks/WebpSharp.Benchmarks/ # BenchmarkDotNet
-  samples/WebpSharp.Cli/         # `webpsharp convert in.jpg out.webp -q 80`, `info`, `resize`
+  benchmarks/RasterSharp.Benchmarks/ # BenchmarkDotNet
+  samples/RasterSharp.Cli/         # `rastersharp convert in.jpg out.webp -q 80`, `info`, `resize`
 ```
 
 Zasady kodu:
-- Tylko jedna publiczna przestrzeń nazw `WebpSharp`. Wszystkie kodeki są `internal`.
+- Tylko jedna publiczna przestrzeń nazw `RasterSharp`. Wszystkie kodeki są `internal`.
 - Tabele z C przenosimy jako `static ReadOnlySpan<T> X => [...]`, co daje dane bez alokacji.
 - Zamiast `unsafe` używamy `Span`, `ref` i `Unsafe.Add`/`MemoryMarshal`.
 - Bufory tymczasowe bierzemy z `ArrayPool<T>.Shared`. Piksele obrazu leżą w `GC.AllocateUninitializedArray<Rgba32>`.
@@ -434,9 +434,9 @@ Weryfikacja: `dotnet build -c Release --no-restore` (0 ostrzeżeń/błędów), `
 dotnet build -c Release
 dotnet test -c Release                               # unit, zgodność z reference.json, round-tripy
 dotnet test -c Release --filter Category=Oracle      # porównania z cwebp/dwebp/webpmux (pomijane bez narzędzi)
-dotnet run -c Release --project samples/WebpSharp.Cli -- convert photo.jpg out.webp -q 80
+dotnet run -c Release --project samples/RasterSharp.Cli -- convert photo.jpg out.webp -q 80
 dwebp out.webp -o check.png && webpmux -info out.webp
-dotnet run -c Release --project benchmarks/WebpSharp.Benchmarks
+dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks
 ```
 
 Rodzaje testów:

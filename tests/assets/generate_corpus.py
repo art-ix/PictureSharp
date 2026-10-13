@@ -20,7 +20,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # Match the C# oracle selection without changing the system installation.
-WEBP_TOOLS = os.environ.get("WEBPSHARP_WEBP_TOOLS", os.path.join(ROOT, "..", "..", "reference", "libwebp-1.6.0-build"))
+WEBP_TOOLS = os.environ.get("RASTERSHARP_WEBP_TOOLS", os.path.join(ROOT, "..", "..", "reference", "libwebp-1.6.0-build"))
 if os.path.isdir(WEBP_TOOLS):
     os.environ["PATH"] = os.path.abspath(WEBP_TOOLS) + os.pathsep + os.environ.get("PATH", "")
 for tool in ['cwebp', 'img2webp', 'webpmux']:

@@ -1,4 +1,4 @@
-/* Test-only adapter to the system libjpeg-turbo. Not part of WebpSharp. */
+/* Test-only adapter to the system libjpeg-turbo. Not part of RasterSharp. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <jpeglib.h>

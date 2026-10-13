@@ -1,13 +1,13 @@
 # AGENTS.md
 
-Instrukcje dla agentów AI (i ludzi) pracujących nad **WebpSharp**: biblioteką .NET do kodowania i dekodowania WebP (oraz odczytu PNG/BMP/JPEG i zapisu PNG/BMP), napisaną w 100% w C#.
+Instrukcje dla agentów AI (i ludzi) pracujących nad **RasterSharp**: biblioteką .NET do przetwarzania obrazów oraz odczytu i zapisu WebP, PNG, BMP i JPEG, napisaną w 100% w C#.
 
 Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.md](plan.md). Przed rozpoczęciem pracy przeczytaj go i ustal, w której fazie jesteś.
 
 ## Twarde zasady
 
 - **Target:** `net10.0`. Biblioteka ma działać na .NET 10 i nowszych.
-- **Zero zależności w `src/WebpSharp`:**
+- **Zero zależności w `src/RasterSharp`:**
   - Nie dodajemy żadnych `PackageReference`, natywnych bibliotek ani P/Invoke.
   - Dozwolony jest tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`).
   - **Nie używamy** `System.IO.Compression` (`ZLibStream`/`DeflateStream`), bo wołają natywne zlib. Deflate/inflate mamy własne w `Compression/`.
@@ -15,7 +15,7 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
 - **Bez słowa kluczowego `unsafe`:**
   - Używamy `Span<T>`, `ref`, `Unsafe.Add`, `MemoryMarshal`.
   - Wyjątek: przypięcie pamięci dla `BitmapData.Scan0` przez `GCHandle`.
-- **Publiczne API tylko w namespace `WebpSharp`.** Kodeki i implementacja są `internal`.
+- **Publiczne API tylko w namespace `RasterSharp`.** Kodeki i implementacja są `internal`.
 - **Alfa prosta.** Piksele w `Image`/`ImageFrame` to `Rgba32` z alfą niepremultiplikowaną.
 - **Wyjątki:**
   - Uszkodzone lub nierozpoznane dane rzucają `ImageFormatException`.
@@ -29,7 +29,7 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
   ```bash
   ./scripts/build-webp-reference.sh
   ```
-  Skrypt pobiera tag v1.6.0, sprawdza commit i buduje `cwebp`/`dwebp`/`webpmux`/`img2webp` w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają tę lokalną wersję; `WEBPSHARP_WEBP_TOOLS` pozwala wskazać inny katalog. Systemowe narzędzia 1.3.2 pozostają bez zmian.
+  Skrypt pobiera tag v1.6.0, sprawdza commit i buduje `cwebp`/`dwebp`/`webpmux`/`img2webp` w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają tę lokalną wersję; `RASTERSHARP_WEBP_TOOLS` pozwala wskazać inny katalog. Systemowe narzędzia 1.3.2 pozostają bez zmian.
   Dekodery faz 1–3 portowano pierwotnie z 1.3.2; ich korpus sprawdzono także z 1.6.0. Stary katalog `reference/libwebp/` zachowujemy do porównań historycznych.
 - **Sposób portowania:**
   - Portujemy funkcja po funkcji.
@@ -64,10 +64,10 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
 ## Struktura
 
 ```
-src/WebpSharp/            biblioteka (Image, fasada WebP, Formats/, Compression/, Processing/, Internal/)
-tests/WebpSharp.Tests/    xUnit; assets/: generate_corpus.py, make_reference.py, reference.json, corpus/, reference/
+src/RasterSharp/            biblioteka (Image, fasada WebP, Formats/, Compression/, Processing/, Internal/)
+tests/RasterSharp.Tests/    xUnit; assets/: generate_corpus.py, make_reference.py, reference.json, corpus/, reference/
 benchmarks/               BenchmarkDotNet
-samples/WebpSharp.Cli/    narzędzie CLI (convert/info/resize)
+samples/RasterSharp.Cli/    narzędzie CLI (convert/info/resize)
 reference/libwebp/        źródła referencyjne (niecommitowane)
 ```
 

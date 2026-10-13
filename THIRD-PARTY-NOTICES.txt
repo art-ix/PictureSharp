@@ -1,7 +1,7 @@
 THIRD-PARTY NOTICES
 ===================
 
-WebpSharp contains C# ports of code from the projects listed below. Their
+RasterSharp contains C# ports of code from the projects listed below. Their
 license terms apply to the corresponding parts of this library.
 
 -------------------------------------------------------------------------------
