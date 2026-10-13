@@ -47,4 +47,4 @@ The test corpus in `tests/assets/corpus` is generated with `tests/assets/generat
 
 ## License
 
-BSD-3-Clause. Parts of the code are ports of libwebp (Copyright Google Inc., BSD-3-Clause); see [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+MIT, see [LICENSE](LICENSE). Parts of the code are ported from libwebp (Copyright Google Inc.); its copyright notice and patent grant are kept in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).

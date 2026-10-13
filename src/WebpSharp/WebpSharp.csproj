@@ -9,12 +9,17 @@
     <PackageId>WebpSharp</PackageId>
     <Description>Pure managed WebP encoder/decoder (lossy, lossless, alpha, animation) with PNG/JPEG import, PNG export and a System.Drawing-like Image API. No native dependencies.</Description>
     <PackageTags>webp;image;png;jpeg;codec;encoder;decoder</PackageTags>
-    <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="WebpSharp.Tests" />
     <InternalsVisibleTo Include="WebpSharp.Benchmarks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>

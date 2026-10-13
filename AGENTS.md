@@ -45,7 +45,7 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
   - przepełnienia.
   - Obliczenia `float` zostają w `float`, z tą samą kolejnością operacji. Od tego zależy bit-exactness enkodera względem `cwebp`.
 - **Tabele stałych** zapisujemy jako `static ReadOnlySpan<T> Name => [ ... ];`.
-- **Licencja:** kod portowany z libwebp to praca pochodna (BSD-3-Clause). Utrzymuj `THIRD-PARTY-NOTICES.txt`. To samo dotyczy fragmentów z libjpeg-turbo (IJG/BSD) i zlib.
+- **Licencja:** projekt jest na licencji MIT. Licencje źródeł portowanych (libwebp BSD-3, libjpeg-turbo IJG/BSD, zlib) wymagają zachowania ich not copyright, dlatego utrzymuj `THIRD-PARTY-NOTICES.txt` (jest pakowany do NuGet razem z `LICENSE`).
 
 ## Styl kodu
 
