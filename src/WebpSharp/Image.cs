@@ -47,18 +47,22 @@ public sealed class Image : IDisposable, ICloneable
     public static Image FromFile(string path, DecoderOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(path);
-        return FromBytes(File.ReadAllBytes(path), options);
+        return CodecRegistry.Decode(File.ReadAllBytes(path), options ?? DecoderOptions.Default);
     }
 
     /// <summary>Decodes an image from a stream, reading it to the end. The stream need not be seekable.</summary>
     public static Image FromStream(Stream stream, DecoderOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        return FromBytes(StreamHelper.ReadAll(stream), options);
+        return CodecRegistry.Decode(StreamHelper.ReadAll(stream), options ?? DecoderOptions.Default);
     }
 
     /// <summary>Decodes an image from memory.</summary>
     public static Image FromBytes(ReadOnlySpan<byte> data, DecoderOptions? options = null) =>
+        CodecRegistry.Decode(data.ToArray(), options ?? DecoderOptions.Default);
+
+    /// <summary>Decodes an image from memory without copying the buffer.</summary>
+    public static Image FromBytes(ReadOnlyMemory<byte> data, DecoderOptions? options = null) =>
         CodecRegistry.Decode(data, options ?? DecoderOptions.Default);
 
     /// <summary>Reads a file asynchronously and decodes it.</summary>
@@ -66,7 +70,7 @@ public sealed class Image : IDisposable, ICloneable
     {
         ArgumentNullException.ThrowIfNull(path);
         byte[] data = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
-        return FromBytes(data, options);
+        return CodecRegistry.Decode(data, options ?? DecoderOptions.Default);
     }
 
     /// <summary>Reads a stream asynchronously to the end and decodes it.</summary>
@@ -74,7 +78,7 @@ public sealed class Image : IDisposable, ICloneable
     {
         ArgumentNullException.ThrowIfNull(stream);
         byte[] data = await StreamHelper.ReadAllAsync(stream, cancellationToken).ConfigureAwait(false);
-        return FromBytes(data, options);
+        return CodecRegistry.Decode(data, options ?? DecoderOptions.Default);
     }
 
     /// <summary>Creates an image from raw pixel data.</summary>
@@ -95,18 +99,18 @@ public sealed class Image : IDisposable, ICloneable
     public static ImageInfo Identify(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        return Identify(File.ReadAllBytes(path));
+        return CodecRegistry.Identify(File.ReadAllBytes(path), DecoderOptions.Default);
     }
 
     /// <summary>Reads the dimensions and basic properties of an encoded image without decoding its pixels.</summary>
     public static ImageInfo Identify(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        return Identify(StreamHelper.ReadAll(stream));
+        return CodecRegistry.Identify(StreamHelper.ReadAll(stream), DecoderOptions.Default);
     }
 
     /// <summary>Reads the dimensions and basic properties of an encoded image without decoding its pixels.</summary>
-    public static ImageInfo Identify(ReadOnlySpan<byte> data) => CodecRegistry.Identify(data, DecoderOptions.Default);
+    public static ImageInfo Identify(ReadOnlySpan<byte> data) => CodecRegistry.Identify(data.ToArray(), DecoderOptions.Default);
 
     /// <summary>Detects the format from the first bytes of a file (at least 12 bytes are needed for WebP).</summary>
     public static ImageFormat? DetectFormat(ReadOnlySpan<byte> header) => FormatDetector.Detect(header);

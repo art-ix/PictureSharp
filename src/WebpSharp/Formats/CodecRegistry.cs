@@ -3,7 +3,7 @@ namespace WebpSharp.Formats;
 /// <summary>Maps image formats to their decoder and encoder implementations.</summary>
 internal static class CodecRegistry
 {
-    private static readonly IImageDecoder[] Decoders = [];
+    private static readonly IImageDecoder[] Decoders = [WebP.WebPDecoder.Instance];
 
     private static readonly IImageEncoder[] Encoders = [];
 
@@ -11,9 +11,9 @@ internal static class CodecRegistry
 
     public static IImageEncoder? GetEncoder(ImageFormat format) => Array.Find(Encoders, e => e.Format == format);
 
-    public static Image Decode(ReadOnlySpan<byte> data, DecoderOptions options)
+    public static Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
-        IImageDecoder decoder = GetDecoderFor(data);
+        IImageDecoder decoder = GetDecoderFor(data.Span);
         Image image = Guard(decoder.Format, data, options, static (d, s, o) => d.Decode(s, o), decoder);
         if (options.ApplyExifOrientation)
         {
@@ -23,9 +23,9 @@ internal static class CodecRegistry
         return image;
     }
 
-    public static ImageInfo Identify(ReadOnlySpan<byte> data, DecoderOptions options)
+    public static ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
-        IImageDecoder decoder = GetDecoderFor(data);
+        IImageDecoder decoder = GetDecoderFor(data.Span);
         return Guard(decoder.Format, data, options, static (d, s, o) => d.Identify(s, o), decoder);
     }
 
@@ -45,11 +45,11 @@ internal static class CodecRegistry
             ?? throw new NotSupportedException($"Decoding {format.Name} images is not supported yet.");
     }
 
-    private delegate T DecodeFunc<T>(IImageDecoder decoder, ReadOnlySpan<byte> data, DecoderOptions options);
+    private delegate T DecodeFunc<T>(IImageDecoder decoder, ReadOnlyMemory<byte> data, DecoderOptions options);
 
     // Safety net: decoders validate their input explicitly, but any unexpected exception caused by
     // malformed data is reported as ImageFormatException rather than leaking implementation details.
-    private static T Guard<T>(ImageFormat format, ReadOnlySpan<byte> data, DecoderOptions options, DecodeFunc<T> func, IImageDecoder decoder)
+    private static T Guard<T>(ImageFormat format, ReadOnlyMemory<byte> data, DecoderOptions options, DecodeFunc<T> func, IImageDecoder decoder)
     {
         try
         {

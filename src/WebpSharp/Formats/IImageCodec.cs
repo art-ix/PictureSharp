@@ -5,9 +5,9 @@ internal interface IImageDecoder
 {
     ImageFormat Format { get; }
 
-    Image Decode(ReadOnlySpan<byte> data, DecoderOptions options);
+    Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options);
 
-    ImageInfo Identify(ReadOnlySpan<byte> data, DecoderOptions options);
+    ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options);
 }
 
 /// <summary>Encodes an image into one format.</summary>

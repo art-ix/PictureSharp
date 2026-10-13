@@ -27,6 +27,36 @@ try
 
             return 0;
 
+        case "decode" when args.Length >= 2:
+        {
+            int iterations = args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 5;
+            byte[] data = File.ReadAllBytes(args[1]);
+            using (Image warmup = Image.FromBytes(data.AsMemory()))
+            {
+                Console.WriteLine($"{args[1]}: {warmup}");
+            }
+
+            var times = new List<double>();
+            for (int i = 0; i < iterations; i++)
+            {
+                var watch = Stopwatch.StartNew();
+                using Image image = Image.FromBytes(data.AsMemory());
+                times.Add(watch.Elapsed.TotalMilliseconds);
+            }
+
+            Console.WriteLine($"decode: min {times.Min():F1} ms, avg {times.Average():F1} ms over {iterations} runs");
+            return 0;
+        }
+
+        case "raw" when args.Length >= 3:
+        {
+            // Writes the decoded RGBA pixels of the active frame (for comparisons with other decoders).
+            using Image image = Image.FromFile(args[1]);
+            File.WriteAllBytes(args[2], image.ToPixelArray(PixelFormat.Rgba32));
+            Console.WriteLine($"{image.Width}x{image.Height} RGBA -> {args[2]}");
+            return 0;
+        }
+
         case "convert" when args.Length >= 3:
         {
             float quality = 75;
@@ -77,5 +107,6 @@ static void PrintUsage() => Console.Error.WriteLine(
     """
     usage:
       webpsharp-cli info <file>...
+      webpsharp-cli decode <file> [iterations]
       webpsharp-cli convert <input> <output> [-q quality] [-m method] [-lossless]
     """);
