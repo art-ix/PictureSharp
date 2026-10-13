@@ -1,0 +1,446 @@
+using System.Drawing;
+using RasterSharp.Tests.Infrastructure;
+
+namespace RasterSharp.Tests.Core;
+
+/// <summary>
+/// The code samples from README.md and docs/*.md, kept compiling and running against corpus files.
+/// Samples that need other libraries (WPF, SkiaSharp, ASP.NET Core) are covered by their RasterSharp part only.
+/// </summary>
+public sealed class DocsExamplesTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), $"rastersharp-docs-{Guid.NewGuid():N}");
+
+    public DocsExamplesTests()
+    {
+        Directory.CreateDirectory(_dir);
+        File.Copy(Corpus.PathOf("jpeg/q90_444.jpg"), P("photo.jpg"));
+        File.Copy(Corpus.PathOf("png/odd_rgba.png"), P("input.png"));
+        File.Copy(Corpus.PathOf("png/odd_rgba.png"), P("logo.png"));
+        File.Copy(Corpus.PathOf("png/odd_rgba.png"), P("frame-1.png"));
+        File.Copy(Corpus.PathOf("webp/anim/alpha_lossless.webp"), P("animated.webp"));
+        using (Image second = Image.Load(P("frame-1.png")))
+        {
+            second.Mutate(x => x.Invert());
+            second.Save(P("frame-2.png"));
+        }
+
+        File.Copy(P("input.png"), P("unknown.bin"));
+    }
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    private string P(string name) => Path.Combine(_dir, name);
+
+    // ------------------------------------------------------------ README.md
+
+    [Fact]
+    public async Task Readme_QuickStart()
+    {
+        using var image = await Image.LoadAsync(P("photo.jpg"));
+        image.Mutate(x => x
+            .AutoOrient()
+            .Resize(1600, 0)                 // 0 keeps the aspect ratio
+            .UnsharpMask());
+        await image.SaveAsWebPAsync(P("photo.webp"), new() { Quality = 82 });
+
+        using Image thumbnail = image.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
+        thumbnail.SaveAsPng(P("thumbnail.png"));
+
+        Assert.Equal(1600, Image.Identify(P("photo.webp")).Width);
+        ImageInfo thumb = Image.Identify(P("thumbnail.png"));
+        Assert.Equal((256, 256), (thumb.Width, thumb.Height));
+    }
+
+    // ------------------------------------------------------------ getting-started.md
+
+    [Fact]
+    public void GettingStarted()
+    {
+        using (var image = Image.Load(P("photo.jpg")))
+        {
+            Assert.Equal(ImageFormat.Jpeg, image.SourceFormat);
+            image.Mutate(x => x.AutoOrient().Resize(800, 0).Grayscale());
+            image.Save(P("photo-small.webp"));
+        }
+
+        Assert.Equal(800, Image.Identify(P("photo-small.webp")).Width);
+
+        using var original = Image.Load(P("photo.jpg"));
+        original.Mutate(x => x.AutoOrient());
+        using Image small = original.Clone(x => x.Resize(640, 0));
+        using Image square = original.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
+        using Image copy = original.Clone();
+        Assert.Equal((640, 256, original.Width), (small.Width, square.Height, copy.Width));
+
+        using var canvas = new Image(320, 200, Color.White);
+        canvas[10, 10] = Color.Red;
+        Rgba32 pixel = canvas[10, 10];
+        Assert.Equal(new Rgba32(255, 0, 0, 255), pixel);
+
+        byte[] upload = [1, 2, 3, 4, 5];
+        Assert.Throws<ImageFormatException>(() => Image.Load(upload, new DecoderOptions { MaxPixels = 50_000_000 }));
+        Assert.Throws<NotSupportedException>(() => canvas.Save(P("x.tiff")));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WebPEncoderOptions { Quality = 120 });
+        Assert.Throws<ImageFormatException>(() => Image.Load(P("photo.jpg"), new DecoderOptions { MaxPixels = 100 }));
+    }
+
+    // ------------------------------------------------------------ loading-and-saving.md
+
+    [Fact]
+    public async Task LoadingAndSaving()
+    {
+        byte[] bytes = [.. new byte[16], .. File.ReadAllBytes(P("input.png"))];
+        CancellationToken cancellationToken = CancellationToken.None;
+        using var stream = new MemoryStream(bytes[16..]);
+
+        using var fromStream = Image.Load(stream);
+        using var fromBytes = Image.Load(bytes[16..]);
+        using var fromSpan = Image.Load(bytes.AsSpan(16));
+        using var fromAsync = await Image.LoadAsync(P("input.png"), cancellationToken);
+        Assert.Equal(fromAsync.GetPixelSpan().ToArray(), fromSpan.GetPixelSpan().ToArray());
+        Assert.Equal(fromStream.Size, fromBytes.Size);
+
+        var options = new DecoderOptions
+        {
+            ApplyExifOrientation = true,
+            FirstFrameOnly = true,
+            IgnoreMetadata = true,
+            MaxPixels = 40_000_000,
+        };
+        using var upload = Image.Load(P("photo.jpg"), options);
+        Assert.Equal(1_000_000, (DecoderOptions.Default with { MaxPixels = 1_000_000 }).MaxPixels);
+
+        upload.Save(P("out.webp"));
+        upload.Save(P("out.bin"), new PngEncoderOptions());
+        using var output = new MemoryStream();
+        upload.Save(output, ImageFormat.Jpeg);
+        upload.Save(output, new WebPEncoderOptions { Lossless = true });
+        await upload.SaveAsync(P("out.png"), cancellationToken);
+        upload.SaveAsWebP(P("photo.webp"), new() { Quality = 82 });
+        upload.SaveAsPng(output);
+        await upload.SaveAsJpegAsync(P("photo.jpg2.jpg"), new() { Quality = 90, Progressive = true });
+        await upload.SaveAsBmpAsync(output, cancellationToken: cancellationToken);
+        byte[] webp = upload.ToWebP();
+        byte[] png = upload.ToPng(new() { CompressionLevel = 9 });
+
+        ImageInfo info = Image.Identify(P("photo.webp"));
+        Assert.Equal((ImageFormat.WebP, upload.Width), (info.Format, info.Width));
+        Assert.Equal(ImageFormat.Png, Image.DetectFormat(P("unknown.bin")));
+        Assert.Equal(ImageFormat.Png, Image.DetectFormat(P("out.bin")));
+        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(webp));
+        Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
+        Assert.Equal(ImageFormat.Jpeg, ImageFormat.FromExtension("photo.JPG"));
+
+        // Convert a folder to WebP.
+        string folder = P("photos");
+        Directory.CreateDirectory(folder);
+        File.Copy(P("photo.jpg"), Path.Combine(folder, "a.jpg"));
+        File.WriteAllText(Path.Combine(folder, "notes.txt"), "skip me");
+        foreach (string path in Directory.EnumerateFiles(folder))
+        {
+            if (ImageFormat.FromExtension(path) is not { CanDecode: true })
+            {
+                continue;
+            }
+
+            using var image = Image.Load(path, new DecoderOptions { ApplyExifOrientation = true });
+            image.Mutate(x => x.Thumbnail(2048, 2048));
+            image.SaveAsWebP(Path.ChangeExtension(path, ".webp"), new() { Quality = 80 });
+        }
+
+        Assert.True(File.Exists(Path.Combine(folder, "a.webp")));
+
+        // Choose the output format from a MIME type.
+        string accept = "image/webp";
+        ImageFormat target = ImageFormat.FromMimeType(accept) ?? ImageFormat.Png;
+        using var body = new MemoryStream();
+        upload.Save(body, target);
+        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(body.ToArray()));
+    }
+
+    // ------------------------------------------------------------ encoder-options.md
+
+    [Fact]
+    public void EncoderOptions()
+    {
+        using var image = Image.Load(P("input.png"));
+        image.SaveAsWebP(P("lossy.webp"));
+        image.SaveAsWebP(P("small.webp"), new() { Quality = 70, Method = 6 });
+        image.SaveAsWebP(P("exact.webp"), new() { Lossless = true, Exact = true });
+        image.SaveAsWebP(P("near.webp"), new() { Lossless = true, NearLossless = 60 });
+        image.SaveAsWebP(P("target.webp"), new() { TargetSize = 50_000, Passes = 6 });
+        image.SaveAsPng(P("out.png"));
+        image.SaveAsPng(P("fast.png"), new() { CompressionLevel = 1 });
+        image.SaveAsPng(P("interlaced.png"), new() { Interlace = true });
+        image.SaveAsJpeg(P("photo.jpg"), new() { Quality = 88 });
+        image.SaveAsJpeg(P("web.jpg"), new() { Quality = 80, Progressive = true });
+        image.SaveAsJpeg(P("sharp-color.jpg"), new() { Subsampling = JpegSubsampling.Ratio444 });
+        image.SaveAsJpeg(P("on-black.jpg"), new() { BackgroundColor = Color.Black });
+        image.SaveAsBmp(P("out.bmp"));
+        image.SaveAsBmp(P("rgb.bmp"), new() { BitsPerPixel = 24 });
+
+        using Image exactBack = Image.Load(P("exact.webp"));
+        Assert.Equal(image.GetPixelSpan().ToArray(), exactBack.GetPixelSpan().ToArray());
+
+        using Image few = new(4, 4, Color.Red);
+        few.SaveAsPng(P("indexed.png"), new() { ColorType = PngColorType.Palette });
+        Assert.Throws<InvalidOperationException>(() => image.SaveAsPng(P("indexed.png"), new() { ColorType = PngColorType.Palette }));
+
+        var exact = new WebPEncoderOptions { Lossless = true, Exact = true };
+        var web = new WebPEncoderOptions { Quality = 78, Method = 6, Preset = WebPPreset.Photo, UseSharpYuv = true };
+        var screenshot = new WebPEncoderOptions { Lossless = true, NearLossless = 80 };
+        var anonymous = new JpegEncoderOptions { Quality = 85, Metadata = MetadataKinds.None };
+        WebPEncoderOptions thumbnails = web with { Quality = 70 };
+        Assert.Equal(70, thumbnails.Quality);
+        Assert.Equal(WebPPreset.Photo, thumbnails.Preset);
+        Assert.NotEmpty(image.ToWebP(exact));
+        Assert.NotEmpty(image.ToWebP(screenshot));
+        Assert.NotEmpty(image.ToJpeg(anonymous));
+    }
+
+    // ------------------------------------------------------------ image-processing.md
+
+    [Fact]
+    public void ImageProcessing()
+    {
+        using var photo = Image.Load(P("photo.jpg"));
+        using var logo = Image.Load(P("logo.png"));
+        photo.Mutate(x => x
+            .AutoOrient()
+            .Resize(new ResizeOptions { Size = new(1200, 800), Mode = ResizeMode.Crop, Position = AnchorPosition.Top })
+            .Contrast(1.1f)
+            .DrawImage(logo, AnchorPosition.BottomRight, opacity: 0.8f));
+        photo.SaveAsJpeg(P("card.jpg"), new() { Quality = 88 });
+        Assert.Equal(new Size(1200, 800), photo.Size);
+
+        using Image image = photo.Clone(x => x.Resize(400, 200));
+        Assert.Equal(new Size(800, 600), image.Clone(x => x.Resize(800, 600)).Size);
+        Assert.Equal(new Size(800, 400), image.Clone(x => x.Resize(800, 0)).Size);
+        Assert.Equal(new Size(100, 50), image.Clone(x => x.Resize(100, 100, ResizeMode.Max)).Size);
+        Assert.Equal(new Size(100, 100), image.Clone(x => x.Resize(100, 100, ResizeMode.Crop, ResamplingFilter.Bicubic)).Size);
+        Assert.Equal(new Size(100, 100), image.Clone(x => x.Resize(100, 100, ResizeMode.Pad)).Size);
+        Assert.Equal(new Size(200, 100), image.Clone(x => x.Resize(100, 100, ResizeMode.Min)).Size);
+        Assert.Equal(new Size(400, 200), image.Clone(x => x.Thumbnail(1920, 1080)).Size);
+
+        using Image padded = image.Clone(x => x.Resize(new ResizeOptions
+        {
+            Size = new(1080, 1080),
+            Mode = ResizeMode.Pad,
+            Position = AnchorPosition.Bottom,
+            PadColor = Color.White,
+            Filter = ResamplingFilter.Lanczos3,
+            AllowUpscale = false,
+        }));
+        Assert.Equal(new Size(1080, 1080), padded.Size);
+        Assert.Equal(Rgba32.White, padded[0, 0]);
+
+        using Image geometry = image.Clone(x => x
+            .Crop(new Rectangle(10, 10, 200, 100))
+            .Crop(150, 80)
+            .Crop(100, 60, AnchorPosition.TopRight)
+            .Pad(120, 120, Color.Black)
+            .Rotate(RotateMode.Rotate90)
+            .Flip(FlipMode.Horizontal)
+            .RotateFlip(RotateMode.Rotate270, FlipMode.Vertical)
+            .AutoOrient());
+        Assert.Equal(new Size(120, 120), geometry.Size);
+
+        using Image rotated = image.Clone(x => x
+            .Rotate(15)
+            .Rotate(-30, ResamplingFilter.Bilinear, Color.White)
+            .Rotate(45, ResamplingFilter.Nearest, expand: false));
+        Assert.True(rotated.Width > 400);
+
+        using var watermark = Image.Load(P("logo.png"));
+        using Image adjusted = image.Clone(x => x
+            .Brightness(1.2f).Contrast(0.8f).Saturate(1.5f).Grayscale().Sepia().Invert()
+            .BackgroundColor(Color.White).Opacity(0.5f).MakeTransparent(Color.Magenta)
+            .Fill(Color.Black).Fill(Color.FromArgb(128, 255, 0, 0), new Rectangle(0, 0, 50, 50))
+            .GaussianBlur(2.5f).BoxBlur(3).UnsharpMask().UnsharpMask(radius: 1, percent: 80, threshold: 2).Sharpen()
+            .DrawImage(watermark, AnchorPosition.BottomRight, opacity: 0.6f)
+            .DrawImage(watermark, new Point(20, 20))
+            .Apply(frame =>
+            {
+                foreach (ref Rgba32 p in frame.GetPixelSpan())
+                {
+                    p.B = 0;                                      // drop the blue channel
+                }
+            })
+            .Resize(600, 0)
+            .Polaroid());
+        Assert.Equal(new Size(640, 420), adjusted.Size);
+        Assert.Equal(Rgba32.White, adjusted[0, 0]);
+    }
+
+    // ------------------------------------------------------------ pixels-and-interop.md
+
+    [Fact]
+    public void PixelsAndInterop()
+    {
+        var orange = new Rgba32(255, 136, 0);
+        var glass = new Rgba32(255, 255, 255, 64);
+        Rgba32 fromColor = Color.CornflowerBlue;
+        Color back = orange;
+        Rgba32 parsed = Rgba32.Parse("#ff8800");
+        Rgba32 named = Rgba32.Parse("cornflowerblue");
+        string userInput = "#80ff0080";
+        bool ok = Rgba32.TryParse(userInput, out Rgba32 color);
+        string hex = orange.ToHex();
+        (byte r, byte g, byte b, byte a) = orange;
+        Assert.Equal(orange, parsed);
+        Assert.Equal(fromColor, named);
+        Assert.Equal(Color.FromArgb(255, 255, 136, 0).ToArgb(), back.ToArgb());
+        Assert.True(ok);
+        Assert.Equal(new Rgba32(0x80, 0xff, 0, 0x80), color);
+        Assert.Equal("#FF8800FF", hex);
+        Assert.Equal((255, 136, 0, 255, 64), (r, g, b, a, glass.A));
+
+        using var image = new Image(64, 32, Color.CornflowerBlue);
+        image[0, 0] = Rgba32.Parse("#ff8800");
+        Span<Rgba32> row = image.GetRowSpan(1);
+        row.Fill(new Rgba32(255, 255, 255, 128));
+        Span<Rgba32> all = image.GetPixelSpan();
+        foreach (ref Rgba32 p in all)
+        {
+            p.A = (byte)(p.A / 2);
+        }
+
+        Assert.Equal(64, image[5, 1].A);
+        Assert.False(image.IsOpaque());
+
+        byte[] bgra = image.ToPixelData(PixelFormat.Bgra32);
+        using Image copy = Image.LoadPixelData(bgra, image.Width, image.Height, PixelFormat.Bgra32);
+        Assert.Equal(image.GetPixelSpan().ToArray(), copy.GetPixelSpan().ToArray());
+
+        int stride = (image.Width * PixelFormat.Rgb24.BytesPerPixel()) + 4;
+        var buffer = new byte[stride * image.Height];
+        image.CopyPixelDataTo(buffer, PixelFormat.Rgb24, stride);
+        image.CopyPixelDataFrom(buffer, PixelFormat.Rgb24, stride);
+        Assert.Equal(255, image[0, 0].A);
+
+        Rgba32[] rgbaPixels = image.GetPixelSpan().ToArray();
+        using Image fromStructs = Image.LoadPixelData(rgbaPixels, image.Width, image.Height);
+        Assert.Equal(rgbaPixels, fromStructs.GetPixelSpan().ToArray());
+
+        // The RasterSharp side of the WPF and SkiaSharp recipes.
+        byte[] pixels = image.ToPixelData(PixelFormat.Bgra32);
+        Assert.Equal(image.Width * 4 * image.Height, pixels.Length);
+        int rowBytes = (image.Width * 4) + 16;
+        var skiaBuffer = new byte[rowBytes * image.Height];
+        image.CopyPixelDataTo(skiaBuffer, PixelFormat.Rgba32, rowBytes);
+        using Image fromSkia = Image.LoadPixelData(skiaBuffer, image.Width, image.Height, PixelFormat.Rgba32, rowBytes);
+        Assert.Equal(image.GetPixelSpan().ToArray(), fromSkia.GetPixelSpan().ToArray());
+
+        // The WebP one-call API.
+        image.SaveAsWebP(P("image.webp"), new() { Lossless = true, Exact = true });
+        byte[] data = File.ReadAllBytes(P("image.webp"));
+        Assert.True(RasterSharp.WebP.TryGetInfo(data, out ImageInfo info));
+        Assert.Equal(WebPCompression.Lossless, info.WebPCompression);
+        byte[] rgba = RasterSharp.WebP.DecodeRgba(data, out int width, out int height);
+        byte[] bgraDecoded = RasterSharp.WebP.DecodeBgra(data, out width, out height);
+        var target = new byte[width * height * 4];
+        Size size = RasterSharp.WebP.DecodeInto(data, target, stride: 0, PixelFormat.Bgra32);
+        byte[] lossless = RasterSharp.WebP.EncodeLosslessRgba(rgba, width, height);
+        using Image allFrames = RasterSharp.WebP.DecodeImage(data);
+        RasterSharp.WebP.Convert(P("input.png"), P("output.webp"), new() { Quality = 80 });
+        Assert.Equal(bgraDecoded, target);
+        Assert.Equal(image.Size, size);
+        Assert.Equal(rgba, RasterSharp.WebP.DecodeRgba(lossless, out _, out _));
+        Assert.Equal(image.ToPixelData(), rgba);
+    }
+
+    // ------------------------------------------------------------ animation.md
+
+    [Fact]
+    public void Animation()
+    {
+        using (var animation = Image.Load(P("animated.webp")))
+        {
+            Assert.True(animation.IsAnimated);
+            foreach (ImageFrame frame in animation.Frames)
+            {
+                Assert.True(frame.Duration > TimeSpan.Zero);
+            }
+
+            using Image third = animation.Frames.CloneFrame(2);
+            third.SaveAsPng(P("frame-3.png"));
+            Assert.Equal(1, third.FrameCount);
+        }
+
+        using var first = Image.Load(P("frame-1.png"));
+        using var second = Image.Load(P("frame-2.png"));
+        using var built = Image.CreateAnimation(TimeSpan.FromMilliseconds(100), first, second);
+        built.LoopCount = 0;
+        built.Frames[1].Duration = TimeSpan.FromMilliseconds(150);
+        built.SaveAsWebP(P("animation.webp"), new() { Lossless = true, Exact = true, MinimizeSize = true });
+
+        using Image back = Image.Load(P("animation.webp"));
+        Assert.Equal(2, back.FrameCount);
+        Assert.Equal(TimeSpan.FromMilliseconds(150), back.Frames[1].Duration);
+        Assert.Equal(first.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
+
+        using Image thirdImage = first.Clone(x => x.Grayscale());
+        built.Frames.Add(thirdImage, TimeSpan.FromMilliseconds(80));
+        built.Frames.Insert(0, new ImageFrame(built.Width, built.Height) { Duration = TimeSpan.FromMilliseconds(40) });
+        built.Frames.Move(0, 2);
+        built.Frames.RemoveAt(1);
+        using Image extracted = built.Frames.ExportFrame(0);
+        Assert.Equal(2, built.FrameCount);
+
+        built.Mutate(x => x.Resize(32, 0).Saturate(1.2f));
+        Assert.All(built.Frames, f => Assert.Equal(32, f.Width));
+        built.SaveAsPng(P("animation.png"));
+        built.SaveAsPng(P("poster.png"), new() { SaveAnimation = false });
+        Assert.Equal(2, Image.Identify(P("animation.png")).FrameCount);
+        Assert.Equal(1, Image.Identify(P("poster.png")).FrameCount);
+    }
+
+    // ------------------------------------------------------------ metadata.md
+
+    [Fact]
+    public void Metadata()
+    {
+        using var photo = Image.Load(P("photo.jpg"));
+        photo.Metadata.Exif = [.. "II*\0"u8, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
+        photo.Metadata.Xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>"u8.ToArray();
+        photo.SaveAsJpeg(P("tagged.jpg"));
+
+        using var reloaded = Image.Load(P("tagged.jpg"));
+        ImageMetadata meta = reloaded.Metadata;
+        Assert.Equal(ExifOrientation.RightTop, meta.Orientation);
+        Assert.NotNull(meta.Xmp);
+
+        using var upright = Image.Load(P("tagged.jpg"), new DecoderOptions { ApplyExifOrientation = true });
+        reloaded.Mutate(x => x.AutoOrient());
+        Assert.Equal(ExifOrientation.TopLeft, reloaded.Metadata.Orientation);
+        Assert.Equal(upright.Size, reloaded.Size);
+        Assert.Equal((photo.Height, photo.Width), (upright.Width, upright.Height));
+
+        reloaded.SaveAsWebP(P("share.webp"), new() { Metadata = MetadataKinds.Icc });
+        reloaded.SaveAsJpeg(P("clean.jpg"), new() { Metadata = MetadataKinds.None });
+        using (Image clean = Image.Load(P("clean.jpg")))
+        using (Image shared = Image.Load(P("share.webp")))
+        {
+            Assert.True(clean.Metadata.IsEmpty);
+            Assert.Null(shared.Metadata.Exif);
+        }
+
+        meta.HorizontalResolution = 300;
+        meta.VerticalResolution = 300;
+        meta.Xmp = null;
+        meta.Clear();
+        Assert.True(meta.IsEmpty);
+        Assert.Equal(300f, meta.HorizontalResolution);
+        Assert.Throws<ArgumentOutOfRangeException>(() => meta.HorizontalResolution = 0);
+    }
+}
+
+public static class MyOperations
+{
+    extension(ImageProcessingContext x)
+    {
+        public ImageProcessingContext Polaroid() =>
+            x.Pad(x.Size.Width + 40, x.Size.Height + 120, Color.White, AnchorPosition.Top);
+    }
+}

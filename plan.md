@@ -425,7 +425,7 @@ Weryfikacja: `dotnet build RasterSharp.slnx -c Release` (0 ostrzeżeń/błędów
   - wszystkie dotychczasowe testy przepisane na nowe API i zielone (te same hashe kodeków i wyniki resize),
   - nowe filtry, obrót i kotwice piksel w piksel z Pillow 10.2.0 (wyrocznia: 569 zadań),
   - migawka publicznego API `tests/assets/PublicApi.approved.txt` zatwierdzona (`PublicApiTests`),
-  - przykłady z README kompilują się i działają (`ReadmeExamplesTests`).
+  - przykłady z README i `docs/` kompilują się i działają (`DocsExamplesTests`).
 
 ### Faza 10: wydajność, odporność, wydanie
 - BenchmarkDotNet: dekodowanie i kodowanie w porównaniu z czasami `cwebp`/`dwebp`. Cel: ≤3× wolniej od natywnego C z SIMD.
@@ -469,5 +469,5 @@ Rodzaje testów:
 1. **Prymitywy:** bit reader/writer, Huffman, IDCT kontra wersja float, CRC/Adler na znanych wektorach, inflate kontra `ZLibStream`.
 2. **Zgodność dekoderów:** hashe pikseli z `reference.json` (dwebp i Pillow), libwebp-test-data, PngSuite, BMP Suite.
 3. **Enkodery:** porównanie bajtów i PSNR z `cwebp` 1.6.0, round-tripy lossless, metadane i animacje przez `webpmux` i Pillow.
-4. **API `Image`:** właściwości, Mutate/Clone, operacje i filtry (wyrocznia Pillow), konwersje formatów pikseli, migawka publicznego API i przykłady z README.
+4. **API `Image`:** właściwości, Mutate/Clone, operacje i filtry (wyrocznia Pillow), konwersje formatów pikseli, migawka publicznego API i przykłady z README oraz `docs/`.
 5. **Odporność:** fuzz i mutacje korpusu.

@@ -1,0 +1,70 @@
+# Development
+
+## Building and testing
+
+Use the .NET 10 SDK or a compatible later SDK:
+
+```bash
+dotnet build -c Release
+dotnet test -c Release
+dotnet test -c Release --filter Category=Oracle      # comparisons with external tools; skipped when missing
+```
+
+The library version comes from the [VERSION](../VERSION) file, read by `Directory.Build.props`. Contributor rules (no dependencies, no `unsafe`, porting conventions) are in [AGENTS.md](../AGENTS.md), and the implementation phases with their completion criteria in [plan.md](../plan.md).
+
+## Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `src/RasterSharp/` | The library: `Image`, options, the `WebP` facade, `Formats/` (codecs), `Compression/` (deflate/inflate), `Processing/`, `Internal/` |
+| `tests/RasterSharp.Tests/` | xUnit tests |
+| `tests/assets/` | Corpus, reference hashes, oracle scripts, public API snapshot |
+| `benchmarks/` | BenchmarkDotNet |
+| `samples/RasterSharp.Cli/` | [Command-line sample](cli.md) |
+| `docs/` | These guides |
+
+## Reference tools
+
+The committed synthetic corpus and reference hashes let the tests run without native image tools. `Category=Oracle` tests compare results with external implementations when the tools are available.
+
+New WebP ports and encoder comparisons use **libwebp 1.6.0**. Build its pinned sources and command-line tools with Git, CMake and a C compiler:
+
+```bash
+./scripts/build-webp-reference.sh
+dotnet test -c Release --filter Category=Oracle
+```
+
+Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `RASTERSHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.
+
+Corpus regeneration requires libwebp 1.6.0 tools, ImageMagick, Python, NumPy and Pillow:
+
+```bash
+python3 -I tests/assets/generate_corpus.py
+python3 -I tests/assets/make_reference.py
+python3 -I tests/assets/make_jpeg_encoder_reference.py
+```
+
+Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder references. Additional JPEG oracle tests use a C compiler and libjpeg development headers, with Pillow and ImageMagick for independent decoding. External corpora are optional; their download procedure is described in [plan.md](../plan.md).
+
+## What the tests verify
+
+At completion of phase 9.5, all 2203 tests passed.
+
+- **Decoders:** pixels match `dwebp` and Pillow exactly (SHA-256 of RGBA in `tests/assets/reference.json`). The WebP decoder ports originated from libwebp 1.3.2; recomputing the 248 corpus references with 1.6.0 changed none.
+- **Lossless WebP:** the nine encoder source images round-trip exactly through both decoders and meet the size of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless output is not guaranteed.
+- **Lossy WebP:** checked across 252 corpus configurations (nine images, four qualities, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and the size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks.
+- **Animated WebP:** 46 encoder tests, including 38 external checks through Pillow and webpmux 1.6.0 comparing decoded canvases, durations, loop counts, background color and EXIF extraction across lossy, lossless, mixed, blend/dispose and keyframe cases.
+- **JPEG encoder:** reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
+- **Image processing:** 140 tests. The Pillow 10.2.0 oracle (`tests/assets/processing_reference.py`) checks 569 results for exact pixel equality: resizing with all filters, modes and anchors, compositing, background flattening, grayscale, enhancement, blur and sharpening, rotation, sepia and EXIF orientation.
+
+## Public API snapshot
+
+`PublicApiTests` describes every public type and member by reflection and compares the result with [tests/assets/PublicApi.approved.txt](../tests/assets/PublicApi.approved.txt). When the API changes, the test fails, writes `tests/assets/PublicApi.received.txt` (ignored by Git) and lists the differences. After reviewing an intended change:
+
+```bash
+mv tests/assets/PublicApi.received.txt tests/assets/PublicApi.approved.txt
+```
+
+## Documentation samples
+
+`DocsExamplesTests` compiles and runs the README quick start and the main samples of each guide in this folder against corpus files. Update it together with the guides so the documented code keeps working.

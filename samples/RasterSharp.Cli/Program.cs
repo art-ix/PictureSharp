@@ -5,7 +5,7 @@ using RasterSharp;
 // rastersharp-cli: small front-end for the RasterSharp library.
 //   info <file>...
 //   convert <input> <output> [-q quality] [-m method] [-lossless]
-//   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3] [-q quality]
+//   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
 
 if (args.Length == 0)
 {
@@ -51,7 +51,7 @@ try
 
         case "raw" when args.Length >= 3:
         {
-            // Writes the decoded RGBA pixels of the active frame (for comparisons with other decoders).
+            // Writes the decoded RGBA pixels of the first frame (for comparisons with other decoders).
             using Image image = Image.Load(args[1]);
             File.WriteAllBytes(args[2], image.ToPixelData(PixelFormat.Rgba32));
             Console.WriteLine($"{image.Width}x{image.Height} RGBA -> {args[2]}");
@@ -150,5 +150,5 @@ static void PrintUsage() => Console.Error.WriteLine(
       rastersharp-cli decode <file> [iterations]
       rastersharp-cli convert <input> <output> [-q quality] [-m method] [-lossless]
       rastersharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]
-                             [-filter nearest|bilinear|bicubic|lanczos3] [-q quality]
+                             [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
     """);

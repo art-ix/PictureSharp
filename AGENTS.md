@@ -67,6 +67,7 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
 src/RasterSharp/            biblioteka (Image, fasada WebP, Formats/, Compression/, Processing/, Internal/)
 tests/RasterSharp.Tests/    xUnit; assets/: generate_corpus.py, make_reference.py, reference.json, corpus/, reference/
 benchmarks/               BenchmarkDotNet
+docs/                     dokumentacja użytkownika (przewodniki; przykłady testuje DocsExamplesTests)
 samples/RasterSharp.Cli/    narzędzie CLI (convert/info/resize)
 reference/libwebp/        źródła referencyjne (niecommitowane)
 ```
