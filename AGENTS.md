@@ -85,10 +85,11 @@ Zasady testowania:
 - **Dekodery:** wynik musi być piksel w piksel zgodny z `reference.json`. Hashe SHA-256 RGBA wylicza `make_reference.py` z `dwebp -pam` i Pillow; uruchamiaj go przez `python3 -I`.
 - **Enkoder lossless:** round-trip musi dać identyczne piksele.
 - **Enkoder lossy:** celujemy w bajty identyczne z `cwebp` 1.3.2. Kryterium zastępcze to parytet PSNR i rozmiaru (patrz DoD w [plan.md](plan.md)).
-- **Pobieranie zewnętrznych korpusów** (`fetch-external.sh`: libwebp-test-data, PngSuite, Kodak) wymaga zgody użytkownika.
+- **Pobieranie zewnętrznych korpusów** (`fetch-external.sh`: libwebp-test-data, PngSuite, Kodak, BMP Suite) wymaga zgody użytkownika.
 - Fazę zamykamy dopiero, gdy jej testy przechodzą i spełnione jest DoD.
 
 ## Git
 
 - Commitujemy i pushujemy tylko na wyraźne polecenie użytkownika.
+- Wersja biblioteki jest w pliku `VERSION` (SemVer). `Directory.Build.props` wczytuje ją do `Version` wszystkich projektów.
 - Nie commitujemy `reference/`, `tests/assets/external/`, `bin/` ani `obj/`.

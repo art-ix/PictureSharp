@@ -8,5 +8,7 @@
     <Deterministic>true</Deterministic>
     <Authors>Artur Pelzak</Authors>
     <RepositoryUrl>https://github.com/art-ix/webpsharp</RepositoryUrl>
+    <!-- Single source of the version: the VERSION file in the repository root. -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</Version>
   </PropertyGroup>
 </Project>
