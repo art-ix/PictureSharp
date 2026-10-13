@@ -5,7 +5,7 @@ namespace WebpSharp.Formats.WebP.Lossless;
 
 internal static class Vp8LEncoder
 {
-    public static byte[] Encode(Image image, WebPEncoderOptions options)
+    public static byte[] Encode(Image image, WebPEncoderOptions options, uint[]? paletteOverride = null)
     {
         int width = image.Width, height = image.Height, size = checked(width * height);
         uint[] source = ArrayPool<uint>.Shared.Rent(size), work = ArrayPool<uint>.Shared.Rent(size);
@@ -20,13 +20,13 @@ internal static class Vp8LEncoder
                 source[i] = ((uint)p.A << 24) | ((uint)p.R << 16) | ((uint)p.G << 8) | p.B;
                 alpha |= p.A != 255;
             }
-            uint[]? palette = Palette(source.AsSpan(0, size), options.Method != 0);
+            uint[]? palette = paletteOverride ?? Palette(source.AsSpan(0, size), options.Method != 0);
             int histogramBits = Math.Clamp((palette is null ? 7 : 9) - options.Method, 2, 9);
             while (Vp8LDecoder.SubSampleSize(width, histogramBits) * Vp8LDecoder.SubSampleSize(height, histogramBits) > 2600 && histogramBits < 9) histogramBits++;
             int transformBits = Math.Min(histogramBits, options.Method < 4 ? 6 : options.Method > 4 ? 4 : 5);
             int quality = (int)options.Quality;
             // Transform trials are independent and compared using the actual encoded size.
-            int[] modes = options.Method == 0 ? [palette is null ? 3 : 4] : palette is { Length: <= 16 } ? [4, 5] : palette is null ? [0, 1, 2, 3] : [4, 5, 0, 1, 2, 3];
+            int[] modes = options.Method == 6 && quality == 100 ? palette is null ? [0, 1, 2, 3] : [4, 5, 0, 1, 2, 3] : options.Method == 0 ? [palette is null ? 3 : 4] : palette is { Length: <= 16 } ? [4, 5] : palette is null ? [0, 1, 2, 3] : [4, 5, 0, 1, 2, 3];
             foreach (int mode in modes)
             {
                 using var writer = new Vp8LBitWriter();
@@ -78,7 +78,14 @@ internal static class Vp8LEncoder
                     best?.Dispose(); best = new Vp8LBitWriter(); best.Append(writer);
                 }
             }
-            return best!.ToArray();
+            byte[] result = best!.ToArray();
+            if (paletteOverride is null && options.Method == 6 && options.Quality == 100 && palette is { Length: > 1 })
+            {
+                uint[] sorted = Vp8LPalette.SortModifiedZeng(source.AsSpan(0, size), width, height, palette.Order().ToArray());
+                byte[] candidate = Encode(image, options, sorted);
+                if (candidate.Length < result.Length) result = candidate;
+            }
+            return result;
         }
         finally { best?.Dispose(); ArrayPool<uint>.Shared.Return(source); ArrayPool<uint>.Shared.Return(work); }
     }

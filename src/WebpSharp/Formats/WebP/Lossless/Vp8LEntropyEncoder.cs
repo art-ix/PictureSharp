@@ -6,27 +6,40 @@ internal static class Vp8LEntropyEncoder
     public static Vp8LBitWriter Encode(uint[] pixels, int width, int height, int quality, int method, bool level0, int histoBits)
     {
         using var matches = new Vp8LBackwardRefs(pixels, width, height, quality, method == 0);
+        using var boxMatches = method == 6 && quality == 100 ? new Vp8LBackwardRefs(pixels, width, height, quality, false, box: true) : null;
         Vp8LBitWriter? best = null;
         try
         {
-            for (int kind = 0; kind < (method == 0 ? 1 : 2); kind++)
+            for (int kind = 0; kind < (method == 0 ? 1 : boxMatches is not null ? 3 : 2); kind++)
             {
-                using Vp8LRefs greedy = matches.Greedy(kind == 1);
+                Vp8LBackwardRefs currentMatches = kind == 2 ? boxMatches! : matches;
+                using Vp8LRefs greedy = currentMatches.Greedy(kind == 1);
                 int cacheBits = 0;
                 long bestCost = long.MaxValue;
                 for (int bits = 0; bits <= (level0 && quality > 25 && method > 0 ? 11 : 0); bits++)
                 {
-                    using Vp8LRefs cached = matches.WithCache(greedy, bits);
+                    using Vp8LRefs cached = currentMatches.WithCache(greedy, bits);
                     var histogram = new Vp8LHistogram(bits);
                     foreach (Vp8LToken token in cached.Tokens) histogram.Add(token, width);
                     long cost = histogram.Estimate();
                     if (cost < bestCost) { bestCost = cost; cacheBits = bits; }
                 }
-                using Vp8LRefs refs = matches.WithCache(greedy, cacheBits);
+                using Vp8LRefs refs = currentMatches.WithCache(greedy, cacheBits);
                 Choose(ref best, Store(refs, width, height, cacheBits, level0, histoBits, quality, method));
-                if (method > 0 && quality >= 25 && kind == 0)
+                // port: src/enc/vp8l_enc.c EncoderAnalyze (cruncher do_no_cache)
+                if (level0 && method == 6 && quality == 100 && cacheBits != 0)
                 {
-                    using Vp8LRefs trace = matches.Trace(refs, cacheBits);
+                    using Vp8LRefs uncached = currentMatches.WithCache(greedy, 0);
+                    Choose(ref best, Store(uncached, width, height, 0, level0, histoBits, quality, method));
+                    if (kind != 1)
+                    {
+                        using Vp8LRefs trace = currentMatches.Trace(uncached, 0);
+                        Choose(ref best, Store(trace, width, height, 0, level0, histoBits, quality, method));
+                    }
+                }
+                if (method > 0 && quality >= 25 && kind != 1)
+                {
+                    using Vp8LRefs trace = currentMatches.Trace(refs, cacheBits);
                     Choose(ref best, Store(trace, width, height, cacheBits, level0, histoBits, quality, method));
                 }
             }

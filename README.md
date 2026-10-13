@@ -1,16 +1,16 @@
 # WebpSharp
 
-WebpSharp is a **pure C# image library for .NET 10 and later**. It reads WebP, PNG, BMP and JPEG, and writes lossless WebP, PNG, BMP and JPEG. The library has no NuGet dependencies, native libraries or P/Invoke calls. PNG compression uses its own managed deflate/inflate implementation.
+WebpSharp is a **pure C# image library for .NET 10 and later**. It reads WebP, PNG, BMP and JPEG, and writes lossy and lossless WebP, PNG, BMP and JPEG. The library has no NuGet dependencies, native libraries or P/Invoke calls. PNG compression uses its own managed deflate/inflate implementation.
 
 The `Image` API provides file and stream I/O, animation frames, metadata, pixel access and basic geometry operations. It uses `System.Drawing.Primitives` for types such as `Color` and `Rectangle`, without requiring `System.Drawing.Common`.
 
-**Status:** in development, with phase 6 complete. Lossy WebP encoding, animated WebP encoding and additional image processing are planned. See [plan.md](plan.md) for implementation phases and completion criteria.
+**Status:** in development. Phase 7 is complete, including static lossy and lossless WebP encoding. Animated WebP encoding and additional image processing are planned. See [plan.md](plan.md) for implementation phases and completion criteria.
 
 ## Supported formats
 
 | Format | Reading | Writing |
 | --- | --- | --- |
-| **WebP** | Lossy VP8, lossless VP8L, alpha, animation, ICC/EXIF/XMP | Static lossless VP8L, near-lossless, alpha, ICC/EXIF/XMP |
+| **WebP** | Lossy VP8, lossless VP8L, alpha, animation, ICC/EXIF/XMP | Static lossy VP8 and lossless VP8L, near-lossless, alpha, ICC/EXIF/XMP |
 | **PNG** | All standard color types and bit depths, transparency, Adam7, APNG | Grayscale, RGB/RGBA and palette images, Adam7, APNG |
 | **BMP** | Palette and truecolor images, RLE4/RLE8/OS/2 RLE24, bit fields, alpha, OS/2 and V2–V5 headers, embedded PNG/JPEG | Uncompressed 1/4/8-bit palette, 24-bit RGB and 32-bit RGBA, automatic bit depth selection |
 | **JPEG** | Baseline, extended and progressive Huffman coding; grayscale, YCbCr, RGB, CMYK and YCCK; restart markers | Baseline and progressive, quality 1–100, grayscale, 4:4:4/4:2:2/4:2:0/4:4:0 sampling, optimized Huffman tables and restart markers |
@@ -30,9 +30,10 @@ using var image = Image.FromFile("input.png", new DecoderOptions
 
 image.Save("output.webp", new WebPEncoderOptions
 {
-    Lossless = true,
-    Exact = true,
+    Quality = 85,
+    Method = 4,
 });
+image.Save("exact.webp", new WebPEncoderOptions { Lossless = true, Exact = true });
 image.Save("output.png", new PngEncoderOptions { Interlace = true });
 image.Save("output.bmp", new BmpEncoderOptions());
 image.Save("output.jpg", new JpegEncoderOptions
@@ -47,18 +48,18 @@ Console.WriteLine($"{info.Format.Name}: {info.Width}x{info.Height}, frames: {inf
 
 Use `Image.FromStream` to read a stream or `Image.FromBytes` to decode an image already in memory. `Save(Stream, options)` writes to a caller-owned stream; streams remain open and do not need to support seeking. `ToWebP`, `ToPng`, `ToBmp` and `ToJpeg` return encoded byte arrays. Images own their pixel buffers and should be disposed with `using`.
 
-`Save(path)` selects the format from the extension and uses its defaults. Convenience methods include `SaveAsPng`, `SaveAsBmp`, `SaveAsJpeg` and `SaveAsWebP`. **WebP currently requires an explicit lossless setting:** use `SaveAsWebP(path, lossless: true)` or `WebPEncoderOptions { Lossless = true }`. The default WebP options request lossy encoding, which is not implemented yet.
+`Save(path)` selects the format from the extension and uses its defaults. Convenience methods include `SaveAsPng`, `SaveAsBmp`, `SaveAsJpeg` and `SaveAsWebP`. WebP defaults to lossy encoding at quality 75 and method 4. Use `SaveAsWebP(path, lossless: true)` or `WebPEncoderOptions { Lossless = true }` for lossless output.
 
 ### Encoder options
 
 | Options type | Main controls |
 | --- | --- |
-| `WebPEncoderOptions` | `Lossless`, `Quality` (compression effort, 0–100), `Method` (0–6), `Exact`, `NearLossless` (0–100) |
+| `WebPEncoderOptions` | `Lossless`, `Quality` (0–100), `Method` (0–6), `Preset`, `Exact`, `NearLossless`, alpha quality/filter/compression, SNS, filtering, segments, partitions, target size/PSNR, passes and `UseSharpYuv` |
 | `PngEncoderOptions` | `CompressionLevel` (0–9), `ColorType`, `FilterStrategy`, `Interlace`, `SaveAnimation` |
 | `BmpEncoderOptions` | `BitsPerPixel` (automatic, 1/4/8/24/32) |
 | `JpegEncoderOptions` | `Quality` (1–100), `Subsampling`, `Progressive`, `OptimizeCoding`, `RestartInterval`, `BackgroundColor` |
 
-For a pixel-exact WebP round-trip, set `Lossless = true`, `Exact = true` and leave `NearLossless = 100`. With `Exact = false`, RGB values under fully transparent pixels may change to improve compression. Lower `NearLossless` values permit pixel quantization. WebP settings for lossy encoding and animation are reserved for later phases.
+For a pixel-exact WebP round-trip, set `Lossless = true`, `Exact = true` and leave `NearLossless = 100`. With `Exact = false`, RGB values under fully transparent pixels may change to improve compression. Lower `NearLossless` values permit pixel quantization. For lossy WebP, `Quality` controls visual quality and `Method` controls compression effort. `Preset` sets content-specific defaults; explicit SNS, filter and segment settings override them. `AlphaQuality = 100` preserves alpha exactly. `UseSharpYuv` enables the more accurate RGB→YUV conversion. `TargetSize` or `TargetPsnr` works with `Passes`; reaching a target depends on the image. As in libwebp, methods 3–6 use one token partition, while methods 0–2 honor `Partitions`. Animation options are reserved for the next phase.
 
 JPEG uses quality 75 and 4:2:0 sampling by default. Progressive output uses optimized Huffman tables. JPEG composites transparency onto `BackgroundColor` (white by default); JPEG and BMP save the active frame. PNG preserves animation by default. The WebP encoder currently rejects animated images.
 
@@ -88,7 +89,7 @@ byte[] webp = WebP.EncodeLosslessRgba(rgba, image.Width, image.Height);
 
 Implemented geometry operations include `Crop`, `RotateFlip`, `AutoOrient`, `Clone` and `Clear`. Resizing, resampling and additional color/compositing operations are planned.
 
-The `WebP` facade provides `TryGetInfo`, `DecodeImage`, `DecodeRgba`, `DecodeBgra`, `DecodeInto`, `Encode`, `EncodeLosslessRgba` and `Convert`. Pass lossless options when using `Encode` or `Convert`.
+The `WebP` facade provides `TryGetInfo`, `DecodeImage`, `DecodeRgba`, `DecodeBgra`, `DecodeInto`, `Encode`, `EncodeLosslessRgba` and `Convert`. `Encode` and `Convert` use lossy WebP defaults unless lossless options are supplied.
 
 ## Building and running
 
@@ -105,7 +106,8 @@ The sample CLI supports image inspection, conversion and decode timing:
 
 ```bash
 dotnet run -c Release --project samples/WebpSharp.Cli -- info input.webp
-dotnet run -c Release --project samples/WebpSharp.Cli -- convert input.png output.webp -lossless -q 75 -m 4
+dotnet run -c Release --project samples/WebpSharp.Cli -- convert input.png output.webp -q 85 -m 4
+dotnet run -c Release --project samples/WebpSharp.Cli -- convert input.png exact.webp -lossless -q 75 -m 4
 dotnet run -c Release --project samples/WebpSharp.Cli -- convert input.webp output.jpg -q 90
 dotnet run -c Release --project samples/WebpSharp.Cli -- decode input.webp 10
 ```
@@ -123,7 +125,7 @@ dotnet test -c Release --filter Category=Oracle
 
 Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `WEBPSHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.
 
-The WebP decoder ports originated from libwebp 1.3.2. Recomputing the existing corpus references with 1.6.0 left all 248 entries unchanged. At completion of phase 6, all 2012 tests passed. The nine WebP encoder source images round-trip exactly through both decoders and meet the size limit of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical WebP output is not guaranteed. JPEG encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
+The WebP decoder ports originated from libwebp 1.3.2. Recomputing the existing corpus references with 1.6.0 left all 248 entries unchanged. At completion of phase 7, all 2023 tests passed. The nine WebP encoder source images round-trip exactly through both decoders and meet the size limit of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless WebP output is not guaranteed. Lossy WebP was checked across 252 corpus configurations (nine images, four quality values, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and output size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks. JPEG encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
 
 Corpus regeneration requires libwebp 1.6.0 tools, ImageMagick, Python, NumPy and Pillow:
 

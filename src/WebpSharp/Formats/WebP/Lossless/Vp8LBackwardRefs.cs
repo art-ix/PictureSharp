@@ -57,11 +57,12 @@ internal sealed class Vp8LBackwardRefs : IDisposable
         return (2 * highest + ((v >> bits) & 1), bits, v & ((1 << bits) - 1));
     }
 
-    public Vp8LBackwardRefs(uint[] pixels, int width, int height, int quality, bool lowEffort)
+    public Vp8LBackwardRefs(uint[] pixels, int width, int height, int quality, bool lowEffort, bool box = false)
     {
         _pixels = pixels; _width = width; _count = width * height;
         _matches = ArrayPool<int>.Shared.Rent(_count);
         Fill(quality, lowEffort);
+        if (box) FillBox();
     }
 
     private static int Hash(uint first, uint second) => (int)(unchecked(second * 0xc6a4a793u + first * 0x5bd1e996u) >> 14);
@@ -76,7 +77,7 @@ internal sealed class Vp8LBackwardRefs : IDisposable
     }
 
     // port: src/enc/backward_references_enc.c VP8LHashChainFill
-    private void Fill(int quality, bool lowEffort)
+    private void Fill(int quality, bool lowEffort, bool box = false)
     {
         _matches.AsSpan(0, _count).Clear();
         if (_count <= 2) return;
@@ -181,6 +182,70 @@ internal sealed class Vp8LBackwardRefs : IDisposable
             i += length;
         }
         return refs;
+    }
+
+    // port: src/enc/backward_references_enc.c BackwardReferencesLz77Box
+    private void FillBox()
+    {
+        if (_count < 2) return;
+        ushort[] runs = ArrayPool<ushort>.Shared.Rent(_count);
+        Span<int> offsets = stackalloc int[32], newOffsets = stackalloc int[32]; offsets.Clear();
+        try
+        {
+            runs[_count - 1] = 1;
+            for (int i = _count - 2; i >= 0; i--) runs[i] = _pixels[i] == _pixels[i + 1] ? (ushort)Math.Min(runs[i + 1] + 1, MaxLength) : (ushort)1;
+            for (int y = 0; y <= 6; y++)
+            for (int x = -6; x <= 6; x++)
+            {
+                int offset = y * _width + x;
+                if (offset <= 0) continue;
+                int code = PlaneCode(_width, offset) - 1;
+                if (code < 32) offsets[code] = offset;
+            }
+            int count = 0, newCount = 0;
+            for (int i = 0; i < 32; i++) if (offsets[i] != 0) offsets[count++] = offsets[i];
+            for (int i = 0; i < count; i++)
+            {
+                bool reachable = false;
+                for (int j = 0; j < count; j++) reachable |= offsets[i] == offsets[j] + 1;
+                if (!reachable) newOffsets[newCount++] = offsets[i];
+            }
+            int previousOffset = -1, previousLength = -1;
+            _matches[0] = 0;
+            for (int i = 1; i < _count; i++)
+            {
+                int bestLength = Length(i), bestOffset = Distance(i);
+                bool compute = true;
+                if (bestLength >= MaxLength)
+                    for (int j = 0; j < count; j++) if (bestOffset == offsets[j]) { compute = false; break; }
+                if (compute)
+                {
+                    bool usePrevious = previousLength > 1 && previousLength < MaxLength;
+                    ReadOnlySpan<int> candidates = usePrevious ? newOffsets[..newCount] : offsets[..count];
+                    bestLength = usePrevious ? previousLength - 1 : 0; bestOffset = usePrevious ? previousOffset : 0;
+                    foreach (int offset in candidates)
+                    {
+                        int start = i - offset;
+                        if (start < 0 || _pixels[start] != _pixels[i]) continue;
+                        int length = 0, current = i;
+                        do
+                        {
+                            int a = runs[start], b = runs[current];
+                            if (a != b) { length += Math.Min(a, b); break; }
+                            length += a; start += a; current += a;
+                        } while (length <= MaxLength && current < _count && _pixels[start] == _pixels[current]);
+                        if (bestLength < length)
+                        {
+                            bestOffset = offset; bestLength = Math.Min(length, MaxLength);
+                            if (length >= MaxLength) break;
+                        }
+                    }
+                }
+                if (bestLength <= 4) { _matches[i] = 0; previousOffset = previousLength = 0; }
+                else { _matches[i] = (bestOffset << 12) | bestLength; previousOffset = bestOffset; previousLength = bestLength; }
+            }
+        }
+        finally { ArrayPool<ushort>.Shared.Return(runs); }
     }
 
     // port: src/enc/backward_references_enc.c BackwardRefsWithLocalCache

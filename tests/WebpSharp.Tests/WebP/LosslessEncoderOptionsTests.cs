@@ -156,7 +156,6 @@ public class LosslessEncoderOptionsTests
             new WebPEncoderOptions { Lossless = true, NearLossless = -1 },
             new WebPEncoderOptions { Lossless = true, NearLossless = 101 },
         }) Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, options));
-        Assert.Throws<NotSupportedException>(() => image.Save(output, new WebPEncoderOptions()));
         using var wide = new Image(16385, 1);
         Assert.Throws<ArgumentOutOfRangeException>(() => wide.Save(output, new WebPEncoderOptions { Lossless = true }));
         Assert.Equal(0, output.Length);

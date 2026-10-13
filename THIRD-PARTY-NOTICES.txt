@@ -5,11 +5,13 @@ WebpSharp contains C# ports of code from the projects listed below. Their
 license terms apply to the corresponding parts of this library.
 
 -------------------------------------------------------------------------------
-libwebp (https://chromium.googlesource.com/webm/libwebp), versions 1.3.2 (original decoder ports) and 1.6.0 (VP8L encoder)
+libwebp (https://chromium.googlesource.com/webm/libwebp), versions 1.3.2 (original decoder ports) and 1.6.0 (VP8/VP8L encoders and SharpYuv)
 Used for: WebP lossy (VP8) and lossless (VP8L) decoder and encoder, alpha,
 animation, sharp YUV conversion.
 -------------------------------------------------------------------------------
 Copyright (c) 2010, Google Inc. All rights reserved.
+Copyright 2011 Google Inc. All Rights Reserved.
+Copyright 2022 Google Inc. All Rights Reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are

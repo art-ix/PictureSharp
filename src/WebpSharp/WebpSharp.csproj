@@ -7,7 +7,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>WebpSharp</PackageId>
-    <Description>Pure managed WebP encoder/decoder (lossy, lossless, alpha, animation) with PNG/JPEG import, PNG export and a System.Drawing-like Image API. No native dependencies.</Description>
+    <Description>Pure C# image library for .NET 10: WebP decoding (lossy, lossless, alpha, animation), static WebP encoding, PNG/BMP/JPEG reading and writing, metadata and pixel access. No native dependencies.</Description>
     <PackageTags>webp;image;png;jpeg;codec;encoder;decoder</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>

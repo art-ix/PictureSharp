@@ -337,7 +337,7 @@ Specyfikacje: ITU-T T.81 (w tym Annex K: tablice kwantyzacji i Huffmana), JFIF 1
 Weryfikacja: `dotnet build -c Release` (0 ostrzeżeń/błędów), `dotnet test -c Release --no-build` (2012/2012, w tym 87 nowych testów enkodera).
 - 9 syntetycznych źródeł PNG: identyczne RGBA po dekodowaniu naszym dekoderem i `dwebp` 1.6.0; wszystkie rozmiary mieszczą się w limicie `cwebp -lossless -exact -q 75 -m 4` +1%. Jest to kryterium zastępcze DoD; pełna zgodność bajtowa z `cwebp` nie jest deklarowana.
 - Testy metod 0–6 i jakości 0/25/75/100, granic palety i wymiarów, długich powtórzeń, color cache, `Exact`, poziomów `NearLossless`, limitów Huffmana i kosztów stałoprzecinkowych zgodnych z 1.6.0.
-- Zapis statycznego VP8L przez `Image.Save`/`SaveAsWebP`/`ToWebP`, `WebP.Encode`, `WebP.EncodeLosslessRgba` i `WebP.Convert`; ICC/EXIF/XMP, padding RIFF, strumienie bez seek, walidacja przed zapisem. Należy podać `Lossless = true`; lossy i animacje pozostają w fazach 7–8.
+- Zapis statycznego VP8L przez `Image.Save`/`SaveAsWebP`/`ToWebP`, `WebP.Encode`, `WebP.EncodeLosslessRgba` i `WebP.Convert`; ICC/EXIF/XMP, padding RIFF, strumienie bez seek, walidacja przed zapisem. Tryb VP8L wybiera `Lossless = true`; enkoder lossy opisano w fazie 7, a zapis animacji pozostaje w fazie 8.
 - Tryby transformacji i referencje LZ77 są porównywane według rzeczywistego rozmiaru strumienia. Port jest skalarny; dalsza optymalizacja szybkości i alokacji pozostaje w fazie wydajnościowej.
 - Przejście wyroczni na 1.6.0 nie zmieniło 248 wpisów `reference.json`; źródła i narzędzia natywne pozostają wyłącznie w ignorowanym `reference/`.
 
@@ -354,6 +354,14 @@ Weryfikacja: `dotnet build -c Release` (0 ostrzeżeń/błędów), `dotnet test -
   - rozmiar pliku ≤ `cwebp -lossless` +1%, docelowo identyczne bajty.
 
 ### Faza 7: enkoder lossy VP8 i alfa (ok. 6k LOC)
+**Status: ukończona (2026-10-13), na bazie libwebp 1.6.0.**
+Weryfikacja: `dotnet build -c Release --no-restore` (0 ostrzeżeń/błędów), `dotnet test -c Release --no-build` (2023/2023).
+- Skalarne DCT/WHT, predykcje, kwantyzacja, koszty, zapis bitów i tokenów porównane dokładnie z natywnymi funkcjami. Analiza i rekonstrukcja 3360 makrobloków zgodne z referencją; RGB→YUV oraz SharpYuv sprawdzone także dla nieparzystych i małych wymiarów.
+- 9 źródeł PNG × jakości 0/35/75/100 × metody 0–6: wszystkie 252 kombinacje spełniają DoD. Obrazy nieprzezroczyste są bajtowo zgodne z `cwebp`; przy różnicach w kompresji ALPH piksele po `dwebp` są identyczne, a rozmiar nie przekracza +1%.
+- 116 porównań ustawień presetów, SNS, filtrów, segmentów, wieloprzebiegowego sterowania rozmiarem/PSNR, alfy, `Exact` i SharpYuv. 20 konfiguracji partycji zgodnych bajtowo z natywnym API; jak w libwebp, metody 3–6 używają jednej partycji tokenów.
+- Publiczne API zapisuje statyczne VP8/VP8X z ALPH oraz ICC/EXIF/XMP. Domyślne opcje WebP działają (lossy q75/m4); walidacja opcji i wymiarów odbywa się przed zapisem.
+- Uzupełniono próby VP8L dla metody 6/jakości 100: wszystkie transformacje również przy małych paletach, wariant bez cache, sortowanie palety Modified Zeng oraz LZ77 Box. Biblioteka pozostaje bez zależności i kodu natywnego; zapis animacji pozostaje w fazie 8.
+
 Źródła: `src/enc/webp_enc.c`, `config_enc.c`, `picture_csp_enc.c`, `analysis_enc.c`, `quant_enc.c`, `frame_enc.c`, `tree_enc.c`, `token_enc.c`, `syntax_enc.c`, `filter_enc.c`, `cost_enc.c`, `iterator_enc.c`, `alpha_enc.c`, `picture_tools_enc.c`, `src/dsp/enc.c`, `cost.c`, `src/utils/quant_levels_utils.c`, opcjonalnie `sharpyuv/`.
 - RGB→YUV420.
 - Analiza makrobloków i k-means do maksymalnie 4 segmentów.

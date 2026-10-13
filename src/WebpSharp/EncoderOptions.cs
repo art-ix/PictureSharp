@@ -74,7 +74,7 @@ public sealed class WebPEncoderOptions : EncoderOptions
     /// <summary>Predictive filter for the alpha plane. Default: <see cref="WebPAlphaFilter.Fast"/>.</summary>
     public WebPAlphaFilter AlphaFilter { get; init; } = WebPAlphaFilter.Fast;
 
-    /// <summary>Preserve RGB values under fully transparent pixels (otherwise they are modified for better compression).</summary>
+    /// <summary>Disable RGB cleanup under fully transparent pixels. Lossless mode preserves these RGB values exactly.</summary>
     public bool Exact { get; init; }
 
     /// <summary>Near-lossless preprocessing level 0–100 for lossless mode (100 = off). Default: 100.</summary>
@@ -128,6 +128,9 @@ public sealed class WebPEncoderOptions : EncoderOptions
     internal override void Validate()
     {
         if (!float.IsFinite(Quality) || Quality is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(Quality), Quality, "Expected 0–100.");
+        if (!Enum.IsDefined(Preset)) throw new ArgumentOutOfRangeException(nameof(Preset));
+        if (!Enum.IsDefined(AlphaFilter)) throw new ArgumentOutOfRangeException(nameof(AlphaFilter));
+        if (MaxDegreeOfParallelism != -1 && MaxDegreeOfParallelism < 1) throw new ArgumentOutOfRangeException(nameof(MaxDegreeOfParallelism));
         if (Method is < 0 or > 6) throw new ArgumentOutOfRangeException(nameof(Method), Method, "Expected 0–6.");
         if (AlphaQuality is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(AlphaQuality), AlphaQuality, "Expected 0–100.");
         if (NearLossless is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(NearLossless), NearLossless, "Expected 0–100.");
@@ -137,7 +140,7 @@ public sealed class WebPEncoderOptions : EncoderOptions
         if (Segments is < 1 or > 4) throw new ArgumentOutOfRangeException(nameof(Segments), Segments, "Expected 1–4.");
         if (Partitions is < 0 or > 3) throw new ArgumentOutOfRangeException(nameof(Partitions), Partitions, "Expected 0–3.");
         if (TargetSize < 0) throw new ArgumentOutOfRangeException(nameof(TargetSize), TargetSize, "Expected >= 0.");
-        if (TargetPsnr < 0) throw new ArgumentOutOfRangeException(nameof(TargetPsnr), TargetPsnr, "Expected >= 0.");
+        if (!float.IsFinite(TargetPsnr) || TargetPsnr < 0) throw new ArgumentOutOfRangeException(nameof(TargetPsnr), TargetPsnr, "Expected >= 0.");
         if (Passes is < 1 or > 10) throw new ArgumentOutOfRangeException(nameof(Passes), Passes, "Expected 1–10.");
         if (KeyframeMin < 0 || KeyframeMax < KeyframeMin) throw new ArgumentOutOfRangeException(nameof(KeyframeMax), "Expected 0 <= KeyframeMin <= KeyframeMax.");
     }
