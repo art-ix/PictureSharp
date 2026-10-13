@@ -39,8 +39,8 @@ using var image = Image.Load("upload.jpg", options);
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `MaxPixels` | 2^28 | Maximum width × height; larger images throw `ImageFormatException` before pixels are allocated. |
-| `FirstFrameOnly` | false | Decode only the first frame of animated WebP/APNG. |
+| `MaxPixels` | 2^28 | Maximum width × height; larger images throw `ImageFormatException` before pixels are allocated. For GIF the limit covers all decoded frames together, because tiny GIF frames still decode to full canvases. |
+| `FirstFrameOnly` | false | Decode only the first frame of animated WebP/APNG/GIF. |
 | `ApplyExifOrientation` | false | Same as calling `Mutate(x => x.AutoOrient())` after loading. |
 | `IgnoreMetadata` | false | Do not read ICC, EXIF and XMP blocks. |
 | `StrictChecksums` | false | PNG: fail on CRC mismatches instead of ignoring them. |
@@ -90,8 +90,9 @@ byte[] png = image.ToPng(new() { CompressionLevel = 9 });
 | PNG | `SaveAsPng` | `SaveAsPngAsync` | `ToPng` |
 | JPEG | `SaveAsJpeg` | `SaveAsJpegAsync` | `ToJpeg` |
 | BMP | `SaveAsBmp` | `SaveAsBmpAsync` | `ToBmp` |
+| GIF | `SaveAsGif` | `SaveAsGifAsync` | `ToGif` |
 
-Streams are left open and do not need to be seekable. Defaults: WebP lossy quality 75, method 4; PNG compression 6 with automatic color type; JPEG quality 75, 4:2:0; BMP automatic bit depth. WebP and PNG keep all animation frames; JPEG and BMP write the first frame. All option settings are in [Encoder options](encoder-options.md).
+Streams are left open and do not need to be seekable. Defaults: WebP lossy quality 75, method 4; PNG compression 6 with automatic color type; JPEG quality 75, 4:2:0; BMP automatic bit depth; GIF up to 256 colors per frame, alpha threshold 128. WebP, PNG and GIF keep all animation frames; JPEG and BMP write the first frame. All option settings are in [Encoder options](encoder-options.md).
 
 ## Recipes
 

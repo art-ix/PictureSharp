@@ -18,5 +18,11 @@ cmake --build "$webp_build" --parallel "${RASTERSHARP_BUILD_JOBS:-4}"
 for webp_tool in cwebp dwebp webpmux img2webp; do
   "$webp_build/$webp_tool" -version
 done
+# GIF oracles (gif2webp, anim_dump, anim_diff) need the giflib headers (libgif-dev).
+if [[ -x "$webp_build/gif2webp" && -x "$webp_build/anim_dump" ]]; then
+  "$webp_build/gif2webp" -version
+else
+  echo 'warning: giflib not found; gif2webp/anim_dump/anim_diff were not built (install libgif-dev).' >&2
+fi
 echo "Reference tools ready in $webp_build"
 echo 'Tests and corpus scripts select this directory automatically.'

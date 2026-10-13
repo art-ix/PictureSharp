@@ -1,4 +1,5 @@
 using RasterSharp.Formats.Bmp;
+using RasterSharp.Formats.Gif;
 using RasterSharp.Formats.Jpeg;
 using RasterSharp.Formats.Png;
 using RasterSharp.Formats.WebP;
@@ -19,6 +20,7 @@ internal static class CodecRegistry
         new(PngFormatDetector.Instance, PngDecoder.Instance, PngEncoder.Instance),
         new(JpegFormatDetector.Instance, JpegDecoder.Instance, JpegEncoder.Instance),
         new(BmpFormatDetector.Instance, BmpDecoder.Instance, BmpEncoder.Instance),
+        new(GifFormatDetector.Instance, GifDecoder.Instance, GifEncoder.Instance),
     ];
 
     private static readonly string UnrecognizedFormatMessage =

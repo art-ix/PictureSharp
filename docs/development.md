@@ -27,7 +27,7 @@ The library version comes from the [VERSION](../VERSION) file, read by `Director
 
 The committed synthetic corpus and reference hashes let the tests run without native image tools. `Category=Oracle` tests compare results with external implementations when the tools are available.
 
-New WebP ports and encoder comparisons use **libwebp 1.6.0**. Build its pinned sources and command-line tools with Git, CMake and a C compiler:
+New WebP ports and encoder comparisons use **libwebp 1.6.0**. Build its pinned sources and command-line tools with Git, CMake and a C compiler (with the giflib headers, `libgif-dev`, the script also builds the GIF oracles `gif2webp`, `anim_dump` and `anim_diff`):
 
 ```bash
 ./scripts/build-webp-reference.sh
@@ -42,19 +42,23 @@ Corpus regeneration requires libwebp 1.6.0 tools, ImageMagick, Python, NumPy and
 python3 -I tests/assets/generate_corpus.py
 python3 -I tests/assets/make_reference.py
 python3 -I tests/assets/make_jpeg_encoder_reference.py
+python3 -I tests/assets/gif_reference.py
 ```
+
+`generate_corpus.py` accepts format names (`webp`, `png`, `jpeg`, `bmp`, `gif`) to regenerate only those directories. `gif_reference.py` stores Pillow's quantization results; the GIF quantizer port follows the Pillow 10.2.0 C sources (`reference/pillow-10.2.0/`, fetched separately).
 
 Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder references. Additional JPEG oracle tests use a C compiler and libjpeg development headers, with Pillow and ImageMagick for independent decoding. External corpora are optional; their download procedure is described in [plan.md](../plan.md).
 
 ## What the tests verify
 
-At completion of phase 9.5, all 2203 tests passed.
+At completion of phase 9.9 (release 0.2.0), all 2682 tests passed.
 
 - **Decoders:** pixels match `dwebp` and Pillow exactly (SHA-256 of RGBA in `tests/assets/reference.json`). The WebP decoder ports originated from libwebp 1.3.2; recomputing the 248 corpus references with 1.6.0 changed none.
 - **Lossless WebP:** the nine encoder source images round-trip exactly through both decoders and meet the size of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless output is not guaranteed.
 - **Lossy WebP:** checked across 252 corpus configurations (nine images, four qualities, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and the size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks.
 - **Animated WebP:** 46 encoder tests, including 38 external checks through Pillow and webpmux 1.6.0 comparing decoded canvases, durations, loop counts, background color and EXIF extraction across lossy, lossless, mixed, blend/dispose and keyframe cases.
 - **JPEG encoder:** reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
+- **GIF:** decoded frames of the 30 corpus files match `anim_dump` 1.6.0 (or `gif2webp` where `anim_util.c` restores the wrong canvas, Pillow for files libwebp rejects); 147 quantization results are identical to Pillow 10.2.0 (median cut, octree, Floyd–Steinberg); RasterSharp's GIF files decode identically in `anim_dump` and Pillow; `WebP.Convert` matches `gif2webp` frame for frame, and GIF → lossless WebP → GIF round-trips exactly.
 - **Image processing:** 140 tests. The Pillow 10.2.0 oracle (`tests/assets/processing_reference.py`) checks 569 results for exact pixel equality: resizing with all filters, modes and anchors, compositing, background flattening, grayscale, enhancement, blur and sharpening, rotation, sepia and EXIF orientation.
 
 ## Public API snapshot

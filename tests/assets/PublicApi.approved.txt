@@ -45,6 +45,29 @@ enum FlipMode
     None = 0
     Horizontal = 1
     Vertical = 2
+enum GifDither
+    None = 0
+    FloydSteinberg = 1
+sealed record GifEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<GifEncoderOptions>
+    ctor()
+    property GifDither Dither { get; init; }
+    property GifQuantizer Quantizer { get; init; }
+    property ImageFormat Format { get; }
+    property System.Boolean Interlace { get; init; }
+    property System.Boolean OptimizeFrames { get; init; }
+    property System.Boolean SaveAnimation { get; init; }
+    property System.Int32 ColorCount { get; init; }
+    property System.Int32 TransparencyThreshold { get; init; }
+static class GifImageExtensions
+    method static System.Byte[] ToGif(Image image, GifEncoderOptions? options = null)
+    method static System.Threading.Tasks.Task SaveAsGifAsync(Image image, System.IO.Stream stream, GifEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsGifAsync(Image image, System.String path, GifEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Void SaveAsGif(Image image, System.IO.Stream stream, GifEncoderOptions? options = null)
+    method static System.Void SaveAsGif(Image image, System.String path, GifEncoderOptions? options = null)
+enum GifQuantizer
+    Auto = 0
+    MedianCut = 1
+    Octree = 2
 sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height)
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
@@ -115,6 +138,7 @@ sealed class ImageFormat : System.IEquatable<ImageFormat>
     property System.String MimeType { get; }
     property System.String Name { get; }
     property static ImageFormat Bmp { get; }
+    property static ImageFormat Gif { get; }
     property static ImageFormat Jpeg { get; }
     property static ImageFormat Png { get; }
     property static ImageFormat WebP { get; }

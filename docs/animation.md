@@ -1,6 +1,6 @@
 # Animation
 
-Animated WebP and APNG decode into an `Image` with several frames. Every frame is a complete canvas (blending and disposal are already applied), all frames have the image's size, and each has its own `Duration`.
+Animated WebP, APNG and GIF decode into an `Image` with several frames. Every frame is a complete canvas (blending and disposal are already applied), all frames have the image's size, and each has its own `Duration`.
 
 ## Reading frames
 
@@ -21,7 +21,7 @@ third.SaveAsPng("frame-3.png");
 | --- | --- |
 | `image.Frames` | The frames (`IReadOnlyList<ImageFrame>`); `Frames.RootFrame` is frame 0. |
 | `image.FrameCount`, `image.IsAnimated` | Number of frames; whether there is more than one. |
-| `image.LoopCount` | Repetitions; 0 means forever. |
+| `image.LoopCount` | Number of plays; 0 means forever (GIF's NETSCAPE repeat count is converted as `gif2webp` does: no extension is 1 play, *n* repeats are *n* + 1 plays). |
 | `image.AnimationBackgroundColor` | Background hint stored in the container (viewers often ignore it). |
 | `frame.Duration` | Display time of a frame. |
 | `frame[x, y]`, `frame.GetRowSpan(y)`, `frame.GetPixelSpan()`, `frame.GetPixelBytes()` | Pixel access per frame. |
@@ -83,3 +83,30 @@ animation.SaveAsPng("poster.png", new() { SaveAnimation = false });
 ```
 
 JPEG and BMP always write the first frame.
+
+## Saving animated GIF
+
+GIF keeps all frames unless `SaveAnimation = false`:
+
+```csharp
+animation.SaveAsGif("animation.gif");
+animation.SaveAsGif("small.gif", new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
+```
+
+Each frame stores only the rectangle that changed, unchanged pixels become transparent and repeated frames are merged into one longer frame (`OptimizeFrames`). A frame is disposed to the background only where the next frame becomes transparent. Durations are rounded to hundredths of a second. Frames keep their exact colors when they fit in the palette; otherwise all frames share one quantized palette. GIF transparency is all-or-nothing, decided by `TransparencyThreshold` (see [Encoder options](encoder-options.md#gif)).
+
+GIF frames are composited like browsers and libwebp's `gif2webp` do: the canvas starts transparent, "restore to background" clears to transparent and "restore to previous" restores the canvas as it was before the frame. Decoded durations are the stored delays (a delay of 0 stays 0 ms).
+
+## Converting between GIF and WebP
+
+```csharp
+WebP.Convert("animation.gif", "animation.webp");                 // like gif2webp: lossless, short frames get 100 ms
+
+using var gif = Image.Load("animation.gif");
+gif.SaveAsWebP("lossy.webp", new() { Quality = 80, KeyframeMin = 3, KeyframeMax = 5 });
+
+using var webp = Image.Load("animated.webp");
+webp.SaveAsGif("animated.gif");
+```
+
+`WebP.Convert` follows `gif2webp` 1.6.0: frames shown for 10 ms or less get 100 ms (as browsers display them) and frames are lossless unless options are passed; the loop count and background color carry over. Over the test corpus its frames, durations and loop counts are identical to `gif2webp` output. Converting the lossless WebP back to GIF restores the original frames.

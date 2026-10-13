@@ -7,7 +7,9 @@ license terms apply to the corresponding parts of this library.
 -------------------------------------------------------------------------------
 libwebp (https://chromium.googlesource.com/webm/libwebp), versions 1.3.2 (original decoder ports) and 1.6.0 (VP8/VP8L encoders, animation encoder/muxer and SharpYuv)
 Used for: WebP lossy (VP8) and lossless (VP8L) decoder and encoder, alpha,
-animation decoder and encoder, container muxer, sharp YUV conversion.
+animation decoder and encoder, container muxer, sharp YUV conversion, GIF frame
+composition and GIF to WebP conversion rules (examples/gifdec.c, gif2webp.c,
+anim_util.c).
 -------------------------------------------------------------------------------
 Copyright (c) 2010, Google Inc. All rights reserved.
 Copyright 2011 Google Inc. All Rights Reserved.
@@ -144,8 +146,11 @@ from Geometry.c, alpha premultiplication from Convert.c, size and crop box
 computation from ImageOps.contain/fit/pad), alpha compositing
 (AlphaComposite.c), brightness/contrast/color enhancement (ImageEnhance.py,
 Blend.c), box and Gaussian blur (BoxBlur.c), unsharp masking (UnsharpMask.c),
-3x3 kernel filtering (Filter.c, ImageFilter.SHARPEN) and rotation
-(Image.rotate, affine transforms from Geometry.c). The code was translated to
+3x3 kernel filtering (Filter.c, ImageFilter.SHARPEN), rotation
+(Image.rotate, affine transforms from Geometry.c) and GIF color quantization
+(median cut from Quant.c with QuantHash.c and QuantHeap.c, fast octree from
+QuantOctree.c, Floyd-Steinberg dithering from Convert.c and the palette color
+cache from Palette.c). The code was translated to
 C# and restructured; it is not the original source.
 -------------------------------------------------------------------------------
 Copyright (c) 1997-2011 by Secret Labs AB

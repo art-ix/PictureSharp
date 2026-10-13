@@ -1,6 +1,6 @@
 # Encoder options
 
-Every format has an options record: `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions` and `BmpEncoderOptions`, all deriving from `EncoderOptions`. Pass them to `Save`, `SaveAsync`, `SaveAs*` or `To*`:
+Every format has an options record: `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions`, `BmpEncoderOptions` and `GifEncoderOptions`, all deriving from `EncoderOptions`. Pass them to `Save`, `SaveAsync`, `SaveAs*` or `To*`:
 
 ```csharp
 image.SaveAsWebP("photo.webp", new() { Quality = 85, Method = 6 });
@@ -94,6 +94,27 @@ image.SaveAsBmp("rgb.bmp", new() { BitsPerPixel = 24 });
 ```
 
 `BitsPerPixel` is 0 (automatic), 1, 4, 8, 24 or 32. Automatic chooses a palette when the image is opaque with at most 256 colors, 24 bits when it is opaque, and 32 bits (with alpha) otherwise. Palette and 24-bit output drop alpha. BMP is written uncompressed and stores the first frame; an ICC profile is embedded in a `BITMAPV5HEADER`.
+
+## GIF
+
+```csharp
+image.SaveAsGif("out.gif");                                                  // exact colors when they fit, else median cut
+image.SaveAsGif("small.gif", new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
+image.SaveAsGif("fast.gif", new() { Quantizer = GifQuantizer.Octree });
+image.SaveAsGif("soft-edges.gif", new() { TransparencyThreshold = 32 });     // keep faint pixels opaque
+```
+
+| Property | Default | Meaning |
+| --- | --- | --- |
+| `ColorCount` | 256 | 2–256 palette entries per frame, including the transparent entry when one is needed. |
+| `Quantizer` | `Auto` | Used when the colors do not fit: `MedianCut` (the `Auto` choice) or `Octree`, ported from Pillow's `Image.quantize`. |
+| `Dither` | `None` | `FloydSteinberg` error diffusion against the quantized palette (smoother gradients, larger files). |
+| `TransparencyThreshold` | 128 | Pixels with lower alpha become transparent, all others opaque: GIF has no partial transparency. |
+| `Interlace` | false | Store rows in four interlaced passes. |
+| `SaveAnimation` | true | Write all frames of animated images (otherwise only the first frame). |
+| `OptimizeFrames` | true | Animation: write only changed rectangles, mark unchanged pixels transparent and merge repeated frames. |
+
+Images whose colors fit keep them exactly: one global palette when all frames together fit, otherwise exact local palettes per animation frame. Otherwise a still image is quantized exactly as Pillow's `Image.quantize(colors)` (same palette and indices), and an animation gets one quantized palette shared by all frames. Durations are stored in hundredths of a second (rounded; at most 655.35 s). ICC and XMP are written as application extensions; GIF has no EXIF.
 
 ## Recipes
 

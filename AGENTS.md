@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instrukcje dla agentów AI (i ludzi) pracujących nad **RasterSharp**: biblioteką .NET do przetwarzania obrazów oraz odczytu i zapisu WebP, PNG, BMP i JPEG, napisaną w 100% w C#.
+Instrukcje dla agentów AI (i ludzi) pracujących nad **RasterSharp**: biblioteką .NET do przetwarzania obrazów oraz odczytu i zapisu WebP, PNG, BMP, JPEG i GIF, napisaną w 100% w C#.
 
 Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.md](plan.md). Przed rozpoczęciem pracy przeczytaj go i ustal, w której fazie jesteś.
 
@@ -29,7 +29,7 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
   ```bash
   ./scripts/build-webp-reference.sh
   ```
-  Skrypt pobiera tag v1.6.0, sprawdza commit i buduje `cwebp`/`dwebp`/`webpmux`/`img2webp` w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają tę lokalną wersję; `RASTERSHARP_WEBP_TOOLS` pozwala wskazać inny katalog. Systemowe narzędzia 1.3.2 pozostają bez zmian.
+  Skrypt pobiera tag v1.6.0, sprawdza commit i buduje `cwebp`/`dwebp`/`webpmux`/`img2webp` (a z nagłówkami giflib, `libgif-dev`, także `gif2webp`/`anim_dump`/`anim_diff`) w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają tę lokalną wersję; `RASTERSHARP_WEBP_TOOLS` pozwala wskazać inny katalog. Systemowe narzędzia 1.3.2 pozostają bez zmian.
   Dekodery faz 1–3 portowano pierwotnie z 1.3.2; ich korpus sprawdzono także z 1.6.0. Stary katalog `reference/libwebp/` zachowujemy do porównań historycznych.
 - **Sposób portowania:**
   - Portujemy funkcja po funkcji.
@@ -92,6 +92,7 @@ Zasady testowania:
   python3 -I tests/assets/generate_corpus.py && python3 -I tests/assets/make_reference.py
   ```
 - **Zdjęcia w `samples/*.jpg|webp`** to prywatne pliki użytkownika (EXIF z GPS) – są w `.gitignore`, nie commitujemy ich; służą tylko do lokalnych testów (`Category=Local`) i benchmarków.
+- **Kwantyzacja GIF:** port z Pillow 10.2.0 (źródła C w `reference/pillow-10.2.0/`, tag `10.2.0`); referencje w `gif_quantize_reference.json` regeneruje `python3 -I tests/assets/gif_reference.py`.
 - **Dekodery:** wynik musi być piksel w piksel zgodny z `reference.json`. Hashe SHA-256 RGBA wylicza `make_reference.py` z `dwebp -pam` i Pillow; uruchamiaj go przez `python3 -I`.
 - **Enkoder lossless:** round-trip musi dać identyczne piksele.
 - **Enkoder lossy:** celujemy w bajty identyczne z `cwebp` 1.6.0. Kryterium zastępcze to parytet PSNR i rozmiaru (patrz DoD w [plan.md](plan.md)).

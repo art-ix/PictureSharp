@@ -4,7 +4,7 @@ using RasterSharp;
 
 // rastersharp-cli: small front-end for the RasterSharp library.
 //   info <file>...
-//   convert <input> <output> [-q quality] [-m method] [-lossless]
+//   convert <input> <output> [-q quality] [-m method] [-lossless] [-colors n] [-octree] [-dither]
 //   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
 
 if (args.Length == 0)
@@ -60,9 +60,10 @@ try
 
         case "convert" when args.Length >= 3:
         {
-            float quality = 75;
-            int method = 4;
+            float? quality = null;
+            int? method = null;
             bool lossless = false;
+            var gif = new GifEncoderOptions();
             for (int i = 3; i < args.Length; i++)
             {
                 switch (args[i])
@@ -70,6 +71,9 @@ try
                     case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                     case "-m": method = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                     case "-lossless": lossless = true; break;
+                    case "-colors": gif = gif with { ColorCount = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                    case "-octree": gif = gif with { Quantizer = GifQuantizer.Octree }; break;
+                    case "-dither": gif = gif with { Dither = GifDither.FloydSteinberg }; break;
                     default: throw new ArgumentException($"Unknown option {args[i]}");
                 }
             }
@@ -78,7 +82,26 @@ try
             using Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
             long decodeMs = sw.ElapsedMilliseconds;
             sw.Restart();
-            Save(image, args[2], quality, method, lossless);
+            ImageFormat target = ImageFormat.FromExtension(args[2]) ?? throw new ArgumentException("Unknown output extension.");
+            if (target == ImageFormat.Gif)
+            {
+                image.SaveAsGif(args[2], gif);
+            }
+            else if (target == ImageFormat.WebP && image.SourceFormat == ImageFormat.Gif)
+            {
+                // Like gif2webp: lossless unless a quality is given, with its keyframe distances for each mode.
+                bool lossy = !lossless && (quality is not null || method is not null);
+                WebP.Convert(args[1], args[2], !lossy && method is null ? null : new()
+                {
+                    Lossless = !lossy, Quality = quality ?? 75, Method = method ?? 4,
+                    KeyframeMin = lossy ? 3 : 9, KeyframeMax = lossy ? 5 : 17,
+                });
+            }
+            else
+            {
+                Save(image, args[2], quality ?? 75, method ?? 4, lossless);
+            }
+
             Console.WriteLine($"{args[1]} -> {args[2]}: {image.Width}x{image.Height}, decode {decodeMs} ms, encode {sw.ElapsedMilliseconds} ms, " +
                               $"{new FileInfo(args[2]).Length} bytes");
             return 0;
@@ -149,6 +172,7 @@ static void PrintUsage() => Console.Error.WriteLine(
       rastersharp-cli info <file>...
       rastersharp-cli decode <file> [iterations]
       rastersharp-cli convert <input> <output> [-q quality] [-m method] [-lossless]
+                              [-colors n] [-octree] [-dither]          (GIF output)
       rastersharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]
                              [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
     """);

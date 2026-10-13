@@ -2,9 +2,10 @@
 """Generates the deterministic test corpus in tests/assets/corpus.
 
 Sources are synthetic (no third-party photos), variants are produced with the reference
-tools: cwebp / img2webp / webpmux (libwebp 1.6.0), ImageMagick `convert` and Pillow.
+tools: cwebp / img2webp / webpmux (libwebp 1.6.0), ImageMagick `convert` and Pillow, plus a
+small GIF writer below for block layouts no tool produces.
 
-Run with:  python3 -I tests/assets/generate_corpus.py
+Run with:  python3 -I tests/assets/generate_corpus.py [webp|png|jpeg|bmp|gif ...]
 Then:      python3 -I tests/assets/make_reference.py
 """
 import io
@@ -642,6 +643,168 @@ def generate_bmp():
     write_bmp(path("bmp", "pal4_short_palette.bmp"), w, h, 4, pack_indices(g4small, 4), pal4)
 
 
+# --------------------------------------------------------------------------- GIF
+
+def lzw_encode(indices, min_code_size, deferred_clear=False):
+    """Plain GIF LZW. With deferred_clear the table stays full instead of being reset at 4096 codes."""
+    clear, eoi = 1 << min_code_size, (1 << min_code_size) + 1
+    out, acc, nbits = bytearray(), 0, 0
+
+    def emit(code, width):
+        nonlocal acc, nbits
+        acc |= code << nbits
+        nbits += width
+        while nbits >= 8:
+            out.append(acc & 0xFF)
+            acc >>= 8
+            nbits -= 8
+
+    width, table, next_code = min_code_size + 1, {}, eoi + 1
+    emit(clear, width)
+    prefix = None
+    for k in indices:
+        if prefix is None:
+            prefix = k
+            continue
+        if (prefix, k) in table:
+            prefix = table[(prefix, k)]
+            continue
+        emit(prefix, width)
+        if next_code < 4096:
+            table[(prefix, k)] = next_code
+            next_code += 1
+            if next_code > (1 << width) and width < 12:
+                width += 1
+        elif not deferred_clear:
+            emit(clear, width)
+            width, table, next_code = min_code_size + 1, {}, eoi + 1
+        prefix = k
+    if prefix is not None:
+        emit(prefix, width)
+    emit(eoi, width)
+    if nbits:
+        out.append(acc & 0xFF)
+    return bytes(out)
+
+
+def gif_sub_blocks(data):
+    out = bytearray()
+    for i in range(0, len(data), 255):
+        out += bytes([len(data[i:i + 255])]) + data[i:i + 255]
+    return bytes(out) + b"\0"
+
+
+def gif_table(colors, bits):
+    return b"".join(bytes(c) for c in colors) + bytes(3 * ((1 << bits) - len(colors)))
+
+
+def gif_header(w, h, gct=None, bits=0, bg=0, version=b"89a"):
+    flags = 0x80 | 0x70 | (bits - 1) if gct is not None else 0
+    return b"GIF" + version + struct.pack("<HHBBB", w, h, flags, bg, 0) + (gif_table(gct, bits) if gct is not None else b"")
+
+
+def gif_gce(delay=0, transparent=None, dispose=0):
+    flags = (dispose << 2) | (transparent is not None)
+    return b"!\xf9\x04" + struct.pack("<BHB", flags, delay, transparent or 0) + b"\0"
+
+
+def gif_app(identifier, payload_blocks=b"\0"):
+    return b"!\xff\x0b" + identifier + payload_blocks
+
+
+def gif_loop(count, identifier=b"NETSCAPE2.0"):
+    return gif_app(identifier, b"\x03\x01" + struct.pack("<H", count) + b"\0")
+
+
+def gif_image(x, y, w, h, indices, min_code_size, local=None, bits=0, lzw=None):
+    flags = 0x80 | (bits - 1) if local is not None else 0
+    out = b"," + struct.pack("<HHHHB", x, y, w, h, flags) + (gif_table(local, bits) if local is not None else b"")
+    return out + bytes([min_code_size]) + gif_sub_blocks(lzw if lzw is not None else lzw_encode(indices, min_code_size))
+
+
+def generate_gif_hand():
+    pal4 = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
+    rng = np.random.default_rng(7)
+    noise = [int(v) for v in rng.integers(0, 4, 300 * 200)]
+
+    def save(name, data):
+        with open(path("gif", name + ".gif"), "wb") as f:
+            f.write(data)
+
+    save("hand_deferred_clear", gif_header(300, 200, pal4, 2) +
+         gif_image(0, 0, 300, 200, noise, 2, lzw=lzw_encode(noise, 2, deferred_clear=True)) + b";")
+    save("hand_codesize8_small_palette", gif_header(300, 200, pal4, 2) + gif_image(0, 0, 300, 200, noise, 8) + b";")
+    # Local tables only, frame offsets, transparency, a dispose-to-background frame.
+    red = [(200, 30, 30), (20, 20, 20)]
+    blue = [(30, 30, 200), (240, 240, 240), (0, 0, 0), (9, 9, 9)]
+    save("hand_local_tables", gif_header(40, 30) + gif_loop(0) +
+         gif_gce(20, None, 2) + gif_image(5, 5, 20, 10, [i % 2 for i in range(200)], 2, red, 1) +
+         gif_gce(30, 3) + gif_image(10, 8, 25, 20, [(i // 25 + i) % 4 for i in range(500)], 2, blue, 2) + b";")
+    # Frames without graphic control extensions, and dispose-to-background followed by restore-to-previous.
+    save("hand_no_gce", gif_header(16, 16, pal4, 2) + gif_loop(2) + gif_image(0, 0, 16, 16, [0] * 256, 2) +
+         gif_image(4, 4, 8, 8, [1] * 64, 2) + gif_image(6, 6, 4, 4, [2] * 16, 2) + b";")
+    save("hand_bg_then_previous", gif_header(8, 4, pal4, 2) + gif_loop(0) +
+         gif_gce(10, None, 0) + gif_image(0, 0, 8, 4, [0] * 32, 2) +
+         gif_gce(10, None, 2) + gif_image(0, 0, 4, 4, [1] * 16, 2) +
+         gif_gce(10, None, 3) + gif_image(2, 0, 4, 4, [2] * 16, 2) +
+         gif_gce(10, 0) + gif_image(2, 1, 4, 2, [3, 0, 3, 0, 0, 3, 0, 3], 2) + b";")
+    # Extensions: comment, plain text, an unknown application, XMP (raw packet + magic trailer), ICC, ANIMEXTS loop.
+    xmp = b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF/></x:xmpmeta>'
+    icc = b"\0\0\x01\x00fake-icc-profile" + bytes(range(256)) * 2
+    save("hand_extensions", gif_header(12, 10, pal4, 2) + b"!\xfe" + gif_sub_blocks(b"a comment") +
+         gif_app(b"ANIMEXTS1.0", b"\x03\x01\x02\x00\0") +
+         gif_app(b"XMP DataXMP", xmp + bytes([1] + list(range(255, -1, -1))) + b"\0") +
+         gif_app(b"ICCRGBG1012", gif_sub_blocks(icc)) + gif_app(b"SOMEAPP1.00", gif_sub_blocks(b"payload")) +
+         b"!\x01\x0c" + bytes(12) + gif_sub_blocks(b"text") + b"!\x77" + gif_sub_blocks(b"unknown label") +
+         gif_gce(5, 1) + gif_image(0, 0, 12, 10, [i % 4 for i in range(120)], 2) +
+         gif_gce(7) + gif_image(3, 3, 6, 4, [3] * 24, 2) + b";")
+    save("hand_loop_max", gif_header(4, 4, pal4, 2) + gif_loop(65535) + gif_gce(4) + gif_image(0, 0, 4, 4, [0] * 16, 2) +
+         gif_gce(4) + gif_image(0, 0, 4, 4, [1] * 16, 2) + b";")
+    save("hand_zero_screen", gif_header(0, 0, pal4, 2) + gif_image(2, 3, 5, 4, [2] * 20, 2) + b";")
+    # Variants only Pillow reads: no color table at all (grayscale), indices beyond the table, garbage instead of a trailer.
+    save("hand_no_color_table", gif_header(16, 8) + gif_image(0, 0, 16, 8, list(range(128)), 7) + b";")
+    save("hand_index_beyond_table", gif_header(8, 4, pal4, 2) + gif_image(0, 0, 8, 4, [i % 8 for i in range(32)], 3) + b";")
+    save("hand_trailing_garbage", gif_header(8, 4, pal4, 2) + gif_image(0, 0, 8, 4, [i % 4 for i in range(32)], 2) + b"\x99junk")
+
+
+def generate_gif():
+    photo = os.path.join(SRC, "photo.png")
+    graphic = os.path.join(SRC, "graphic.png")
+    galpha = os.path.join(SRC, "graphic_alpha.png")
+    img = Image.open(photo).convert("RGB")
+    img.save(path("gif", "pil_photo.gif"))                       # median cut, interlaced (Pillow's default)
+    img.save(path("gif", "pil_photo_progressive.gif"), interlace=False)
+    img.convert("L").save(path("gif", "pil_gray.gif"))
+    Image.open(os.path.join(SRC, "photo_odd.png")).convert("RGB").save(path("gif", "pil_odd.gif"))
+    Image.open(os.path.join(SRC, "tiny.png")).convert("RGB").save(path("gif", "pil_tiny.gif"))
+    Image.open(graphic).convert("RGB").save(path("gif", "pil_graphic.gif"))
+    Image.open(galpha).convert("RGBA").save(path("gif", "pil_graphic_alpha.gif"))
+
+    alpha = make_anim_frames(6, 96, 64, True, alpha_value=255)
+    opaque = make_anim_frames(6, 96, 64, False)
+    alpha[0].save(path("gif", "pil_anim_alpha.gif"), save_all=True, append_images=alpha[1:], duration=100, loop=0)
+    for disposal in (1, 2, 3):
+        alpha[0].save(path("gif", f"pil_anim_dispose{disposal}.gif"), save_all=True, append_images=alpha[1:],
+                      duration=80, loop=0, disposal=disposal)
+    opaque[0].save(path("gif", "pil_anim_opaque.gif"), save_all=True, append_images=opaque[1:], duration=60, loop=3)
+    opaque[0].save(path("gif", "pil_anim_no_loop.gif"), save_all=True, append_images=opaque[1:], duration=60)
+    alpha[0].save(path("gif", "pil_anim_durations.gif"), save_all=True, append_images=alpha[1:],
+                  duration=[0, 10, 20, 50, 1000, 30], loop=1, comment=b"durations")
+
+    tmp = path("gif_src", "x")[:-1]
+    files = []
+    for i, frame in enumerate(alpha):
+        files.append(os.path.join(tmp, f"frame_{i}.png"))
+        frame.save(files[-1])
+    run("convert", graphic, "GIF87:" + path("gif", "im_87a.gif"))
+    run("convert", os.path.join(SRC, "photo_odd.png"), "-interlace", "GIF", path("gif", "im_interlace.gif"))
+    run("convert", "-delay", "8", "-loop", "0", "-dispose", "background", *files, "-layers", "Optimize", path("gif", "im_anim_optimize.gif"))
+    run("convert", "-delay", "5", "-loop", "0", "-dispose", "previous", *files, path("gif", "im_dispose_previous.gif"))
+    run("convert", "-delay", "5", "-loop", "2", "-dispose", "background", *files, path("gif", "im_dispose_background.gif"))
+    shutil.rmtree(tmp)
+    generate_gif_hand()
+
+
 # --------------------------------------------------------------------------- EXIF helper
 
 def make_exif(orientation=None, resolution=None):
@@ -671,14 +834,21 @@ def main():
     for tool in ("cwebp", "img2webp", "webpmux", "convert"):
         if shutil.which(tool) is None:
             sys.exit(f"missing tool: {tool}")
-    for sub in ("webp", "png", "jpeg", "bmp"):
+    parts = sys.argv[1:] or ["webp", "png", "jpeg", "bmp", "gif"]
+    for sub in parts:
         shutil.rmtree(os.path.join(CORPUS, sub), ignore_errors=True)
     sources = generate_sources()
-    generate_webp(sources)
-    generate_animations()
-    generate_png(sources)
-    generate_jpeg()
-    generate_bmp()
+    if "webp" in parts:
+        generate_webp(sources)
+        generate_animations()
+    if "png" in parts:
+        generate_png(sources)
+    if "jpeg" in parts:
+        generate_jpeg()
+    if "bmp" in parts:
+        generate_bmp()
+    if "gif" in parts:
+        generate_gif()
     count = sum(len(files) for _, _, files in os.walk(CORPUS))
     print(f"corpus: {count} files in {CORPUS}")
 

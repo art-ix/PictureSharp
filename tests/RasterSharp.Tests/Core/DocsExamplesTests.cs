@@ -179,6 +179,11 @@ public sealed class DocsExamplesTests : IDisposable
         image.SaveAsJpeg(P("on-black.jpg"), new() { BackgroundColor = Color.Black });
         image.SaveAsBmp(P("out.bmp"));
         image.SaveAsBmp(P("rgb.bmp"), new() { BitsPerPixel = 24 });
+        image.SaveAsGif(P("out.gif"));
+        image.SaveAsGif(P("small.gif"), new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
+        image.SaveAsGif(P("fast.gif"), new() { Quantizer = GifQuantizer.Octree });
+        image.SaveAsGif(P("soft-edges.gif"), new() { TransparencyThreshold = 32 });
+        Assert.Equal(ImageFormat.Gif, Image.DetectFormat(P("small.gif")));
 
         using Image exactBack = Image.Load(P("exact.webp"));
         Assert.Equal(image.GetPixelSpan().ToArray(), exactBack.GetPixelSpan().ToArray());
@@ -394,6 +399,27 @@ public sealed class DocsExamplesTests : IDisposable
         built.SaveAsPng(P("poster.png"), new() { SaveAnimation = false });
         Assert.Equal(2, Image.Identify(P("animation.png")).FrameCount);
         Assert.Equal(1, Image.Identify(P("poster.png")).FrameCount);
+
+        built.SaveAsGif(P("animation.gif"));
+        built.SaveAsGif(P("small.gif"), new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
+        Assert.Equal(2, Image.Identify(P("animation.gif")).FrameCount);
+
+        RasterSharp.WebP.Convert(P("animation.gif"), P("animation.webp"));
+        using (var gif = Image.Load(P("animation.gif")))
+        {
+            gif.SaveAsWebP(P("lossy.webp"), new() { Quality = 80, KeyframeMin = 3, KeyframeMax = 5 });
+        }
+
+        using (var webp = Image.Load(P("animated.webp")))
+        {
+            webp.SaveAsGif(P("animated.gif"));
+        }
+
+        using Image converted = Image.Load(P("animation.webp"));
+        using Image gifBack = Image.Load(P("animation.gif"));
+        Assert.Equal(gifBack.FrameCount, converted.FrameCount);
+        Assert.Equal(gifBack.GetPixelSpan().ToArray(), converted.GetPixelSpan().ToArray());
+        Assert.Equal(Image.Identify(P("animated.webp")).FrameCount, Image.Identify(P("animated.gif")).FrameCount);
     }
 
     // ------------------------------------------------------------ metadata.md

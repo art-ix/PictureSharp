@@ -24,8 +24,11 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
     /// <summary>Windows/OS2 bitmap (BMP/DIB).</summary>
     public static ImageFormat Bmp { get; } = new("BMP", "image/bmp", ".bmp", ".dib");
 
+    /// <summary>Graphics Interchange Format (GIF87a/GIF89a), including animations.</summary>
+    public static ImageFormat Gif { get; } = new("GIF", "image/gif", ".gif");
+
     /// <summary>All file formats known to the library.</summary>
-    public static IReadOnlyList<ImageFormat> All { get; } = [WebP, Png, Jpeg, Bmp];
+    public static IReadOnlyList<ImageFormat> All { get; } = [WebP, Png, Jpeg, Bmp, Gif];
 
     /// <summary>Short name of the format.</summary>
     public string Name { get; }

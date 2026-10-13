@@ -7,6 +7,7 @@ Potrzebna jest biblioteka .NET (**net10.0+**) do kodowania i dekodowania WebP, n
 Ustalenia z użytkownikiem:
 - **WebP w pełnym zakresie** (odczyt i zapis): lossy VP8, lossless VP8L, alfa ALPH, animacja ANIM/ANMF, metadane ICCP/EXIF/XMP.
 - **PNG:** odczyt i zapis. **BMP:** odczyt i zapis. **JPEG:** odczyt i zapis (enkoder w fazie 5.5).
+- **GIF:** odczyt i zapis (w tym animacje) oraz konwersja animowany GIF ↔ animowany WebP (faza 9.9).
 - **Deflate/zlib piszemy sami.** Nie używamy `ZLibStream`, bo pod spodem woła natywne zlib.
 - **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli, operacje na kolorach i filtry (od fazy 9.5).
 
@@ -36,7 +37,7 @@ RasterSharp/
     Image.cs, ImageFrame.cs, ImageFrameCollection.cs, ImageInfo.cs, ImageFormat.cs,
     Rgba32.cs, PixelFormat.cs, ImageMetadata.cs, BitmapData.cs, enums (RotateFlipType,
     ResizeMode, ResamplingFilter, ImageLockMode, ExifOrientation), DecoderOptions.cs,
-    EncoderOptions.cs (+ WebPEncoderOptions, PngEncoderOptions, BmpEncoderOptions), WebP.cs (fasada),
+    EncoderOptions.cs (+ WebPEncoderOptions, PngEncoderOptions, BmpEncoderOptions, GifEncoderOptions), WebP.cs (fasada),
     ImageFormatException.cs
     Formats/
       FormatDetector.cs, IImageDecoder.cs, IImageEncoder.cs, CodecRegistry.cs (internal)
@@ -53,9 +54,11 @@ RasterSharp/
       Bmp/  (BmpDecoder, BmpEncoder, BmpHeaders, Rle)
       Jpeg/ (JpegDecoder, JpegHuffman, JpegIdct (islow), Progressive, Upsampler, ColorConverter,
             JpegEncoder, JpegFdct, JpegQuantizer, JpegHuffmanEncoder, JpegMarkerWriter)
+      Gif/  (GifFile, GifDecoder, GifEncoder, GifLzwDecoder/Encoder, GifPaletteBuilder)
       Metadata/ (ExifReader/Patcher: Orientation, rozdzielczość; IccProfile)
     Compression/ (Inflater, Deflater, Adler32, Crc32)
-    Processing/  (Resizer, Kernels, Geometry, ColorOps, Compositor, PixelConverter)
+    Processing/  (Resizer, Kernels, Geometry, ColorOps, Compositor, PixelConverter,
+                  Quantization/: MedianCutQuantizer, OctreeQuantizer, PaletteMapper, QuantHashTable)
     Internal/    (BitHelpers, pooling, SIMD helpers)
   tests/RasterSharp.Tests/         # xUnit (zależności tylko w testach)
     assets/ generate_corpus.py, make_reference.py, fetch-external.sh, reference.json, corpus/, reference/
@@ -76,7 +79,7 @@ Zasady kodu:
 ### Typy podstawowe
 - `Rgba32`: struktura `{byte R,G,B,A}` w układzie sekwencyjnym, z konwersjami do i z `System.Drawing.Color` oraz `uint`. Przechowuje **alfę prostą** (niepremultiplikowaną), tak samo jak WebP i PNG.
 - `PixelFormat` (do eksportu i importu): `Rgba32, Bgra32, Argb32, Rgb24, Bgr24, Gray8, Rgba32Premultiplied, Bgra32Premultiplied`.
-- `ImageFormat`: klasa z instancjami statycznymi `WebP`, `Png`, `Bmp`, `Jpeg`, `MemoryBmp`. Właściwości: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`.
+- `ImageFormat`: klasa z instancjami statycznymi `WebP`, `Png`, `Bmp`, `Jpeg`, `Gif` (od fazy 9.9), `MemoryBmp`. Właściwości: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`.
 - `ImageInfo` (wynik `Identify`, bez dekodowania pikseli): `Format`, `Width`, `Height`, `HasAlpha`, `FrameCount`, `IsAnimated`, `WebPCompression` (Lossy/Lossless/Mixed), `Orientation`, `HorizontalResolution`/`VerticalResolution`.
 - `ImageMetadata`: `byte[]? IccProfile`, `Exif`, `Xmp`, `ExifOrientation Orientation`, `Clear()`.
 - `ImageFormatException : FormatException`, rzucany dla uszkodzonych lub nierozpoznanych danych. Poprawne pliki z nieobsługiwanymi funkcjami (np. arytmetyczny JPEG) dają `NotSupportedException`.
@@ -155,6 +158,9 @@ Opcje są rekordami (`with`), a wartości sprawdzamy przy ustawianiu (`init` ze 
   - `BitsPerPixel` (Auto: 1/4/8 z paletą przy ≤256 kolorach, 24 dla obrazów nieprzezroczystych, 32 z kanałem alfa)
   - `Metadata` (profil ICC w nagłówku BITMAPV5HEADER)
 - **`JpegEncoderOptions`:** `Quality` (1–100), `Subsampling`, `Progressive`, `OptimizeCoding`, `RestartInterval`, `BackgroundColor` (`Rgba32`, nieprzezroczysty), `Metadata`.
+- **`GifEncoderOptions`** (faza 9.9):
+  - `ColorCount` (2–256, domyślnie 256), `Quantizer` (Auto/MedianCut/Octree), `Dither` (None/FloydSteinberg)
+  - `TransparencyThreshold` (0–255, domyślnie 128), `Interlace`, `SaveAnimation`, `OptimizeFrames`, `Metadata` (XMP/ICC)
 
 ### Fasada `WebP` (odwzorowuje proste API z `decode.h`/`encode.h`)
 
@@ -164,7 +170,7 @@ static byte[] DecodeRgba(ReadOnlySpan<byte> data, out int width, out int height)
 static byte[] DecodeBgra(...);  static Size DecodeInto(ReadOnlySpan<byte> data, Span<byte> dst, int stride, PixelFormat f);
 static byte[] EncodeLosslessRgba(ReadOnlySpan<byte> rgba, int w, int h, int stride = 0);
 static byte[] Encode(Image image, WebPEncoderOptions? o = null);
-static void Convert(string inPath, string outPath, WebPEncoderOptions? o = null);   // jpg/png/bmp/webp -> webp
+static void Convert(string inPath, string outPath, WebPEncoderOptions? o = null);   // jpg/png/bmp/gif/webp -> webp
 ```
 
 Przykład użycia:
@@ -179,6 +185,7 @@ img.SaveAsWebP("photo.webp", new() { Quality = 82 });
 - Brak zarządzania kolorem: ICC jest przenoszony, ale nie stosowany. CMYK→RGB konwertujemy naiwnie.
 - PNG 16-bit jest konwertowane do 8 bitów.
 - BMP zapisujemy zawsze bez kompresji (RLE tylko przy odczycie). Animacje zapisujemy jako pierwszą klatkę (także JPEG).
+- GIF: alfa binarna (próg `TransparencyThreshold`), maksymalnie 256 kolorów na klatkę (kwantyzacja), czasy klatek w krokach 10 ms, EXIF nie jest zapisywany.
 - Strumień wejściowy jest wczytywany w całości do pamięci.
 
 ---
@@ -427,6 +434,85 @@ Weryfikacja: `dotnet build RasterSharp.slnx -c Release` (0 ostrzeżeń/błędów
   - migawka publicznego API `tests/assets/PublicApi.approved.txt` zatwierdzona (`PublicApiTests`),
   - przykłady z README i `docs/` kompilują się i działają (`DocsExamplesTests`).
 
+### Faza 9.9: GIF, odczyt i zapis z animacją, konwersja GIF↔WebP (ok. 3k LOC)
+**Status: ukończona (2026-10-13), wydana jako 0.2.0.**
+Weryfikacja: `dotnet build RasterSharp.slnx -c Release` (0 ostrzeżeń/błędów), `dotnet test -c Release` (2682/2682, w tym 439 testów GIF; testy `Category=Oracle` uruchomione z `gif2webp`/`anim_dump` 1.6.0 zbudowanymi z giflib).
+- Dekoder: 30 plików korpusu (Pillow, ImageMagick, ręcznie złożone: deferred clear, kod 8 bitów przy małej palecie, palety lokalne, brak GCE, disposal background→previous, rozszerzenia, ekran 0×0, brak palety, indeksy poza paletą, śmieci zamiast trailera) zgodnych piksel w piksel z `anim_dump` 1.6.0; w jednym przypadku (`hand_bg_then_previous`) `anim_util.c` przywraca niewłaściwe płótno, więc referencją jest `gif2webp`, a pliki odrzucane przez libwebp mają referencję z Pillow. Czasy, pętla, tło, XMP/ICC i `Identify` zgodne z referencją. Testy obcięć, błędnych kodów, przycinania klatek poza ekranem, limitu `MaxPixels` dla wszystkich klatek i 900 losowych mutacji (wyłącznie `ImageFormatException`).
+- Kwantyzacja: port `Quant.c`/`QuantHash.c`/`QuantHeap.c` (median cut), `QuantOctree.c` i ditheringu FS z `Convert.c`/`Palette.c`; 147 wyników (7 źródeł, w tym >65536 kolorów, × 7 liczb kolorów × 3 metody) identycznych z Pillow 10.2.0 co do palety i indeksów, a zapis obrazów statycznych daje te same piksele co `Image.quantize`.
+- Enkoder: round-trip bez strat dla wszystkich GIF-ów korpusu (także z przeplotem i bez optymalizacji), animacji WebP z ≤256 kolorami i 40 losowych animacji z przezroczystością; palety: wspólna dokładna, lokalne dokładne (tylko kolory rysowanych pikseli), a w ostateczności wspólna kwantyzowana. Nasze pliki dekodują się identycznie w `anim_dump` i Pillow (3 zestawy opcji × 39 wejść).
+- Konwersja: `WebP.Convert` daje klatki, czasy, pętlę, tło i XMP identyczne z `gif2webp` 1.6.0 dla 27 plików korpusu (pozostałe 3 `gif2webp` odrzuca albo czyta inaczej z wyboru); `webpmux -info` poprawnie listuje klatki; GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę; `gif2webp` czyta nasze GIF-y z tymi samymi klatkami.
+- Rozmiar względem Pillow `save_all=True, optimize=True`: 6 z 7 animacji korpusu WebP mniejszych (0,26–0,60×). Wyjątek `alpha_lossy` (6040 B wobec 1607 B): zapisujemy ją bezstratnie z lokalnymi paletami, a Pillow redukuje ją do 8 kolorów i psuje przezroczystość (poprawny wariant Pillow z `disposal=2` ma 2020 B). Kryterium „≤ Pillow +10%” spełnione dla przypadków bez utraty jakości; `ColorCount = 64` daje 1866 B.
+- Rozbieżności semantyki opisane w testach: Pillow powiększa płótno do klatek wychodzących poza ekran i inaczej usuwa klatki (tłem z palety), `gif2webp` zostawia klatki bez palety przezroczyste (my: skala szarości jak Pillow).
+
+Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 (pętla), XMP DataXMP, ICCRGBG1 (ICC). Algorytmy referencyjne: libwebp 1.6.0 `examples/gifdec.c`, `gif2webp.c`, `anim_util.c` (`ReadAnimatedGIF`); Pillow 10.2.0 `GifImagePlugin.py`, `GifDecode.c`, `GifEncode.c`, `Quant.c` (licencja HPND jest już w NOTICES). LZW piszemy sami, bez giflib.
+- Wykrywanie po sygnaturze `GIF87a`/`GIF89a`. `ImageFormat.Gif` (`image/gif`, `.gif`) rejestrujemy w `CodecRegistry`.
+- Dekoder GIF:
+  - logical screen descriptor, globalna i lokalne tablice kolorów (2–256 wpisów), kolejne bloki obrazu i rozszerzeń;
+  - LZW: minimalny rozmiar kodu 2–8, kody do 12 bitów, clear/EOI, „deferred clear” po 4096 kodach, dane w sub-blokach;
+  - przeplot (4 przebiegi);
+  - Graphic Control Extension: disposal 0–3 (wartości 4–7 traktujemy jak 0), indeks przezroczystości, opóźnienie (×10 ms, bez zmian w `ImageFrame.Duration`);
+  - NETSCAPE2.0/ANIMEXTS1.0 → `LoopCount` (model WebP, czyli liczba odtworzeń, 0 = nieskończenie): brak rozszerzenia → 1, n>0 → n+1 (z limitem 65535), 0 → 0, jak `gif2webp`;
+  - XMP (DataXMP) i ICC (ICCRGBG1) trafiają do `ImageMetadata`. Komentarze, Plain Text i nieznane rozszerzenia pomijamy;
+  - kompozycja klatek jak w `anim_util.c` `ReadAnimatedGIF` (semantyka przeglądarek):
+    - płótno startuje przezroczyste;
+    - dispose background czyści prostokąt do przezroczystości, a dispose previous przywraca poprzednią zawartość;
+    - klatki wychodzące poza ekran logiczny przycinamy;
+    - przezroczyste piksele mają postać (0,0,0,0);
+  - `AnimationBackgroundColor` z indeksu tła, jak `GIFGetBackgroundColor` (przezroczysty, gdy równy indeksowi przezroczystości);
+  - `Identify` bez dekodowania LZW: wymiary, `FrameCount`, `IsAnimated`, `HasAlpha` (z GCE);
+  - opcje `FirstFrameOnly` i `MaxPixels`, z budżetem pamięci klatek jak w animacjach WebP/APNG;
+  - tryb tolerancyjny jak w Pillow: obcięte dane LZW i indeksy spoza palety nie wywalają dekodera. Dane, których nie da się odczytać, dają wyłącznie `ImageFormatException`.
+- Enkoder GIF (`GifEncoderOptions`):
+  - `ColorCount` (2–256, domyślnie 256);
+  - `Quantizer` (Auto/MedianCut/Octree);
+  - `Dither` (None/FloydSteinberg, domyślnie None);
+  - `TransparencyThreshold` (0–255, domyślnie 128: alfa poniżej progu daje piksel przezroczysty, pozostałe są nieprzezroczyste);
+  - `Interlace`;
+  - `SaveAnimation` (domyślnie true);
+  - `OptimizeFrames` (domyślnie true);
+  - `Metadata` (XMP i ICC jako rozszerzenia aplikacji; EXIF nie istnieje w GIF).
+- Paleta i kwantyzacja:
+  - dokładna paleta, gdy kolorów (po progu alfy) jest ≤ `ColorCount`: kolory nieprzezroczyste zachowujemy bit w bit;
+  - w przeciwnym razie port median cut z Pillow `Quant.c` (indeksy jak `Image.quantize(method=MEDIANCUT)`), opcjonalnie octree, oraz dithering Floyd–Steinberga jak w `Convert.c`;
+  - jeden wpis rezerwujemy na przezroczystość;
+  - paleta globalna, gdy wszystkie klatki się w niej mieszczą, w przeciwnym razie lokalne tablice klatek.
+- Enkoder LZW ze słownikiem 4096 kodów i clear po zapełnieniu. Sub-bloki po 255 B.
+- Animacja:
+  - czasy ms → setne sekundy z zaokrągleniem (udokumentować utratę precyzji);
+  - `LoopCount` odwrotnie niż w dekoderze: 1 → brak NETSCAPE2.0, 0 → 0, n → n−1;
+  - `OptimizeFrames`, wzorowane na `_write_multiple_frames` w Pillow:
+    - prostokąt zmian względem poprzedniego płótna;
+    - niezmienione piksele kodujemy indeksem przezroczystości;
+    - dobór disposal none/background, gdy piksele stają się przezroczyste.
+- API:
+  - `SaveAsGif`/`SaveAsGifAsync`/`ToGif` (blok `extension(Image)`), `Image.Save` rozpoznaje `.gif`;
+  - `ImageFormat.Gif.CanEncode = true`;
+  - migawka `PublicApi.approved.txt`.
+- Konwersja:
+  - GIF→WebP przez `Image.Load(...).SaveAsWebP(...)`, `WebP.Convert` (przyjmuje `.gif`) i CLI `convert anim.gif anim.webp`;
+  - `WebP.Convert` i CLI dla wejścia GIF bez jawnych opcji używają domyślnych ustawień `gif2webp`: lossless, kmin/kmax 9/17 (lossy 3/5) i czasy ≤10 ms → 100 ms;
+  - WebP→GIF przez `SaveAsGif` i CLI `convert anim.webp anim.gif`;
+  - `docs/` (animation, loading-and-saving, encoder-options, cli) z przykładami testowanymi przez `DocsExamplesTests`.
+- Korpus (`generate_corpus.py`):
+  - Pillow: `save_all`, disposal 0–3, przezroczystość, palety lokalne, przeplot, pętle 0/1/n i brak NETSCAPE, czasy 0/10/20/…;
+  - ImageMagick: GIF87a, `-dispose`, `-layers optimize`, `-interlace GIF`;
+  - pliki ręczne: kod 2 i 8 bitów, deferred clear, klatki poza ekranem, obcięte LZW, brak GCT, indeks poza paletą, rozszerzenia comment/plain text/XMP/ICC.
+- Wyrocznie:
+  - `make_reference.py` liczy hashe skomponowanych klatek z `anim_dump` 1.6.0 oraz Pillow;
+  - `scripts/build-webp-reference.sh` buduje `gif2webp`/`anim_dump`/`anim_diff`, gdy jest giflib (`libgif-dev` instalujemy za zgodą użytkownika);
+  - testy `Category=Oracle` są pomijane bez narzędzi.
+- **DoD:**
+  - dekoder: wszystkie GIF-y z korpusu mają klatki identyczne z `anim_dump` 1.6.0 (piksele, a czasy po normalizacji ≤10 ms → 100 ms) i z Pillow tam, gdzie semantyka jest wspólna; różnice semantyki Pillow są opisane w testach. Uszkodzone pliki dają tylko `ImageFormatException`/`NotSupportedException`;
+  - enkoder:
+    - obrazy i animacje z ≤256 kolorami i alfą binarną przechodzą round-trip bez strat;
+    - kwantyzacja median cut daje indeksy identyczne z Pillow;
+    - nasze pliki otwierają Pillow, ImageMagick i `gif2webp` z pikselami równymi naszemu dekoderowi;
+    - rozmiar animacji ≤ Pillow `save_all=True, optimize=True` +10%;
+  - konwersja:
+    - GIF→WebP przez `WebP.Convert` daje klatki (po `anim_dump`/Pillow), czasy i pętlę identyczne z wynikiem `gif2webp` 1.6.0, a `webpmux -info` poprawnie listuje klatki;
+    - WebP→GIF dla 7 animacji korpusu daje klatki zgodne ze źródłem po progu alfy i kwantyzacji (dokładnie przy ≤256 kolorach);
+    - round-trip GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę.
+
 ### Faza 10: wydajność, odporność, wydanie
 - BenchmarkDotNet: dekodowanie i kodowanie w porównaniu z czasami `cwebp`/`dwebp`. Cel: ≤3× wolniej od natywnego C z SIMD.
 - Ścieżki `Vector128`/`Vector256` (cross-platform intrinsics) dla:
@@ -462,12 +548,14 @@ dotnet test -c Release                               # unit, zgodność z refere
 dotnet test -c Release --filter Category=Oracle      # porównania z cwebp/dwebp/webpmux (pomijane bez narzędzi)
 dotnet run -c Release --project samples/RasterSharp.Cli -- convert photo.jpg out.webp -q 80
 dwebp out.webp -o check.png && webpmux -info out.webp
+dotnet run -c Release --project samples/RasterSharp.Cli -- convert anim.gif anim.webp   # GIF↔WebP (faza 9.9)
 dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks
 ```
 
 Rodzaje testów:
 1. **Prymitywy:** bit reader/writer, Huffman, IDCT kontra wersja float, CRC/Adler na znanych wektorach, inflate kontra `ZLibStream`.
-2. **Zgodność dekoderów:** hashe pikseli z `reference.json` (dwebp i Pillow), libwebp-test-data, PngSuite, BMP Suite.
-3. **Enkodery:** porównanie bajtów i PSNR z `cwebp` 1.6.0, round-tripy lossless, metadane i animacje przez `webpmux` i Pillow.
-4. **API `Image`:** właściwości, Mutate/Clone, operacje i filtry (wyrocznia Pillow), konwersje formatów pikseli, migawka publicznego API i przykłady z README oraz `docs/`.
-5. **Odporność:** fuzz i mutacje korpusu.
+2. **Zgodność dekoderów:** hashe pikseli z `reference.json` (dwebp i Pillow), libwebp-test-data, PngSuite, BMP Suite, klatki GIF z `anim_dump` 1.6.0 i Pillow.
+3. **Konwersja GIF↔WebP:** porównanie z `gif2webp` 1.6.0 (klatki, czasy, pętla), round-tripy przez nasz dekoder i Pillow.
+4. **Enkodery:** porównanie bajtów i PSNR z `cwebp` 1.6.0, round-tripy lossless, metadane i animacje przez `webpmux` i Pillow.
+5. **API `Image`:** właściwości, Mutate/Clone, operacje i filtry (wyrocznia Pillow), konwersje formatów pikseli, migawka publicznego API i przykłady z README oraz `docs/`.
+6. **Odporność:** fuzz i mutacje korpusu.
