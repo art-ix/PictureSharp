@@ -127,7 +127,7 @@ public sealed class WebPEncoderOptions : EncoderOptions
 
     internal override void Validate()
     {
-        if (Quality is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(Quality), Quality, "Expected 0–100.");
+        if (!float.IsFinite(Quality) || Quality is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(Quality), Quality, "Expected 0–100.");
         if (Method is < 0 or > 6) throw new ArgumentOutOfRangeException(nameof(Method), Method, "Expected 0–6.");
         if (AlphaQuality is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(AlphaQuality), AlphaQuality, "Expected 0–100.");
         if (NearLossless is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(NearLossless), NearLossless, "Expected 0–100.");

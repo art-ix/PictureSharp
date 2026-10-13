@@ -2,7 +2,7 @@
 """Generates the deterministic test corpus in tests/assets/corpus.
 
 Sources are synthetic (no third-party photos), variants are produced with the reference
-tools: cwebp / img2webp / webpmux (libwebp 1.3.2), ImageMagick `convert` and Pillow.
+tools: cwebp / img2webp / webpmux (libwebp 1.6.0), ImageMagick `convert` and Pillow.
 
 Run with:  python3 -I tests/assets/generate_corpus.py
 Then:      python3 -I tests/assets/make_reference.py
@@ -18,6 +18,16 @@ import numpy as np
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Match the C# oracle selection without changing the system installation.
+WEBP_TOOLS = os.environ.get("WEBPSHARP_WEBP_TOOLS", os.path.join(ROOT, "..", "..", "reference", "libwebp-1.6.0-build"))
+if os.path.isdir(WEBP_TOOLS):
+    os.environ["PATH"] = os.path.abspath(WEBP_TOOLS) + os.pathsep + os.environ.get("PATH", "")
+for tool in ['cwebp', 'img2webp', 'webpmux']:
+    version = subprocess.check_output([tool, "-version"], text=True).splitlines()[0].strip().rsplit(" ", 1)[-1]
+    if version != "1.6.0":
+        raise RuntimeError(f"{tool} {version}: expected 1.6.0; run scripts/build-webp-reference.sh")
+
 CORPUS = os.path.join(ROOT, "corpus")
 SRC = os.path.join(CORPUS, "src")
 

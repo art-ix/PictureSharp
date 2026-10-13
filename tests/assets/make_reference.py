@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Computes reference decodes of the test corpus into tests/assets/reference.json.
 
-* static WebP  -> `dwebp -pam` (libwebp 1.3.2), cross-checked with Pillow
+* static WebP  -> `dwebp -pam` (libwebp 1.6.0), cross-checked with Pillow
 * animated WebP -> Pillow (WebPAnimDecoder: fully composited canvas frames)
 * PNG           -> Pillow (8-bit) / ImageMagick (16-bit, scaled with round(v/257)); APNG via Pillow
 * BMP           -> Pillow (ImageMagick scales 4/5-bit channels differently, so it is no oracle for BMP;
@@ -23,6 +23,16 @@ import numpy as np
 from PIL import Image, ImageSequence
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Match the C# oracle selection without changing the system installation.
+WEBP_TOOLS = os.environ.get("WEBPSHARP_WEBP_TOOLS", os.path.join(ROOT, "..", "..", "reference", "libwebp-1.6.0-build"))
+if os.path.isdir(WEBP_TOOLS):
+    os.environ["PATH"] = os.path.abspath(WEBP_TOOLS) + os.pathsep + os.environ.get("PATH", "")
+for tool in ['dwebp']:
+    version = subprocess.check_output([tool, "-version"], text=True).splitlines()[0].strip().rsplit(" ", 1)[-1]
+    if version != "1.6.0":
+        raise RuntimeError(f"{tool} {version}: expected 1.6.0; run scripts/build-webp-reference.sh")
+
 CORPUS = os.path.join(ROOT, "corpus")
 REFDIR = os.path.join(ROOT, "reference")
 

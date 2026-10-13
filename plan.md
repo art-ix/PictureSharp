@@ -10,14 +10,15 @@ Ustalenia z użytkownikiem:
 - **Deflate/zlib piszemy sami.** Nie używamy `ZLibStream`, bo pod spodem woła natywne zlib.
 - **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli i proste operacje na kolorach.
 
-Stan środowiska:
-- Katalog projektu `/home/artur/Projekty/ai/webpsharp` jest pusty (nie jest repozytorium git).
-- Jest SDK .NET 10.0.112.
-- Narzędzia libwebp **1.3.2** (`cwebp`, `dwebp`, `webpmux`, `img2webp`), ImageMagick `convert` oraz Python 3 z Pillow 10.2. Wszystkie posłużą jako wyrocznie w testach.
+Stan środowiska (aktualizacja w fazie 6):
+- Repozytorium znajduje się w `/home/artur/Projekty/ai/webpsharp`; target to .NET 10.
+- Nowa referencja to **libwebp 1.6.0**, tag `v1.6.0`, commit `4fa21912338357f89e4fd51cf2368325b59e9bd9`.
+- `scripts/build-webp-reference.sh` pobiera źródła do `reference/libwebp-1.6.0/` i buduje narzędzia wyroczni w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają je automatycznie; można ustawić `WEBPSHARP_WEBP_TOOLS`.
+- Systemowe narzędzia 1.3.2 i stara kopia `reference/libwebp/` pozostają do porównań. ImageMagick i Pillow służą jako pozostałe wyrocznie.
 
-**Kluczowa decyzja:** portujemy z tagu **libwebp v1.3.2**, czyli tej samej wersji co zainstalowane `cwebp`/`dwebp`.
-- Dekoder można wtedy sprawdzać piksel w piksel z `dwebp`.
-- Dla enkodera celujemy w wynik **bajt w bajt identyczny z `cwebp`** przy tych samych parametrach. Jeśli gdzieś się to nie uda (float/`pow`/`log`), kryterium zastępczym jest parytet PSNR i rozmiaru pliku.
+**Kluczowa decyzja:** od fazy 6 nowe porty bazują na **libwebp v1.6.0**. Enkoder lossless używa kosztów stałoprzecinkowych tej wersji (23 bity ułamkowe). Dekodery faz 1–3 pochodzą z 1.3.2; ponowne obliczenie 248 wpisów `reference.json` z `dwebp` 1.6.0 nie zmieniło wyników. Historycznego korpusu nie regenerujemy przy samej zmianie wyroczni.
+- Dekoder sprawdzamy piksel w piksel z `dwebp`.
+- Dla enkodera celujemy w wynik **bajt w bajt identyczny z `cwebp`** przy tych samych parametrach. Kryterium zastępczym jest parytet PSNR i rozmiaru pliku określony w DoD danej fazy.
 
 ---
 
@@ -30,7 +31,7 @@ webpsharp/
                                  # IsAotCompatible, IsTrimmable, GenerateDocumentationFile
   THIRD-PARTY-NOTICES.txt        # licencja BSD-3 libwebp (kod portowany = praca pochodna) + inne źródła
   .gitignore                     # reference/, tests/assets/external/, bin/obj
-  reference/libwebp/             # git clone --branch v1.3.2 (tylko do czytania, poza buildem)
+  reference/libwebp-1.6.0/       # źródła tagu v1.6.0 (tylko do czytania, poza buildem)
   src/WebpSharp/                 # biblioteka, ZERO PackageReference
     Image.cs, ImageFrame.cs, ImageFrameCollection.cs, ImageInfo.cs, ImageFormat.cs,
     Rgba32.cs, PixelFormat.cs, ImageMetadata.cs, BitmapData.cs, enums (RotateFlipType,
@@ -332,6 +333,14 @@ Specyfikacje: ITU-T T.81 (w tym Annex K: tablice kwantyzacji i Huffmana), JFIF 1
   - PSNR i rozmiar dla q=75 i 90 równe Pillow.
 
 ### Faza 6: enkoder lossless VP8L (ok. 5k LOC)
+**Status: ukończona (2026-10-13), na bazie libwebp 1.6.0.**
+Weryfikacja: `dotnet build -c Release` (0 ostrzeżeń/błędów), `dotnet test -c Release --no-build` (2012/2012, w tym 87 nowych testów enkodera).
+- 9 syntetycznych źródeł PNG: identyczne RGBA po dekodowaniu naszym dekoderem i `dwebp` 1.6.0; wszystkie rozmiary mieszczą się w limicie `cwebp -lossless -exact -q 75 -m 4` +1%. Jest to kryterium zastępcze DoD; pełna zgodność bajtowa z `cwebp` nie jest deklarowana.
+- Testy metod 0–6 i jakości 0/25/75/100, granic palety i wymiarów, długich powtórzeń, color cache, `Exact`, poziomów `NearLossless`, limitów Huffmana i kosztów stałoprzecinkowych zgodnych z 1.6.0.
+- Zapis statycznego VP8L przez `Image.Save`/`SaveAsWebP`/`ToWebP`, `WebP.Encode`, `WebP.EncodeLosslessRgba` i `WebP.Convert`; ICC/EXIF/XMP, padding RIFF, strumienie bez seek, walidacja przed zapisem. Należy podać `Lossless = true`; lossy i animacje pozostają w fazach 7–8.
+- Tryby transformacji i referencje LZ77 są porównywane według rzeczywistego rozmiaru strumienia. Port jest skalarny; dalsza optymalizacja szybkości i alokacji pozostaje w fazie wydajnościowej.
+- Przejście wyroczni na 1.6.0 nie zmieniło 248 wpisów `reference.json`; źródła i narzędzia natywne pozostają wyłącznie w ignorowanym `reference/`.
+
 Źródła: `src/enc/vp8l_enc.c`, `backward_references_enc.c`, `backward_references_cost_enc.c`, `histogram_enc.c`, `predictor_enc.c`, `near_lossless_enc.c`, `src/utils/huffman_encode_utils.c`, `bit_writer_utils.c`, `src/dsp/lossless_enc.c`.
 - Analiza i wybór trybu entropii, budowa i sortowanie palety.
 - Transformacje: subtract-green, predictor (wybór trybu per kafel), cross-color.
@@ -359,7 +368,7 @@ Specyfikacje: ITU-T T.81 (w tym Annex K: tablice kwantyzacji i Huffmana), JFIF 1
 - Presety z `config_enc.c`.
 - Na końcu SharpYuv.
 - **DoD:**
-  - dla tego samego wejścia PNG i flag (`-q`, `-m`, `-alpha_*`) wynik jest bajt w bajt równy `cwebp` 1.3.2 lub, gdzie to niemożliwe, PSNR ≥ cwebp −0,05 dB przy rozmiarze ≤ +1%;
+  - dla tego samego wejścia PNG i flag (`-q`, `-m`, `-alpha_*`) wynik jest bajt w bajt równy `cwebp` 1.6.0 lub, gdzie to niemożliwe, PSNR ≥ cwebp −0,05 dB przy rozmiarze ≤ +1%;
   - `dwebp` dekoduje wszystkie nasze pliki.
 
 ### Faza 8: enkoder animacji i muxer (ok. 1,5k LOC)
@@ -425,6 +434,6 @@ dotnet run -c Release --project benchmarks/WebpSharp.Benchmarks
 Rodzaje testów:
 1. **Prymitywy:** bit reader/writer, Huffman, IDCT kontra wersja float, CRC/Adler na znanych wektorach, inflate kontra `ZLibStream`.
 2. **Zgodność dekoderów:** hashe pikseli z `reference.json` (dwebp i Pillow), libwebp-test-data, PngSuite, BMP Suite.
-3. **Enkodery:** porównanie bajtów i PSNR z `cwebp` 1.3.2, round-tripy lossless, metadane i animacje przez `webpmux` i Pillow.
+3. **Enkodery:** porównanie bajtów i PSNR z `cwebp` 1.6.0, round-tripy lossless, metadane i animacje przez `webpmux` i Pillow.
 4. **API `Image`:** właściwości, operacje i konwersje formatów pikseli.
 5. **Odporność:** fuzz i mutacje korpusu.

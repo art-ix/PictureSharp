@@ -7,6 +7,21 @@ public static class ReferenceTools
 {
     private static readonly Lazy<bool> DwebpAvailable = new(() => Run("dwebp", "-version", out _) == 0);
 
+    public const string WebPVersion = "1.6.0";
+    private static readonly Lazy<bool> CwebpAvailable = new(() => Run("cwebp", "-version", out string output) == 0 && output.Split('\n')[0].Trim() == WebPVersion);
+    public static bool HasCwebp => CwebpAvailable.Value;
+
+    // An explicit directory wins; a local reference build takes precedence over system tools.
+    private static string Resolve(string tool)
+    {
+        if (tool is not ("cwebp" or "dwebp" or "webpmux" or "img2webp" or "webpinfo")) return tool;
+        string? configured = Environment.GetEnvironmentVariable("WEBPSHARP_WEBP_TOOLS");
+        if (!string.IsNullOrWhiteSpace(configured)) return Path.Combine(configured, tool + (OperatingSystem.IsWindows() ? ".exe" : ""));
+        string root = Path.GetFullPath(Path.Combine(Corpus.Assets, "..", ".."));
+        string path = Path.Combine(root, "reference", "libwebp-1.6.0-build", tool + (OperatingSystem.IsWindows() ? ".exe" : ""));
+        return File.Exists(path) ? path : tool;
+    }
+
     public static bool HasDwebp => DwebpAvailable.Value;
 
     public static string ExternalDir => Path.Combine(Corpus.Assets, "external");
@@ -36,7 +51,7 @@ public static class ReferenceTools
     {
         try
         {
-            using var process = Process.Start(new ProcessStartInfo(tool, arguments)
+            using var process = Process.Start(new ProcessStartInfo(Resolve(tool), arguments)
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

@@ -25,10 +25,12 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
 
 ## Portowanie z libwebp
 
-- **Referencja:** libwebp **v1.3.2** w `reference/libwebp/` (tylko do odczytu, poza buildem, w `.gitignore`). To ta sama wersja co systemowe `cwebp`/`dwebp`/`webpmux`, które służą jako wyrocznie w testach. Pobranie:
+- **Referencja dla nowych portów:** libwebp **v1.6.0** w `reference/libwebp-1.6.0/` (tylko do odczytu, poza buildem, w `.gitignore`). Narzędzia wyroczni budujemy oddzielnie:
   ```bash
-  git clone --depth 1 --branch v1.3.2 https://chromium.googlesource.com/webm/libwebp reference/libwebp
+  ./scripts/build-webp-reference.sh
   ```
+  Skrypt pobiera tag v1.6.0, sprawdza commit i buduje `cwebp`/`dwebp`/`webpmux`/`img2webp` w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają tę lokalną wersję; `WEBPSHARP_WEBP_TOOLS` pozwala wskazać inny katalog. Systemowe narzędzia 1.3.2 pozostają bez zmian.
+  Dekodery faz 1–3 portowano pierwotnie z 1.3.2; ich korpus sprawdzono także z 1.6.0. Stary katalog `reference/libwebp/` zachowujemy do porównań historycznych.
 - **Sposób portowania:**
   - Portujemy funkcja po funkcji.
   - Nad każdą funkcją piszemy komentarz źródła, np. `// port: src/dec/vp8_dec.c GetCoeffsFast`.
@@ -43,7 +45,8 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
   - przesunięcia arytmetyczne,
   - mieszanie `uint`/`int`,
   - przepełnienia.
-  - Obliczenia `float` zostają w `float`, z tą samą kolejnością operacji. Od tego zależy bit-exactness enkodera względem `cwebp`.
+  - Enkoder VP8L używa kosztów stałoprzecinkowych (23 bity ułamkowe) zgodnie z 1.6.0.
+  - Tam, gdzie źródło używa `float`, obliczenia zostają w `float`, z tą samą kolejnością operacji. Od tego zależy bit-exactness enkodera względem `cwebp`.
 - **Tabele stałych** zapisujemy jako `static ReadOnlySpan<T> Name => [ ... ];`.
 - **Licencja:** projekt jest na licencji MIT. Licencje źródeł portowanych (libwebp BSD-3, libjpeg-turbo IJG/BSD, zlib) wymagają zachowania ich not copyright, dlatego utrzymuj `THIRD-PARTY-NOTICES.txt` (jest pakowany do NuGet razem z `LICENSE`).
 
@@ -84,7 +87,7 @@ Zasady testowania:
 - **Zdjęcia w `samples/*.jpg|webp`** to prywatne pliki użytkownika (EXIF z GPS) – są w `.gitignore`, nie commitujemy ich; służą tylko do lokalnych testów (`Category=Local`) i benchmarków.
 - **Dekodery:** wynik musi być piksel w piksel zgodny z `reference.json`. Hashe SHA-256 RGBA wylicza `make_reference.py` z `dwebp -pam` i Pillow; uruchamiaj go przez `python3 -I`.
 - **Enkoder lossless:** round-trip musi dać identyczne piksele.
-- **Enkoder lossy:** celujemy w bajty identyczne z `cwebp` 1.3.2. Kryterium zastępcze to parytet PSNR i rozmiaru (patrz DoD w [plan.md](plan.md)).
+- **Enkoder lossy:** celujemy w bajty identyczne z `cwebp` 1.6.0. Kryterium zastępcze to parytet PSNR i rozmiaru (patrz DoD w [plan.md](plan.md)).
 - **Pobieranie zewnętrznych korpusów** (`fetch-external.sh`: libwebp-test-data, PngSuite, Kodak, BMP Suite) wymaga zgody użytkownika.
 - Fazę zamykamy dopiero, gdy jej testy przechodzą i spełnione jest DoD.
 

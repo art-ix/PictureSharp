@@ -72,4 +72,25 @@ public static class WebP
 
         return Image.FromBytes(data, options);
     }
+
+    /// <summary>Encodes an image with the supplied WebP options.</summary>
+    public static byte[] Encode(Image image, WebPEncoderOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return image.ToWebP(options);
+    }
+
+    /// <summary>Encodes RGBA pixels losslessly, preserving RGB under transparent pixels.</summary>
+    public static byte[] EncodeLosslessRgba(ReadOnlySpan<byte> rgba, int width, int height, int stride = 0)
+    {
+        using Image image = Image.FromPixels(rgba, width, height, PixelFormat.Rgba32, stride);
+        return image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true });
+    }
+
+    /// <summary>Converts a supported image file to WebP.</summary>
+    public static void Convert(string inputPath, string outputPath, WebPEncoderOptions? options = null)
+    {
+        using Image image = Image.FromFile(inputPath);
+        image.Save(outputPath, options ?? new WebPEncoderOptions());
+    }
 }
