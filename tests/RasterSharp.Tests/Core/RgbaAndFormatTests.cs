@@ -48,4 +48,32 @@ public class RgbaAndFormatTests
         Assert.Null(FormatDetector.Detect([]));
         Assert.Throws<ImageFormatException>(() => Image.Load("not an image"u8));
     }
+
+    public static TheoryData<string> AllFormats => [.. ImageFormat.All.Select(f => f.Name)];
+
+    [Theory]
+    [MemberData(nameof(AllFormats))]
+    public void CodecRegistry_CoversEveryFormat(string name)
+    {
+        ImageFormat format = ImageFormat.All.Single(f => f.Name == name);
+        IImageFormatDetector? detector = CodecRegistry.GetDetector(format);
+        Assert.NotNull(detector);
+        Assert.True(detector.HeaderSize <= FormatDetector.HeaderSize);
+        Assert.Equal(format, CodecRegistry.GetDecoder(format)?.Format);
+        Assert.Equal(format, CodecRegistry.GetEncoder(format)?.Format);
+        Assert.True(format.CanDecode);
+        Assert.True(format.CanEncode);
+        Assert.Equal(format, format.CreateDefaultEncoderOptions().Format);
+    }
+
+    [Fact]
+    public void FormatDetector_HeaderSizeCoversWebP() => Assert.Equal(12, FormatDetector.HeaderSize);
+
+    [Fact]
+    public void Encoder_RejectsOptionsOfAnotherFormat()
+    {
+        IImageEncoder encoder = Formats.Png.PngEncoder.Instance;
+        using Image image = Image.LoadPixelData([default(Rgba32)], 1, 1);
+        Assert.Throws<ArgumentException>(() => encoder.Encode(image, Stream.Null, new BmpEncoderOptions()));
+    }
 }

@@ -1,16 +1,5 @@
 namespace RasterSharp.Formats.Jpeg;
 
-/// <summary>Parameters of one scan (SOS segment).</summary>
-internal sealed class JpegScan
-{
-    public required JpegComponent[] Components { get; init; }
-    public int Ss { get; init; }
-    public int Se { get; init; }
-    public int Ah { get; init; }
-    public int Al { get; init; }
-    public int RestartInterval { get; init; }
-}
-
 /// <summary>Huffman entropy decoding of sequential and progressive scans.</summary>
 internal static class JpegScanDecoder
 {

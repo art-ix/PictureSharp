@@ -82,30 +82,9 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
     }
 
     /// <summary>Default encoder options for this format.</summary>
-    internal EncoderOptions CreateDefaultEncoderOptions()
-    {
-        if (this == WebP)
-        {
-            return new WebPEncoderOptions();
-        }
-
-        if (this == Png)
-        {
-            return new PngEncoderOptions();
-        }
-
-        if (this == Bmp)
-        {
-            return new BmpEncoderOptions();
-        }
-
-        if (this == Jpeg)
-        {
-            return new JpegEncoderOptions();
-        }
-
-        throw new NotSupportedException($"Saving images in {Name} format is not supported.");
-    }
+    internal EncoderOptions CreateDefaultEncoderOptions() =>
+        CodecRegistry.GetEncoder(this)?.CreateDefaultOptions()
+        ?? throw new NotSupportedException($"Saving images in {Name} format is not supported.");
 
     /// <inheritdoc/>
     public bool Equals(ImageFormat? other) => ReferenceEquals(this, other);

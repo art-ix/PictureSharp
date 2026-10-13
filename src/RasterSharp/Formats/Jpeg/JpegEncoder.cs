@@ -1,38 +1,37 @@
 namespace RasterSharp.Formats.Jpeg;
 
-internal sealed class JpegEncoder : IImageEncoder
+internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
 {
     public static JpegEncoder Instance { get; } = new();
     public ImageFormat Format => ImageFormat.Jpeg;
 
-    public void Encode(Image image, Stream output, EncoderOptions options)
+    public void Encode(Image image, Stream output, JpegEncoderOptions options)
     {
-        var o = (JpegEncoderOptions)options;
         if (image.Width > 65535 || image.Height > 65535)
             throw new ArgumentOutOfRangeException(nameof(image), "JPEG dimensions must not exceed 65535.");
-        JpegMarkerWriter.ValidateMetadata(image.Metadata, o.Metadata);
+        JpegMarkerWriter.ValidateMetadata(image.Metadata, options.Metadata);
         bool gray = true;
         foreach (Rgba32 pixel in image.GetPixelSpan())
         {
-            Rgba32 p = JpegEncoderComponent.Composite(pixel, o.BackgroundColor);
+            Rgba32 p = JpegEncoderComponent.Composite(pixel, options.BackgroundColor);
             if (p.R != p.G || p.R != p.B) { gray = false; break; }
         }
 
-        int h = o.Subsampling is JpegSubsampling.Ratio420 or JpegSubsampling.Ratio422 ? 2 : 1;
-        int v = o.Subsampling is JpegSubsampling.Ratio420 or JpegSubsampling.Ratio440 ? 2 : 1;
+        int h = options.Subsampling is JpegSubsampling.Ratio420 or JpegSubsampling.Ratio422 ? 2 : 1;
+        int v = options.Subsampling is JpegSubsampling.Ratio420 or JpegSubsampling.Ratio440 ? 2 : 1;
         var components = new JpegEncoderComponent[gray ? 1 : 3];
-        byte[][] quantization = gray ? [Quantization(o.Quality, false)] : [Quantization(o.Quality, false), Quantization(o.Quality, true)];
+        byte[][] quantization = gray ? [Quantization(options.Quality, false)] : [Quantization(options.Quality, false), Quantization(options.Quality, true)];
         try
         {
             for (int c = 0; c < components.Length; c++)
             {
                 components[c] = new JpegEncoderComponent(image.Width, image.Height, c == 0 ? h : 1, c == 0 ? v : 1, h, v);
-                components[c].Prepare(image, c, h, v, o.BackgroundColor, quantization[c == 0 ? 0 : 1]);
+                components[c].Prepare(image, c, h, v, options.BackgroundColor, quantization[c == 0 ? 0 : 1]);
             }
 
             var markers = new JpegMarkerWriter(output);
-            markers.Header(image, o.Metadata);
-            markers.Frame(image, components, quantization, o.Progressive);
+            markers.Header(image, options.Metadata);
+            markers.Frame(image, components, quantization, options.Progressive);
             JpegHuffmanEncoder?[] tables =
             [
                 new(JpegTables.DcLuminanceCounts, JpegTables.DcValues),
@@ -41,11 +40,11 @@ internal sealed class JpegEncoder : IImageEncoder
                 new(JpegTables.AcChrominanceCounts, JpegTables.AcChrominanceValues),
             ];
             bool first = true;
-            foreach (JpegEncoderScan scan in Scans(gray, o.Progressive))
+            foreach (JpegEncoderScan scan in Scans(gray, options.Progressive))
             {
-                if (o.OptimizeCoding || o.Progressive)
+                if (options.OptimizeCoding || options.Progressive)
                 {
-                    var statistics = new JpegScanEncoder(components, scan, o.Progressive, o.RestartInterval, tables, null);
+                    var statistics = new JpegScanEncoder(components, scan, options.Progressive, options.RestartInterval, tables, null);
                     statistics.Encode();
                     for (int i = 0; i < 4; i++)
                         if (statistics.Frequencies[i].Any(f => f != 0)) tables[i] = JpegHuffmanEncoder.Optimize(statistics.Frequencies[i]);
@@ -54,16 +53,16 @@ internal sealed class JpegEncoder : IImageEncoder
                 // Baseline tables appear once, DC and AC for each component; progressive tables are per scan.
                 for (int i = 0; i < (gray ? 2 : 4); i++)
                 {
-                    bool used = !o.Progressive || (scan.Start == 0
+                    bool used = !options.Progressive || (scan.Start == 0
                         ? scan.High == 0 && i % 2 == 0
                         : i == (scan.Component == 0 ? 1 : 3));
                     if (used) markers.Huffman(i, tables[i]!);
                 }
 
-                if (first && o.RestartInterval != 0) markers.RestartInterval(o.RestartInterval);
+                if (first && options.RestartInterval != 0) markers.RestartInterval(options.RestartInterval);
                 first = false;
-                markers.Scan(scan, components.Length, o.Progressive);
-                new JpegScanEncoder(components, scan, o.Progressive, o.RestartInterval, tables, output).Encode();
+                markers.Scan(scan, components.Length, options.Progressive);
+                new JpegScanEncoder(components, scan, options.Progressive, options.RestartInterval, tables, output).Encode();
             }
 
             markers.Marker(0xD9);

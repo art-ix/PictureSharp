@@ -99,8 +99,7 @@ internal sealed class BmpDecoder : IImageDecoder
     private static IImageDecoder EmbeddedDecoder(ReadOnlySpan<byte> file, BmpHeader h)
     {
         ImageFormat expected = h.RawCompression == BmpConstants.Png ? ImageFormat.Png : ImageFormat.Jpeg;
-        ImageFormat? actual = FormatDetector.Detect(file[(int)h.DataOffset..]);
-        if (actual != expected)
+        if (CodecRegistry.GetDetector(expected)?.IsSupported(file[(int)h.DataOffset..]) != true)
         {
             throw Error($"The BMP does not contain the {expected.Name} data its header declares.");
         }

@@ -6,24 +6,23 @@ using RasterSharp.Formats.WebP.Container;
 
 namespace RasterSharp.Formats.WebP;
 
-internal sealed class WebPEncoder : IImageEncoder
+internal sealed class WebPEncoder : IImageEncoder<WebPEncoderOptions>
 {
     public static WebPEncoder Instance { get; } = new();
     public ImageFormat Format => ImageFormat.WebP;
 
-    public void Encode(Image image, Stream output, EncoderOptions options)
+    public void Encode(Image image, Stream output, WebPEncoderOptions options)
     {
-        var o = (WebPEncoderOptions)options;
         if (image.IsAnimated)
         {
-            AnimationEncoder.Validate(image, o);
-            var frames = AnimationEncoder.Encode(image, o);
-            WebPMuxer.Write(image, output, o, null, frames);
+            AnimationEncoder.Validate(image, options);
+            var frames = AnimationEncoder.Encode(image, options);
+            WebPMuxer.Write(image, output, options, null, frames);
         }
         else
         {
-            ValidateDimensions(image.Width, image.Height, o.Lossless);
-            WebPMuxer.Write(image, output, o, EncodeFrame(image, o));
+            ValidateDimensions(image.Width, image.Height, options.Lossless);
+            WebPMuxer.Write(image, output, options, EncodeFrame(image, options));
         }
     }
 

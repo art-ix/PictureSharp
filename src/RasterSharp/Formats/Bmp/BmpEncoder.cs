@@ -3,22 +3,21 @@ using System.Buffers.Binary;
 namespace RasterSharp.Formats.Bmp;
 
 /// <summary>Encoder for uncompressed bottom-up BMP files.</summary>
-internal sealed class BmpEncoder : IImageEncoder
+internal sealed class BmpEncoder : IImageEncoder<BmpEncoderOptions>
 {
     public static BmpEncoder Instance { get; } = new();
 
     public ImageFormat Format => ImageFormat.Bmp;
 
-    public void Encode(Image image, Stream output, EncoderOptions options)
+    public void Encode(Image image, Stream output, BmpEncoderOptions options)
     {
-        var o = (BmpEncoderOptions)options;
         ImageFrame frame = image.Frames.RootFrame;
         ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
         int width = frame.Width;
         int height = frame.Height;
 
-        (int bits, Rgba32[]? palette) = ChooseLayout(pixels, o.BitsPerPixel);
-        byte[]? icc = (o.Metadata & MetadataKinds.Icc) != 0 && image.Metadata.IccProfile is { Length: > 0 } p ? p : null;
+        (int bits, Rgba32[]? palette) = ChooseLayout(pixels, options.BitsPerPixel);
+        byte[]? icc = (options.Metadata & MetadataKinds.Icc) != 0 && image.Metadata.IccProfile is { Length: > 0 } p ? p : null;
 
         // BITMAPINFOHEADER is the most widely readable; the alpha mask and the ICC profile need BITMAPV5HEADER.
         int headerSize = bits == 32 || icc is not null ? BmpConstants.V5HeaderSize : BmpConstants.InfoHeaderSize;

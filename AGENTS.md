@@ -72,6 +72,12 @@ samples/RasterSharp.Cli/    narzędzie CLI (convert/info/resize)
 reference/libwebp/        źródła referencyjne (niecommitowane)
 ```
 
+Nowy format pliku rejestrujemy w jednym miejscu, `Formats/CodecRegistry.cs`:
+- detektor sygnatury (`IImageFormatDetector`),
+- dekoder (`IImageDecoder`),
+- enkoder (`IImageEncoder<TOptions>` z własnym rekordem opcji).
+Duże kodeki dzielimy na pliki `partial class` (np. `PngDecoder.Chunks.cs`).
+
 ## Build i testy
 
 ```bash

@@ -1,4 +1,3 @@
-using RasterSharp.Formats;
 using RasterSharp.Formats.WebP;
 
 namespace RasterSharp;
@@ -16,7 +15,7 @@ public static class WebP
     public static bool TryGetInfo(ReadOnlySpan<byte> data, out ImageInfo info)
     {
         info = null!;
-        if (FormatDetector.Detect(data) != ImageFormat.WebP)
+        if (!WebPFormatDetector.Instance.IsSupported(data))
         {
             return false;
         }
@@ -65,7 +64,7 @@ public static class WebP
     /// <summary>Decodes WebP data to an <see cref="Image"/> (all frames of animations).</summary>
     public static Image DecodeImage(ReadOnlySpan<byte> data, DecoderOptions? options = null)
     {
-        if (FormatDetector.Detect(data) != ImageFormat.WebP)
+        if (!WebPFormatDetector.Instance.IsSupported(data))
         {
             throw new ImageFormatException(ImageFormat.WebP, "The data is not a WebP file.");
         }

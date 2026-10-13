@@ -6,20 +6,19 @@ using RasterSharp.Processing;
 namespace RasterSharp.Formats.Png;
 
 /// <summary>Encoder for PNG and APNG files.</summary>
-internal sealed class PngEncoder : IImageEncoder
+internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
 {
     public static PngEncoder Instance { get; } = new();
 
     public ImageFormat Format => ImageFormat.Png;
 
-    public void Encode(Image image, Stream output, EncoderOptions options)
+    public void Encode(Image image, Stream output, PngEncoderOptions options)
     {
-        var o = (PngEncoderOptions)options;
-        List<ImageFrame> frames = image.IsAnimated && o.SaveAnimation
+        List<ImageFrame> frames = image.IsAnimated && options.SaveAnimation
             ? [.. image.Frames]
             : [image.Frames.RootFrame];
 
-        Layout layout = ChooseLayout(frames, o.ColorType);
+        Layout layout = ChooseLayout(frames, options.ColorType);
         int width = image.Width;
         int height = image.Height;
 
@@ -33,7 +32,7 @@ internal sealed class PngEncoder : IImageEncoder
         ihdr[9] = (byte)layout.Color;
         ihdr[10] = 0;
         ihdr[11] = 0;
-        ihdr[12] = (byte)(o.Interlace ? 1 : 0);
+        ihdr[12] = (byte)(options.Interlace ? 1 : 0);
         writer.Write("IHDR", ihdr);
 
         bool animated = frames.Count > 1;
@@ -46,7 +45,7 @@ internal sealed class PngEncoder : IImageEncoder
         }
 
         ImageMetadata meta = image.Metadata;
-        if ((o.Metadata & MetadataKinds.Icc) != 0 && meta.IccProfile is { Length: > 0 } icc)
+        if ((options.Metadata & MetadataKinds.Icc) != 0 && meta.IccProfile is { Length: > 0 } icc)
         {
             byte[] name = "ICC Profile\0\0"u8.ToArray();
             byte[] compressed = Deflater.CompressZlib(icc, 9);
@@ -62,7 +61,7 @@ internal sealed class PngEncoder : IImageEncoder
             writer.Write("pHYs", phys);
         }
 
-        if ((o.Metadata & MetadataKinds.Exif) != 0 && meta.Exif is { Length: > 0 } exif)
+        if ((options.Metadata & MetadataKinds.Exif) != 0 && meta.Exif is { Length: > 0 } exif)
         {
             writer.Write("eXIf", exif);
         }
@@ -115,8 +114,8 @@ internal sealed class PngEncoder : IImageEncoder
                 writer.Write("fcTL", fctl);
             }
 
-            byte[] raw = Serialize(frame, layout, o);
-            byte[] compressed = Deflater.CompressZlib(raw, o.CompressionLevel);
+            byte[] raw = Serialize(frame, layout, options);
+            byte[] compressed = Deflater.CompressZlib(raw, options.CompressionLevel);
             const int maxChunk = 1 << 20;
             for (int offset = 0; offset < compressed.Length || offset == 0; offset += maxChunk)
             {
@@ -140,7 +139,7 @@ internal sealed class PngEncoder : IImageEncoder
             }
         }
 
-        if ((o.Metadata & MetadataKinds.Xmp) != 0 && meta.Xmp is { Length: > 0 } xmp)
+        if ((options.Metadata & MetadataKinds.Xmp) != 0 && meta.Xmp is { Length: > 0 } xmp)
         {
             // iTXt: keyword, NUL, compression flag, compression method, language tag NUL, translated keyword NUL, text
             byte[] header = [.. Encoding.ASCII.GetBytes(PngConstants.XmpKeyword), 0, 0, 0, 0, 0];
@@ -160,83 +159,6 @@ internal sealed class PngEncoder : IImageEncoder
 
         // Fall back to hundredths of a second for long or fractional delays.
         return ((ushort)Math.Min(ushort.MaxValue, Math.Round(ms / 10)), 100);
-    }
-
-    // ------------------------------------------------------------------ color type selection
-
-    private sealed class Layout
-    {
-        public PngColor Color;
-        public int BitDepth = 8;
-        public Rgba32[]? Palette;
-        public Dictionary<uint, byte>? PaletteIndex;
-    }
-
-    private static Layout ChooseLayout(List<ImageFrame> frames, PngColorType requested)
-    {
-        bool hasAlpha = false;
-        bool isGray = true;
-        var colors = new Dictionary<uint, byte>();
-        bool fitsPalette = true;
-        foreach (ImageFrame frame in frames)
-        {
-            foreach (Rgba32 p in frame.GetPixelSpan())
-            {
-                hasAlpha |= p.A != 255;
-                isGray &= p.R == p.G && p.G == p.B;
-                if (fitsPalette && !colors.ContainsKey(p.PackedValue))
-                {
-                    if (colors.Count == 256)
-                    {
-                        fitsPalette = false;
-                    }
-                    else
-                    {
-                        colors.Add(p.PackedValue, 0);
-                    }
-                }
-            }
-        }
-
-        PngColorType type = requested;
-        if (type == PngColorType.Auto)
-        {
-            type = isGray && !hasAlpha ? PngColorType.Grayscale
-                : fitsPalette ? PngColorType.Palette
-                : isGray ? PngColorType.GrayscaleAlpha
-                : hasAlpha ? PngColorType.Rgba : PngColorType.Rgb;
-        }
-
-        switch (type)
-        {
-            case PngColorType.Grayscale:
-                return new Layout { Color = PngColor.Gray };
-            case PngColorType.GrayscaleAlpha:
-                return new Layout { Color = PngColor.GrayAlpha };
-            case PngColorType.Rgb:
-                return new Layout { Color = PngColor.Rgb };
-            case PngColorType.Rgba:
-                return new Layout { Color = PngColor.Rgba };
-            default:
-            {
-                if (!fitsPalette)
-                {
-                    throw new InvalidOperationException("The image has more than 256 colors and cannot be saved as an indexed PNG.");
-                }
-
-                // Transparent entries first so the tRNS chunk stays short; then by frequency-agnostic value order.
-                Rgba32[] palette = colors.Keys.Select(k => new Rgba32 { PackedValue = k })
-                    .OrderBy(c => c.A == 255 ? 1 : 0).ThenBy(c => c.PackedValue).ToArray();
-                var index = new Dictionary<uint, byte>(palette.Length);
-                for (int i = 0; i < palette.Length; i++)
-                {
-                    index[palette[i].PackedValue] = (byte)i;
-                }
-
-                int depth = palette.Length <= 2 ? 1 : palette.Length <= 4 ? 2 : palette.Length <= 16 ? 4 : 8;
-                return new Layout { Color = PngColor.Palette, BitDepth = depth, Palette = palette, PaletteIndex = index };
-            }
-        }
     }
 
     // ------------------------------------------------------------------ scanlines
@@ -439,22 +361,6 @@ internal sealed class PngEncoder : IImageEncoder
 
                 break;
             }
-        }
-    }
-
-    private sealed class ChunkWriter(Stream output)
-    {
-        public void Write(string type, ReadOnlySpan<byte> data)
-        {
-            Span<byte> header = stackalloc byte[8];
-            BinaryPrimitives.WriteUInt32BigEndian(header, (uint)data.Length);
-            Encoding.ASCII.GetBytes(type, header[4..]);
-            output.Write(header);
-            output.Write(data);
-            uint crc = Crc32.Update(Crc32.Compute(header[4..]), data);
-            Span<byte> trailer = stackalloc byte[4];
-            BinaryPrimitives.WriteUInt32BigEndian(trailer, crc);
-            output.Write(trailer);
         }
     }
 }
