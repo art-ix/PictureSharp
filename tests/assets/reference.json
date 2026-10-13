@@ -497,23 +497,23 @@
   "loop": 0,
   "frames": [
    {
-    "sha256": "e354ca7712e616eac10299c80690e6de79a37b66beeb32879fd819481c3adbea",
+    "sha256": "34345a55edace22c83b5ad969772491ecf05eebe21fa500724eff2bbf5e44ebf",
     "duration": 100.0
    },
    {
-    "sha256": "a5e764ccf8ed54709c796a1ea610c998d070759ef31defb1b71b11182c9bcecc",
+    "sha256": "616942649bbbdd904a85e6aed26cf0f96ebd678d6f49482581cd9bed610e52a9",
     "duration": 100.0
    },
    {
-    "sha256": "ffe7ec76d36d9882df5dc1835708b2ec1303e193205c24e6d3c6b9330a6748a3",
+    "sha256": "608ceebcf0d5e7d1bff79907bfef32c44729a279e5e5a45ac62c7f7c8efda401",
     "duration": 100.0
    },
    {
-    "sha256": "5038229087beb4416c3b73dc8307d848bc55b2bb9a55e0bad54bfb8355b68d59",
+    "sha256": "1d30f202f89bd181d0307f4dc5ee0c0d85378b4f8e2a97f3ec39d16f64fe46a9",
     "duration": 100.0
    },
    {
-    "sha256": "4fd2eea4e53b0ddc19dc2777162d25b502cf9ac373cd3166ac5fa138193ec739",
+    "sha256": "6616e4de46573c91ec8f2f1f32264222a5a139a74cd1ada9b0939e61b3727def",
     "duration": 100.0
    }
   ],
@@ -586,7 +586,7 @@
   "animated": false,
   "frames": [
    {
-    "sha256": "76a46d77b8c0a3eefa66e9fe93e0b76998134e1197b32b1c76006c5bfc750396",
+    "sha256": "7b3f5593a8cff251cb38de743623f141aead77d38d434e8118d91ff4559c74c6",
     "duration": 0
    }
   ],

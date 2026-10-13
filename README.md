@@ -2,7 +2,7 @@
 
 A pure managed .NET 10 library for encoding and decoding **WebP**, with **PNG/JPEG import** and **PNG export**. It has no NuGet dependencies and no native code. The `Image` class works like `System.Drawing.Image`/`Bitmap`.
 
-> Status: **work in progress**. See [plan.md](plan.md) for the roadmap. Done: phase 0 (core types, `Image` API, test corpus), phase 1 (WebP container parsing, lossless VP8L decoder) and phase 2 (lossy VP8 decoder, alpha, animation, metadata). The WebP decoder is bit-exact with libwebp 1.3.2.
+> Status: **work in progress**. See [plan.md](plan.md) for the roadmap. Done: phase 0 (core types, `Image` API, test corpus), phase 1 (WebP container parsing, lossless VP8L decoder), phase 2 (lossy VP8 decoder, alpha, animation, metadata) and phase 3 (own zlib inflate/deflate, PNG/APNG decoder and encoder). The WebP decoder is bit-exact with libwebp 1.3.2.
 
 ```csharp
 using WebpSharp;

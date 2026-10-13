@@ -118,7 +118,7 @@ def ref_png(path, rel):
         entry.update(animated=True, loop=im.info.get("loop", 0), frames=frames, decoder="pillow")
         return entry
     if depth == 16:
-        raw = subprocess.run(["convert", path, "-depth", "16", "RGBA:-"], check=True, capture_output=True).stdout
+        raw = subprocess.run(["convert", path, "-depth", "16", "-endian", "MSB", "RGBA:-"], check=True, capture_output=True).stdout
         v = np.frombuffer(raw, dtype=">u2").astype(np.uint32)
         rgba = ((v + 128) // 257).astype(np.uint8).tobytes()
         decoder = "imagemagick16"

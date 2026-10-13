@@ -164,7 +164,7 @@ def generate_webp(sources):
     run("webpmux", "-set", "exif", meta[:-1] + "exif.bin", base_ll, "-o", path("webp", "meta", "lossless_exif.webp"))
 
 
-def make_anim_frames(n, w, h, alpha):
+def make_anim_frames(n, w, h, alpha, alpha_value=200):
     frames = []
     bg = make_photo(w, h, 42)
     for i in range(n):
@@ -176,7 +176,7 @@ def make_anim_frames(n, w, h, alpha):
         cx, cy = 10 + i * (w - 20) // max(1, n - 1), h // 2
         yy, xx = np.mgrid[0:h, 0:w]
         disk = (xx - cx) ** 2 + (yy - cy) ** 2 < (min(w, h) // 4) ** 2
-        a[disk] = (255, 40 * i % 256, 60, 200 if alpha else 255)
+        a[disk] = (255, 40 * i % 256, 60, alpha_value if alpha else 255)
         frames.append(Image.fromarray(a, "RGBA"))
     return frames
 
@@ -201,6 +201,23 @@ def generate_animations():
 
 
 # --------------------------------------------------------------------------- PNG
+
+def strip_png_timestamps(path):
+    """Removes ImageMagick's date:* tEXt and tIME chunks so the corpus is reproducible."""
+    with open(path, "rb") as f:
+        data = f.read()
+    out = bytearray(data[:8])
+    pos = 8
+    while pos < len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        ctype = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + length]
+        if not (ctype == b"tIME" or (ctype == b"tEXt" and body.startswith(b"date:"))):
+            out += data[pos:pos + 12 + length]
+        pos += 12 + length
+    with open(path, "wb") as f:
+        f.write(out)
+
 
 def generate_png(sources):
     photo = os.path.join(SRC, "photo.png")
@@ -229,12 +246,14 @@ def generate_png(sources):
     for name, src, args in conv:
         out = path("png", name + ".png")
         run("convert", src, *args[:-1], args[-1] + out)
+        strip_png_timestamps(out)
     # Pillow variants: palette with partial alpha (tRNS), low-depth palette, zlib levels, APNG.
     g = Image.open(galpha).convert("RGBA").quantize(16)
     g.save(path("png", "palette4_trns.png"), bits=4)
     Image.open(photo).save(path("png", "rgb_level0.png"), compress_level=0)
     Image.open(photo).save(path("png", "rgb_level9.png"), compress_level=9)
-    frames = make_anim_frames(5, 64, 48, True)
+    # Binary alpha only: Pillow's APNG "over" blending is not spec-exact for partial alpha.
+    frames = make_anim_frames(5, 64, 48, True, alpha_value=255)
     frames[0].save(path("png", "apng_alpha.png"), save_all=True, append_images=frames[1:], duration=100, loop=0,
                    disposal=[0, 1, 2, 0, 1], blend=[0, 1, 1, 0, 1])
     img = Image.open(photo)
