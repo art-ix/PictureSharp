@@ -5,7 +5,7 @@ internal static class CodecRegistry
 {
     private static readonly IImageDecoder[] Decoders = [WebP.WebPDecoder.Instance, Png.PngDecoder.Instance, Jpeg.JpegDecoder.Instance, Bmp.BmpDecoder.Instance];
 
-    private static readonly IImageEncoder[] Encoders = [Png.PngEncoder.Instance, Bmp.BmpEncoder.Instance];
+    private static readonly IImageEncoder[] Encoders = [Png.PngEncoder.Instance, Bmp.BmpEncoder.Instance, Jpeg.JpegEncoder.Instance];
 
     public static IImageDecoder? GetDecoder(ImageFormat format) => Array.Find(Decoders, d => d.Format == format);
 

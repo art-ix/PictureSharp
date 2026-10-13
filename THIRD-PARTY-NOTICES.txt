@@ -71,8 +71,12 @@ Independent JPEG Group's libjpeg
 Used for: JPEG decoder (marker parsing and restart resynchronization from
 jdmarker.c, Huffman decoding from jdhuff.c/jdphuff.c, accurate integer inverse
 DCT from jidctint.c, fancy upsampling from jdsample.c, color conversion from
-jdcolor.c). The code was translated to C# and restructured; it is not the
-original source.
+jdcolor.c), and JPEG encoder (quality tables and progressive scan script from
+jcparam.c, RGB conversion from jccolor.c, downsampling from jcsample.c,
+accurate integer forward DCT from jfdctint.c, quantization from jcdctmgr.c,
+coefficient padding from jccoefct.c, Huffman encoding and optimal tables from
+jchuff.c/jcphuff.c, marker writing from jcmarker.c). The code was translated
+to C# and restructured; it is not the original source.
 
 This software is based in part on the work of the Independent JPEG Group.
 -------------------------------------------------------------------------------

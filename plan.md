@@ -2,11 +2,11 @@
 
 ## Kontekst
 
-Potrzebna jest biblioteka .NET (**net10.0+**) do kodowania i dekodowania WebP, napisana w 100% w kodzie zarządzanym (C#), **bez zależności NuGet i bez natywnych bibliotek**. Używamy tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`), które jest częścią shared framework i działa na każdej platformie. Biblioteka ma też czytać PNG, BMP i JPEG (do przekodowywania) oraz zapisywać PNG i BMP. Centralnym typem jest klasa `Image`, wzorowana na `System.Drawing.Image`/`Bitmap`, z prostym API.
+Potrzebna jest biblioteka .NET (**net10.0+**) do kodowania i dekodowania WebP, napisana w 100% w kodzie zarządzanym (C#), **bez zależności NuGet i bez natywnych bibliotek**. Używamy tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`), które jest częścią shared framework i działa na każdej platformie. Biblioteka ma też czytać PNG, BMP i JPEG (do przekodowywania) oraz zapisywać PNG, BMP i JPEG. Centralnym typem jest klasa `Image`, wzorowana na `System.Drawing.Image`/`Bitmap`, z prostym API.
 
 Ustalenia z użytkownikiem:
 - **WebP w pełnym zakresie** (odczyt i zapis): lossy VP8, lossless VP8L, alfa ALPH, animacja ANIM/ANMF, metadane ICCP/EXIF/XMP.
-- **PNG:** odczyt i zapis. **BMP:** odczyt i zapis. **JPEG:** tylko odczyt.
+- **PNG:** odczyt i zapis. **BMP:** odczyt i zapis. **JPEG:** odczyt i zapis (enkoder w fazie 5.5).
 - **Deflate/zlib piszemy sami.** Nie używamy `ZLibStream`, bo pod spodem woła natywne zlib.
 - **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli i proste operacje na kolorach.
 
@@ -50,7 +50,8 @@ webpsharp/
             WebPDecoder.cs, WebPEncoder.cs
       Png/  (PngDecoder, PngEncoder, PngFilters, Adam7, Apng)
       Bmp/  (BmpDecoder, BmpEncoder, BmpHeaders, Rle)
-      Jpeg/ (JpegDecoder, JpegHuffman, JpegIdct (islow), Progressive, Upsampler, ColorConverter)
+      Jpeg/ (JpegDecoder, JpegHuffman, JpegIdct (islow), Progressive, Upsampler, ColorConverter,
+            JpegEncoder, JpegFdct, JpegQuantizer, JpegHuffmanEncoder, JpegMarkerWriter)
       Metadata/ (ExifReader/Patcher: Orientation, rozdzielczość; IccProfile)
     Compression/ (Inflater, Deflater, Adler32, Crc32)
     Processing/  (Resizer, Kernels, Geometry, ColorOps, Compositor, PixelConverter)
@@ -295,6 +296,40 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
   - korpus JPEG (ImageMagick, Pillow i pliki generowane własnym koderem w `generate_corpus.py`: YCCK, Adobe RGB, nietypowe próbkowanie, skany nieprzeplatane, brak DHT, 16-bitowe DQT) zgodny z Pillow piksel w piksel;
   - uszkodzone pliki (obcięte skany, błędne markery RST) zgodne z Pillow (`Category=Oracle`);
   - lokalne zdjęcia z `samples/` porównywane z Pillow (`Category=Local`).
+
+### Faza 5.5: enkoder JPEG (ok. 2k LOC)
+**Status: ukończona (2026-10-13).** Enkoder i publiczne API są zaimplementowane, bez nowych zależności biblioteki.
+Weryfikacja: `dotnet build -c Release` (0 ostrzeżeń/błędów), `dotnet test -c Release --no-build` (1925/1925).
+- 468 wariantów z korpusu: pełne pliki JPEG oraz zdekodowane piksele identyczne z Pillow 10.2.0 / libjpeg-turbo 2.1.5; jakości 1, 25, 50, 75, 90 i 100, obrazy kolorowe/szare/z alfą, baseline, optimize i progressive. Identyczność plików i pikseli zapewnia także równe rozmiary i PSNR dla q75/q90.
+- 290 dodatkowych wariantów `Category=Oracle`: zgodność bajtowa z systemowym libjpeg, w tym 4:4:0, restarty, niepełne MCU i długie EOB runs; pliki otwierane przez Pillow, ImageMagick i nasz dekoder.
+- Testy API, aktywnej klatki, kompozycji alfy, metadanych wielosegmentowych, DPI i walidacji opcji. Referencje enkodera: `tests/assets/jpeg_encoder_reference.json`; regeneracja: `python3 -I tests/assets/make_jpeg_encoder_reference.py`.
+
+Specyfikacje: ITU-T T.81 (w tym Annex K: tablice kwantyzacji i Huffmana), JFIF 1.02, Exif (APP1), ICC (APP2). Algorytmy referencyjne: libjpeg-turbo `jcparam.c` (skalowanie jakości, domyślne tablice, `jpeg_simple_progression`), `jccolor.c`, `jcsample.c`, `jfdctint.c` (FDCT islow), `jcdctmgr.c` (kwantyzacja z zaokrąglaniem), `jchuff.c`, `jcphuff.c`, `jcmarker.c`. Licencja IJG jest już w NOTICES.
+- Konwersja RGB→YCbCr (tablice stałoprzecinkowe z `jccolor.c`) i Gray dla obrazów w skali szarości.
+- Podpróbkowanie chrominancji 4:4:4, 4:2:2, 4:2:0 (domyślnie) i 4:4:0, z uśrednianiem i naprzemiennym zaokrąglaniem jak `h2v1_downsample`/`h2v2_downsample`. Brzegi uzupełniane replikacją do pełnych MCU.
+- FDCT islow i kwantyzacja bit-exact z libjpeg-turbo.
+- Tablice kwantyzacji z Annex K skalowane jakością 1–100 (`jpeg_quality_scaling`, domyślnie 75), z wymuszeniem wartości baseline ≤255.
+- Kodowanie Huffmana:
+  - domyślne tablice z Annex K;
+  - opcjonalnie tablice optymalne (`OptimizeCoding`: dwa przebiegi i `jpeg_gen_optimal_table`);
+  - opcjonalnie restart markers (`RestartInterval`).
+- Tryb progresywny według skryptu `jpeg_simple_progression` (DC first/refine, AC first/refine z EOB runs). Wymusza tablice optymalne, tak jak libjpeg.
+- Zapis markerów: SOI, APP0 JFIF z DPI, APP1 EXIF, APP2 ICC (dzielony na kawałki ≤65519 B), APP1 XMP, DQT, SOF0/SOF2, DHT, DRI, SOS, EOI. Kolejność i nagłówki jak w Pillow.
+- Alfa: JPEG jej nie ma, więc piksele półprzezroczyste składamy na `BackgroundColor` (domyślnie białe).
+- API:
+  - `JpegEncoderOptions`: `Quality`, `Subsampling`, `Progressive`, `OptimizeCoding`, `RestartInterval`, `BackgroundColor`, `Metadata`;
+  - `SaveAsJpeg(path, quality)`, `ToJpeg(options)`;
+  - `Image.Save` rozpoznaje `.jpg`/`.jpeg`;
+  - `ImageFormat.Jpeg.CanEncode` staje się `true`.
+- Testy:
+  - porównanie bajtów z Pillow (`Image.save(quality, subsampling, optimize, progressive)`) dla źródeł z korpusu i różnych opcji;
+  - nasze pliki dekodowane przez nasz dekoder i Pillow dają te same piksele;
+  - metadane przechodzą round-trip;
+  - fuzz opcji: walidacja zakresów rzuca `ArgumentOutOfRangeException`.
+- **DoD:**
+  - dla tych samych pikseli i opcji wynik jest bajt w bajt równy plikowi z Pillow (libjpeg-turbo 2.1.5); kryterium zastępcze: identyczne dane skanu (segmenty od DQT do EOI) przy dopuszczalnych różnicach w markerach APP;
+  - Pillow, ImageMagick i nasz dekoder otwierają wszystkie nasze pliki;
+  - PSNR i rozmiar dla q=75 i 90 równe Pillow.
 
 ### Faza 6: enkoder lossless VP8L (ok. 5k LOC)
 Źródła: `src/enc/vp8l_enc.c`, `backward_references_enc.c`, `backward_references_cost_enc.c`, `histogram_enc.c`, `predictor_enc.c`, `near_lossless_enc.c`, `src/utils/huffman_encode_utils.c`, `bit_writer_utils.c`, `src/dsp/lossless_enc.c`.

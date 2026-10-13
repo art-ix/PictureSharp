@@ -82,6 +82,12 @@ try
             {
                 image.Save(args[2], new WebPEncoderOptions { Quality = quality, Method = method, Lossless = lossless });
             }
+            else if (target == ImageFormat.Jpeg)
+            {
+                if (!float.IsFinite(quality) || quality != MathF.Truncate(quality))
+                    throw new ArgumentException("JPEG quality must be an integer from 1 to 100.");
+                image.SaveAsJpeg(args[2], (int)quality);
+            }
             else
             {
                 image.Save(args[2], target);

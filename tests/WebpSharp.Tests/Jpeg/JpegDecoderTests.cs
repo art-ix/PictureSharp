@@ -50,11 +50,11 @@ public class JpegDecoderTests
     }
 
     [Fact]
-    public void Format_DecodesButDoesNotEncode()
+    public void Format_DecodesAndEncodes()
     {
         Assert.Equal(ImageFormat.Jpeg, Image.DetectFormat(Corpus.Read("jpeg/q90_420.jpg")));
         Assert.True(ImageFormat.Jpeg.CanDecode);
-        Assert.False(ImageFormat.Jpeg.CanEncode);
+        Assert.True(ImageFormat.Jpeg.CanEncode);
     }
 
     [Fact]

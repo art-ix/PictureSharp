@@ -210,6 +210,6 @@ public class ImageTests
     {
         using var img = new Image(1, 1);
         Assert.Throws<NotSupportedException>(() => img.Save("x.tiff"));
-        Assert.Throws<NotSupportedException>(() => img.Save(new MemoryStream(), ImageFormat.Jpeg));
+        Assert.Throws<NotSupportedException>(() => img.Save(new MemoryStream(), ImageFormat.WebP));
     }
 }

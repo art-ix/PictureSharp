@@ -18,7 +18,7 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
     /// <summary>Portable Network Graphics, including APNG.</summary>
     public static ImageFormat Png { get; } = new("PNG", "image/png", ".png", ".apng");
 
-    /// <summary>JPEG / JFIF (decode only).</summary>
+    /// <summary>JPEG / JFIF (baseline and progressive).</summary>
     public static ImageFormat Jpeg { get; } = new("JPEG", "image/jpeg", ".jpg", ".jpeg", ".jpe", ".jfif");
 
     /// <summary>Windows/OS2 bitmap (BMP/DIB).</summary>

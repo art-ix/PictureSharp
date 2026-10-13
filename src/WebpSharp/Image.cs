@@ -516,6 +516,9 @@ public sealed class Image : IDisposable, ICloneable
     /// <summary>Saves the image as BMP.</summary>
     public void SaveAsBmp(string path) => Save(path, new BmpEncoderOptions());
 
+    /// <summary>Saves the active frame as JPEG, compositing transparency on white.</summary>
+    public void SaveAsJpeg(string path, int quality = 75) => Save(path, new JpegEncoderOptions { Quality = quality });
+
     /// <summary>Encodes the image as WebP.</summary>
     public byte[] ToWebP(WebPEncoderOptions? options = null) => Encode(options ?? new WebPEncoderOptions());
 
@@ -524,6 +527,9 @@ public sealed class Image : IDisposable, ICloneable
 
     /// <summary>Encodes the image as BMP.</summary>
     public byte[] ToBmp(BmpEncoderOptions? options = null) => Encode(options ?? new BmpEncoderOptions());
+
+    /// <summary>Encodes the active frame as JPEG.</summary>
+    public byte[] ToJpeg(JpegEncoderOptions? options = null) => Encode(options ?? new JpegEncoderOptions());
 
     private byte[] Encode(EncoderOptions options)
     {
@@ -548,6 +554,11 @@ public sealed class Image : IDisposable, ICloneable
         if (format == ImageFormat.Bmp)
         {
             return new BmpEncoderOptions();
+        }
+
+        if (format == ImageFormat.Jpeg)
+        {
+            return new JpegEncoderOptions();
         }
 
         throw new NotSupportedException($"Saving images in {format.Name} format is not supported.");
