@@ -1,8 +1,12 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
 using WebpSharp.Formats.Metadata;
+using WebpSharp.Formats.WebP.Alpha;
+using WebpSharp.Formats.WebP.Animation;
+using WebpSharp.Formats.WebP.ColorConversion;
 using WebpSharp.Formats.WebP.Container;
 using WebpSharp.Formats.WebP.Lossless;
+using WebpSharp.Formats.WebP.Lossy;
 
 namespace WebpSharp.Formats.WebP;
 
@@ -37,17 +41,22 @@ internal sealed class WebPDecoder : IImageDecoder
         WebPContainer c = WebPContainer.Parse(data.Span);
         options.ValidateDimensions(ImageFormat.WebP, c.CanvasWidth, c.CanvasHeight);
 
+        Image image;
         if (c.IsAnimated)
         {
-            throw new NotSupportedException("Decoding animated WebP images is not supported yet.");
+            image = new Image(AnimationDecoder.Decode(data, c, options))
+            {
+                LoopCount = c.LoopCount,
+                AnimationBackgroundColor = ToColor(c.BackgroundColor),
+            };
+        }
+        else
+        {
+            image = new Image([DecodeFrame(data, c.Frames[0], options)]);
         }
 
-        ImageFrame frame = DecodeFrame(data, c.Frames[0], options);
-        var image = new Image([frame])
-        {
-            RawFormat = ImageFormat.WebP,
-            HasAlpha = c.HasAlpha,
-        };
+        image.RawFormat = ImageFormat.WebP;
+        image.HasAlpha = c.HasAlpha;
 
         if (!options.IgnoreMetadata)
         {
@@ -91,16 +100,31 @@ internal sealed class WebPDecoder : IImageDecoder
     /// <summary>Decodes the bitstream of one frame to a frame-sized RGBA buffer.</summary>
     internal static ImageFrame DecodeFrame(ReadOnlyMemory<byte> data, WebPFrameInfo info, DecoderOptions options)
     {
-        if (!info.IsLossless)
-        {
-            throw new NotSupportedException("Decoding lossy (VP8) WebP images is not supported yet.");
-        }
-
         (byte[] array, int offset) = GetArray(data);
-        uint[] argb = Vp8LDecoder.Decode(array, offset + info.Image.Offset, info.Image.Length, out int width, out int height);
-        ImageFrame frame = ImageFrame.CreateUninitialized(width, height);
-        ArgbToRgba(argb, frame.GetPixelSpan());
-        return frame;
+        if (info.IsLossless)
+        {
+            uint[] argb = Vp8LDecoder.Decode(array, offset + info.Image.Offset, info.Image.Length, out int width, out int height);
+            ImageFrame frame = ImageFrame.CreateUninitialized(width, height);
+            ArgbToRgba(argb, frame.GetPixelSpan());
+            return frame;
+        }
+        else
+        {
+            Vp8Frame yuv = Vp8Decoder.Decode(array, offset + info.Image.Offset, info.Image.Length, options.WebPBypassFiltering);
+            ImageFrame frame = ImageFrame.CreateUninitialized(yuv.Width, yuv.Height);
+            Span<Rgba32> pixels = frame.GetPixelSpan();
+            YuvToRgb.Convert(yuv, pixels, options.WebPFancyUpsampling);
+            if (!info.Alpha.IsEmpty)
+            {
+                byte[] alpha = AlphaDecoder.Decode(array, offset + info.Alpha.Offset, info.Alpha.Length, yuv.Width, yuv.Height);
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    pixels[i].A = alpha[i];
+                }
+            }
+
+            return frame;
+        }
     }
 
     private static (byte[] Array, int Offset) GetArray(ReadOnlyMemory<byte> data)
