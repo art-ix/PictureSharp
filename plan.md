@@ -380,6 +380,14 @@ Weryfikacja: `dotnet build -c Release --no-restore` (0 ostrzeżeń/błędów), `
   - `dwebp` dekoduje wszystkie nasze pliki.
 
 ### Faza 8: enkoder animacji i muxer (ok. 1,5k LOC)
+**Status: ukończona (2026-10-13), na bazie libwebp 1.6.0.**
+Weryfikacja: `dotnet build -c Release --no-restore` (0 ostrzeżeń/błędów), `dotnet test -c Release --no-build` (2069/2069, 0 pominiętych). CLI poprawnie przekodował animację korpusu; webpmux i Pillow otworzyły wynik. Pakiet NuGet ma zero zależności i komplet not copyright.
+- Enkoder ANIM/ANMF dostępny przez `Image.Save`/`SaveAsync`/`ToWebP`, fasadę WebP i CLI. Prostokąty zmian mają parzyste offsety; rozważamy dispose none/background i blend/no-blend, a `AllowMixed` także VP8/VP8L.
+- Wybór klatki kluczowej według najmniejszego kosztu w oknie po `KeyframeMin` do `KeyframeMax`, z normalizacją jak w libwebp. `KeyframeMax = 0` wyłącza wstawianie, `1` wymusza keyframes. `MinimizeSize` wyłącza periodyczne keyframes i dodatkowo próbuje pełne płótna.
+- Wspólny muxer statycznych obrazów i animacji zapisuje VP8X, ICCP, ANIM/ANMF, EXIF/XMP, rozmiary i padding RIFF. Przed zapisem walidujemy wymiary, pętle (0–65535) i czasy (0–16777215 ms, zaokrąglenie do ms). Powtórzone klatki zachowują osobne czasy.
+- 46 nowych testów obejmuje lossless/lossy/mixed, alfa i ukryte RGB, małe/nieparzyste/graniczne wymiary, dispose/blend, długie sekwencje i losowe częściowe aktualizacje, keyframes, metadane, pliki/strumienie bez seek i async. Testy Pillow/webpmux obejmują 38 konfiguracji, w tym 7 animacji korpusu; porównujemy wszystkie skomponowane RGBA, czasy, pętle i tło, a EXIF odzyskujemy przez webpmux.
+- Obecny limit płótna: 16383 na wymiar dla trybu lossy, 16384 dla lossless/mixed. Pełna zgodność bajtowa/rozmiarowa z img2webp nie jest kryterium tej fazy.
+
 Źródła: `src/mux/anim_encode.c`, `muxedit.c`, `muxinternal.c`.
 - Dla każdej klatki: prostokąt zmian względem poprzedniego płótna (offsety parzyste).
 - Kandydaci dispose none/background × blend/no-blend, a przy `AllowMixed` także lossy kontra lossless. Wybieramy najmniejszy wynik.

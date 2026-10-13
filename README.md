@@ -6,13 +6,13 @@ RasterSharp is a **pure C# image library for .NET 10 and later**. It reads WebP,
 
 The `Image` API provides file and stream I/O, animation frames, metadata, pixel access and basic geometry operations. It uses `System.Drawing.Primitives` for types such as `Color` and `Rectangle`, without requiring `System.Drawing.Common`.
 
-**Status:** in development. Phase 7 is complete, including static lossy and lossless WebP encoding. Animated WebP encoding and additional image processing are planned. See [plan.md](plan.md) for implementation phases and completion criteria.
+**Status:** in development. Phase 8 is complete, including animated WebP encoding alongside static lossy and lossless output. Further image processing is planned. See [plan.md](plan.md) for implementation phases and completion criteria.
 
 ## Supported formats
 
 | Format | Reading | Writing |
 | --- | --- | --- |
-| **WebP** | Lossy VP8, lossless VP8L, alpha, animation, ICC/EXIF/XMP | Static lossy VP8 and lossless VP8L, near-lossless, alpha, ICC/EXIF/XMP |
+| **WebP** | Lossy VP8, lossless VP8L, alpha, animation, ICC/EXIF/XMP | Static and animated lossy VP8 and lossless VP8L, mixed animation, near-lossless, alpha, ICC/EXIF/XMP |
 | **PNG** | All standard color types and bit depths, transparency, Adam7, APNG | Grayscale, RGB/RGBA and palette images, Adam7, APNG |
 | **BMP** | Palette and truecolor images, RLE4/RLE8/OS/2 RLE24, bit fields, alpha, OS/2 and V2–V5 headers, embedded PNG/JPEG | Uncompressed 1/4/8-bit palette, 24-bit RGB and 32-bit RGBA, automatic bit depth selection |
 | **JPEG** | Baseline, extended and progressive Huffman coding; grayscale, YCbCr, RGB, CMYK and YCCK; restart markers | Baseline and progressive, quality 1–100, grayscale, 4:4:4/4:2:2/4:2:0/4:4:0 sampling, optimized Huffman tables and restart markers |
@@ -56,14 +56,33 @@ Use `Image.FromStream` to read a stream or `Image.FromBytes` to decode an image 
 
 | Options type | Main controls |
 | --- | --- |
-| `WebPEncoderOptions` | `Lossless`, `Quality` (0–100), `Method` (0–6), `Preset`, `Exact`, `NearLossless`, alpha quality/filter/compression, SNS, filtering, segments, partitions, target size/PSNR, passes and `UseSharpYuv` |
+| `WebPEncoderOptions` | `Lossless`, `Quality` (0–100), `Method` (0–6), `Preset`, `Exact`, `NearLossless`, alpha quality/filter/compression, SNS, filtering, segments, partitions, target size/PSNR, passes, `UseSharpYuv`, `AllowMixed`, `MinimizeSize`, `KeyframeMin` and `KeyframeMax` |
 | `PngEncoderOptions` | `CompressionLevel` (0–9), `ColorType`, `FilterStrategy`, `Interlace`, `SaveAnimation` |
 | `BmpEncoderOptions` | `BitsPerPixel` (automatic, 1/4/8/24/32) |
 | `JpegEncoderOptions` | `Quality` (1–100), `Subsampling`, `Progressive`, `OptimizeCoding`, `RestartInterval`, `BackgroundColor` |
 
-For a pixel-exact WebP round-trip, set `Lossless = true`, `Exact = true` and leave `NearLossless = 100`. With `Exact = false`, RGB values under fully transparent pixels may change to improve compression. Lower `NearLossless` values permit pixel quantization. For lossy WebP, `Quality` controls visual quality and `Method` controls compression effort. `Preset` sets content-specific defaults; explicit SNS, filter and segment settings override them. `AlphaQuality = 100` preserves alpha exactly. `UseSharpYuv` enables the more accurate RGB→YUV conversion. `TargetSize` or `TargetPsnr` works with `Passes`; reaching a target depends on the image. As in libwebp, methods 3–6 use one token partition, while methods 0–2 honor `Partitions`. Animation options are reserved for the next phase.
+For a pixel-exact WebP round-trip, set `Lossless = true`, `Exact = true` and leave `NearLossless = 100`. With `Exact = false`, RGB values under fully transparent pixels may change to improve compression. Lower `NearLossless` values permit pixel quantization. For lossy WebP, `Quality` controls visual quality and `Method` controls compression effort. `Preset` sets content-specific defaults; explicit SNS, filter and segment settings override them. `AlphaQuality = 100` preserves alpha exactly. `UseSharpYuv` enables the more accurate RGB→YUV conversion. `TargetSize` or `TargetPsnr` works with `Passes`; reaching a target depends on the image. As in libwebp, methods 3–6 use one token partition, while methods 0–2 honor `Partitions`.
 
-JPEG uses quality 75 and 4:2:0 sampling by default. Progressive output uses optimized Huffman tables. JPEG composites transparency onto `BackgroundColor` (white by default); JPEG and BMP save the active frame. PNG preserves animation by default. The WebP encoder currently rejects animated images.
+JPEG uses quality 75 and 4:2:0 sampling by default. Progressive output uses optimized Huffman tables. JPEG composites transparency onto `BackgroundColor` (white by default); JPEG and BMP save the active frame. PNG and WebP preserve all animation frames by default.
+
+### Animated WebP
+
+```csharp
+using var first = Image.FromFile("frame-1.png");
+using var second = Image.FromFile("frame-2.png");
+using var animation = Image.CreateAnimation([first, second], TimeSpan.FromMilliseconds(100), loopCount: 0);
+animation.Frames[1].Duration = TimeSpan.FromMilliseconds(150);
+animation.Save("animation.webp", new WebPEncoderOptions
+{
+    Lossless = true,
+    Exact = true,
+    MinimizeSize = true,
+});
+```
+
+Frames must have the same dimensions. WebP stores durations rounded to the nearest millisecond, from 0 to 16,777,215 ms per frame. `LoopCount` accepts 0–65,535; zero means infinite playback. Duplicate frames retain their individual durations. `AnimationBackgroundColor`, metadata and canvas dimensions are stored in the container.
+
+The encoder tries even-offset change rectangles, blend/no-blend and disposal to transparent background, selecting the smallest encoded candidate. `AllowMixed = true` also compares VP8 and VP8L for each frame, so an animation may contain lossy frames even with `Lossless = true`. Leave it disabled for a pixel-exact lossless round-trip. `MinimizeSize` also tries full-canvas candidates and disables periodic keyframes. Otherwise `KeyframeMax = 0` disables insertion, `1` makes every frame a keyframe, and larger values bound the distance between keyframes. The search window after `KeyframeMin` is normalized as in libwebp (at most 30 candidates, with the lower bound raised above half of `KeyframeMax` when possible). Animated canvases currently use the same dimension limits as static frames: 16,383 pixels per side for lossy, or 16,384 when lossless or mixed encoding is available.
 
 ### Metadata and decoding behavior
 
@@ -127,7 +146,7 @@ dotnet test -c Release --filter Category=Oracle
 
 Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `RASTERSHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.
 
-The WebP decoder ports originated from libwebp 1.3.2. Recomputing the existing corpus references with 1.6.0 left all 248 entries unchanged. At completion of phase 7, all 2023 tests passed. The nine WebP encoder source images round-trip exactly through both decoders and meet the size limit of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless WebP output is not guaranteed. Lossy WebP was checked across 252 corpus configurations (nine images, four quality values, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and output size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks. JPEG encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
+The WebP decoder ports originated from libwebp 1.3.2. Recomputing the existing corpus references with 1.6.0 left all 248 entries unchanged. At completion of phase 8, all 2069 tests passed. The nine WebP encoder source images round-trip exactly through both decoders and meet the size limit of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless WebP output is not guaranteed. Lossy WebP was checked across 252 corpus configurations (nine images, four quality values, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and output size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks. JPEG encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
 
 Corpus regeneration requires libwebp 1.6.0 tools, ImageMagick, Python, NumPy and Pillow:
 
@@ -136,6 +155,8 @@ python3 -I tests/assets/generate_corpus.py
 python3 -I tests/assets/make_reference.py
 python3 -I tests/assets/make_jpeg_encoder_reference.py
 ```
+
+Animated WebP has 46 encoder tests, including 38 external checks through Pillow and webpmux 1.6.0. These compare complete decoded canvases, durations, loop counts, background color and EXIF extraction across lossy, lossless, mixed, blend/dispose and keyframe cases.
 
 Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder references. Additional JPEG oracle tests use a C compiler and libjpeg development headers, with Pillow and ImageMagick for independent decoding. External corpora are optional; their download procedure is described in [plan.md](plan.md).
 

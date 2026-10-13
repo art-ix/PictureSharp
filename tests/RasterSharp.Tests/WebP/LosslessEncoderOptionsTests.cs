@@ -162,7 +162,7 @@ public class LosslessEncoderOptionsTests
     }
 
     [Fact]
-    public void Save_WritesToNonSeekableStream_AndRejectsAnimation()
+    public void Save_WritesToNonSeekableStream_AndAnimation()
     {
         using var image = new Image(5, 3, System.Drawing.Color.CornflowerBlue);
         using var output = new WriteOnlyStream();
@@ -172,8 +172,10 @@ public class LosslessEncoderOptionsTests
         Assert.True(output.CanWrite);
         using Image animation = Image.CreateAnimation([image, image], TimeSpan.FromMilliseconds(50));
         using var target = new MemoryStream();
-        Assert.Throws<NotSupportedException>(() => animation.Save(target, new WebPEncoderOptions { Lossless = true }));
-        Assert.Equal(0, target.Length);
+        animation.Save(target, new WebPEncoderOptions { Lossless = true, Exact = true });
+        using Image decodedAnimation = Image.FromBytes(target.ToArray().AsMemory());
+        Assert.Equal(2, decodedAnimation.FrameCount);
+        Assert.All(decodedAnimation.Frames, frame => Assert.Equal(image.GetPixelSpan().ToArray(), frame.GetPixelSpan().ToArray()));
     }
 
     private sealed class WriteOnlyStream : Stream

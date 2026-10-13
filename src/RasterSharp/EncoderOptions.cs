@@ -113,17 +113,29 @@ public sealed class WebPEncoderOptions : EncoderOptions
     /// <summary>Animation: allow mixing lossy and lossless frames, choosing the smaller per frame.</summary>
     public bool AllowMixed { get; init; }
 
-    /// <summary>Animation: spend extra effort to minimize the output size.</summary>
+    /// <summary>Animation: also try full-canvas candidates and disable periodic keyframes to minimize size.</summary>
     public bool MinimizeSize { get; init; }
 
-    /// <summary>Animation: minimum distance between key frames.</summary>
+    /// <summary>Animation: lower bound of the keyframe search window (default 9). Normalized as in libwebp.</summary>
     public int KeyframeMin { get; init; } = 9;
 
-    /// <summary>Animation: maximum distance between key frames.</summary>
+    /// <summary>Animation: maximum keyframe distance (default 17). Zero disables insertion; one makes every frame a keyframe.</summary>
     public int KeyframeMax { get; init; } = 17;
 
     /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
     public int MaxDegreeOfParallelism { get; init; } = -1;
+
+    internal WebPEncoderOptions ForAnimationFrame(bool lossless, bool blend) => new()
+    {
+        Quality = Quality, Lossless = lossless, Method = Method, Preset = Preset,
+        AlphaQuality = AlphaQuality, AlphaCompression = AlphaCompression, AlphaFilter = AlphaFilter,
+        Exact = Exact, NearLossless = NearLossless, SnsStrength = SnsStrength,
+        FilterStrength = blend && !lossless ? 0 : FilterStrength,
+        FilterSharpness = FilterSharpness, AutoFilter = !blend && AutoFilter,
+        Segments = Segments, Partitions = Partitions, TargetSize = TargetSize,
+        TargetPsnr = TargetPsnr, Passes = Passes, UseSharpYuv = UseSharpYuv,
+        Metadata = MetadataKinds.None, MaxDegreeOfParallelism = MaxDegreeOfParallelism,
+    };
 
     internal override void Validate()
     {
@@ -142,7 +154,8 @@ public sealed class WebPEncoderOptions : EncoderOptions
         if (TargetSize < 0) throw new ArgumentOutOfRangeException(nameof(TargetSize), TargetSize, "Expected >= 0.");
         if (!float.IsFinite(TargetPsnr) || TargetPsnr < 0) throw new ArgumentOutOfRangeException(nameof(TargetPsnr), TargetPsnr, "Expected >= 0.");
         if (Passes is < 1 or > 10) throw new ArgumentOutOfRangeException(nameof(Passes), Passes, "Expected 1–10.");
-        if (KeyframeMin < 0 || KeyframeMax < KeyframeMin) throw new ArgumentOutOfRangeException(nameof(KeyframeMax), "Expected 0 <= KeyframeMin <= KeyframeMax.");
+        if (KeyframeMin < 0) throw new ArgumentOutOfRangeException(nameof(KeyframeMin));
+        if (KeyframeMax < 0) throw new ArgumentOutOfRangeException(nameof(KeyframeMax));
     }
 }
 
