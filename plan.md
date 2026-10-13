@@ -2,11 +2,11 @@
 
 ## Kontekst
 
-Potrzebna jest biblioteka .NET (**net10.0+**) do kodowania i dekodowania WebP, napisana w 100% w kodzie zarządzanym (C#), **bez zależności NuGet i bez natywnych bibliotek**. Używamy tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`), które jest częścią shared framework i działa na każdej platformie. Biblioteka ma też czytać PNG i JPEG (do przekodowywania) oraz zapisywać PNG. Centralnym typem jest klasa `Image`, wzorowana na `System.Drawing.Image`/`Bitmap`, z prostym API.
+Potrzebna jest biblioteka .NET (**net10.0+**) do kodowania i dekodowania WebP, napisana w 100% w kodzie zarządzanym (C#), **bez zależności NuGet i bez natywnych bibliotek**. Używamy tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`), które jest częścią shared framework i działa na każdej platformie. Biblioteka ma też czytać PNG, BMP i JPEG (do przekodowywania) oraz zapisywać PNG i BMP. Centralnym typem jest klasa `Image`, wzorowana na `System.Drawing.Image`/`Bitmap`, z prostym API.
 
 Ustalenia z użytkownikiem:
 - **WebP w pełnym zakresie** (odczyt i zapis): lossy VP8, lossless VP8L, alfa ALPH, animacja ANIM/ANMF, metadane ICCP/EXIF/XMP.
-- **PNG:** odczyt i zapis. **JPEG:** tylko odczyt.
+- **PNG:** odczyt i zapis. **BMP:** odczyt i zapis. **JPEG:** tylko odczyt.
 - **Deflate/zlib piszemy sami.** Nie używamy `ZLibStream`, bo pod spodem woła natywne zlib.
 - **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli i proste operacje na kolorach.
 
@@ -35,7 +35,7 @@ webpsharp/
     Image.cs, ImageFrame.cs, ImageFrameCollection.cs, ImageInfo.cs, ImageFormat.cs,
     Rgba32.cs, PixelFormat.cs, ImageMetadata.cs, BitmapData.cs, enums (RotateFlipType,
     ResizeMode, ResamplingFilter, ImageLockMode, ExifOrientation), DecoderOptions.cs,
-    EncoderOptions.cs (+ WebPEncoderOptions, PngEncoderOptions), WebP.cs (fasada),
+    EncoderOptions.cs (+ WebPEncoderOptions, PngEncoderOptions, BmpEncoderOptions), WebP.cs (fasada),
     ImageFormatException.cs
     Formats/
       FormatDetector.cs, IImageDecoder.cs, IImageEncoder.cs, CodecRegistry.cs (internal)
@@ -49,6 +49,7 @@ webpsharp/
             Color/    (YuvToRgb + fancy upsampling, RgbToYuv, SharpYuv)
             WebPDecoder.cs, WebPEncoder.cs
       Png/  (PngDecoder, PngEncoder, PngFilters, Adam7, Apng)
+      Bmp/  (BmpDecoder, BmpEncoder, BmpHeaders, Rle)
       Jpeg/ (JpegDecoder, JpegHuffman, JpegIdct (islow), Progressive, Upsampler, ColorConverter)
       Metadata/ (ExifReader/Patcher: Orientation, rozdzielczość; IccProfile)
     Compression/ (Inflater, Deflater, Adler32, Crc32)
@@ -73,7 +74,7 @@ Zasady kodu:
 ### Typy podstawowe
 - `Rgba32`: struktura `{byte R,G,B,A}` w układzie sekwencyjnym, z konwersjami do i z `System.Drawing.Color` oraz `uint`. Przechowuje **alfę prostą** (niepremultiplikowaną), tak samo jak WebP i PNG.
 - `PixelFormat` (do eksportu i importu): `Rgba32, Bgra32, Argb32, Rgb24, Bgr24, Gray8, Rgba32Premultiplied, Bgra32Premultiplied`.
-- `ImageFormat`: klasa z instancjami statycznymi `WebP`, `Png`, `Jpeg`, `MemoryBmp`. Właściwości: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`.
+- `ImageFormat`: klasa z instancjami statycznymi `WebP`, `Png`, `Bmp`, `Jpeg`, `MemoryBmp`. Właściwości: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`.
 - `ImageInfo` (wynik `Identify`, bez dekodowania pikseli): `Format`, `Width`, `Height`, `HasAlpha`, `FrameCount`, `IsAnimated`, `WebPCompression` (Lossy/Lossless/Mixed), `Orientation`, `HorizontalResolution`/`VerticalResolution`.
 - `ImageMetadata`: `byte[]? IccProfile`, `Exif`, `Xmp`, `ExifOrientation Orientation`, `Clear()`.
 - `ImageFormatException : FormatException`, rzucany dla uszkodzonych lub nierozpoznanych danych. Poprawne pliki z nieobsługiwanymi funkcjami (np. arytmetyczny JPEG) dają `NotSupportedException`.
@@ -120,12 +121,12 @@ Image MakeTransparent(Color c);  Image DrawImage(Image src, Point at, float opac
 Image Clone();  Image Clone(Rectangle r);  Image GetThumbnailImage(int w, int h);
 
 // Zapis
-void Save(string path);                       // format z rozszerzenia (.webp -> lossy q75, .png)
+void Save(string path);                       // format z rozszerzenia (.webp -> lossy q75, .png, .bmp)
 void Save(string path, ImageFormat f);  void Save(Stream s, ImageFormat f);
 void Save(string path, EncoderOptions o);  void Save(Stream s, EncoderOptions o);
 Task SaveAsync(...);
-void SaveAsWebP(string path, int quality = 75, bool lossless = false);  void SaveAsPng(string path);
-byte[] ToWebP(WebPEncoderOptions? o = null);  byte[] ToPng(PngEncoderOptions? o = null);
+void SaveAsWebP(string path, int quality = 75, bool lossless = false);  void SaveAsPng(string path);  void SaveAsBmp(string path);
+byte[] ToWebP(WebPEncoderOptions? o = null);  byte[] ToPng(PngEncoderOptions? o = null);  byte[] ToBmp(BmpEncoderOptions? o = null);
 ```
 
 - **`ImageFrame`:** `Width`, `Height`, `Duration` (TimeSpan), indeksator `Rgba32`, `GetRowSpan`, `GetPixelSpan`, `Clone()`. Każda klatka to pełne płótno, a dekoder zwraca klatki już skomponowane, jak `WebPAnimDecoder`.
@@ -156,6 +157,9 @@ byte[] ToWebP(WebPEncoderOptions? o = null);  byte[] ToPng(PngEncoderOptions? o 
   - `ColorType` (Auto: wybiera Palette, Gray, Rgb lub Rgba w zależności od danych)
   - `FilterStrategy` (Adaptive)
   - `Interlace`, `Metadata`, `SaveAnimation` (APNG)
+- **`BmpEncoderOptions`:**
+  - `BitsPerPixel` (Auto: 1/4/8 z paletą przy ≤256 kolorach, 24 dla obrazów nieprzezroczystych, 32 z kanałem alfa)
+  - `Metadata` (profil ICC w nagłówku BITMAPV5HEADER)
 
 ### Fasada `WebP` (odwzorowuje proste API z `decode.h`/`encode.h`)
 
@@ -166,7 +170,7 @@ static byte[] DecodeBgra(...);  static void DecodeInto(ReadOnlySpan<byte> data, 
 static byte[] EncodeRgba(ReadOnlySpan<byte> rgba, int w, int h, int stride, float quality);  // WebPEncodeRGBA
 static byte[] EncodeLosslessRgba(ReadOnlySpan<byte> rgba, int w, int h, int stride);
 static byte[] Encode(Image image, WebPEncoderOptions? o = null);
-static void Convert(string inPath, string outPath, WebPEncoderOptions? o = null);   // jpg/png/webp -> webp
+static void Convert(string inPath, string outPath, WebPEncoderOptions? o = null);   // jpg/png/bmp/webp -> webp
 ```
 
 Przykład użycia:
@@ -179,6 +183,7 @@ img.AutoOrient().Thumbnail(1920, 1080).SaveAsWebP("photo.webp", quality: 82);
 ### Wyraźne ograniczenia (do opisania w dokumentacji)
 - Brak zarządzania kolorem: ICC jest przenoszony, ale nie stosowany. CMYK→RGB konwertujemy naiwnie.
 - PNG 16-bit jest konwertowane do 8 bitów.
+- BMP zapisujemy zawsze bez kompresji (RLE tylko przy odczycie). Animacje zapisujemy jako aktywną klatkę.
 - Strumień wejściowy jest wczytywany w całości do pamięci.
 
 ---
@@ -202,6 +207,7 @@ Każda faza kończy się zielonymi testami.
 - `fetch-external.sh` (pobieranie za zgodą użytkownika) ściąga do `tests/assets/external/`:
   - libwebp-test-data (wektory zgodności VP8),
   - PngSuite,
+  - BMP Suite (Jason Summers, katalogi g/q/b: poprawne, wątpliwe, błędne),
   - zestaw Kodak (do porównań enkodera).
 
 ### Faza 1: kontener WebP i dekoder lossless VP8L (ok. 2k LOC)
@@ -249,7 +255,32 @@ Specyfikacje: RFC 1950/1951, W3C PNG 3rd ed. Algorytmy referencyjne: zlib `puff.
   - deflate→inflate daje identyczne dane, a nasz deflate jest poprawnie rozpakowywany przez `ZLibStream` z BCL (tylko w testach),
   - PNG zapisane przez nas otwiera Pillow.
 
-### Faza 4: dekoder JPEG (ok. 2,5k LOC)
+### Faza 4: BMP, odczyt i zapis (ok. 1k LOC)
+Specyfikacje: Microsoft BITMAPFILEHEADER oraz nagłówki BITMAPCOREHEADER (OS/2, 12 B), BITMAPINFOHEADER (40 B), BITMAPV2/V3INFOHEADER (52/56 B), BITMAPV4HEADER (108 B), BITMAPV5HEADER (124 B), OS/2 2.x (64 B). Referencja testowa: Pillow i BMP Suite.
+- Wykrywanie formatu po sygnaturze `BM`. `ImageFormat.Bmp` z rozszerzeniami `.bmp` i `.dib`.
+- Dekoder BMP:
+  - głębie 1/2/4/8 bit z paletą (BGR lub BGRX), 16 bit (domyślnie RGB555, BI_BITFIELDS np. RGB565), 24 bit, 32 bit (BGRX lub maski bitowe);
+  - kompresje BI_RGB, BI_RLE8, BI_RLE4 (z przeskokami delta i końcem linii), BI_BITFIELDS, BI_ALPHABITFIELDS;
+  - maski bitowe o dowolnej szerokości skalowane do 8 bitów;
+  - kanał alfa z maski alfa (V3+ / BI_ALPHABITFIELDS); 32-bit BI_RGB traktujemy jak BGRX (nieprzezroczysty), tak jak Pillow;
+  - obrazy bottom-up i top-down (ujemna wysokość), wyrównanie wierszy do 4 bajtów, offset danych z nagłówka pliku;
+  - rozdzielczość z `XPelsPerMeter`/`YPelsPerMeter` przeliczana na DPI;
+  - profil ICC osadzony w BITMAPV5HEADER (PROFILE_EMBEDDED);
+  - BI_PNG przekazujemy do naszego dekodera PNG, a BI_JPEG do dekodera JPEG z kolejnej fazy (do tego czasu `NotSupportedException`);
+  - walidacja rozmiarów, palet i strumieni RLE: uszkodzone pliki dają `ImageFormatException`.
+- Enkoder BMP:
+  - automatyczny dobór głębi: 1/4/8 bit z paletą przy ≤256 kolorach bez przezroczystości, 24 bit dla obrazów nieprzezroczystych, 32 bit BGRA z BITMAPV5HEADER i maską alfa, gdy obraz ma przezroczystość;
+  - zapis DPI i (opcjonalnie) profilu ICC w BITMAPV5HEADER;
+  - zapis bottom-up z wyrównaniem wierszy, bez kompresji.
+- `Image.Save` rozpoznaje `.bmp`, dochodzą `SaveAsBmp`/`ToBmp` i `BmpEncoderOptions`.
+- Korpus: warianty z ImageMagick (`BMP2:`, `BMP3:`, `BMP:`, głębie 1/4/8/16/24/32, RLE8, top-down) i Pillow; referencja pikseli z Pillow.
+- **DoD:**
+  - korpus BMP zgodny z Pillow piksel w piksel,
+  - BMP Suite: pliki z katalogu `g` zgodne z Pillow, pliki z `b` odrzucane wyjątkiem `ImageFormatException`, pliki z `q` dekodowane bez wyjątków spoza dozwolonych,
+  - round-trip encode→decode bez strat dla każdej głębi,
+  - nasze pliki BMP otwiera Pillow i ImageMagick.
+
+### Faza 5: dekoder JPEG (ok. 2,5k LOC)
 Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-turbo `jidctint.c`, fancy upsampling i `jdcolor.c` (licencja IJG/BSD trafia do NOTICES).
 - Markery SOF0/1/2, DHT, DQT (8- i 16-bit), DRI/RSTn, SOS.
 - Skany przeplatane i nieprzeplatane, dowolne współczynniki próbkowania.
@@ -261,7 +292,7 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
 - Nieobsługiwane (rzucają `NotSupportedException`): kodowanie arytmetyczne, SOF3 lossless, 12-bit.
 - **DoD:** różnica względem Pillow (libjpeg-turbo, islow) ≤1 na kanał, docelowo 0.
 
-### Faza 5: enkoder lossless VP8L (ok. 5k LOC)
+### Faza 6: enkoder lossless VP8L (ok. 5k LOC)
 Źródła: `src/enc/vp8l_enc.c`, `backward_references_enc.c`, `backward_references_cost_enc.c`, `histogram_enc.c`, `predictor_enc.c`, `near_lossless_enc.c`, `src/utils/huffman_encode_utils.c`, `bit_writer_utils.c`, `src/dsp/lossless_enc.c`.
 - Analiza i wybór trybu entropii, budowa i sortowanie palety.
 - Transformacje: subtract-green, predictor (wybór trybu per kafel), cross-color.
@@ -274,7 +305,7 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
   - encode→decode zwraca identyczne piksele (naszym dekoderem i `dwebp`),
   - rozmiar pliku ≤ `cwebp -lossless` +1%, docelowo identyczne bajty.
 
-### Faza 6: enkoder lossy VP8 i alfa (ok. 6k LOC)
+### Faza 7: enkoder lossy VP8 i alfa (ok. 6k LOC)
 Źródła: `src/enc/webp_enc.c`, `config_enc.c`, `picture_csp_enc.c`, `analysis_enc.c`, `quant_enc.c`, `frame_enc.c`, `tree_enc.c`, `token_enc.c`, `syntax_enc.c`, `filter_enc.c`, `cost_enc.c`, `iterator_enc.c`, `alpha_enc.c`, `picture_tools_enc.c`, `src/dsp/enc.c`, `cost.c`, `src/utils/quant_levels_utils.c`, opcjonalnie `sharpyuv/`.
 - RGB→YUV420.
 - Analiza makrobloków i k-means do maksymalnie 4 segmentów.
@@ -292,7 +323,7 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
   - dla tego samego wejścia PNG i flag (`-q`, `-m`, `-alpha_*`) wynik jest bajt w bajt równy `cwebp` 1.3.2 lub, gdzie to niemożliwe, PSNR ≥ cwebp −0,05 dB przy rozmiarze ≤ +1%;
   - `dwebp` dekoduje wszystkie nasze pliki.
 
-### Faza 7: enkoder animacji i muxer (ok. 1,5k LOC)
+### Faza 8: enkoder animacji i muxer (ok. 1,5k LOC)
 Źródła: `src/mux/anim_encode.c`, `muxedit.c`, `muxinternal.c`.
 - Dla każdej klatki: prostokąt zmian względem poprzedniego płótna (offsety parzyste).
 - Kandydaci dispose none/background × blend/no-blend, a przy `AllowMixed` także lossy kontra lossless. Wybieramy najmniejszy wynik.
@@ -303,7 +334,7 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
   - `webpmux -info` poprawnie listuje klatki,
   - `webpmux -get exif` zwraca nasz EXIF.
 
-### Faza 8: przetwarzanie obrazu w `Image` (ok. 2k LOC)
+### Faza 9: przetwarzanie obrazu w `Image` (ok. 2k LOC)
 - `Resizer`: separowalny splot dwuprzebiegowy z wagami liczonymi z góry, na alfie premultiplikowanej. Filtry Nearest, Bilinear, Bicubic (Catmull-Rom), Lanczos3. Pętla po wierszach przez `Parallel.For`.
 - Tryby `ResizeMode`: Stretch, Fit, Fill (z przycięciem), Pad.
 - `Crop`, `RotateFlip` (8 wariantów), `AutoOrient`.
@@ -314,7 +345,7 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
   - resize zgodny z Pillow z tolerancją,
   - LockBits/CopyPixels round-trip dla każdego `PixelFormat`.
 
-### Faza 9: wydajność, odporność, wydanie
+### Faza 10: wydajność, odporność, wydanie
 - BenchmarkDotNet: dekodowanie i kodowanie w porównaniu z czasami `cwebp`/`dwebp`. Cel: ≤3× wolniej od natywnego C z SIMD.
 - Ścieżki `Vector128`/`Vector256` (cross-platform intrinsics) dla:
   - IDCT/FDCT,
@@ -332,7 +363,7 @@ Specyfikacje: ITU-T T.81, JFIF, Adobe APP14. Algorytmy referencyjne: libjpeg-tur
 
 ## Wytyczne portowania z C
 - Portujemy funkcja po funkcji, z komentarzem źródła, np. `// port: src/dec/vp8_dec.c GetCoeffsFast`.
-- Najpierw wersja skalarna z referencyjnych plików `dsp/*.c`. SIMD dopiero w fazie 9.
+- Najpierw wersja skalarna z referencyjnych plików `dsp/*.c`. SIMD dopiero w fazie 10.
 - Pilnujemy semantyki C:
   - promocja do `int`,
   - rzutowania `(uint8_t)` przez `clip_8b`,
@@ -354,7 +385,7 @@ dotnet run -c Release --project benchmarks/WebpSharp.Benchmarks
 
 Rodzaje testów:
 1. **Prymitywy:** bit reader/writer, Huffman, IDCT kontra wersja float, CRC/Adler na znanych wektorach, inflate kontra `ZLibStream`.
-2. **Zgodność dekoderów:** hashe pikseli z `reference.json` (dwebp i Pillow), libwebp-test-data, PngSuite.
+2. **Zgodność dekoderów:** hashe pikseli z `reference.json` (dwebp i Pillow), libwebp-test-data, PngSuite, BMP Suite.
 3. **Enkodery:** porównanie bajtów i PSNR z `cwebp` 1.3.2, round-tripy lossless, metadane i animacje przez `webpmux` i Pillow.
 4. **API `Image`:** właściwości, operacje i konwersje formatów pikseli.
 5. **Odporność:** fuzz i mutacje korpusu.

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instrukcje dla agentów AI (i ludzi) pracujących nad **WebpSharp**: biblioteką .NET do kodowania i dekodowania WebP (oraz odczytu PNG/JPEG i zapisu PNG), napisaną w 100% w C#.
+Instrukcje dla agentów AI (i ludzi) pracujących nad **WebpSharp**: biblioteką .NET do kodowania i dekodowania WebP (oraz odczytu PNG/BMP/JPEG i zapisu PNG/BMP), napisaną w 100% w C#.
 
 Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.md](plan.md). Przed rozpoczęciem pracy przeczytaj go i ustal, w której fazie jesteś.
 
