@@ -62,7 +62,7 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
 
 ```
 src/WebpSharp/            biblioteka (Image, fasada WebP, Formats/, Compression/, Processing/, Internal/)
-tests/WebpSharp.Tests/    xUnit; assets/: generate-corpus.sh, make_reference.py, reference.json
+tests/WebpSharp.Tests/    xUnit; assets/: generate_corpus.py, make_reference.py, reference.json, corpus/, reference/
 benchmarks/               BenchmarkDotNet
 samples/WebpSharp.Cli/    narzędzie CLI (convert/info/resize)
 reference/libwebp/        źródła referencyjne (niecommitowane)
@@ -77,6 +77,11 @@ dotnet test -c Release --filter Category=Oracle   # porównania z cwebp/dwebp/we
 ```
 
 Zasady testowania:
+- **Korpus testowy:** `tests/assets/corpus/` (syntetyczne źródła + warianty z `cwebp`/`img2webp`/`webpmux`/`convert`/Pillow) jest commitowany. Regeneracja:
+  ```bash
+  python3 -I tests/assets/generate_corpus.py && python3 -I tests/assets/make_reference.py
+  ```
+- **Zdjęcia w `samples/*.jpg|webp`** to prywatne pliki użytkownika (EXIF z GPS) – są w `.gitignore`, nie commitujemy ich; służą tylko do lokalnych testów (`Category=Local`) i benchmarków.
 - **Dekodery:** wynik musi być piksel w piksel zgodny z `reference.json`. Hashe SHA-256 RGBA wylicza `make_reference.py` z `dwebp -pam` i Pillow; uruchamiaj go przez `python3 -I`.
 - **Enkoder lossless:** round-trip musi dać identyczne piksele.
 - **Enkoder lossy:** celujemy w bajty identyczne z `cwebp` 1.3.2. Kryterium zastępcze to parytet PSNR i rozmiaru (patrz DoD w [plan.md](plan.md)).

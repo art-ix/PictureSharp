@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>WebpSharp</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <PackageId>WebpSharp</PackageId>
+    <Description>Pure managed WebP encoder/decoder (lossy, lossless, alpha, animation) with PNG/JPEG import, PNG export and a System.Drawing-like Image API. No native dependencies.</Description>
+    <PackageTags>webp;image;png;jpeg;codec;encoder;decoder</PackageTags>
+    <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WebpSharp.Tests" />
+    <InternalsVisibleTo Include="WebpSharp.Benchmarks" />
+  </ItemGroup>
+
+</Project>

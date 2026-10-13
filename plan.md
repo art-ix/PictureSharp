@@ -55,7 +55,7 @@ webpsharp/
     Processing/  (Resizer, Kernels, Geometry, ColorOps, Compositor, PixelConverter)
     Internal/    (BitHelpers, pooling, SIMD helpers)
   tests/WebpSharp.Tests/         # xUnit (zależności tylko w testach)
-    assets/ generate-corpus.sh, fetch-external.sh, make_reference.py, reference.json
+    assets/ generate_corpus.py, make_reference.py, fetch-external.sh, reference.json, corpus/, reference/
   benchmarks/WebpSharp.Benchmarks/ # BenchmarkDotNet
   samples/WebpSharp.Cli/         # `webpsharp convert in.jpg out.webp -q 80`, `info`, `resize`
 ```
@@ -197,7 +197,7 @@ Każda faza kończy się zielonymi testami.
 - Utworzyć solution, `Directory.Build.props`, projekty src/tests/benchmarks/samples.
 - `git clone --branch v1.3.2 https://chromium.googlesource.com/webm/libwebp reference/libwebp`.
 - Typy podstawowe: `Rgba32`, `PixelFormat`, `ImageFormat`, `ImageFrame`, `Image` (konstrukcja, piksele, `Clone`, `LockBits`, `PixelConverter`), wyjątki, `FormatDetector` (sygnatury RIFF/WEBP, PNG, JPEG SOI), `CodecRegistry`, stub `Save`/`From*`.
-- `tests/assets/generate-corpus.sh` tworzy korpus testowy narzędziami `cwebp` (różne `-q`, `-m 0..6`, `-lossless`, `-alpha_filter`, `-exact`, `-segments`, `-sharp_yuv`), `img2webp`/`webpmux` (animacje, metadane) i `convert` (PNG dla wszystkich typów kolorów i głębi, Adam7, palety, tRNS; JPEG baseline/progressive, 4:4:4/4:2:2/4:2:0/4:1:1, gray, CMYK, DRI, EXIF orientation 1–8).
+- `tests/assets/generate_corpus.py` tworzy korpus testowy narzędziami `cwebp` (różne `-q`, `-m 0..6`, `-lossless`, `-alpha_filter`, `-exact`, `-segments`, `-sharp_yuv`), `img2webp`/`webpmux` (animacje, metadane) i `convert` (PNG dla wszystkich typów kolorów i głębi, Adam7, palety, tRNS; JPEG baseline/progressive, 4:4:4/4:2:2/4:2:0/4:1:1, gray, CMYK, DRI, EXIF orientation 1–8).
 - `make_reference.py` (uruchamiany przez `python3 -I`) zapisuje do `reference.json` SHA-256 pikseli RGBA zdekodowanych przez `dwebp -pam` oraz Pillow (PNG/JPEG/animacje WebP przez WebPAnimDecoder). Testy nie wymagają wtedy narzędzi w runtime.
 - `fetch-external.sh` (pobieranie za zgodą użytkownika) ściąga do `tests/assets/external/`:
   - libwebp-test-data (wektory zgodności VP8),

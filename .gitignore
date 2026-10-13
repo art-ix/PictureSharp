@@ -8,3 +8,9 @@ BenchmarkDotNet.Artifacts/
 reference/
 tests/assets/external/
 .claude/settings.local.json
+
+# Local sample photos (private, not committed)
+samples/*.jpg
+samples/*.jpeg
+samples/*.webp
+samples/*.png
