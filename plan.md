@@ -276,7 +276,7 @@ Specyfikacje: Microsoft BITMAPFILEHEADER oraz nagłówki BITMAPCOREHEADER (OS/2,
 - Korpus: warianty z ImageMagick (`BMP2:`, `BMP3:`, `BMP:`, głębie 1/4/8/16/24/32, RLE8, top-down) i Pillow; referencja pikseli z Pillow.
 - **DoD:**
   - korpus BMP zgodny z Pillow piksel w piksel,
-  - BMP Suite: pliki z katalogu `g` zgodne z Pillow, pliki z `b` odrzucane wyjątkiem `ImageFormatException`, pliki z `q` dekodowane bez wyjątków spoza dozwolonych,
+  - BMP Suite: pliki z katalogu `g` zgodne z Pillow (z ImageMagick tam, gdzie Pillow ich nie czyta albo ma znany błąd); pliki z `q` i `b` dekodowane tolerancyjnie albo odrzucane wyłącznie wyjątkiem `ImageFormatException`/`NotSupportedException`,
   - round-trip encode→decode bez strat dla każdej głębi,
   - nasze pliki BMP otwiera Pillow i ImageMagick.
 

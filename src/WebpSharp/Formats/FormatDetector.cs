@@ -25,6 +25,11 @@ internal static class FormatDetector
             return ImageFormat.Jpeg;
         }
 
+        if (header.StartsWith("BM"u8))
+        {
+            return ImageFormat.Bmp;
+        }
+
         return null;
     }
 }

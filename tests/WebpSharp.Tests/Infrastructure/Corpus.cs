@@ -68,6 +68,7 @@ public sealed class ReferenceEntry
     public int Loop { get; set; }
     public int[]? Background { get; set; }
     public int BitDepth { get; set; }
+    public int HeaderSize { get; set; }
     public int ColorType { get; set; }
     public bool Interlaced { get; set; }
     public bool Progressive { get; set; }

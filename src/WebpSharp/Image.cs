@@ -452,7 +452,7 @@ public sealed class Image : IDisposable, ICloneable
 
     // ---------------------------------------------------------------- saving
 
-    /// <summary>Saves the image; the format is chosen from the file extension (.webp: lossy quality 75, .png).</summary>
+    /// <summary>Saves the image; the format is chosen from the file extension (.webp: lossy quality 75, .png, .bmp).</summary>
     public void Save(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -513,11 +513,17 @@ public sealed class Image : IDisposable, ICloneable
     /// <summary>Saves the image as PNG.</summary>
     public void SaveAsPng(string path) => Save(path, new PngEncoderOptions());
 
+    /// <summary>Saves the image as BMP.</summary>
+    public void SaveAsBmp(string path) => Save(path, new BmpEncoderOptions());
+
     /// <summary>Encodes the image as WebP.</summary>
     public byte[] ToWebP(WebPEncoderOptions? options = null) => Encode(options ?? new WebPEncoderOptions());
 
     /// <summary>Encodes the image as PNG.</summary>
     public byte[] ToPng(PngEncoderOptions? options = null) => Encode(options ?? new PngEncoderOptions());
+
+    /// <summary>Encodes the image as BMP.</summary>
+    public byte[] ToBmp(BmpEncoderOptions? options = null) => Encode(options ?? new BmpEncoderOptions());
 
     private byte[] Encode(EncoderOptions options)
     {
@@ -537,6 +543,11 @@ public sealed class Image : IDisposable, ICloneable
         if (format == ImageFormat.Png)
         {
             return new PngEncoderOptions();
+        }
+
+        if (format == ImageFormat.Bmp)
+        {
+            return new BmpEncoderOptions();
         }
 
         throw new NotSupportedException($"Saving images in {format.Name} format is not supported.");

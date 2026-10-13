@@ -28,7 +28,7 @@ public class RgbaAndFormatTests
         Assert.Equal(expected, ImageFormat.FromExtension(input)?.Name);
 
     [Fact]
-    public void ImageFormat_FromExtension_Unknown() => Assert.Null(ImageFormat.FromExtension("file.bmp"));
+    public void ImageFormat_FromExtension_Unknown() => Assert.Null(ImageFormat.FromExtension("file.tiff"));
 
     public static TheoryData<string> AllFiles => Corpus.Files("");
 

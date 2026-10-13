@@ -3,9 +3,9 @@ namespace WebpSharp.Formats;
 /// <summary>Maps image formats to their decoder and encoder implementations.</summary>
 internal static class CodecRegistry
 {
-    private static readonly IImageDecoder[] Decoders = [WebP.WebPDecoder.Instance, Png.PngDecoder.Instance];
+    private static readonly IImageDecoder[] Decoders = [WebP.WebPDecoder.Instance, Png.PngDecoder.Instance, Bmp.BmpDecoder.Instance];
 
-    private static readonly IImageEncoder[] Encoders = [Png.PngEncoder.Instance];
+    private static readonly IImageEncoder[] Encoders = [Png.PngEncoder.Instance, Bmp.BmpEncoder.Instance];
 
     public static IImageDecoder? GetDecoder(ImageFormat format) => Array.Find(Decoders, d => d.Format == format);
 
@@ -40,7 +40,7 @@ internal static class CodecRegistry
     private static IImageDecoder GetDecoderFor(ReadOnlySpan<byte> data)
     {
         ImageFormat format = FormatDetector.Detect(data)
-            ?? throw new ImageFormatException("The data is not a recognized image format (expected WebP, PNG or JPEG).");
+            ?? throw new ImageFormatException("The data is not a recognized image format (expected WebP, PNG, JPEG or BMP).");
         return GetDecoder(format)
             ?? throw new NotSupportedException($"Decoding {format.Name} images is not supported yet.");
     }

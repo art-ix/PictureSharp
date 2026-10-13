@@ -21,11 +21,14 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
     /// <summary>JPEG / JFIF (decode only).</summary>
     public static ImageFormat Jpeg { get; } = new("JPEG", "image/jpeg", ".jpg", ".jpeg", ".jpe", ".jfif");
 
+    /// <summary>Windows/OS2 bitmap (BMP/DIB).</summary>
+    public static ImageFormat Bmp { get; } = new("BMP", "image/bmp", ".bmp", ".dib");
+
     /// <summary>An image created in memory rather than decoded from a file.</summary>
     public static ImageFormat MemoryBmp { get; } = new("MemoryBMP", "application/octet-stream");
 
     /// <summary>All file formats known to the library.</summary>
-    public static IReadOnlyList<ImageFormat> All { get; } = [WebP, Png, Jpeg];
+    public static IReadOnlyList<ImageFormat> All { get; } = [WebP, Png, Jpeg, Bmp];
 
     /// <summary>Short name of the format.</summary>
     public string Name { get; }

@@ -4,6 +4,8 @@
 * static WebP  -> `dwebp -pam` (libwebp 1.3.2), cross-checked with Pillow
 * animated WebP -> Pillow (WebPAnimDecoder: fully composited canvas frames)
 * PNG           -> Pillow (8-bit) / ImageMagick (16-bit, scaled with round(v/257)); APNG via Pillow
+* BMP           -> Pillow (ImageMagick scales 4/5-bit channels differently, so it is no oracle for BMP;
+                   variants Pillow cannot read are covered by unit tests)
 * JPEG          -> Pillow (libjpeg-turbo, islow IDCT, fancy upsampling); RGBA also saved as
                    PNG under reference/jpeg/ for tolerance comparisons
 
@@ -154,6 +156,31 @@ def ref_jpeg(path, rel):
     return entry
 
 
+def bmp_info(data):
+    header_size = struct.unpack_from("<I", data, 14)[0]
+    if header_size == 12:
+        bits, compression = struct.unpack_from("<H", data, 24)[0], 0
+    else:
+        bits, compression = struct.unpack_from("<HI", data, 28)
+    has_alpha = compression in (3, 6) and (header_size >= 56 or compression == 6) and struct.unpack_from("<I", data, 66)[0] != 0
+    return header_size, bits, compression, has_alpha
+
+
+def ref_bmp(path, rel):
+    with open(path, "rb") as f:
+        data = f.read()
+    header_size, bits, compression, has_alpha = bmp_info(data)
+    entry = {"format": "BMP", "bitDepth": bits, "compression": str(compression), "headerSize": header_size,
+             "hasAlpha": has_alpha, "animated": False}
+    im = Image.open(path)
+    rgba = im.convert("RGBA").tobytes()
+    dpi = im.info.get("dpi")
+    if dpi and dpi[0] > 0:
+        entry["dpi"] = [round(dpi[0], 2), round(dpi[1], 2)]
+    entry.update(width=im.width, height=im.height, frames=[{"sha256": sha(rgba), "duration": 0}], decoder="pillow")
+    return entry
+
+
 def main():
     refs = {}
     for dirpath, _, files in os.walk(CORPUS):
@@ -166,6 +193,8 @@ def main():
                 refs[rel] = ref_webp(path, rel)
             elif name.endswith(".png"):
                 refs[rel] = ref_png(path, rel)
+            elif name.endswith(".bmp"):
+                refs[rel] = ref_bmp(path, rel)
             elif name.endswith(".jpg"):
                 refs[rel] = ref_jpeg(path, rel)
     with open(os.path.join(ROOT, "reference.json"), "w") as f:

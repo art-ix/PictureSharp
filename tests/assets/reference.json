@@ -1,4 +1,498 @@
 {
+ "bmp/im_dpi.bmp": {
+  "format": "BMP",
+  "bitDepth": 24,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   300.0,
+   149.99
+  ],
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "8f548e91cdaec7bd1cefab117db9b457afc5eea5dc8f8f2f520b0c88df91a3b6",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_os2_pal8.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "0",
+  "headerSize": 12,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "5290d0956ed366ba8751a99a6c5e5332d5e04282fb40d7617ad8ca063ec8f6c0",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_os2_rgb24.bmp": {
+  "format": "BMP",
+  "bitDepth": 24,
+  "compression": "0",
+  "headerSize": 12,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "0472a4741ce827c32443ce5cf55b99dcf85521c7511741994605d8d225f987b8",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_pal1.bmp": {
+  "format": "BMP",
+  "bitDepth": 1,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 200,
+  "height": 150,
+  "frames": [
+   {
+    "sha256": "7a880ae6824366c6fa886498f2a8ef7191e541f791f701d9b8df1bd69ff856aa",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_pal4.bmp": {
+  "format": "BMP",
+  "bitDepth": 4,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 200,
+  "height": 150,
+  "frames": [
+   {
+    "sha256": "4a849096c6598148eac34177d3dd870b56491a4260e6e516563592ff58ba5f7c",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_pal8.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "5290d0956ed366ba8751a99a6c5e5332d5e04282fb40d7617ad8ca063ec8f6c0",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_pal8_rle.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "1",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "5290d0956ed366ba8751a99a6c5e5332d5e04282fb40d7617ad8ca063ec8f6c0",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_pal8_rle_odd.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "1",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "c5c8c27c4aaa4925faba4ba81cc6bb6927cfaab10b67673e9d44693ac8e681ca",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_rgb24.bmp": {
+  "format": "BMP",
+  "bitDepth": 24,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "8f548e91cdaec7bd1cefab117db9b457afc5eea5dc8f8f2f520b0c88df91a3b6",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_rgb24_odd.bmp": {
+  "format": "BMP",
+  "bitDepth": 24,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "0472a4741ce827c32443ce5cf55b99dcf85521c7511741994605d8d225f987b8",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_rgb24_v5.bmp": {
+  "format": "BMP",
+  "bitDepth": 24,
+  "compression": "0",
+  "headerSize": 124,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "8f548e91cdaec7bd1cefab117db9b457afc5eea5dc8f8f2f520b0c88df91a3b6",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_rgb555.bmp": {
+  "format": "BMP",
+  "bitDepth": 16,
+  "compression": "3",
+  "headerSize": 124,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "74c54dc3aa7123b0cd9be6461acc705bb4c6fc9fc86e02a3b13dded412599841",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_rgb565.bmp": {
+  "format": "BMP",
+  "bitDepth": 16,
+  "compression": "3",
+  "headerSize": 124,
+  "hasAlpha": false,
+  "animated": false,
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "2655bbf07bc18b735b0533755bdd6e08c2234aa1c1baa1e26c7a11f424c2eb5f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/im_rgba32_v5.bmp": {
+  "format": "BMP",
+  "bitDepth": 32,
+  "compression": "3",
+  "headerSize": 124,
+  "hasAlpha": true,
+  "animated": false,
+  "width": 200,
+  "height": 160,
+  "frames": [
+   {
+    "sha256": "2e501f0c7e8a3b2d3a27f024e4121aad990927b9ce1fbbb6a504f77eda1cbbf0",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/os2v2_pal8.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "0",
+  "headerSize": 64,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "139d288d6b58ab121011cb0fa0dd69af8a0d6458b101714243f70a84a40da187",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/pal4_short_palette.bmp": {
+  "format": "BMP",
+  "bitDepth": 4,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "39cb376da1952115804310a7d8d0fa794ae105befef8008479954ba47a5ffa0f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/pal8_gap.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "139d288d6b58ab121011cb0fa0dd69af8a0d6458b101714243f70a84a40da187",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/pil_gray.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   96.01,
+   96.01
+  ],
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "295e1c4bf5a20ffd63eea870b23e72d9214c0eb7b387506525297d3af7d21b7f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/pil_mono.bmp": {
+  "format": "BMP",
+  "bitDepth": 1,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   96.01,
+   96.01
+  ],
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "0a5458e331b5abf6d0f14931ccf7ca3b4f9e84c4d0dea609cf1f3e6931c6391f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/pil_pal.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   96.01,
+   96.01
+  ],
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "7e32d28d61eacb02278f3390283a0a2e0556c1e8a2fa98fec37a0f5f43dacf7e",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/pil_rgb.bmp": {
+  "format": "BMP",
+  "bitDepth": 24,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 256,
+  "height": 192,
+  "frames": [
+   {
+    "sha256": "8f548e91cdaec7bd1cefab117db9b457afc5eea5dc8f8f2f520b0c88df91a3b6",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/pil_rgba.bmp": {
+  "format": "BMP",
+  "bitDepth": 32,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   96.01,
+   96.01
+  ],
+  "width": 200,
+  "height": 160,
+  "frames": [
+   {
+    "sha256": "e0e9482e40b9955c13c135806f64b4abada75e6e321b143cdee61a02e7c9c479",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/rgb32_bgrx_junk.bmp": {
+  "format": "BMP",
+  "bitDepth": 32,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "0472a4741ce827c32443ce5cf55b99dcf85521c7511741994605d8d225f987b8",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/rle4.bmp": {
+  "format": "BMP",
+  "bitDepth": 4,
+  "compression": "2",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 200,
+  "height": 150,
+  "frames": [
+   {
+    "sha256": "4a849096c6598148eac34177d3dd870b56491a4260e6e516563592ff58ba5f7c",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/topdown_pal8.bmp": {
+  "format": "BMP",
+  "bitDepth": 8,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "139d288d6b58ab121011cb0fa0dd69af8a0d6458b101714243f70a84a40da187",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
+ "bmp/topdown_rgb24.bmp": {
+  "format": "BMP",
+  "bitDepth": 24,
+  "compression": "0",
+  "headerSize": 40,
+  "hasAlpha": false,
+  "animated": false,
+  "dpi": [
+   72.01,
+   72.01
+  ],
+  "width": 171,
+  "height": 93,
+  "frames": [
+   {
+    "sha256": "0472a4741ce827c32443ce5cf55b99dcf85521c7511741994605d8d225f987b8",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow"
+ },
  "jpeg/cmyk.jpg": {
   "format": "JPEG",
   "width": 256,

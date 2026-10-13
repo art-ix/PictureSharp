@@ -292,6 +292,143 @@ def generate_jpeg():
         img.save(path("jpeg", f"orientation_{o}.jpg"), quality=85, exif=b"Exif\0\0" + make_exif(orientation=o))
 
 
+# --------------------------------------------------------------------------- BMP
+
+def write_bmp(out, width, height, bits, rows, palette=None, header_size=40, compression=0, masks=None,
+              ppm=(2835, 2835), topdown=False, gap=0):
+    """Writes a BMP from already packed rows (top row first; padded here unless RLE)."""
+    if compression in (1, 2):
+        data = rows
+    else:
+        stride = ((width * bits + 31) // 32) * 4
+        ordered = rows if topdown else rows[::-1]
+        data = b"".join(r + b"\0" * (stride - len(r)) for r in ordered)
+    entry = 3 if header_size == 12 else 4
+    pal = b"".join(bytes((b, g, r)) + (b"" if entry == 3 else b"\0") for r, g, b in (palette or []))
+    if header_size == 12:
+        hdr = struct.pack("<IHHHH", 12, width, height, 1, bits)
+    else:
+        hdr = struct.pack("<IiiHHIIiiII", header_size, width, -height if topdown else height, 1, bits, compression,
+                          len(data), ppm[0], ppm[1], len(palette or []), 0)
+        if masks is not None:
+            hdr += struct.pack("<4I", *masks)
+        hdr += b"\0" * (header_size - len(hdr))
+    offset = 14 + len(hdr) + len(pal) + gap
+    with open(out, "wb") as f:
+        f.write(b"BM" + struct.pack("<IHHI", offset + len(data), 0, 0, offset) + hdr + pal + b"\xAA" * gap + data)
+
+
+def palette_of(img, n):
+    p = img.getpalette() + [0] * (3 * n)
+    return [tuple(p[i * 3:i * 3 + 3]) for i in range(n)]
+
+
+def pack_indices(img, bits):
+    w, h = img.size
+    px = list(img.getdata())
+    rows = []
+    for y in range(h):
+        row = bytearray((w * bits + 7) // 8)
+        for x in range(w):
+            row[x * bits // 8] |= px[y * w + x] << (8 - bits - (x * bits) % 8)
+        rows.append(bytes(row))
+    return rows
+
+
+def rle4_encode(img):
+    """BI_RLE4 with encoded runs, even-length absolute runs, end-of-line and end-of-bitmap codes."""
+    w, h = img.size
+    px = list(img.getdata())
+    out = bytearray()
+    for y in range(h - 1, -1, -1):
+        row = px[y * w:(y + 1) * w]
+        x = 0
+        literal = []
+
+        def flush():
+            while len(literal) >= 4:
+                n = min(len(literal) & ~1, 254)
+                chunk = literal[:n]
+                del literal[:n]
+                out.extend((0, n))
+                body = bytes((chunk[i] << 4) | chunk[i + 1] for i in range(0, n, 2))
+                out.extend(body + (b"\0" if len(body) & 1 else b""))
+            for v in literal:
+                out.extend((1, v << 4))
+            literal.clear()
+
+        while x < w:
+            n = 1
+            while x + n < w and row[x + n] == row[x] and n < 255:
+                n += 1
+            if n >= 3:
+                flush()
+                out.extend((n, (row[x] << 4) | row[x]))
+                x += n
+            else:
+                literal.append(row[x])
+                x += 1
+        flush()
+        out.extend((0, 0))
+    out.extend((0, 1))
+    return bytes(out)
+
+
+def generate_bmp():
+    photo = os.path.join(SRC, "photo.png")
+    odd = os.path.join(SRC, "photo_odd.png")
+    alpha = os.path.join(SRC, "photo_alpha.png")
+    graphic = os.path.join(SRC, "graphic.png")
+    conv = [
+        ("im_rgb24", photo, ["BMP3:"]),
+        ("im_rgb24_odd", odd, ["BMP3:"]),
+        ("im_rgb24_v5", photo, ["BMP:"]),
+        ("im_os2_rgb24", odd, ["BMP2:"]),
+        ("im_os2_pal8", photo, ["-colors", "200", "BMP2:"]),
+        ("im_pal8", photo, ["-colors", "200", "-compress", "None", "BMP3:"]),
+        ("im_pal8_rle", photo, ["-colors", "200", "-compress", "RLE", "BMP3:"]),
+        ("im_pal8_rle_odd", odd, ["-colors", "100", "-compress", "RLE", "BMP3:"]),
+        ("im_pal4", graphic, ["-type", "Palette", "BMP3:"]),
+        ("im_pal1", graphic, ["-monochrome", "BMP3:"]),
+        ("im_rgba32_v5", alpha, ["BMP:"]),
+        ("im_rgb565", photo, ["-define", "bmp:subtype=RGB565", "BMP:"]),
+        ("im_rgb555", photo, ["-define", "bmp:subtype=RGB555", "BMP:"]),
+        ("im_dpi", photo, ["-units", "PixelsPerInch", "-density", "300x150", "BMP3:"]),
+    ]
+    for name, src, args in conv:
+        run("convert", src, *args[:-1], args[-1] + path("bmp", name + ".bmp"))
+
+    # Pillow writer: 1-bit, grayscale palette, palette, 24-bit and 32-bit BI_RGB (read back as opaque BGRX).
+    img = Image.open(photo).convert("RGB")
+    img.convert("1").save(path("bmp", "pil_mono.bmp"))
+    img.convert("L").save(path("bmp", "pil_gray.bmp"))
+    img.quantize(64).save(path("bmp", "pil_pal.bmp"))
+    img.save(path("bmp", "pil_rgb.bmp"), dpi=(72, 72))
+    Image.open(alpha).save(path("bmp", "pil_rgba.bmp"))
+
+    # Hand-built variants.
+    rgb_odd = Image.open(odd).convert("RGB")
+    w, h = rgb_odd.size
+    bgr_rows = [rgb_odd.tobytes("raw", "BGR")[y * w * 3:(y + 1) * w * 3] for y in range(h)]
+    write_bmp(path("bmp", "topdown_rgb24.bmp"), w, h, 24, bgr_rows, topdown=True)
+    junk = bytes((x * 37 + 11) & 0xFF for x in range(w * h))
+    bgrx = rgb_odd.tobytes("raw", "BGRX")
+    bgrx = bytes(b if i % 4 != 3 else junk[i // 4] for i, b in enumerate(bgrx))
+    write_bmp(path("bmp", "rgb32_bgrx_junk.bmp"), w, h, 32, [bgrx[y * w * 4:(y + 1) * w * 4] for y in range(h)])
+    pal_img = rgb_odd.quantize(256)
+    palette = palette_of(pal_img, 256)
+    write_bmp(path("bmp", "topdown_pal8.bmp"), w, h, 8, pack_indices(pal_img, 8), palette, topdown=True)
+    write_bmp(path("bmp", "pal8_gap.bmp"), w, h, 8, pack_indices(pal_img, 8), palette, gap=50)
+    write_bmp(path("bmp", "os2v2_pal8.bmp"), w, h, 8, pack_indices(pal_img, 8), palette, header_size=64)
+    g = Image.open(graphic).convert("RGB")
+    g4 = g.quantize(16)
+    pal16 = palette_of(g4, 16)
+    write_bmp(path("bmp", "rle4.bmp"), g4.width, g4.height, 4, rle4_encode(g4), pal16, compression=2)
+    g4small = rgb_odd.quantize(4)
+    pal4 = palette_of(g4small, 4)
+    write_bmp(path("bmp", "pal4_short_palette.bmp"), w, h, 4, pack_indices(g4small, 4), pal4)
+
+
 # --------------------------------------------------------------------------- EXIF helper
 
 def make_exif(orientation):
@@ -310,13 +447,14 @@ def main():
     for tool in ("cwebp", "img2webp", "webpmux", "convert"):
         if shutil.which(tool) is None:
             sys.exit(f"missing tool: {tool}")
-    for sub in ("webp", "png", "jpeg"):
+    for sub in ("webp", "png", "jpeg", "bmp"):
         shutil.rmtree(os.path.join(CORPUS, sub), ignore_errors=True)
     sources = generate_sources()
     generate_webp(sources)
     generate_animations()
     generate_png(sources)
     generate_jpeg()
+    generate_bmp()
     count = sum(len(files) for _, _, files in os.walk(CORPUS))
     print(f"corpus: {count} files in {CORPUS}")
 
