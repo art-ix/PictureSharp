@@ -2,10 +2,24 @@ using RasterSharp.Formats.Metadata;
 
 namespace RasterSharp;
 
-/// <summary>Color profile and metadata blocks carried by an image.</summary>
+/// <summary>Resolution, color profile and metadata blocks carried by an image.</summary>
 public sealed class ImageMetadata
 {
     private byte[]? _exif;
+
+    /// <summary>Horizontal resolution in dots per inch. Default: 96.</summary>
+    public float HorizontalResolution
+    {
+        get;
+        set => field = CheckResolution(value);
+    } = 96f;
+
+    /// <summary>Vertical resolution in dots per inch. Default: 96.</summary>
+    public float VerticalResolution
+    {
+        get;
+        set => field = CheckResolution(value);
+    } = 96f;
 
     /// <summary>Raw ICC color profile. The library carries it over but does not apply it.</summary>
     public byte[]? IccProfile { get; set; }
@@ -33,10 +47,10 @@ public sealed class ImageMetadata
         }
     }
 
-    /// <summary>Whether any metadata is present.</summary>
+    /// <summary>Whether no ICC, EXIF or XMP block is present.</summary>
     public bool IsEmpty => IccProfile is null && _exif is null && Xmp is null;
 
-    /// <summary>Removes all metadata.</summary>
+    /// <summary>Removes the ICC, EXIF and XMP blocks; the resolution is kept.</summary>
     public void Clear()
     {
         IccProfile = null;
@@ -47,8 +61,13 @@ public sealed class ImageMetadata
     /// <summary>Returns a deep copy.</summary>
     public ImageMetadata Clone() => new()
     {
+        HorizontalResolution = HorizontalResolution,
+        VerticalResolution = VerticalResolution,
         IccProfile = (byte[]?)IccProfile?.Clone(),
         _exif = (byte[]?)_exif?.Clone(),
         Xmp = (byte[]?)Xmp?.Clone(),
     };
+
+    private static float CheckResolution(float dpi, [System.Runtime.CompilerServices.CallerMemberName] string? name = null) =>
+        dpi > 0 && float.IsFinite(dpi) ? dpi : throw new ArgumentOutOfRangeException(name, dpi, "Resolution must be a positive finite number.");
 }

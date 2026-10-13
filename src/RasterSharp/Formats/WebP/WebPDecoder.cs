@@ -1,4 +1,3 @@
-using System.Drawing;
 using System.Runtime.InteropServices;
 using RasterSharp.Formats.Metadata;
 using RasterSharp.Formats.WebP.Alpha;
@@ -47,7 +46,7 @@ internal sealed class WebPDecoder : IImageDecoder
             image = new Image(AnimationDecoder.Decode(data, c, options))
             {
                 LoopCount = c.LoopCount,
-                AnimationBackgroundColor = ToColor(c.BackgroundColor),
+                AnimationBackgroundColor = Rgba32.FromArgb(c.BackgroundColor),
             };
         }
         else
@@ -55,7 +54,7 @@ internal sealed class WebPDecoder : IImageDecoder
             image = new Image([DecodeFrame(data, c.Frames[0], options)]);
         }
 
-        image.RawFormat = ImageFormat.WebP;
+        image.SourceFormat = ImageFormat.WebP;
         image.HasAlpha = c.HasAlpha;
 
         if (!options.IgnoreMetadata)
@@ -145,7 +144,4 @@ internal sealed class WebPDecoder : IImageDecoder
             dst[i] = new Rgba32((byte)(p >> 16), (byte)(p >> 8), (byte)p, (byte)(p >> 24));
         }
     }
-
-    internal static Color ToColor(uint bgra) =>
-        Color.FromArgb((byte)(bgra >> 24), (byte)(bgra >> 16), (byte)(bgra >> 8), (byte)bgra);
 }

@@ -61,12 +61,12 @@ public class PngSuiteTests
         string expected = Reference.Value![name];
         if (expected == "error")
         {
-            Exception ex = Assert.ThrowsAny<Exception>(() => Image.FromFile(path, new DecoderOptions { StrictChecksums = true }));
+            Exception ex = Assert.ThrowsAny<Exception>(() => Image.Load(path, new DecoderOptions { StrictChecksums = true }));
             Assert.True(ex is ImageFormatException or NotSupportedException, ex.ToString());
             return;
         }
 
-        using Image image = Image.FromFile(path, new DecoderOptions { FirstFrameOnly = true });
-        Assert.Equal(expected, Corpus.Sha256(image.ToPixelArray()));
+        using Image image = Image.Load(path, new DecoderOptions { FirstFrameOnly = true });
+        Assert.Equal(expected, Corpus.Sha256(image.ToPixelData()));
     }
 }

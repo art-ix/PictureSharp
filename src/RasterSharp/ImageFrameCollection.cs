@@ -20,16 +20,19 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
     /// <inheritdoc/>
     public ImageFrame this[int index] => _frames[index];
 
+    /// <summary>The first frame; pixel accessors on <see cref="Image"/> work on it.</summary>
+    public ImageFrame RootFrame => _frames[0];
+
     internal List<ImageFrame> List => _frames;
 
     /// <summary>Appends a frame. Its size must match the image size.</summary>
     public void Add(ImageFrame frame) => Insert(_frames.Count, frame);
 
-    /// <summary>Appends a copy of the active frame of <paramref name="image"/> with the given duration.</summary>
+    /// <summary>Appends a copy of the root frame of <paramref name="image"/> with the given duration.</summary>
     public ImageFrame Add(Image image, TimeSpan duration)
     {
         ArgumentNullException.ThrowIfNull(image);
-        ImageFrame frame = image.ActiveFrame.Clone();
+        ImageFrame frame = image.Frames.RootFrame.Clone();
         frame.Duration = duration;
         Add(frame);
         return frame;
@@ -63,7 +66,6 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
         }
 
         _frames.RemoveAt(index);
-        _owner.OnFrameRemoved(index);
     }
 
     /// <summary>Moves a frame from one position to another.</summary>
@@ -77,6 +79,24 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
 
         _frames.RemoveAt(fromIndex);
         _frames.Insert(toIndex, frame);
+    }
+
+    /// <summary>Returns a new still image with a copy of the frame at <paramref name="index"/> and the image's metadata.</summary>
+    public Image CloneFrame(int index)
+    {
+        ImageFrame frame = _frames[index].Clone();
+        return _owner.CopyPropertiesTo(new Image([frame]));
+    }
+
+    /// <summary>
+    /// Removes the frame at <paramref name="index"/> and returns it as a new still image with the image's metadata.
+    /// The last remaining frame cannot be exported.
+    /// </summary>
+    public Image ExportFrame(int index)
+    {
+        ImageFrame frame = _frames[index];
+        RemoveAt(index);
+        return _owner.CopyPropertiesTo(new Image([frame]));
     }
 
     /// <summary>Index of the frame, or -1.</summary>

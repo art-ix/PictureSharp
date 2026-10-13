@@ -2,7 +2,7 @@ using RasterSharp.Formats;
 
 namespace RasterSharp;
 
-/// <summary>An image file format, modelled after System.Drawing.Imaging.ImageFormat.</summary>
+/// <summary>An image file format, such as <see cref="WebP"/> or <see cref="Png"/>.</summary>
 public sealed class ImageFormat : IEquatable<ImageFormat>
 {
     private ImageFormat(string name, string mimeType, params string[] extensions)
@@ -23,9 +23,6 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
 
     /// <summary>Windows/OS2 bitmap (BMP/DIB).</summary>
     public static ImageFormat Bmp { get; } = new("BMP", "image/bmp", ".bmp", ".dib");
-
-    /// <summary>An image created in memory rather than decoded from a file.</summary>
-    public static ImageFormat MemoryBmp { get; } = new("MemoryBMP", "application/octet-stream");
 
     /// <summary>All file formats known to the library.</summary>
     public static IReadOnlyList<ImageFormat> All { get; } = [WebP, Png, Jpeg, Bmp];
@@ -67,6 +64,47 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
         }
 
         return null;
+    }
+
+    /// <summary>Finds the format for a MIME type, e.g. "image/webp".</summary>
+    public static ImageFormat? FromMimeType(string mimeType)
+    {
+        ArgumentNullException.ThrowIfNull(mimeType);
+        foreach (ImageFormat format in All)
+        {
+            if (string.Equals(format.MimeType, mimeType, StringComparison.OrdinalIgnoreCase))
+            {
+                return format;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Default encoder options for this format.</summary>
+    internal EncoderOptions CreateDefaultEncoderOptions()
+    {
+        if (this == WebP)
+        {
+            return new WebPEncoderOptions();
+        }
+
+        if (this == Png)
+        {
+            return new PngEncoderOptions();
+        }
+
+        if (this == Bmp)
+        {
+            return new BmpEncoderOptions();
+        }
+
+        if (this == Jpeg)
+        {
+            return new JpegEncoderOptions();
+        }
+
+        throw new NotSupportedException($"Saving images in {Name} format is not supported.");
     }
 
     /// <inheritdoc/>

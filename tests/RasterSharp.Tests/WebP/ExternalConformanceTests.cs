@@ -42,12 +42,12 @@ public class ExternalConformanceTests
         if (expected is null)
         {
             // dwebp rejects the file: we must reject it too, with a format exception.
-            Exception ex = Assert.ThrowsAny<Exception>(() => Image.FromFile(path));
+            Exception ex = Assert.ThrowsAny<Exception>(() => Image.Load(path));
             Assert.True(ex is ImageFormatException or NotSupportedException, ex.ToString());
             return;
         }
 
-        using Image image = Image.FromFile(path, new DecoderOptions { FirstFrameOnly = true });
-        Assert.True(expected.AsSpan().SequenceEqual(image.ToPixelArray()), $"{name} differs from dwebp");
+        using Image image = Image.Load(path, new DecoderOptions { FirstFrameOnly = true });
+        Assert.True(expected.AsSpan().SequenceEqual(image.ToPixelData()), $"{name} differs from dwebp");
     }
 }

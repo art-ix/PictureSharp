@@ -68,7 +68,7 @@ public class BmpSuiteTests
         Image? image = null;
         try
         {
-            image = Image.FromFile(path);
+            image = Image.Load(path);
         }
         catch (Exception ex) when (!name.StartsWith("g/", StringComparison.Ordinal))
         {
@@ -85,7 +85,7 @@ public class BmpSuiteTests
                 string oracle = PillowBugs.ContainsKey(name) || r["pillow"] == "error" ? "imagemagick" : "pillow";
                 string expected = r[oracle];
                 Assert.NotEqual("error", expected);
-                Assert.True(expected == Corpus.Sha256(image.ToPixelArray()), $"{name} differs from {oracle}");
+                Assert.True(expected == Corpus.Sha256(image.ToPixelData()), $"{name} differs from {oracle}");
             }
         }
     }

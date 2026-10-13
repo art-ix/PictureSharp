@@ -46,6 +46,6 @@ public class RgbaAndFormatTests
     {
         Assert.Null(FormatDetector.Detect("RIFF\0\0\0\0WAVE"u8));
         Assert.Null(FormatDetector.Detect([]));
-        Assert.Throws<ImageFormatException>(() => Image.FromBytes("not an image"u8));
+        Assert.Throws<ImageFormatException>(() => Image.Load("not an image"u8));
     }
 }

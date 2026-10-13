@@ -1,4 +1,4 @@
-using System.Drawing;
+using RasterSharp.Internal;
 
 namespace RasterSharp;
 
@@ -15,17 +15,17 @@ public enum JpegSubsampling
     Ratio440,
 }
 
-/// <summary>Options for encoding the active frame as an 8-bit JPEG.</summary>
-public sealed class JpegEncoderOptions : EncoderOptions
+/// <summary>Options for encoding the first frame as an 8-bit JPEG.</summary>
+public sealed record JpegEncoderOptions : EncoderOptions
 {
     /// <inheritdoc/>
     public override ImageFormat Format => ImageFormat.Jpeg;
 
     /// <summary>Quality from 1 to 100. Default: 75.</summary>
-    public int Quality { get; init; } = 75;
+    public int Quality { get; init => field = Check.Range(value, 1, 100); } = 75;
 
     /// <summary>Chroma subsampling. Default: 4:2:0.</summary>
-    public JpegSubsampling Subsampling { get; init; } = JpegSubsampling.Ratio420;
+    public JpegSubsampling Subsampling { get; init => field = Check.Defined(value); } = JpegSubsampling.Ratio420;
 
     /// <summary>Use progressive scans and optimized Huffman tables.</summary>
     public bool Progressive { get; init; }
@@ -34,18 +34,12 @@ public sealed class JpegEncoderOptions : EncoderOptions
     public bool OptimizeCoding { get; init; }
 
     /// <summary>Number of MCUs between restart markers, 0–65535. Zero disables restarts.</summary>
-    public int RestartInterval { get; init; }
+    public int RestartInterval { get; init => field = Check.Range(value, 0, 65535); }
 
     /// <summary>Opaque background on which transparent pixels are composited. Default: white.</summary>
-    public Color BackgroundColor { get; init; } = Color.White;
-
-    internal override void Validate()
+    public Rgba32 BackgroundColor
     {
-        if (Quality is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(Quality));
-        if (Subsampling is < JpegSubsampling.Ratio444 or > JpegSubsampling.Ratio440)
-            throw new ArgumentOutOfRangeException(nameof(Subsampling));
-        if (RestartInterval is < 0 or > 65535) throw new ArgumentOutOfRangeException(nameof(RestartInterval));
-        if (BackgroundColor.A != 255) throw new ArgumentOutOfRangeException(nameof(BackgroundColor), "Expected an opaque background.");
-        if ((Metadata & ~MetadataKinds.All) != 0) throw new ArgumentOutOfRangeException(nameof(Metadata));
-    }
+        get;
+        init => field = value.A == 255 ? value : throw new ArgumentOutOfRangeException(nameof(BackgroundColor), value, "Expected an opaque background.");
+    } = Rgba32.White;
 }

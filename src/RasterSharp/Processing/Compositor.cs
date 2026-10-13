@@ -25,10 +25,7 @@ internal static class Compositor
         }
 
         Span<byte> alphaMap = stackalloc byte[256];
-        for (int a = 0; a < 256; a++)
-        {
-            alphaMap[a] = (byte)(int)((a * opacity) + 0.5f);
-        }
+        FillAlphaMap(alphaMap, opacity);
 
         for (int y = y0; y < y1; y++)
         {
@@ -40,6 +37,15 @@ internal static class Compositor
                 s.A = alphaMap[s.A];
                 dstRow[x] = Over(dstRow[x], s);
             }
+        }
+    }
+
+    /// <summary>Fills <paramref name="map"/>[a] with a × <paramref name="opacity"/>, rounded half up.</summary>
+    public static void FillAlphaMap(Span<byte> map, float opacity)
+    {
+        for (int a = 0; a < map.Length; a++)
+        {
+            map[a] = (byte)(int)((a * opacity) + 0.5f);
         }
     }
 

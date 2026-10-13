@@ -17,7 +17,7 @@ internal static class CodecRegistry
         Image image = Guard(decoder.Format, data, options, static (d, s, o) => d.Decode(s, o), decoder);
         if (options.ApplyExifOrientation)
         {
-            image.AutoOrient();
+            image.Mutate(static x => x.AutoOrient());
         }
 
         return image;
@@ -31,7 +31,7 @@ internal static class CodecRegistry
 
     public static void Encode(Image image, Stream output, EncoderOptions options)
     {
-        options.Validate();
+        ArgumentNullException.ThrowIfNull(options);
         IImageEncoder encoder = GetEncoder(options.Format)
             ?? throw new NotSupportedException($"Saving images in {options.Format.Name} format is not supported.");
         encoder.Encode(image, output, options);

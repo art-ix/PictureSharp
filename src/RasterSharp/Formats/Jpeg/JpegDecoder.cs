@@ -39,9 +39,9 @@ internal sealed class JpegDecoder : IImageDecoder
         }
 
         Rgba32[] pixels = JpegColorConverter.Convert(frame, file.ColorSpace());
-        var image = new Image([new ImageFrame(frame.Width, frame.Height, pixels)]) { RawFormat = ImageFormat.Jpeg };
+        var image = new Image([new ImageFrame(frame.Width, frame.Height, pixels)]) { SourceFormat = ImageFormat.Jpeg };
         (float dpiX, float dpiY) = file.Resolution();
-        image.SetResolution(dpiX, dpiY);
+        (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution) = (dpiX, dpiY);
         if (!options.IgnoreMetadata)
         {
             image.Metadata.Exif = file.Exif;

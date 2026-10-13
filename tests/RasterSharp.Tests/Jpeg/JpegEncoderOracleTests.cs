@@ -37,7 +37,7 @@ public class JpegEncoderOracleTests
                     image[0, 0] = new Rgba32(0, 0, 0, 255);
                 }
 
-                File.WriteAllBytes(raw, image.ToPixelArray(gray ? PixelFormat.Gray8 : PixelFormat.Rgb24));
+                File.WriteAllBytes(raw, image.ToPixelData(gray ? PixelFormat.Gray8 : PixelFormat.Rgb24));
                 foreach (JpegSubsampling sampling in Enum.GetValues<JpegSubsampling>())
                 foreach (int interval in new[] { 0, 1, 7, 65535 })
                 foreach ((bool optimize, bool progressive) in new[] { (false, false), (true, false), (false, true) })
@@ -48,11 +48,11 @@ public class JpegEncoderOracleTests
                     Assert.Equal(0, ReferenceTools.Run(oracle, $"\"{raw}\" \"{expectedPath}\" {width} {height} 90 {(int)sampling} {(optimize ? 1 : 0)} {(progressive ? 1 : 0)} {interval} {(gray ? 1 : 0)}", out _));
                     Assert.True(File.ReadAllBytes(expectedPath).AsSpan().SequenceEqual(encoded), $"{width}x{height} gray={gray}, {sampling}, restart={interval}, optimize={optimize}, progressive={progressive}");
                     File.WriteAllBytes(actualPath, encoded);
-                    using Image decoded = Image.FromBytes(encoded.AsMemory());
+                    using Image decoded = Image.Load(encoded.AsMemory());
                     if (pillow)
                     {
                         Assert.Equal(0, ReferenceTools.Run("python3", $"-I \"{script}\" \"{actualPath}\" \"{rgba}\"", out _));
-                        Assert.Equal(File.ReadAllBytes(rgba), decoded.ToPixelArray(PixelFormat.Rgba32));
+                        Assert.Equal(File.ReadAllBytes(rgba), decoded.ToPixelData(PixelFormat.Rgba32));
                     }
                     if (convert) Assert.Equal(0, ReferenceTools.Run("convert", $"\"{actualPath}\" null:", out _));
                 }

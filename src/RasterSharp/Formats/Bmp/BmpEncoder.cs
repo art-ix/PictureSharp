@@ -12,7 +12,7 @@ internal sealed class BmpEncoder : IImageEncoder
     public void Encode(Image image, Stream output, EncoderOptions options)
     {
         var o = (BmpEncoderOptions)options;
-        ImageFrame frame = image.ActiveFrame;
+        ImageFrame frame = image.Frames.RootFrame;
         ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
         int width = frame.Width;
         int height = frame.Height;
@@ -47,8 +47,8 @@ internal sealed class BmpEncoder : IImageEncoder
         BinaryPrimitives.WriteUInt16LittleEndian(h[14..], (ushort)bits);
         BinaryPrimitives.WriteUInt32LittleEndian(h[16..], bits == 32 ? BmpConstants.BitFields : BmpConstants.Rgb);
         BinaryPrimitives.WriteUInt32LittleEndian(h[20..], (uint)imageSize);
-        BinaryPrimitives.WriteInt32LittleEndian(h[24..], ToPixelsPerMeter(image.HorizontalResolution));
-        BinaryPrimitives.WriteInt32LittleEndian(h[28..], ToPixelsPerMeter(image.VerticalResolution));
+        BinaryPrimitives.WriteInt32LittleEndian(h[24..], ToPixelsPerMeter(image.Metadata.HorizontalResolution));
+        BinaryPrimitives.WriteInt32LittleEndian(h[28..], ToPixelsPerMeter(image.Metadata.VerticalResolution));
         BinaryPrimitives.WriteUInt32LittleEndian(h[32..], (uint)(palette?.Length ?? 0));
         if (headerSize == BmpConstants.V5HeaderSize)
         {

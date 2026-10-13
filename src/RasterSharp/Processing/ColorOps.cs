@@ -46,4 +46,37 @@ internal static class ColorOps
             }
         }
     }
+
+    /// <summary>Composites the pixels over <paramref name="background"/>.</summary>
+    public static void BackgroundColor(Span<Rgba32> pixels, Rgba32 background)
+    {
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = Compositor.Over(background, pixels[i]);
+        }
+    }
+
+    /// <summary>Scales alpha by <paramref name="opacity"/> with the rounding of <see cref="Compositor.DrawOver"/>.</summary>
+    public static void Opacity(Span<Rgba32> pixels, float opacity)
+    {
+        Span<byte> alphaMap = stackalloc byte[256];
+        Compositor.FillAlphaMap(alphaMap, opacity);
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i].A = alphaMap[pixels[i].A];
+        }
+    }
+
+    /// <summary>Applies the classic sepia matrix in fixed point (thousandths), rounding half up and clamping.</summary>
+    public static void Sepia(Span<Rgba32> pixels)
+    {
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            Rgba32 p = pixels[i];
+            int r = ((393 * p.R) + (769 * p.G) + (189 * p.B) + 500) / 1000;
+            int g = ((349 * p.R) + (686 * p.G) + (168 * p.B) + 500) / 1000;
+            int b = ((272 * p.R) + (534 * p.G) + (131 * p.B) + 500) / 1000;
+            pixels[i] = new Rgba32((byte)Math.Min(r, 255), (byte)Math.Min(g, 255), (byte)Math.Min(b, 255), p.A);
+        }
+    }
 }

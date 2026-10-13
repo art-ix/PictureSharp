@@ -16,14 +16,37 @@ internal static class Geometry
         return dst;
     }
 
-    /// <summary>Applies <paramref name="type"/> to the frame in place.</summary>
-    public static void RotateFlip(ImageFrame frame, RotateFlipType type)
+    /// <summary>The internal form of <paramref name="rotate"/> followed by <paramref name="flip"/>.</summary>
+    public static (int QuarterTurns, bool FlipX) ToQuarterTurns(RotateMode rotate, FlipMode flip)
+    {
+        int turns = rotate switch
+        {
+            RotateMode.None => 0,
+            RotateMode.Rotate90 => 1,
+            RotateMode.Rotate180 => 2,
+            RotateMode.Rotate270 => 3,
+            _ => throw new ArgumentOutOfRangeException(nameof(rotate), rotate, "Unknown rotate mode."),
+        };
+
+        // A vertical flip equals a half turn followed by a horizontal flip.
+        return flip switch
+        {
+            FlipMode.None => (turns, false),
+            FlipMode.Horizontal => (turns, true),
+            FlipMode.Vertical => ((turns + 2) & 3, true),
+            _ => throw new ArgumentOutOfRangeException(nameof(flip), flip, "Unknown flip mode."),
+        };
+    }
+
+    /// <summary>
+    /// Rotates the frame by <paramref name="rotation"/> quarter turns clockwise, then mirrors it horizontally when
+    /// <paramref name="flipX"/> is set. Even turns work in place; odd turns give the frame a new buffer.
+    /// </summary>
+    public static void RotateFlip(ImageFrame frame, int rotation, bool flipX)
     {
         int w = frame.Width;
         int h = frame.Height;
         Rgba32[] src = frame.Pixels;
-        int rotation = (int)type & 3;   // quarter turns clockwise
-        bool flipX = (int)type >= 4;    // horizontal flip applied after rotation
 
         if (rotation == 0 && !flipX)
         {
@@ -97,16 +120,32 @@ internal static class Geometry
         frame.Replace(nw, nh, dst);
     }
 
-    /// <summary>The transform that turns an image stored with EXIF <paramref name="orientation"/> upright.</summary>
-    public static RotateFlipType FromExifOrientation(ExifOrientation orientation) => orientation switch
+    /// <summary>The transform (quarter turns, then horizontal flip) that turns an image stored with EXIF <paramref name="orientation"/> upright.</summary>
+    public static (int QuarterTurns, bool FlipX) FromExifOrientation(ExifOrientation orientation) => orientation switch
     {
-        ExifOrientation.TopRight => RotateFlipType.RotateNoneFlipX,
-        ExifOrientation.BottomRight => RotateFlipType.Rotate180FlipNone,
-        ExifOrientation.BottomLeft => RotateFlipType.RotateNoneFlipY,
-        ExifOrientation.LeftTop => RotateFlipType.Rotate90FlipX,
-        ExifOrientation.RightTop => RotateFlipType.Rotate90FlipNone,
-        ExifOrientation.RightBottom => RotateFlipType.Rotate270FlipX,
-        ExifOrientation.LeftBottom => RotateFlipType.Rotate270FlipNone,
-        _ => RotateFlipType.RotateNoneFlipNone,
+        ExifOrientation.TopRight => (0, true),
+        ExifOrientation.BottomRight => (2, false),
+        ExifOrientation.BottomLeft => (2, true),
+        ExifOrientation.LeftTop => (1, true),
+        ExifOrientation.RightTop => (1, false),
+        ExifOrientation.RightBottom => (3, true),
+        ExifOrientation.LeftBottom => (3, false),
+        _ => (0, false),
     };
+
+    /// <summary>
+    /// Copies a <paramref name="srcWidth"/>-wide image onto <paramref name="dst"/> with its top-left corner at
+    /// (<paramref name="x"/>, <paramref name="y"/>), clipped to the destination (no blending).
+    /// </summary>
+    public static void Place(ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Span<Rgba32> dst, int dstWidth, int dstHeight, int x, int y)
+    {
+        int x0 = Math.Max(0, x);
+        int y0 = Math.Max(0, y);
+        int x1 = (int)Math.Min(dstWidth, (long)x + srcWidth);
+        int y1 = (int)Math.Min(dstHeight, (long)y + srcHeight);
+        for (int row = y0; row < y1; row++)
+        {
+            src.Slice(((row - y) * srcWidth) + (x0 - x), x1 - x0).CopyTo(dst.Slice((row * dstWidth) + x0, x1 - x0));
+        }
+    }
 }

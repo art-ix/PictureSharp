@@ -53,7 +53,7 @@ public class JpegSamplesTests
 
         string expected = Reference.Value![name];
         Assert.NotEqual("error", expected);
-        using Image image = Image.FromFile(Path.Combine(Corpus.SamplesDir, name));
+        using Image image = Image.Load(Path.Combine(Corpus.SamplesDir, name));
         Assert.True(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} differs from Pillow");
     }
 }

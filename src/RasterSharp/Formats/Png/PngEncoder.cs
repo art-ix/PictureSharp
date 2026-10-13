@@ -17,7 +17,7 @@ internal sealed class PngEncoder : IImageEncoder
         var o = (PngEncoderOptions)options;
         List<ImageFrame> frames = image.IsAnimated && o.SaveAnimation
             ? [.. image.Frames]
-            : [image.ActiveFrame];
+            : [image.Frames.RootFrame];
 
         Layout layout = ChooseLayout(frames, o.ColorType);
         int width = image.Width;
@@ -53,11 +53,11 @@ internal sealed class PngEncoder : IImageEncoder
             writer.Write("iCCP", [.. name, .. compressed]);
         }
 
-        if (image.HorizontalResolution != 96f || image.VerticalResolution != 96f)
+        if (image.Metadata.HorizontalResolution != 96f || image.Metadata.VerticalResolution != 96f)
         {
             Span<byte> phys = stackalloc byte[9];
-            BinaryPrimitives.WriteUInt32BigEndian(phys, (uint)Math.Round(image.HorizontalResolution / 0.0254));
-            BinaryPrimitives.WriteUInt32BigEndian(phys[4..], (uint)Math.Round(image.VerticalResolution / 0.0254));
+            BinaryPrimitives.WriteUInt32BigEndian(phys, (uint)Math.Round(image.Metadata.HorizontalResolution / 0.0254));
+            BinaryPrimitives.WriteUInt32BigEndian(phys[4..], (uint)Math.Round(image.Metadata.VerticalResolution / 0.0254));
             phys[8] = 1;  // unit: meter
             writer.Write("pHYs", phys);
         }

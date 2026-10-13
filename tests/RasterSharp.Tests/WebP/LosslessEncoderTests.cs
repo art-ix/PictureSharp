@@ -18,10 +18,10 @@ public class LosslessEncoderTests
     [MemberData(nameof(Sources))]
     public void Corpus_RoundTripsExactly(string source)
     {
-        using Image image = Image.FromFile(Corpus.PathOf(source));
+        using Image image = Image.Load(Corpus.PathOf(source));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true });
-        using Image decoded = Image.FromBytes(encoded.AsMemory());
-        Assert.Equal(image.ToPixelArray(PixelFormat.Rgba32), decoded.ToPixelArray(PixelFormat.Rgba32));
+        using Image decoded = Image.Load(encoded.AsMemory());
+        Assert.Equal(image.ToPixelData(PixelFormat.Rgba32), decoded.ToPixelData(PixelFormat.Rgba32));
     }
 
     [Theory]
@@ -30,14 +30,14 @@ public class LosslessEncoderTests
     public void Corpus_OpensInDwebp_AndMeetsSizeTarget(string source)
     {
         if (!ReferenceTools.HasDwebp || !ReferenceTools.HasCwebp) return;
-        using Image image = Image.FromFile(Corpus.PathOf(source));
+        using Image image = Image.Load(Corpus.PathOf(source));
         string output = Path.Combine(Path.GetTempPath(), $"rastersharp-{Guid.NewGuid():N}.webp");
         string reference = output + ".ref.webp";
         try
         {
             byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true });
             File.WriteAllBytes(output, encoded);
-            Assert.Equal(image.ToPixelArray(PixelFormat.Rgba32), ReferenceTools.DwebpRgba(output));
+            Assert.Equal(image.ToPixelData(PixelFormat.Rgba32), ReferenceTools.DwebpRgba(output));
             Assert.Equal(0, ReferenceTools.Run("cwebp", $"-quiet -lossless -exact -q 75 -m 4 \"{Corpus.PathOf(source)}\" -o \"{reference}\"", out _));
             long expected = new FileInfo(reference).Length;
             Assert.True(encoded.Length <= expected * 1.01, $"{source}: managed {encoded.Length}, cwebp {expected}, ratio {(double)encoded.Length / expected:F4}");

@@ -17,14 +17,14 @@ public class JpegDecoderTests
     public void Decode_IsBitExactWithPillow(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = Image.FromFile(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Jpeg, image.RawFormat);
+        using Image image = Image.Load(Corpus.PathOf(file));
+        Assert.Equal(ImageFormat.Jpeg, image.SourceFormat);
         Assert.False(image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
         if (r.Dpi is { } dpi)
         {
-            Assert.Equal(dpi[0], image.HorizontalResolution, 1);
-            Assert.Equal(dpi[1], image.VerticalResolution, 1);
+            Assert.Equal(dpi[0], image.Metadata.HorizontalResolution, 1);
+            Assert.Equal(dpi[1], image.Metadata.VerticalResolution, 1);
         }
 
         Assert.Equal(r.IccSha256, image.Metadata.IccProfile is { } icc ? Corpus.Sha256(icc) : null);
@@ -61,8 +61,8 @@ public class JpegDecoderTests
     public void Resolution_InCentimeters_IsConvertedToDpi()
     {
         // Pillow 10.2 ignores JFIF density unit 2, so this is not covered by the reference.
-        using Image image = Image.FromFile(Corpus.PathOf("jpeg/dpcm.jpg"));
-        Assert.Equal(28 * 2.54f, image.HorizontalResolution, 2);
+        using Image image = Image.Load(Corpus.PathOf("jpeg/dpcm.jpg"));
+        Assert.Equal(28 * 2.54f, image.Metadata.HorizontalResolution, 2);
         Assert.Equal(28 * 2.54f, Image.Identify(Corpus.PathOf("jpeg/dpcm.jpg")).VerticalResolution, 2);
     }
 
@@ -101,10 +101,10 @@ public class JpegDecoderTests
     [Fact]
     public void Metadata_CanBeIgnored_AndOrientationApplied()
     {
-        using Image plain = Image.FromFile(Corpus.PathOf("jpeg/icc_multi.jpg"), new DecoderOptions { IgnoreMetadata = true });
+        using Image plain = Image.Load(Corpus.PathOf("jpeg/icc_multi.jpg"), new DecoderOptions { IgnoreMetadata = true });
         Assert.True(plain.Metadata.IsEmpty);
 
-        using Image rotated = Image.FromFile(Corpus.PathOf("jpeg/orientation_6.jpg"), new DecoderOptions { ApplyExifOrientation = true });
+        using Image rotated = Image.Load(Corpus.PathOf("jpeg/orientation_6.jpg"), new DecoderOptions { ApplyExifOrientation = true });
         Assert.Equal((192, 256), (rotated.Width, rotated.Height));
         Assert.Equal(ExifOrientation.TopLeft, rotated.Metadata.Orientation);
     }
@@ -148,7 +148,7 @@ public class JpegDecoderTests
 
     private static Rgba32[] Pixels(byte[] jpeg)
     {
-        using Image image = Image.FromBytes(jpeg);
+        using Image image = Image.Load(jpeg);
         return image.GetPixelSpan().ToArray();
     }
 
@@ -166,7 +166,7 @@ public class JpegDecoderTests
     public void Truncated_Progressive_StillDecodes()
     {
         byte[] full = Corpus.Read("jpeg/progressive_420.jpg");
-        using Image image = Image.FromBytes(full[..(full.Length * 2 / 3)]);
+        using Image image = Image.Load(full[..(full.Length * 2 / 3)]);
         Assert.Equal((256, 192), (image.Width, image.Height));
     }
 
@@ -175,8 +175,8 @@ public class JpegDecoderTests
     {
         byte[] full = Corpus.Read("jpeg/q90_420.jpg");
         (int sos, _) = Find(full, 0xDA);
-        Assert.Throws<ImageFormatException>(() => Image.FromBytes(full[..sos]));
-        Assert.Throws<ImageFormatException>(() => Image.FromBytes(full[..(sos - 3)]));
+        Assert.Throws<ImageFormatException>(() => Image.Load(full[..sos]));
+        Assert.Throws<ImageFormatException>(() => Image.Load(full[..(sos - 3)]));
         Assert.Equal(256, Image.Identify(full[..(sos + 2)]).Width);
     }
 
@@ -205,7 +205,7 @@ public class JpegDecoderTests
     [MemberData(nameof(UnsupportedFiles))]
     public void Decode_UnsupportedVariant_ThrowsNotSupported(string name, byte[] jpeg)
     {
-        Assert.Throws<NotSupportedException>(() => Image.FromBytes(jpeg));
+        Assert.Throws<NotSupportedException>(() => Image.Load(jpeg));
         Assert.NotEmpty(name);
     }
 
@@ -249,7 +249,7 @@ public class JpegDecoderTests
     [MemberData(nameof(InvalidFiles))]
     public void Decode_InvalidFile_ThrowsFormatException(string name, byte[] jpeg)
     {
-        var ex = Assert.ThrowsAny<Exception>(() => Image.FromBytes(jpeg));
+        var ex = Assert.ThrowsAny<Exception>(() => Image.Load(jpeg));
         Assert.True(ex is ImageFormatException, $"{name}: {ex}");
     }
 
@@ -257,7 +257,7 @@ public class JpegDecoderTests
     public void Decode_RespectsMaxPixels()
     {
         byte[] jpeg = Build(Sof(0xC0, 8, 60000, 60000, (1, 1, 1)));
-        Assert.Throws<ImageFormatException>(() => Image.FromBytes(jpeg, new DecoderOptions { MaxPixels = 1 << 20 }));
+        Assert.Throws<ImageFormatException>(() => Image.Load(jpeg, new DecoderOptions { MaxPixels = 1 << 20 }));
         Assert.Equal(60000, Image.Identify(jpeg).Width);
     }
 
@@ -288,7 +288,7 @@ public class JpegDecoderTests
 
                 try
                 {
-                    using Image img = Image.FromBytes(data);
+                    using Image img = Image.Load(data);
                 }
                 catch (ImageFormatException)
                 {
@@ -357,7 +357,7 @@ public class JpegDecoderTests
 
             foreach ((string name, byte[] data) in files)
             {
-                using Image image = Image.FromBytes(data);
+                using Image image = Image.Load(data);
                 Assert.True(reference[name] == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} differs from Pillow");
             }
         }

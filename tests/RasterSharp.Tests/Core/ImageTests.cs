@@ -26,7 +26,8 @@ public class ImageTests
         Assert.True(img.HasAlpha);
         Assert.Equal(1, img.FrameCount);
         Assert.False(img.IsAnimated);
-        Assert.Equal(ImageFormat.MemoryBmp, img.RawFormat);
+        Assert.Null(img.SourceFormat);
+        Assert.Equal(new Rectangle(0, 0, 3, 2), img.Bounds);
         Assert.All(img.GetPixelSpan().ToArray(), p => Assert.Equal(Rgba32.Transparent, p));
         Assert.False(img.IsOpaque());
     }
@@ -35,19 +36,19 @@ public class ImageTests
     public void BackgroundConstructor_FillsAndIsOpaque()
     {
         using var img = new Image(4, 4, Color.Red);
-        Assert.Equal(Color.Red.ToArgb(), img.GetPixel(3, 3).ToArgb());
+        Assert.Equal(Rgba32.FromColor(Color.Red), img[3, 3]);
         Assert.True(img.IsOpaque());
         Assert.False(img.HasAlpha);
     }
 
     [Fact]
-    public void GetSetPixel_ChecksBounds()
+    public void Indexer_AcceptsColor_AndChecksBounds()
     {
         using var img = new Image(2, 2);
-        img.SetPixel(1, 1, Color.FromArgb(1, 2, 3, 4));
+        img[1, 1] = Color.FromArgb(1, 2, 3, 4);
         Assert.Equal(new Rgba32(2, 3, 4, 1), img[1, 1]);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.GetPixel(2, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.SetPixel(0, -1, Color.Red));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img[2, 0]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => img[0, -1] = Color.Red);
     }
 
     [Theory]
@@ -63,9 +64,9 @@ public class ImageTests
     public void PixelArray_RoundTrip_Lossless(PixelFormat format)
     {
         using Image img = Pattern(5, 3);
-        byte[] bytes = img.ToPixelArray(format);
+        byte[] bytes = img.ToPixelData(format);
         Assert.Equal(5 * 3 * 4, bytes.Length);
-        using Image back = Image.FromPixels(bytes, 5, 3, format);
+        using Image back = Image.LoadPixelData(bytes, 5, 3, format);
         Assert.Equal(img.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
     }
 
@@ -75,7 +76,7 @@ public class ImageTests
     public void PixelArray_Rgb_DropsAlpha(PixelFormat format)
     {
         using Image img = Pattern(4, 4);
-        using Image back = Image.FromPixels(img.ToPixelArray(format), 4, 4, format);
+        using Image back = Image.LoadPixelData(img.ToPixelData(format), 4, 4, format);
         Assert.False(back.HasAlpha);
         for (int i = 0; i < 16; i++)
         {
@@ -90,9 +91,9 @@ public class ImageTests
     {
         using var img = new Image(1, 1);
         img[0, 0] = new Rgba32(1, 2, 3, 4);
-        Assert.Equal(new byte[] { 3, 2, 1, 4 }, img.ToPixelArray(PixelFormat.Bgra32));
-        Assert.Equal(new byte[] { 4, 1, 2, 3 }, img.ToPixelArray(PixelFormat.Argb32));
-        Assert.Equal(new byte[] { 3, 2, 1 }, img.ToPixelArray(PixelFormat.Bgr24));
+        Assert.Equal(new byte[] { 3, 2, 1, 4 }, img.ToPixelData(PixelFormat.Bgra32));
+        Assert.Equal(new byte[] { 4, 1, 2, 3 }, img.ToPixelData(PixelFormat.Argb32));
+        Assert.Equal(new byte[] { 3, 2, 1 }, img.ToPixelData(PixelFormat.Bgr24));
     }
 
     [Fact]
@@ -102,7 +103,7 @@ public class ImageTests
         img[0, 0] = new Rgba32(255, 0, 0);
         img[1, 0] = new Rgba32(0, 255, 0);
         img[2, 0] = new Rgba32(255, 255, 255);
-        Assert.Equal(new byte[] { 76, 150, 255 }, img.ToPixelArray(PixelFormat.Gray8));
+        Assert.Equal(new byte[] { 76, 150, 255 }, img.ToPixelData(PixelFormat.Gray8));
     }
 
     [Theory]
@@ -114,8 +115,8 @@ public class ImageTests
         img[0, 0] = new Rgba32(200, 100, 50, 255);
         img[1, 0] = new Rgba32(200, 100, 50, 0);
         img[2, 0] = new Rgba32(200, 100, 50, 128);
-        byte[] bytes = img.ToPixelArray(format);
-        using Image back = Image.FromPixels(bytes, 3, 1, format);
+        byte[] bytes = img.ToPixelData(format);
+        using Image back = Image.LoadPixelData(bytes, 3, 1, format);
         Assert.Equal(img[0, 0], back[0, 0]);
         Assert.Equal(Rgba32.Transparent, back[1, 0]);
         Rgba32 half = back[2, 0];
@@ -125,44 +126,47 @@ public class ImageTests
     }
 
     [Fact]
-    public void LoadPixels_WithStride()
+    public void LoadPixelData_WithStride()
     {
         byte[] src = [1, 2, 3, 9, 4, 5, 6, 9];  // 1 px per row RGB24, stride 4
-        using Image img = Image.FromPixels(src, 1, 2, PixelFormat.Rgb24, stride: 4);
+        using Image img = Image.LoadPixelData(src, 1, 2, PixelFormat.Rgb24, stride: 4);
         Assert.Equal(new Rgba32(4, 5, 6), img[0, 1]);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.LoadPixels(src, PixelFormat.Rgb24, stride: 2));
-        Assert.Throws<ArgumentException>(() => img.LoadPixels(src.AsSpan(0, 6), PixelFormat.Rgb24, stride: 4));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.CopyPixelDataFrom(src, PixelFormat.Rgb24, stride: 2));
+        Assert.Throws<ArgumentException>(() => img.CopyPixelDataFrom(src.AsSpan(0, 6), PixelFormat.Rgb24, stride: 4));
     }
 
     [Fact]
-    public void LockBits_ReadWrite_WritesBackOnDispose()
+    public void LoadPixelData_Rgba32Span_And_CopyPixelDataTo()
     {
-        using Image img = Pattern(6, 5);
-        Rgba32 untouched = img[0, 0];
-        using (BitmapData data = img.LockBits(new Rectangle(1, 1, 3, 2), ImageLockMode.ReadWrite, PixelFormat.Bgr24))
-        {
-            Assert.Equal(12, data.Stride); // 9 bytes rounded up to a multiple of 4
-            Assert.Equal(img[1, 1].B, data.Span[0]);
-            Assert.NotEqual(IntPtr.Zero, data.Scan0);
-            data.GetRowSpan(1)[3..6].Fill(77);
-        }
-
-        Assert.Equal(new Rgba32(77, 77, 77, 255), img[2, 2]);
-        Assert.Equal(untouched, img[0, 0]);
+        Rgba32[] src = [new(1, 2, 3, 4), new(5, 6, 7, 8), new(9, 10, 11, 12), new(13, 14, 15, 16)];
+        using Image img = Image.LoadPixelData(src, 2, 2);
+        Assert.Equal(src[3], img[1, 1]);
+        var copy = new Rgba32[4];
+        img.CopyPixelDataTo(copy);
+        Assert.Equal(src, copy);
+        Assert.Throws<ArgumentException>(() => Image.LoadPixelData(src.AsSpan(0, 3), 2, 2));
     }
 
     [Fact]
-    public void LockBits_ReadOnly_DiscardsChanges()
+    public void GetPixelMemory_SharesThePixels()
     {
-        using Image img = Pattern(4, 4);
-        Rgba32 before = img[0, 0];
-        BitmapData data = img.LockBits(new Rectangle(0, 0, 4, 4), ImageLockMode.ReadOnly, PixelFormat.Rgba32);
-        data.Span.Clear();
-        img.UnlockBits(data);
-        Assert.Equal(before, img[0, 0]);
-        Assert.True(data.IsUnlocked);
-        Assert.Throws<ObjectDisposedException>(() => data.Span.Length);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.LockBits(new Rectangle(2, 2, 3, 1), ImageLockMode.ReadOnly, PixelFormat.Rgba32));
+        using Image img = Pattern(3, 2);
+        Memory<Rgba32> memory = img.GetPixelMemory();
+        Assert.Equal(6, memory.Length);
+        memory.Span[4] = Rgba32.White;
+        Assert.Equal(Rgba32.White, img[1, 1]);
+    }
+
+    [Fact]
+    public void CopyPixelDataTo_WithStride_LeavesPadding()
+    {
+        using Image img = Pattern(2, 2);
+        byte[] dst = new byte[8 + 6];
+        dst.AsSpan().Fill(0xEE);
+        img.CopyPixelDataTo(dst, PixelFormat.Bgr24, stride: 8);
+        Assert.Equal(img[0, 1].B, dst[8]);
+        Assert.Equal(0xEE, dst[7]);
+        Assert.Throws<ArgumentException>(() => img.CopyPixelDataTo(dst.AsSpan(0, 13), PixelFormat.Bgr24, stride: 8));
     }
 
     [Fact]
@@ -170,27 +174,28 @@ public class ImageTests
     {
         using Image img = Pattern(4, 3);
         img.Metadata.Xmp = [1, 2, 3];
-        img.SetResolution(300, 200);
+        img.Metadata.HorizontalResolution = 300;
+        img.Metadata.VerticalResolution = 200;
         using Image copy = img.Clone();
         copy[0, 0] = Rgba32.White;
         copy.Metadata.Xmp![0] = 9;
         Assert.NotEqual(img[0, 0], copy[0, 0]);
         Assert.Equal(1, img.Metadata.Xmp[0]);
-        Assert.Equal(300f, copy.HorizontalResolution);
-        Assert.Equal(200f, copy.VerticalResolution);
+        Assert.Equal(300f, copy.Metadata.HorizontalResolution);
+        Assert.Equal(200f, copy.Metadata.VerticalResolution);
     }
 
     [Fact]
-    public void CloneRectangle_And_Crop()
+    public void CloneCrop_And_MutateCrop()
     {
         using Image img = Pattern(10, 8);
-        using Image part = img.Clone(new Rectangle(2, 3, 4, 2));
+        using Image part = img.Clone(x => x.Crop(new Rectangle(2, 3, 4, 2)));
         Assert.Equal(new Size(4, 2), part.Size);
         Assert.Equal(img[2, 3], part[0, 0]);
         Assert.Equal(img[5, 4], part[3, 1]);
 
         Rgba32 expected = img[7, 7];
-        img.Crop(new Rectangle(5, 5, 5, 3));
+        img.Mutate(x => x.Crop(5, 5, 5, 3));
         Assert.Equal(new Size(5, 3), img.Size);
         Assert.Equal(expected, img[2, 2]);
     }
@@ -202,7 +207,8 @@ public class ImageTests
         img.Dispose();
         img.Dispose();
         Assert.Throws<ObjectDisposedException>(() => img.Width);
-        Assert.Throws<ObjectDisposedException>(() => img.GetPixel(0, 0));
+        Assert.Throws<ObjectDisposedException>(() => img[0, 0]);
+        Assert.Throws<ObjectDisposedException>(() => img.Mutate(x => x.Invert()));
     }
 
     [Fact]

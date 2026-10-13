@@ -6,7 +6,7 @@ namespace RasterSharp.Tests.Png;
 
 public class PngEncoderTests
 {
-    private static Image Load(string file) => Image.FromFile(Corpus.PathOf(file));
+    private static Image Load(string file) => Image.Load(Corpus.PathOf(file));
 
     private static (int Depth, int ColorType, bool Interlaced) Header(byte[] png) => (png[24], png[25], png[28] == 1);
 
@@ -28,7 +28,7 @@ public class PngEncoderTests
     {
         using Image original = Load(file);
         byte[] png = original.ToPng();
-        using Image back = Image.FromBytes(png);
+        using Image back = Image.Load(png);
         AssertSamePixels(original, back);
         Assert.Equal(original.LoopCount, back.LoopCount);
     }
@@ -59,7 +59,7 @@ public class PngEncoderTests
         var options = new PngEncoderOptions { ColorType = type, Interlace = interlace, FilterStrategy = filter, CompressionLevel = level };
         byte[] png = original.ToPng(options);
         Assert.Equal(interlace, Header(png).Interlaced);
-        using Image back = Image.FromBytes(png);
+        using Image back = Image.Load(png);
         AssertSamePixels(original, back);
     }
 
@@ -97,8 +97,8 @@ public class PngEncoderTests
     {
         using Image image = Load("png/rgb8.png");
         byte[] png = image.ToPng(new PngEncoderOptions { ColorType = PngColorType.Grayscale });
-        using Image back = Image.FromBytes(png);
-        Assert.Equal(image.ToPixelArray(PixelFormat.Gray8), back.ToPixelArray(PixelFormat.Gray8));
+        using Image back = Image.Load(png);
+        Assert.Equal(image.ToPixelData(PixelFormat.Gray8), back.ToPixelData(PixelFormat.Gray8));
         Assert.False(back.HasAlpha);
     }
 
@@ -106,17 +106,18 @@ public class PngEncoderTests
     public void Apng_RoundTrip_KeepsFramesDurationsAndLoops()
     {
         using Image a = Load("png/rgba8.png");
-        using Image b = a.Clone().RotateFlip(RotateFlipType.Rotate180FlipNone);
-        using Image anim = Image.CreateAnimation([a, b, a], TimeSpan.FromMilliseconds(70), loopCount: 3);
+        using Image b = a.Clone(x => x.Rotate(RotateMode.Rotate180));
+        using Image anim = Image.CreateAnimation(TimeSpan.FromMilliseconds(70), a, b, a);
+        anim.LoopCount = 3;
         anim.Frames[1].Duration = TimeSpan.FromMilliseconds(1234);
         byte[] png = anim.ToPng();
-        using Image back = Image.FromBytes(png);
+        using Image back = Image.Load(png);
         AssertSamePixels(anim, back);
         Assert.Equal(3, back.LoopCount);
         Assert.Equal(new[] { 70.0, 1234.0, 70.0 }, back.Frames.Select(f => f.Duration.TotalMilliseconds));
 
         byte[] still = anim.ToPng(new PngEncoderOptions { SaveAnimation = false });
-        using Image single = Image.FromBytes(still);
+        using Image single = Image.Load(still);
         Assert.Equal(1, single.FrameCount);
     }
 
@@ -127,17 +128,18 @@ public class PngEncoderTests
         image.Metadata.IccProfile = Enumerable.Range(0, 3000).Select(i => (byte)i).ToArray();
         image.Metadata.Exif = [.. "II*\0"u8, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
         image.Metadata.Xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>"u8.ToArray();
-        image.SetResolution(300, 150);
+        image.Metadata.HorizontalResolution = 300;
+        image.Metadata.VerticalResolution = 150;
 
-        using Image back = Image.FromBytes(image.ToPng());
+        using Image back = Image.Load(image.ToPng());
         Assert.Equal(image.Metadata.IccProfile, back.Metadata.IccProfile);
         Assert.Equal(image.Metadata.Exif, back.Metadata.Exif);
         Assert.Equal(image.Metadata.Xmp, back.Metadata.Xmp);
         Assert.Equal(ExifOrientation.RightTop, back.Metadata.Orientation);
-        Assert.Equal(300f, back.HorizontalResolution, 0.1f);
-        Assert.Equal(150f, back.VerticalResolution, 0.1f);
+        Assert.Equal(300f, back.Metadata.HorizontalResolution, 0.1f);
+        Assert.Equal(150f, back.Metadata.VerticalResolution, 0.1f);
 
-        using Image stripped = Image.FromBytes(image.ToPng(new PngEncoderOptions { Metadata = MetadataKinds.None }));
+        using Image stripped = Image.Load(image.ToPng(new PngEncoderOptions { Metadata = MetadataKinds.None }));
         Assert.True(stripped.Metadata.IsEmpty);
     }
 
@@ -146,7 +148,7 @@ public class PngEncoderTests
     {
         using Image image = Load("png/rgba8.png");
         byte[] png = image.ToPng();
-        using Image back = Image.FromBytes(png, new DecoderOptions { StrictChecksums = true });
+        using Image back = Image.Load(png, new DecoderOptions { StrictChecksums = true });
         Assert.Equal(image.Size, back.Size);
         Assert.Equal("IEND", System.Text.Encoding.ASCII.GetString(png, png.Length - 8, 4));
     }
@@ -161,7 +163,7 @@ public class PngEncoderTests
             image.Save(path);
             Assert.Equal(ImageFormat.Png, Image.Identify(path).Format);
             image.SaveAsPng(path);
-            using Image back = Image.FromFile(path);
+            using Image back = Image.Load(path);
             AssertSamePixels(image, back);
         }
         finally

@@ -46,7 +46,7 @@ public static class WebP
         using Image image = DecodeImage(data, FirstFrame);
         width = image.Width;
         height = image.Height;
-        return image.ToPixelArray(format);
+        return image.ToPixelData(format);
     }
 
     /// <summary>Decodes WebP data into a caller-provided buffer, like WebPDecodeRGBAInto.</summary>
@@ -58,7 +58,7 @@ public static class WebP
     public static System.Drawing.Size DecodeInto(ReadOnlySpan<byte> data, Span<byte> output, int stride, PixelFormat format)
     {
         using Image image = DecodeImage(data, FirstFrame);
-        image.CopyPixels(output, format, stride);
+        image.CopyPixelDataTo(output, format, stride);
         return image.Size;
     }
 
@@ -70,7 +70,7 @@ public static class WebP
             throw new ImageFormatException(ImageFormat.WebP, "The data is not a WebP file.");
         }
 
-        return Image.FromBytes(data, options);
+        return Image.Load(data, options);
     }
 
     /// <summary>Encodes an image with the supplied WebP options.</summary>
@@ -83,14 +83,14 @@ public static class WebP
     /// <summary>Encodes RGBA pixels losslessly, preserving RGB under transparent pixels.</summary>
     public static byte[] EncodeLosslessRgba(ReadOnlySpan<byte> rgba, int width, int height, int stride = 0)
     {
-        using Image image = Image.FromPixels(rgba, width, height, PixelFormat.Rgba32, stride);
+        using Image image = Image.LoadPixelData(rgba, width, height, PixelFormat.Rgba32, stride);
         return image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true });
     }
 
     /// <summary>Converts a supported image file to WebP.</summary>
     public static void Convert(string inputPath, string outputPath, WebPEncoderOptions? options = null)
     {
-        using Image image = Image.FromFile(inputPath);
-        image.Save(outputPath, options ?? new WebPEncoderOptions());
+        using Image image = Image.Load(inputPath);
+        image.SaveAsWebP(outputPath, options);
     }
 }

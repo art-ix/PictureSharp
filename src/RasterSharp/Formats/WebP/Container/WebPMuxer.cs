@@ -48,7 +48,7 @@ internal static class WebPMuxer
         else
         {
             Span<byte> anim = stackalloc byte[AnimChunkSize];
-            Color background = image.AnimationBackgroundColor;
+            Rgba32 background = image.AnimationBackgroundColor;
             anim[0] = background.B; anim[1] = background.G; anim[2] = background.R; anim[3] = background.A;
             BinaryPrimitives.WriteUInt16LittleEndian(anim[4..], (ushort)image.LoopCount);
             Chunk(output, "ANIM"u8, anim);

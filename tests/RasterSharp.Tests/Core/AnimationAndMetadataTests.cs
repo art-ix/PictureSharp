@@ -9,17 +9,42 @@ public class AnimationAndMetadataTests
     {
         using Image a = ImageTests.Pattern(3, 3);
         using Image b = new(3, 3, System.Drawing.Color.Blue);
-        using Image anim = Image.CreateAnimation([a, b], TimeSpan.FromMilliseconds(40), loopCount: 2);
+        using Image anim = Image.CreateAnimation(TimeSpan.FromMilliseconds(40), a, b);
+        anim.LoopCount = 2;
         Assert.Equal(2, anim.FrameCount);
         Assert.True(anim.IsAnimated);
         Assert.Equal(2, anim.LoopCount);
         Assert.All(anim.Frames, f => Assert.Equal(TimeSpan.FromMilliseconds(40), f.Duration));
-
-        anim.SelectActiveFrame(1);
-        Assert.Equal(System.Drawing.Color.Blue.ToArgb(), anim.GetPixel(0, 0).ToArgb());
-        anim.ActiveFrameIndex = 0;
+        Assert.Equal(Rgba32.FromColor(System.Drawing.Color.Blue), anim.Frames[1][0, 0]);
         Assert.Equal(a[1, 1], anim[1, 1]);
-        Assert.Throws<ArgumentOutOfRangeException>(() => anim.SelectActiveFrame(2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => anim.LoopCount = -1);
+
+        using Image fromList = Image.CreateAnimation(TimeSpan.FromMilliseconds(10), new List<Image> { a, b, a });
+        Assert.Equal(3, fromList.FrameCount);
+        Assert.Throws<ArgumentException>(() => Image.CreateAnimation(TimeSpan.FromMilliseconds(10)));
+        using Image small = new(2, 2);
+        Assert.Throws<ArgumentException>(() => Image.CreateAnimation(TimeSpan.FromMilliseconds(10), a, small));
+    }
+
+    [Fact]
+    public void CloneFrame_And_ExportFrame_ReturnStillImages()
+    {
+        using Image a = ImageTests.Pattern(3, 3);
+        using Image b = new(3, 3, System.Drawing.Color.Blue);
+        using Image anim = Image.CreateAnimation(TimeSpan.FromMilliseconds(40), a, b, a);
+        anim.Metadata.Xmp = [7];
+
+        using Image second = anim.Frames.CloneFrame(1);
+        Assert.Equal(1, second.FrameCount);
+        Assert.Equal(new Rgba32(0, 0, 255), second[0, 0]);
+        Assert.Equal(new byte[] { 7 }, second.Metadata.Xmp);
+        Assert.Equal(3, anim.FrameCount);
+
+        using Image exported = anim.Frames.ExportFrame(1);
+        Assert.Equal(new Rgba32(0, 0, 255), exported[0, 0]);
+        Assert.Equal(2, anim.FrameCount);
+        Assert.Equal(a[2, 2], anim.Frames[1][2, 2]);
+        Assert.Same(anim.Frames[0], anim.Frames.RootFrame);
     }
 
     [Fact]
@@ -28,9 +53,8 @@ public class AnimationAndMetadataTests
         using var img = new Image(4, 4);
         Assert.Throws<ArgumentException>(() => img.Frames.Add(new ImageFrame(3, 4)));
         img.Frames.Add(new ImageFrame(4, 4) { Duration = TimeSpan.FromSeconds(1) });
-        img.SelectActiveFrame(1);
         img.Frames.RemoveAt(1);
-        Assert.Equal(0, img.ActiveFrameIndex);
+        Assert.Equal(1, img.FrameCount);
         Assert.Throws<InvalidOperationException>(() => img.Frames.RemoveAt(0));
         Assert.Throws<ArgumentException>(() => img.Frames.Add(img.Frames[0]));
     }
@@ -80,7 +104,7 @@ public class AnimationAndMetadataTests
         using Image img = ImageTests.Pattern(5, 3);
         Rgba32 bottomLeft = img[0, 2];
         img.Metadata.Exif = Exif(6, false); // stored rotated: needs 90° clockwise
-        img.AutoOrient();
+        img.Mutate(x => x.AutoOrient());
         Assert.Equal((3, 5), (img.Width, img.Height));
         Assert.Equal(bottomLeft, img[0, 0]);
         Assert.Equal(ExifOrientation.TopLeft, img.Metadata.Orientation);

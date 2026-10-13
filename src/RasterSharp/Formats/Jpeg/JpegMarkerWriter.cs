@@ -36,8 +36,8 @@ internal sealed class JpegMarkerWriter(Stream output)
     public void Header(Image image, MetadataKinds kinds)
     {
         Marker(0xD8);
-        int x = (int)Math.Clamp(Math.Round(image.HorizontalResolution), 1, 65535);
-        int y = (int)Math.Clamp(Math.Round(image.VerticalResolution), 1, 65535);
+        int x = (int)Math.Clamp(Math.Round(image.Metadata.HorizontalResolution), 1, 65535);
+        int y = (int)Math.Clamp(Math.Round(image.Metadata.VerticalResolution), 1, 65535);
         Span<byte> jfif = stackalloc byte[14];
         "JFIF\0"u8.CopyTo(jfif);
         jfif[5] = 1;

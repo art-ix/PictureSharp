@@ -1,52 +1,50 @@
 namespace RasterSharp;
 
-/// <summary>Rotation and flip operations. Values match System.Drawing.RotateFlipType.</summary>
-public enum RotateFlipType
+/// <summary>Quarter-turn rotations, clockwise.</summary>
+public enum RotateMode
 {
-    /// <summary>No rotation, no flip.</summary>
-    RotateNoneFlipNone = 0,
-    /// <summary>90° clockwise, no flip.</summary>
-    Rotate90FlipNone = 1,
-    /// <summary>180°, no flip.</summary>
-    Rotate180FlipNone = 2,
-    /// <summary>270° clockwise, no flip.</summary>
-    Rotate270FlipNone = 3,
-    /// <summary>No rotation, horizontal flip.</summary>
-    RotateNoneFlipX = 4,
-    /// <summary>90° clockwise, horizontal flip.</summary>
-    Rotate90FlipX = 5,
-    /// <summary>180°, horizontal flip (same as vertical flip).</summary>
-    Rotate180FlipX = 6,
-    /// <summary>270° clockwise, horizontal flip.</summary>
-    Rotate270FlipX = 7,
-    /// <summary>Same as <see cref="Rotate180FlipX"/>.</summary>
-    RotateNoneFlipY = Rotate180FlipX,
-    /// <summary>Same as <see cref="Rotate270FlipX"/>.</summary>
-    Rotate90FlipY = Rotate270FlipX,
-    /// <summary>Same as <see cref="RotateNoneFlipX"/>.</summary>
-    Rotate180FlipY = RotateNoneFlipX,
-    /// <summary>Same as <see cref="Rotate90FlipX"/>.</summary>
-    Rotate270FlipY = Rotate90FlipX,
-    /// <summary>Same as <see cref="Rotate180FlipNone"/>.</summary>
-    RotateNoneFlipXY = Rotate180FlipNone,
-    /// <summary>Same as <see cref="Rotate270FlipNone"/>.</summary>
-    Rotate90FlipXY = Rotate270FlipNone,
-    /// <summary>Same as <see cref="RotateNoneFlipNone"/>.</summary>
-    Rotate180FlipXY = RotateNoneFlipNone,
-    /// <summary>Same as <see cref="Rotate90FlipNone"/>.</summary>
-    Rotate270FlipXY = Rotate90FlipNone,
+    /// <summary>No rotation.</summary>
+    None = 0,
+    /// <summary>90° clockwise.</summary>
+    Rotate90 = 90,
+    /// <summary>180°.</summary>
+    Rotate180 = 180,
+    /// <summary>270° clockwise (90° counter-clockwise).</summary>
+    Rotate270 = 270,
 }
 
-/// <summary>Access mode for <see cref="Image.LockBits"/>. Values match System.Drawing.Imaging.ImageLockMode.</summary>
-[Flags]
-public enum ImageLockMode
+/// <summary>Mirror operations.</summary>
+public enum FlipMode
 {
-    /// <summary>The buffer is only read; changes are discarded on unlock.</summary>
-    ReadOnly = 1,
-    /// <summary>The buffer is only written; it is not filled with the current pixels and is copied back on unlock.</summary>
-    WriteOnly = 2,
-    /// <summary>The buffer is filled with the current pixels and copied back on unlock.</summary>
-    ReadWrite = ReadOnly | WriteOnly,
+    /// <summary>No flip.</summary>
+    None = 0,
+    /// <summary>Mirrors left to right.</summary>
+    Horizontal,
+    /// <summary>Mirrors top to bottom.</summary>
+    Vertical,
+}
+
+/// <summary>Where an image is anchored when it is cropped, padded or placed on a larger area.</summary>
+public enum AnchorPosition
+{
+    /// <summary>Centered on both axes.</summary>
+    Center = 0,
+    /// <summary>Top edge, centered horizontally.</summary>
+    Top,
+    /// <summary>Bottom edge, centered horizontally.</summary>
+    Bottom,
+    /// <summary>Left edge, centered vertically.</summary>
+    Left,
+    /// <summary>Right edge, centered vertically.</summary>
+    Right,
+    /// <summary>Top-left corner.</summary>
+    TopLeft,
+    /// <summary>Top-right corner.</summary>
+    TopRight,
+    /// <summary>Bottom-left corner.</summary>
+    BottomLeft,
+    /// <summary>Bottom-right corner.</summary>
+    BottomRight,
 }
 
 /// <summary>EXIF orientation tag values (TIFF tag 0x0112).</summary>
@@ -101,17 +99,19 @@ public enum MetadataKinds
     All = Icc | Exif | Xmp,
 }
 
-/// <summary>How <see cref="Image.Resize(int, int, ResizeMode, ResamplingFilter)"/> maps the image onto the requested size.</summary>
+/// <summary>How a resize maps the image onto the requested size (see <see cref="ResizeOptions"/>).</summary>
 public enum ResizeMode
 {
     /// <summary>Scales to exactly the requested size, ignoring the aspect ratio.</summary>
     Stretch = 0,
-    /// <summary>Keeps the aspect ratio and fits inside the requested size; one side may come out smaller.</summary>
-    Fit,
-    /// <summary>Keeps the aspect ratio and covers the requested size, cropping the excess around the center.</summary>
-    Fill,
-    /// <summary>Like <see cref="Fit"/>, then centers the result on a canvas of exactly the requested size.</summary>
+    /// <summary>Keeps the aspect ratio and fits inside the requested size; one side may come out smaller (CSS <c>contain</c>).</summary>
+    Max,
+    /// <summary>Keeps the aspect ratio and covers the requested size, cropping the excess at the anchor (CSS <c>cover</c>).</summary>
+    Crop,
+    /// <summary>Like <see cref="Max"/>, then places the result on a canvas of exactly the requested size at the anchor.</summary>
     Pad,
+    /// <summary>Keeps the aspect ratio and covers the requested size without cropping; one side may come out larger.</summary>
+    Min,
 }
 
 /// <summary>Interpolation kernels used for resizing.</summary>
@@ -125,4 +125,8 @@ public enum ResamplingFilter
     Bicubic,
     /// <summary>Windowed sinc with three lobes: sharpest, slowest.</summary>
     Lanczos3,
+    /// <summary>Box (area average) filter: each output pixel averages the source pixels it covers. Good for downscaling.</summary>
+    Box,
+    /// <summary>Hamming-windowed sinc with one lobe: sharper than bilinear at a similar cost.</summary>
+    Hamming,
 }

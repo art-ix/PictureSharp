@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -6,10 +8,11 @@ namespace RasterSharp;
 
 /// <summary>
 /// A 32-bit pixel with 8-bit red, green, blue and alpha channels stored in that order in memory.
-/// Alpha is straight (not premultiplied).
+/// Alpha is straight (not premultiplied). <see cref="Color"/> converts implicitly, so <c>Color.Red</c>
+/// can be passed wherever an <see cref="Rgba32"/> is expected.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct Rgba32 : IEquatable<Rgba32>
+public struct Rgba32 : IEquatable<Rgba32>, ISpanParsable<Rgba32>
 {
     /// <summary>Red channel.</summary>
     public byte R;
@@ -71,6 +74,79 @@ public struct Rgba32 : IEquatable<Rgba32>
 
     /// <summary>Converts from <see cref="Color"/>.</summary>
     public static implicit operator Rgba32(Color color) => FromColor(color);
+
+    /// <summary>Deconstructs the pixel into its channels.</summary>
+    public readonly void Deconstruct(out byte r, out byte g, out byte b, out byte a)
+    {
+        r = R;
+        g = G;
+        b = B;
+        a = A;
+    }
+
+    /// <summary>Returns the color as <c>#RRGGBBAA</c>.</summary>
+    public readonly string ToHex() => $"#{R:X2}{G:X2}{B:X2}{A:X2}";
+
+    /// <summary>
+    /// Parses a hex color (<c>#RGB</c>, <c>#RGBA</c>, <c>#RRGGBB</c> or <c>#RRGGBBAA</c>, the <c>#</c> is optional)
+    /// or a known color name such as <c>"CornflowerBlue"</c>.
+    /// </summary>
+    public static Rgba32 Parse(string s) => Parse(s, null);
+
+    /// <inheritdoc cref="Parse(string)"/>
+    public static Rgba32 Parse(string s, IFormatProvider? provider)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        return Parse(s.AsSpan(), provider);
+    }
+
+    /// <inheritdoc cref="Parse(string)"/>
+    public static Rgba32 Parse(ReadOnlySpan<char> s, IFormatProvider? provider = null) =>
+        TryParse(s, provider, out Rgba32 result) ? result : throw new FormatException($"'{s}' is not a valid color.");
+
+    /// <summary>Tries to parse a hex color or a known color name; see <see cref="Parse(string)"/>.</summary>
+    public static bool TryParse([NotNullWhen(true)] string? s, out Rgba32 result) => TryParse(s, null, out result);
+
+    /// <inheritdoc cref="TryParse(string?, out Rgba32)"/>
+    public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, out Rgba32 result) =>
+        TryParse(s.AsSpan(), provider, out result);
+
+    /// <inheritdoc cref="TryParse(string?, out Rgba32)"/>
+    public static bool TryParse(ReadOnlySpan<char> s, out Rgba32 result) => TryParse(s, null, out result);
+
+    /// <inheritdoc cref="TryParse(string?, out Rgba32)"/>
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Rgba32 result)
+    {
+        s = s.Trim();
+        bool hash = s.StartsWith('#');
+        ReadOnlySpan<char> hex = hash ? s[1..] : s;
+        if (hex.Length is 3 or 4 or 6 or 8 && uint.TryParse(hex, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out uint v))
+        {
+            result = hex.Length switch
+            {
+                3 => new Rgba32(Nibble(v >> 8), Nibble(v >> 4), Nibble(v)),
+                4 => new Rgba32(Nibble(v >> 12), Nibble(v >> 8), Nibble(v >> 4), Nibble(v)),
+                6 => new Rgba32((byte)(v >> 16), (byte)(v >> 8), (byte)v),
+                _ => new Rgba32((byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v),
+            };
+            return true;
+        }
+
+        if (!hash && s.Length > 0)
+        {
+            Color named = Color.FromName(s.ToString());
+            if (named.IsKnownColor)
+            {
+                result = FromColor(named);
+                return true;
+            }
+        }
+
+        result = default;
+        return false;
+    }
+
+    private static byte Nibble(uint v) => (byte)((v & 0xF) * 0x11);
 
     /// <inheritdoc/>
     public readonly bool Equals(Rgba32 other) => PackedValue == other.PackedValue;

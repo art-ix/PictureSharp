@@ -2,13 +2,13 @@
 
 ## Kontekst
 
-Potrzebna jest biblioteka .NET (**net10.0+**) do kodowania i dekodowania WebP, napisana w 100% w kodzie zarządzanym (C#), **bez zależności NuGet i bez natywnych bibliotek**. Używamy tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`), które jest częścią shared framework i działa na każdej platformie. Biblioteka ma też czytać PNG, BMP i JPEG (do przekodowywania) oraz zapisywać PNG, BMP i JPEG. Centralnym typem jest klasa `Image`, wzorowana na `System.Drawing.Image`/`Bitmap`, z prostym API.
+Potrzebna jest biblioteka .NET (**net10.0+**) do kodowania i dekodowania WebP, napisana w 100% w kodzie zarządzanym (C#), **bez zależności NuGet i bez natywnych bibliotek**. Używamy tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`), które jest częścią shared framework i działa na każdej platformie. Biblioteka ma też czytać PNG, BMP i JPEG (do przekodowywania) oraz zapisywać PNG, BMP i JPEG. Centralnym typem jest klasa `Image` z API w stylu ImageSharp (`Load`/`Mutate`/`Clone`/`SaveAs*`, od fazy 9.5; wcześniej wzorowana na `System.Drawing.Image`/`Bitmap`).
 
 Ustalenia z użytkownikiem:
 - **WebP w pełnym zakresie** (odczyt i zapis): lossy VP8, lossless VP8L, alfa ALPH, animacja ANIM/ANMF, metadane ICCP/EXIF/XMP.
 - **PNG:** odczyt i zapis. **BMP:** odczyt i zapis. **JPEG:** odczyt i zapis (enkoder w fazie 5.5).
 - **Deflate/zlib piszemy sami.** Nie używamy `ZLibStream`, bo pod spodem woła natywne zlib.
-- **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli i proste operacje na kolorach.
+- **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli, operacje na kolorach i filtry (od fazy 9.5).
 
 Stan środowiska (aktualizacja w fazie 6):
 - Lokalny katalog roboczy pozostaje `/home/artur/Projekty/ai/webpsharp`; projekt i repozytorium GitHub noszą nazwę `RasterSharp`. Target to .NET 10.
@@ -81,67 +81,59 @@ Zasady kodu:
 - `ImageMetadata`: `byte[]? IccProfile`, `Exif`, `Xmp`, `ExifOrientation Orientation`, `Clear()`.
 - `ImageFormatException : FormatException`, rzucany dla uszkodzonych lub nierozpoznanych danych. Poprawne pliki z nieobsługiwanymi funkcjami (np. arytmetyczny JPEG) dają `NotSupportedException`.
 
-### `Image` (sealed, `IDisposable`, `ICloneable`)
+### `Image` (sealed, `IDisposable`) — API od fazy 9.5
 
 ```csharp
-// Wczytywanie
-static Image FromFile(string path, DecoderOptions? o = null);
-static Image FromStream(Stream s, DecoderOptions? o = null);     // nie wymaga Seek
-static Image FromBytes(ReadOnlySpan<byte> data, DecoderOptions? o = null);
-static Task<Image> FromFileAsync(string path, DecoderOptions? o = null, CancellationToken ct = default);
-static Image FromPixels(ReadOnlySpan<byte> px, int w, int h, PixelFormat fmt, int stride = 0);
-static ImageInfo Identify(string path) / Identify(Stream) / Identify(ReadOnlySpan<byte>);
-static ImageFormat? DetectFormat(ReadOnlySpan<byte> header);
-static Image CreateAnimation(IEnumerable<Image> frames, TimeSpan frameDuration, int loopCount = 0);
-Image(int width, int height);  Image(int width, int height, Color background);
+// Wczytywanie (format z zawartości)
+static Image Load(string path | Stream | ReadOnlySpan<byte> | ReadOnlyMemory<byte>, DecoderOptions? o = null); // byte[] bez kopii
+static Task<Image> LoadAsync(string path | Stream [, DecoderOptions? o], CancellationToken ct = default);
+static Image LoadPixelData(ReadOnlySpan<byte> px, int w, int h, PixelFormat fmt, int stride = 0);
+static Image LoadPixelData(ReadOnlySpan<Rgba32> px, int w, int h);
+static ImageInfo Identify(path | Stream | ReadOnlySpan<byte>);  static Task<ImageInfo> IdentifyAsync(path | Stream, ct);
+static ImageFormat? DetectFormat(ReadOnlySpan<byte> | string path | Stream);
+static Image CreateAnimation(TimeSpan frameDuration, params ReadOnlySpan<Image> frames);  // + IEnumerable<Image>
+Image(int w, int h);  Image(int w, int h, Rgba32 background);
 
-// Właściwości (w stylu System.Drawing)
-int Width, Height;  Size Size;  ImageFormat RawFormat;  bool HasAlpha;
-float HorizontalResolution, VerticalResolution;  void SetResolution(float x, float y);
-ImageMetadata Metadata;  object? Tag;
-// Animacja
-ImageFrameCollection Frames;  int FrameCount;  bool IsAnimated;
-int ActiveFrameIndex;  void SelectActiveFrame(int index);  ImageFrame ActiveFrame;
-int LoopCount;  Color AnimationBackgroundColor;
+// Właściwości
+int Width, Height;  Size Size;  Rectangle Bounds;  ImageFormat? SourceFormat;  bool HasAlpha;
+ImageMetadata Metadata;   // DPI (HorizontalResolution/VerticalResolution), ICC, EXIF, XMP, Orientation
+ImageFrameCollection Frames;  int FrameCount;  bool IsAnimated;  int LoopCount;  Rgba32 AnimationBackgroundColor;
 
-// Piksele (aktywna klatka)
-Color GetPixel(int x, int y);  void SetPixel(int x, int y, Color c);
-Rgba32 this[int x, int y] { get; set; }
-Span<Rgba32> GetRowSpan(int y);  Span<Rgba32> GetPixelSpan();
-BitmapData LockBits(Rectangle r, ImageLockMode mode, PixelFormat fmt);  void UnlockBits(BitmapData d);
-void CopyPixels(Span<byte> dest, PixelFormat fmt, int stride = 0);  byte[] ToPixelArray(PixelFormat fmt);
-void LoadPixels(ReadOnlySpan<byte> src, PixelFormat fmt, int stride = 0);
-bool IsOpaque();   // skan alfy
+// Piksele (pierwsza klatka, Frames.RootFrame)
+Rgba32 this[int x, int y] { get; set; }   // Color konwertuje się niejawnie
+Span<Rgba32> GetRowSpan(int y);  Span<Rgba32> GetPixelSpan();  Memory<Rgba32> GetPixelMemory();
+void CopyPixelDataTo(Span<Rgba32>);  void CopyPixelDataTo(Span<byte>, PixelFormat, int stride = 0);
+void CopyPixelDataFrom(ReadOnlySpan<byte>, PixelFormat, int stride = 0);  byte[] ToPixelData(PixelFormat = Rgba32);
+bool IsOpaque();
 
-// Operacje: działają w miejscu na WSZYSTKICH klatkach i zwracają `this` (fluent)
-Image Resize(int w, int h, ResizeMode mode = ResizeMode.Stretch, ResamplingFilter f = Lanczos3);
-Image Thumbnail(int maxW, int maxH, ResamplingFilter f = Lanczos3);   // Fit, nigdy nie powiększa
-Image Crop(Rectangle r);  Image RotateFlip(RotateFlipType t);  Image AutoOrient();
-Image Grayscale();  Image Invert();  Image Clear(Color c);  Image Fill(Rectangle r, Color c);
-Image MakeTransparent(Color c);  Image DrawImage(Image src, Point at, float opacity = 1f);
-// Operacje zwracające NOWY obraz (zgodność z System.Drawing)
-Image Clone();  Image Clone(Rectangle r);  Image GetThumbnailImage(int w, int h);
+// Przetwarzanie: Mutate zmienia obraz, Clone zwraca nowy (kopiuje piksele leniwie)
+void Mutate(Action<ImageProcessingContext> op);  Image Clone(Action<ImageProcessingContext> op);  Image Clone();
 
 // Zapis
-void Save(string path);                       // format z rozszerzenia (.webp -> lossy q75, .png, .bmp)
-void Save(string path, ImageFormat f);  void Save(Stream s, ImageFormat f);
-void Save(string path, EncoderOptions o);  void Save(Stream s, EncoderOptions o);
-Task SaveAsync(...);
-void SaveAsWebP(string path, int quality = 75, bool lossless = false);  void SaveAsPng(string path);  void SaveAsBmp(string path);
-byte[] ToWebP(WebPEncoderOptions? o = null);  byte[] ToPng(PngEncoderOptions? o = null);  byte[] ToBmp(BmpEncoderOptions? o = null);
+void Save(string path);  void Save(string path, EncoderOptions o);  void Save(Stream s, ImageFormat f);  void Save(Stream s, EncoderOptions o);
+Task SaveAsync(...);   // te same warianty + CancellationToken
+// Per format (bloki extension(Image) w C# 14): SaveAsWebP/SaveAsPng/SaveAsJpeg/SaveAsBmp(path | Stream, options? = null),
+// SaveAsXAsync(...), ToWebP/ToPng/ToJpeg/ToBmp(options? = null) -> byte[]
 ```
 
-- **`ImageFrame`:** `Width`, `Height`, `Duration` (TimeSpan), indeksator `Rgba32`, `GetRowSpan`, `GetPixelSpan`, `Clone()`. Każda klatka to pełne płótno, a dekoder zwraca klatki już skomponowane, jak `WebPAnimDecoder`.
-- **`ImageFrameCollection`:** `IReadOnlyList<ImageFrame>` plus `Add(Image, TimeSpan)`, `Insert`, `RemoveAt`, `Move`. Wymiary klatek muszą być równe wymiarom obrazu.
-- **`BitmapData`:** `IDisposable` (Dispose = Unlock), ma `Width`, `Height`, `Stride`, `PixelFormat`, `Span<byte> Span` oraz przypięty `IntPtr Scan0` do interopu z WPF, SkiaSharp lub WinForms. Przy `ReadWrite`/`WriteOnly` dane są przy odblokowaniu konwertowane z powrotem do Rgba32.
-- **`RotateFlipType`** ma wartości liczbowe identyczne z System.Drawing.
+- **`ImageProcessingContext`** (`readonly ref struct`, nie może wyjść poza lambdę; `Size`, `FrameCount`). Operacje działają na wszystkich klatkach i zwracają kontekst:
+  - `Resize(w, h)` (0 = proporcje), `Resize(Size)`, `Resize(w, h, ResamplingFilter)`, `Resize(w, h, ResizeMode, filter)`, `Resize(ResizeOptions)`, `Thumbnail(maxW, maxH)`;
+  - `ResizeOptions` (rekord): `Size`, `Mode` (Stretch/Max/Crop/Pad/Min), `Filter` (Nearest/Bilinear/Bicubic/Lanczos3/Box/Hamming), `Position` (`AnchorPosition`), `PadColor`, `AllowUpscale`;
+  - `Crop(Rectangle | x, y, w, h | w, h, anchor)`, `Pad(w, h, color, anchor)`, `Rotate(RotateMode)`, `Flip(FlipMode)`, `RotateFlip`, `AutoOrient`, `Rotate(float degrees, filter, background, expand)`;
+  - `Grayscale`, `Invert`, `Sepia`, `Brightness`, `Contrast`, `Saturate`, `Fill(color[, rect])`, `MakeTransparent`, `BackgroundColor`, `Opacity`;
+  - `BoxBlur`, `GaussianBlur`, `UnsharpMask`, `Sharpen`, `DrawImage(source, Point | AnchorPosition, opacity)`, `Apply(Action<ImageFrame>)`.
+- **`ImageFrame`:** `Width`, `Height`, `Duration` (TimeSpan), indeksator `Rgba32`, `GetRowSpan`, `GetPixelSpan`, `GetPixelBytes`, `Clone()`. Każda klatka to pełne płótno, a dekoder zwraca klatki już skomponowane, jak `WebPAnimDecoder`.
+- **`ImageFrameCollection`:** `IReadOnlyList<ImageFrame>` plus `RootFrame`, `Add(ImageFrame)`, `Add(Image, TimeSpan)`, `Insert`, `RemoveAt`, `Move`, `CloneFrame(i)`, `ExportFrame(i)`. Wymiary klatek muszą być równe wymiarom obrazu.
+- **`Rgba32`:** `Parse`/`TryParse` (`ISpanParsable`: `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, nazwy kolorów), `ToHex`, `Deconstruct`, niejawne konwersje z/do `Color`.
 - **`AutoOrient()`** stosuje orientację EXIF 1–8 i ustawia tag na 1 bezpośrednio w bajtach EXIF.
+- Publiczne API jest zapisane w `tests/assets/PublicApi.approved.txt` i pilnowane przez `PublicApiTests`.
 
 ### Opcje
+Opcje są rekordami (`with`), a wartości sprawdzamy przy ustawianiu (`init` ze słowem `field`), więc błędna wartość rzuca `ArgumentOutOfRangeException` od razu.
 - **`DecoderOptions`:**
   - `MaxPixels` (domyślnie 2^28)
   - `FirstFrameOnly`
-  - `ApplyExifOrientation` (domyślnie false, tak jak w System.Drawing)
+  - `ApplyExifOrientation` (domyślnie false)
   - `IgnoreMetadata`
   - `WebPFancyUpsampling` (true)
   - `WebPBypassFiltering`
@@ -162,15 +154,15 @@ byte[] ToWebP(WebPEncoderOptions? o = null);  byte[] ToPng(PngEncoderOptions? o 
 - **`BmpEncoderOptions`:**
   - `BitsPerPixel` (Auto: 1/4/8 z paletą przy ≤256 kolorach, 24 dla obrazów nieprzezroczystych, 32 z kanałem alfa)
   - `Metadata` (profil ICC w nagłówku BITMAPV5HEADER)
+- **`JpegEncoderOptions`:** `Quality` (1–100), `Subsampling`, `Progressive`, `OptimizeCoding`, `RestartInterval`, `BackgroundColor` (`Rgba32`, nieprzezroczysty), `Metadata`.
 
 ### Fasada `WebP` (odwzorowuje proste API z `decode.h`/`encode.h`)
 
 ```csharp
 static bool TryGetInfo(ReadOnlySpan<byte> data, out ImageInfo info);
 static byte[] DecodeRgba(ReadOnlySpan<byte> data, out int width, out int height);   // WebPDecodeRGBA
-static byte[] DecodeBgra(...);  static void DecodeInto(ReadOnlySpan<byte> data, Span<byte> dst, int stride, PixelFormat f);
-static byte[] EncodeRgba(ReadOnlySpan<byte> rgba, int w, int h, int stride, float quality);  // WebPEncodeRGBA
-static byte[] EncodeLosslessRgba(ReadOnlySpan<byte> rgba, int w, int h, int stride);
+static byte[] DecodeBgra(...);  static Size DecodeInto(ReadOnlySpan<byte> data, Span<byte> dst, int stride, PixelFormat f);
+static byte[] EncodeLosslessRgba(ReadOnlySpan<byte> rgba, int w, int h, int stride = 0);
 static byte[] Encode(Image image, WebPEncoderOptions? o = null);
 static void Convert(string inPath, string outPath, WebPEncoderOptions? o = null);   // jpg/png/bmp/webp -> webp
 ```
@@ -178,14 +170,15 @@ static void Convert(string inPath, string outPath, WebPEncoderOptions? o = null)
 Przykład użycia:
 
 ```csharp
-using var img = Image.FromFile("photo.jpg");
-img.AutoOrient().Thumbnail(1920, 1080).SaveAsWebP("photo.webp", quality: 82);
+using var img = Image.Load("photo.jpg");
+img.Mutate(x => x.AutoOrient().Thumbnail(1920, 1080));
+img.SaveAsWebP("photo.webp", new() { Quality = 82 });
 ```
 
 ### Wyraźne ograniczenia (do opisania w dokumentacji)
 - Brak zarządzania kolorem: ICC jest przenoszony, ale nie stosowany. CMYK→RGB konwertujemy naiwnie.
 - PNG 16-bit jest konwertowane do 8 bitów.
-- BMP zapisujemy zawsze bez kompresji (RLE tylko przy odczycie). Animacje zapisujemy jako aktywną klatkę.
+- BMP zapisujemy zawsze bez kompresji (RLE tylko przy odczycie). Animacje zapisujemy jako pierwszą klatkę (także JPEG).
 - Strumień wejściowy jest wczytywany w całości do pamięci.
 
 ---
@@ -417,6 +410,23 @@ Weryfikacja: `dotnet build RasterSharp.slnx -c Release` (0 ostrzeżeń/błędów
   - resize zgodny z Pillow z tolerancją,
   - LockBits/CopyPixels round-trip dla każdego `PixelFormat`.
 
+### Faza 9.5: API w stylu ImageSharp i filtry Pillow
+**Status: ukończona (2026-10-13).**
+Weryfikacja: `dotnet build RasterSharp.slnx -c Release` (0 ostrzeżeń/błędów), `dotnet test -c Release` (wszystkie zielone, 0 pominiętych).
+- Cel: intuicyjne API odkrywalne z IntelliSense, jedna oczywista droga dla każdej czynności (przegląd: ImageSharp 3/4, sharp/NetVips, Pillow, nowości C# 14/.NET 10). API łamiemy bez okresu przejściowego (0.x, przed NuGet).
+- **Wczytywanie/zapis:** `Load`/`LoadAsync`/`Identify(Async)`/`DetectFormat`/`LoadPixelData`; `Save`/`SaveAsync`; per format bloki `extension(Image)`: `SaveAsX(path|Stream, options?)`, `SaveAsXAsync`, `ToX`.
+- **Przetwarzanie:** `Mutate(x => ...)` w miejscu, `Clone(x => ...)` jako nowy obraz z leniwą kopią (`Processing/ProcessingState.cs`: operacje tworzące nowy bufor czytają źródło bez kopiowania). Kontekst `ImageProcessingContext` to `readonly ref struct`; własne operacje dopisuje się blokiem `extension(ImageProcessingContext)`.
+- **Usunięte artefakty System.Drawing:** `From*`, `RawFormat`/`MemoryBmp`, `Tag`, `ICloneable`, aktywna klatka, `GetPixel/SetPixel`, `LockBits/BitmapData/ImageLockMode`, `RotateFlipType`, `GetThumbnailImage`, `Clone(Rectangle)`, `SetResolution` (DPI w `ImageMetadata`).
+- **Resize:** 0 = proporcje, `ResizeOptions` (`Position` → Pillow `centering`, `PadColor`, `AllowUpscale`), tryby w nazewnictwie ImageSharp (Stretch/Max/Crop/Pad/Min), filtry `Box`/`Hamming`.
+- **Nowe operacje:** `Crop(w, h, anchor)`, `Pad`, `Rotate/Flip` (`RotateMode`/`FlipMode`), `Rotate(stopnie)` (port `Image.rotate` + `Geometry.c`: `affine_fixed`, `bilinear/bicubic_filter32RGB`), `Brightness`/`Contrast`/`Saturate` (`ImageEnhance` + `Blend.c`), `BoxBlur`/`GaussianBlur` (`BoxBlur.c`), `UnsharpMask` (`UnsharpMask.c`), `Sharpen` (`Filter.c` 3×3), `Sepia`, `BackgroundColor`, `Opacity`, `DrawImage(anchor)`, `Apply`.
+- Filtry przestrzenne i obrót z interpolacją działają na alfie premultiplikowanej, jak Pillow na „RGBa” — bez przecieku koloru spod przezroczystych pikseli.
+- **Kolor i opcje:** jeden typ koloru w sygnaturach (`Rgba32`, `Color` niejawnie), `Rgba32.Parse/TryParse/ToHex`; opcje jako rekordy walidowane przy ustawianiu.
+- **DoD:**
+  - wszystkie dotychczasowe testy przepisane na nowe API i zielone (te same hashe kodeków i wyniki resize),
+  - nowe filtry, obrót i kotwice piksel w piksel z Pillow 10.2.0 (wyrocznia: 569 zadań),
+  - migawka publicznego API `tests/assets/PublicApi.approved.txt` zatwierdzona (`PublicApiTests`),
+  - przykłady z README kompilują się i działają (`ReadmeExamplesTests`).
+
 ### Faza 10: wydajność, odporność, wydanie
 - BenchmarkDotNet: dekodowanie i kodowanie w porównaniu z czasami `cwebp`/`dwebp`. Cel: ≤3× wolniej od natywnego C z SIMD.
 - Ścieżki `Vector128`/`Vector256` (cross-platform intrinsics) dla:
@@ -459,5 +469,5 @@ Rodzaje testów:
 1. **Prymitywy:** bit reader/writer, Huffman, IDCT kontra wersja float, CRC/Adler na znanych wektorach, inflate kontra `ZLibStream`.
 2. **Zgodność dekoderów:** hashe pikseli z `reference.json` (dwebp i Pillow), libwebp-test-data, PngSuite, BMP Suite.
 3. **Enkodery:** porównanie bajtów i PSNR z `cwebp` 1.6.0, round-tripy lossless, metadane i animacje przez `webpmux` i Pillow.
-4. **API `Image`:** właściwości, operacje i konwersje formatów pikseli.
+4. **API `Image`:** właściwości, Mutate/Clone, operacje i filtry (wyrocznia Pillow), konwersje formatów pikseli, migawka publicznego API i przykłady z README.
 5. **Odporność:** fuzz i mutacje korpusu.

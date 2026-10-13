@@ -1,18 +1,20 @@
+using RasterSharp.Internal;
+
 namespace RasterSharp;
 
-/// <summary>Options controlling image decoding.</summary>
-public sealed class DecoderOptions
+/// <summary>Options controlling image decoding. Values are checked when they are set.</summary>
+public sealed record DecoderOptions
 {
     /// <summary>Default options.</summary>
     public static DecoderOptions Default { get; } = new();
 
     /// <summary>Maximum number of pixels (width × height) an image may have. Default: 2^28.</summary>
-    public long MaxPixels { get; init; } = 1L << 28;
+    public long MaxPixels { get; init => field = Check.AtLeast(value, 1L); } = 1L << 28;
 
     /// <summary>Decode only the first frame of animations.</summary>
     public bool FirstFrameOnly { get; init; }
 
-    /// <summary>Rotate/flip the image according to its EXIF orientation after decoding. Default: false.</summary>
+    /// <summary>Rotate/flip the image according to its EXIF orientation after decoding (like <c>AutoOrient()</c>). Default: false.</summary>
     public bool ApplyExifOrientation { get; init; }
 
     /// <summary>Do not read ICC/EXIF/XMP metadata.</summary>

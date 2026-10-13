@@ -7,11 +7,19 @@ public class ProcessingTests
 {
     public static TheoryData<ResamplingFilter> AllFilters => [ResamplingFilter.Nearest, ResamplingFilter.Bilinear, ResamplingFilter.Bicubic, ResamplingFilter.Lanczos3];
 
-    public static TheoryData<RotateFlipType> AllRotateFlips =>
-    [
-        RotateFlipType.RotateNoneFlipNone, RotateFlipType.Rotate90FlipNone, RotateFlipType.Rotate180FlipNone, RotateFlipType.Rotate270FlipNone,
-        RotateFlipType.RotateNoneFlipX, RotateFlipType.Rotate90FlipX, RotateFlipType.Rotate180FlipX, RotateFlipType.Rotate270FlipX,
-    ];
+    public static TheoryData<RotateMode, FlipMode> AllRotateFlips()
+    {
+        var data = new TheoryData<RotateMode, FlipMode>();
+        foreach (RotateMode rotate in Enum.GetValues<RotateMode>())
+        {
+            foreach (FlipMode flip in Enum.GetValues<FlipMode>())
+            {
+                data.Add(rotate, flip);
+            }
+        }
+
+        return data;
+    }
 
     public static TheoryData<PixelFormat> AllFormats => new(Enum.GetValues<PixelFormat>());
 
@@ -21,34 +29,38 @@ public class ProcessingTests
 
     [Theory]
     [MemberData(nameof(AllRotateFlips))]
-    public void RotateFlip_MatchesNaiveRotationThenFlip(RotateFlipType type)
+    public void RotateFlip_MatchesNaiveRotationThenFlip(RotateMode rotate, FlipMode flip)
     {
         using Image img = ImageTests.Pattern(7, 4);
         Rgba32[,] expected = ToGrid(img);
-        for (int i = 0; i < ((int)type & 3); i++)
+        for (int i = 0; i < (int)rotate / 90; i++)
         {
             expected = RotateClockwise(expected);
         }
 
-        if ((int)type >= 4)
+        if (flip == FlipMode.Horizontal)
         {
             expected = FlipX(expected);
         }
+        else if (flip == FlipMode.Vertical)
+        {
+            expected = FlipY(expected);
+        }
 
-        img.RotateFlip(type);
+        img.Mutate(x => x.RotateFlip(rotate, flip));
         Assert.Equal(expected, ToGrid(img));
     }
 
     [Theory]
     [MemberData(nameof(AllRotateFlips))]
-    public void RotateFlip_FourTimesQuarterTurnOrTwiceFlip_IsIdentity(RotateFlipType type)
+    public void RotateFlip_FourTimesQuarterTurnOrTwiceFlip_IsIdentity(RotateMode rotate, FlipMode flip)
     {
         using Image img = ImageTests.Pattern(6, 5);
         Rgba32[] before = Pixels(img);
-        int repeat = (int)type >= 4 ? 2 : 4;   // every flip variant is an involution; rotations have order ≤ 4
+        int repeat = flip != FlipMode.None ? 2 : 4;   // every flip variant is an involution; rotations have order ≤ 4
         for (int i = 0; i < repeat; i++)
         {
-            img.RotateFlip(type);
+            img.Mutate(x => x.RotateFlip(rotate, flip));
         }
 
         Assert.Equal(before, Pixels(img));
@@ -67,26 +79,26 @@ public class ProcessingTests
     {
         // Store an upright pattern the way a camera with this orientation would, then check AutoOrient restores it.
         using Image upright = ImageTests.Pattern(5, 3);
-        using Image stored = upright.Clone();
-        stored.RotateFlip(Inverse((ExifOrientation)orientation));
+        (RotateMode rotate, FlipMode flip) = Inverse((ExifOrientation)orientation);
+        using Image stored = upright.Clone(x => x.RotateFlip(rotate, flip));
         stored.Metadata.Exif = [.. "II*\0"u8, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, (byte)orientation, 0, 0, 0, 0, 0, 0, 0];
         Assert.Equal((ExifOrientation)orientation, stored.Metadata.Orientation);
-        stored.AutoOrient();
+        stored.Mutate(x => x.AutoOrient());
         Assert.Equal(Pixels(upright), Pixels(stored));
         Assert.Equal(upright.Size, stored.Size);
         Assert.Equal(ExifOrientation.TopLeft, stored.Metadata.Orientation);
     }
 
-    private static RotateFlipType Inverse(ExifOrientation orientation) => orientation switch
+    private static (RotateMode, FlipMode) Inverse(ExifOrientation orientation) => orientation switch
     {
-        ExifOrientation.RightTop => RotateFlipType.Rotate270FlipNone,
-        ExifOrientation.LeftBottom => RotateFlipType.Rotate90FlipNone,
-        ExifOrientation.TopRight => RotateFlipType.RotateNoneFlipX,
-        ExifOrientation.BottomRight => RotateFlipType.Rotate180FlipNone,
-        ExifOrientation.BottomLeft => RotateFlipType.RotateNoneFlipY,
-        ExifOrientation.LeftTop => RotateFlipType.Rotate90FlipX,
-        ExifOrientation.RightBottom => RotateFlipType.Rotate270FlipX,
-        _ => RotateFlipType.RotateNoneFlipNone,
+        ExifOrientation.RightTop => (RotateMode.Rotate270, FlipMode.None),
+        ExifOrientation.LeftBottom => (RotateMode.Rotate90, FlipMode.None),
+        ExifOrientation.TopRight => (RotateMode.None, FlipMode.Horizontal),
+        ExifOrientation.BottomRight => (RotateMode.Rotate180, FlipMode.None),
+        ExifOrientation.BottomLeft => (RotateMode.None, FlipMode.Vertical),
+        ExifOrientation.LeftTop => (RotateMode.Rotate90, FlipMode.Horizontal),
+        ExifOrientation.RightBottom => (RotateMode.Rotate270, FlipMode.Horizontal),
+        _ => (RotateMode.None, FlipMode.None),
     };
 
     [Theory]
@@ -96,9 +108,9 @@ public class ProcessingTests
     public void Crop_TakesExactRegion_OnAllFrames(int x, int y, int w, int h)
     {
         using Image a = ImageTests.Pattern(7, 4);
-        using Image b = a.Clone().Invert();
-        using Image anim = Image.CreateAnimation([a, b], TimeSpan.FromMilliseconds(30));
-        anim.Crop(new Rectangle(x, y, w, h));
+        using Image b = a.Clone(c => c.Invert());
+        using Image anim = Image.CreateAnimation(TimeSpan.FromMilliseconds(30), a, b);
+        anim.Mutate(c => c.Crop(new Rectangle(x, y, w, h)));
         Assert.Equal(new Size(w, h), anim.Size);
         for (int f = 0; f < 2; f++)
         {
@@ -125,8 +137,8 @@ public class ProcessingTests
     public void Crop_OutsideBounds_Throws(int x, int y, int w, int h)
     {
         using Image img = ImageTests.Pattern(7, 4);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Crop(new Rectangle(x, y, w, h)));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Clone(new Rectangle(x, y, w, h)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(c => c.Crop(new Rectangle(x, y, w, h))));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Clone(c => c.Crop(x, y, w, h)));
         Assert.Equal(new Size(7, 4), img.Size);
     }
 
@@ -134,15 +146,20 @@ public class ProcessingTests
 
     [Theory]
     [InlineData(ResizeMode.Stretch, 40, 40, 40, 40)]
-    [InlineData(ResizeMode.Fit, 40, 40, 40, 20)]
-    [InlineData(ResizeMode.Fit, 300, 50, 100, 50)]
-    [InlineData(ResizeMode.Fill, 40, 40, 40, 40)]
-    [InlineData(ResizeMode.Fill, 10, 70, 10, 70)]
+    [InlineData(ResizeMode.Max, 40, 40, 40, 20)]
+    [InlineData(ResizeMode.Max, 300, 50, 100, 50)]
+    [InlineData(ResizeMode.Crop, 40, 40, 40, 40)]
+    [InlineData(ResizeMode.Crop, 10, 70, 10, 70)]
     [InlineData(ResizeMode.Pad, 40, 40, 40, 40)]
+    [InlineData(ResizeMode.Min, 40, 40, 80, 40)]
+    [InlineData(ResizeMode.Min, 300, 50, 300, 150)]
+    [InlineData(ResizeMode.Stretch, 30, 0, 30, 15)]
+    [InlineData(ResizeMode.Stretch, 0, 25, 50, 25)]
+    [InlineData(ResizeMode.Crop, 0, 20, 40, 20)]
     public void Resize_ModesProduceExpectedSizes(ResizeMode mode, int w, int h, int ew, int eh)
     {
         using Image img = ProcessingOracleTests.Noise(100, 50, 3);
-        img.Resize(w, h, mode);
+        img.Mutate(x => x.Resize(w, h, mode));
         Assert.Equal(new Size(ew, eh), img.Size);
     }
 
@@ -150,7 +167,7 @@ public class ProcessingTests
     public void Resize_Pad_CentersAndFillsBorders()
     {
         using var img = new Image(100, 50, Color.Red);
-        img.Resize(40, 40, ResizeMode.Pad, ResamplingFilter.Bilinear);
+        img.Mutate(x => x.Resize(40, 40, ResizeMode.Pad, ResamplingFilter.Bilinear));
         Assert.True(img.HasAlpha);
         Assert.Equal(Rgba32.Transparent, img[20, 0]);
         Assert.Equal(Rgba32.Transparent, img[20, 9]);
@@ -159,7 +176,10 @@ public class ProcessingTests
         Assert.Equal(Rgba32.Transparent, img[20, 30]);
 
         using var white = new Image(50, 100, Color.Red);
-        white.Resize(41, 40, ResizeMode.Pad, ResamplingFilter.Bicubic, Color.White);
+        white.Mutate(x => x.Resize(new ResizeOptions
+        {
+            Size = new(41, 40), Mode = ResizeMode.Pad, Filter = ResamplingFilter.Bicubic, PadColor = Color.White,
+        }));
         Assert.False(white.HasAlpha);
         Assert.Equal((41, 40), (white.Width, white.Height));
         Assert.Equal(Rgba32.White, white[9, 20]);     // 20 px wide content; left border round(10.5) = 10 (half to even)
@@ -172,7 +192,7 @@ public class ProcessingTests
     public void Resize_FitThatRoundsToZero_KeepsOnePixel()
     {
         using Image img = ProcessingOracleTests.Noise(100, 3, 4);
-        img.Resize(9, 40, ResizeMode.Fit);
+        img.Mutate(x => x.Resize(9, 40, ResizeMode.Max));
         Assert.Equal(new Size(9, 1), img.Size);
     }
 
@@ -185,10 +205,10 @@ public class ProcessingTests
         foreach (Rgba32 color in new[] { new Rgba32(200, 100, 50), new Rgba32(200, 100, 50, 77) })
         {
             Rgba32 expected = filter == ResamplingFilter.Nearest ? color : PillowPremultiplyRoundTrip(color);
-            using var img = new Image(37, 23, color.ToColor());
+            using var img = new Image(37, 23, color);
             foreach ((int w, int h) in new[] { (11, 5), (90, 61), (37, 9), (1, 1) })
             {
-                using Image resized = img.Clone().Resize(w, h, ResizeMode.Stretch, filter);
+                using Image resized = img.Clone(x => x.Resize(w, h, filter));
                 Assert.All(Pixels(resized), p => Assert.Equal(expected, p));
             }
         }
@@ -220,7 +240,7 @@ public class ProcessingTests
             }
         }
 
-        img.Resize(7, 13, ResizeMode.Stretch, filter);
+        img.Mutate(x => x.Resize(7, 13, filter));
         Assert.All(Pixels(img), p => Assert.True(p.A == 0 || p.R == 0, p.ToString()));
         Assert.Contains(Pixels(img), p => p.A != 0);
     }
@@ -230,10 +250,10 @@ public class ProcessingTests
     {
         using Image img = ImageTests.Pattern(9, 6);
         Rgba32[] before = Pixels(img);
-        img.Resize(9, 6);
+        img.Mutate(x => x.Resize(9, 6));
         Assert.Equal(before, Pixels(img));
 
-        using Image big = img.Clone().Resize(18, 12, ResizeMode.Stretch, ResamplingFilter.Nearest);
+        using Image big = img.Clone(x => x.Resize(18, 12, ResamplingFilter.Nearest));
         for (int y = 0; y < 12; y++)
         {
             for (int x = 0; x < 18; x++)
@@ -247,10 +267,10 @@ public class ProcessingTests
     public void Resize_LargeImage_ParallelIsDeterministic()
     {
         using Image img = ProcessingOracleTests.Noise(640, 480, 5);
-        using Image a = img.Clone().Resize(1001, 333);
-        using Image b = img.Clone().Resize(1001, 333);
+        using Image a = img.Clone(x => x.Resize(1001, 333));
+        using Image b = img.Clone(x => x.Resize(1001, 333));
         Assert.Equal(Pixels(a), Pixels(b));
-        using Image down = img.Clone().Resize(7, 5);
+        using Image down = img.Clone(x => x.Resize(7, 5));
         Assert.Equal(new Size(7, 5), down.Size);
     }
 
@@ -259,8 +279,9 @@ public class ProcessingTests
     {
         using Image a = ImageTests.Pattern(8, 6);
         using Image b = new(8, 6, Color.Green);
-        using Image anim = Image.CreateAnimation([a, b], TimeSpan.FromMilliseconds(70), loopCount: 3);
-        anim.Resize(4, 3, ResizeMode.Stretch, ResamplingFilter.Bilinear);
+        using Image anim = Image.CreateAnimation(TimeSpan.FromMilliseconds(70), a, b);
+        anim.LoopCount = 3;
+        anim.Mutate(x => x.Resize(4, 3, ResamplingFilter.Bilinear));
         Assert.All(anim.Frames, f => Assert.Equal((4, 3, TimeSpan.FromMilliseconds(70)), (f.Width, f.Height, f.Duration)));
         Assert.Equal(new Rgba32(0, 128, 0), anim.Frames[1][2, 1]);
         Assert.Equal(3, anim.LoopCount);
@@ -270,34 +291,38 @@ public class ProcessingTests
     public void Thumbnail_ShrinksKeepingAspect_AndNeverEnlarges()
     {
         using Image img = ProcessingOracleTests.Noise(120, 80, 6);
-        img.Thumbnail(60, 60);
+        img.Mutate(x => x.Thumbnail(60, 60));
         Assert.Equal(new Size(60, 40), img.Size);
-        img.Thumbnail(1000, 1000);
+        img.Mutate(x => x.Thumbnail(1000, 1000));
         Assert.Equal(new Size(60, 40), img.Size);
+        img.Mutate(x => x.Thumbnail(30, 0));
+        Assert.Equal(new Size(30, 20), img.Size);
     }
 
     [Fact]
-    public void GetThumbnailImage_ReturnsNewImage()
+    public void CloneResize_ReturnsNewImage_AndLeavesSourceUntouched()
     {
         using Image img = ImageTests.Pattern(10, 10);
-        img.SetResolution(300, 300);
+        img.Metadata.HorizontalResolution = 300;
         Rgba32[] before = Pixels(img);
-        using Image thumb = img.GetThumbnailImage(3, 4);
+        using Image thumb = img.Clone(x => x.Resize(3, 4));
         Assert.Equal(new Size(3, 4), thumb.Size);
-        Assert.Equal(300f, thumb.HorizontalResolution);
+        Assert.Equal(300f, thumb.Metadata.HorizontalResolution);
         Assert.Equal(before, Pixels(img));
+        Assert.Equal(new Size(10, 10), img.Size);
     }
 
     [Fact]
     public void Resize_InvalidArguments_Throw()
     {
         using Image img = ImageTests.Pattern(4, 4);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Resize(0, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Resize(3, -1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Resize(3, 3, (ResizeMode)9));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Resize(3, 3, ResizeMode.Fit, (ResamplingFilter)9));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Thumbnail(0, 3));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.GetThumbnailImage(3, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Resize(0, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Resize(3, -1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Resize(3, 3, (ResizeMode)9)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Resize(3, 3, ResizeMode.Max, (ResamplingFilter)9)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Thumbnail(0, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ResizeOptions { Size = new(-1, 3) });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ResizeOptions { Size = new(3, 3), Position = (AnchorPosition)99 });
         Assert.Equal(new Size(4, 4), img.Size);
     }
 
@@ -308,7 +333,7 @@ public class ProcessingTests
     {
         using Image img = ImageTests.Pattern(6, 4);
         Rgba32[] before = Pixels(img);
-        img.Grayscale();
+        img.Mutate(x => x.Grayscale());
         Rgba32[] after = Pixels(img);
         for (int i = 0; i < before.Length; i++)
         {
@@ -322,9 +347,9 @@ public class ProcessingTests
     {
         using Image img = ImageTests.Pattern(6, 4);
         Rgba32[] before = Pixels(img);
-        img.Invert();
+        img.Mutate(x => x.Invert());
         Assert.Equal(new Rgba32((byte)(255 - before[5].R), (byte)(255 - before[5].G), (byte)(255 - before[5].B), before[5].A), img.GetPixelSpan()[5]);
-        img.Invert();
+        img.Mutate(x => x.Invert());
         Assert.Equal(before, Pixels(img));
     }
 
@@ -332,24 +357,24 @@ public class ProcessingTests
     public void Fill_ClipsToBounds_AndOverwrites()
     {
         using var img = new Image(5, 4, Color.Black);
-        img.Fill(new Rectangle(3, -2, 10, 4), Color.FromArgb(128, 255, 0, 0));
+        img.Mutate(x => x.Fill(Color.FromArgb(128, 255, 0, 0), new Rectangle(3, -2, 10, 4)));
         Assert.True(img.HasAlpha);
         Assert.Equal(new Rgba32(255, 0, 0, 128), img[3, 0]);
         Assert.Equal(new Rgba32(255, 0, 0, 128), img[4, 1]);
         Assert.Equal(Rgba32.Black, img[2, 0]);
         Assert.Equal(Rgba32.Black, img[4, 2]);
-        img.Fill(new Rectangle(10, 10, 3, 3), Color.White);   // fully outside: no-op
-        img.Fill(new Rectangle(0, 0, 5, 4), Color.Blue);
+        img.Mutate(x => x.Fill(Color.White, new Rectangle(10, 10, 3, 3)));   // fully outside: no-op
+        img.Mutate(x => x.Fill(Color.Blue, new Rectangle(0, 0, 5, 4)));
         Assert.All(Pixels(img), p => Assert.Equal(new Rgba32(0, 0, 255), p));
     }
 
     [Fact]
-    public void Clear_UpdatesHasAlpha()
+    public void Fill_UpdatesHasAlpha()
     {
         using var img = new Image(2, 2);
-        img.Clear(Color.White);
+        img.Mutate(x => x.Fill(Color.White));
         Assert.False(img.HasAlpha);
-        img.Clear(Color.Transparent);
+        img.Mutate(x => x.Fill(Color.Transparent));
         Assert.True(img.HasAlpha);
     }
 
@@ -359,21 +384,15 @@ public class ProcessingTests
         using Image a = new(3, 2, Color.White);
         a[1, 0] = Rgba32.Black;
         using Image b = a.Clone();
-        using Image anim = Image.CreateAnimation([a, b], TimeSpan.FromMilliseconds(10));
+        using Image anim = Image.CreateAnimation(TimeSpan.FromMilliseconds(10), a, b);
         anim.HasAlpha = false;
-        anim.MakeTransparent(Color.White);
+        anim.Mutate(x => x.MakeTransparent(Color.White));
         Assert.True(anim.HasAlpha);
         foreach (ImageFrame frame in anim.Frames)
         {
             Assert.Equal(new Rgba32(255, 255, 255, 0), frame[0, 0]);
             Assert.Equal(Rgba32.Black, frame[1, 0]);
         }
-
-        using var c = new Image(3, 2, Color.Green);
-        c[0, 1] = Rgba32.Black;   // bottom-left decides the key color
-        c.MakeTransparent();
-        Assert.Equal(0, c[0, 1].A);
-        Assert.Equal(255, c[0, 0].A);
     }
 
     // ------------------------------------------------------------ drawing
@@ -383,13 +402,12 @@ public class ProcessingTests
     {
         using var dst = new Image(6, 5, Color.White);
         using var src = new Image(3, 3, Color.Red);
-        dst.DrawImage(src, new Point(-1, 3));
+        dst.Mutate(x => x.DrawImage(src, new Point(-1, 3)));
         Assert.Equal(new Rgba32(255, 0, 0), dst[0, 3]);
         Assert.Equal(new Rgba32(255, 0, 0), dst[1, 4]);
         Assert.Equal(Rgba32.White, dst[2, 3]);
         Assert.Equal(Rgba32.White, dst[0, 2]);
-        dst.DrawImage(src, new Point(100, 100));   // fully outside
-        dst.DrawImage(src, new Point(int.MinValue, int.MaxValue));
+        dst.Mutate(x => x.DrawImage(src, new Point(100, 100)).DrawImage(src, new Point(int.MinValue, int.MaxValue)));   // fully outside
         Assert.Equal(Rgba32.White, dst[5, 0]);
     }
 
@@ -398,12 +416,12 @@ public class ProcessingTests
     {
         using var dst = new Image(2, 2, Color.Black);
         using var src = new Image(2, 2, Color.White);
-        dst.DrawImage(src, Point.Empty, 0f);
+        dst.Mutate(x => x.DrawImage(src, Point.Empty, 0f));
         Assert.Equal(Rgba32.Black, dst[0, 0]);
-        dst.DrawImage(src, Point.Empty, 0.5f);
+        dst.Mutate(x => x.DrawImage(src, Point.Empty, 0.5f));
         Assert.Equal(new Rgba32(128, 128, 128), dst[1, 1]);
-        Assert.Throws<ArgumentOutOfRangeException>(() => dst.DrawImage(src, Point.Empty, 1.5f));
-        Assert.Throws<ArgumentOutOfRangeException>(() => dst.DrawImage(src, Point.Empty, float.NaN));
+        Assert.Throws<ArgumentOutOfRangeException>(() => dst.Mutate(x => x.DrawImage(src, Point.Empty, 1.5f)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => dst.Mutate(x => x.DrawImage(src, Point.Empty, float.NaN)));
     }
 
     [Fact]
@@ -411,14 +429,14 @@ public class ProcessingTests
     {
         using var dst = new Image(3, 3);
         using var src = new Image(3, 3, Color.FromArgb(100, 10, 20, 30));
-        dst.DrawImage(src, Point.Empty);
+        dst.Mutate(x => x.DrawImage(src, Point.Empty));
         Assert.Equal(new Rgba32(10, 20, 30, 100), dst[1, 1]);
 
         using Image img = ImageTests.Pattern(4, 4);
         using Image expected = img.Clone();
         using Image copy = img.Clone();
-        expected.DrawImage(copy, new Point(1, 1));
-        img.DrawImage(img, new Point(1, 1));
+        expected.Mutate(x => x.DrawImage(copy, new Point(1, 1)));
+        img.Mutate(x => x.DrawImage(img, new Point(1, 1)));
         Assert.Equal(Pixels(expected), Pixels(img));
     }
 
@@ -426,18 +444,18 @@ public class ProcessingTests
 
     [Theory]
     [MemberData(nameof(AllFormats))]
-    public void CopyPixels_LoadPixels_RoundTripIsStable(PixelFormat format)
+    public void CopyPixelData_RoundTripIsStable(PixelFormat format)
     {
         using Image img = ProcessingOracleTests.Noise(13, 7, 7);
         int bpp = format.BytesPerPixel();
         int stride = (13 * bpp) + 5;
         var first = new byte[stride * 7];
-        img.CopyPixels(first, format, stride);
+        img.CopyPixelDataTo(first, format, stride);
 
         using var copy = new Image(13, 7);
-        copy.LoadPixels(first, format, stride);
+        copy.CopyPixelDataFrom(first, format, stride);
         var second = new byte[stride * 7];
-        copy.CopyPixels(second, format, stride);
+        copy.CopyPixelDataTo(second, format, stride);
         for (int y = 0; y < 7; y++)
         {
             Assert.Equal(first.AsSpan(y * stride, 13 * bpp).ToArray(), second.AsSpan(y * stride, 13 * bpp).ToArray());
@@ -447,46 +465,6 @@ public class ProcessingTests
         {
             Assert.Equal(Pixels(img), Pixels(copy));
         }
-    }
-
-    [Theory]
-    [MemberData(nameof(AllFormats))]
-    public void LockBits_WriteThenRead_RoundTripsInEveryFormat(PixelFormat format)
-    {
-        using Image source = ProcessingOracleTests.Noise(5, 4, 8);
-        byte[] expected = source.ToPixelArray(format);
-        var rect = new Rectangle(2, 1, 5, 4);
-
-        using var img = new Image(9, 7, Color.Blue);
-        using (BitmapData data = img.LockBits(rect, ImageLockMode.WriteOnly, format))
-        {
-            Assert.Equal(format, data.PixelFormat);
-            Assert.Equal((5, 4), (data.Width, data.Height));
-            for (int y = 0; y < 4; y++)
-            {
-                expected.AsSpan(y * 5 * format.BytesPerPixel(), 5 * format.BytesPerPixel()).CopyTo(data.Span[(y * data.Stride)..]);
-            }
-        }
-
-        BitmapData read = img.LockBits(rect, ImageLockMode.ReadOnly, format);
-        try
-        {
-            for (int y = 0; y < 4; y++)
-            {
-                Assert.Equal(
-                    expected.AsSpan(y * 5 * format.BytesPerPixel(), 5 * format.BytesPerPixel()).ToArray(),
-                    read.Span.Slice(y * read.Stride, 5 * format.BytesPerPixel()).ToArray());
-            }
-        }
-        finally
-        {
-            img.UnlockBits(read);
-        }
-
-        Assert.Equal(new Rgba32(0, 0, 255), img[1, 1]);   // outside the locked rectangle
-        Assert.Equal(new Rgba32(0, 0, 255), img[7, 5]);
-        using Image region = img.Clone(rect);
-        Assert.Equal(expected, region.ToPixelArray(format));
     }
 
     // ------------------------------------------------------------ helpers
@@ -514,6 +492,21 @@ public class ProcessingTests
             for (int x = 0; x < w; x++)
             {
                 r[x, h - 1 - y] = g[y, x];
+            }
+        }
+
+        return r;
+    }
+
+    private static Rgba32[,] FlipY(Rgba32[,] g)
+    {
+        int h = g.GetLength(0), w = g.GetLength(1);
+        var r = new Rgba32[h, w];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                r[h - 1 - y, x] = g[y, x];
             }
         }
 

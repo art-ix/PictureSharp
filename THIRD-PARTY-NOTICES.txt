@@ -139,10 +139,14 @@ assumed by the product vendor.
 Pillow (https://python-pillow.org), version 10.2.0, the friendly fork of the
 Python Imaging Library
 Used for: image resizing (two-pass resampling with precomputed fixed-point
-weights from Resample.c, nearest-neighbour scaling from Geometry.c, alpha
-premultiplication from Convert.c, size and crop box computation from
-ImageOps.contain/fit/pad) and alpha compositing (AlphaComposite.c). The code
-was translated to C# and restructured; it is not the original source.
+weights and the box/hamming kernels from Resample.c, nearest-neighbour scaling
+from Geometry.c, alpha premultiplication from Convert.c, size and crop box
+computation from ImageOps.contain/fit/pad), alpha compositing
+(AlphaComposite.c), brightness/contrast/color enhancement (ImageEnhance.py,
+Blend.c), box and Gaussian blur (BoxBlur.c), unsharp masking (UnsharpMask.c),
+3x3 kernel filtering (Filter.c, ImageFilter.SHARPEN) and rotation
+(Image.rotate, affine transforms from Geometry.c). The code was translated to
+C# and restructured; it is not the original source.
 -------------------------------------------------------------------------------
 Copyright (c) 1997-2011 by Secret Labs AB
 Copyright (c) 1995-2011 by Fredrik Lundh and contributors

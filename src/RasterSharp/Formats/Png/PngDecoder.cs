@@ -110,14 +110,14 @@ internal sealed class PngDecoder : IImageDecoder
 
         var image = new Image(frames)
         {
-            RawFormat = ImageFormat.Png,
+            SourceFormat = ImageFormat.Png,
             HasAlpha = png.HasAlpha,
             LoopCount = loopCount,
         };
 
         if (png.DpiX is float dx && png.DpiY is float dy && dx > 0 && dy > 0)
         {
-            image.SetResolution(dx, dy);
+            (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution) = (dx, dy);
         }
 
         if (!options.IgnoreMetadata)

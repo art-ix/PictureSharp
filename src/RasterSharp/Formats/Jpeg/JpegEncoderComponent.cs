@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Drawing;
 using System.Runtime.CompilerServices;
 
 namespace RasterSharp.Formats.Jpeg;
@@ -29,7 +28,7 @@ internal sealed class JpegEncoderComponent : IDisposable
 
     // port: libjpeg-turbo jccolor.c rgb_ycc_convert; jcsample.c h2v1_downsample,
     // h2v2_downsample, int_downsample; jccoefct.c compress_first_pass
-    public void Prepare(Image image, int component, int maxH, int maxV, Color background, ReadOnlySpan<byte> quantization)
+    public void Prepare(Image image, int component, int maxH, int maxV, Rgba32 background, ReadOnlySpan<byte> quantization)
     {
         int dx = maxH / Horizontal, dy = maxV / Vertical;
         Span<int> samples = stackalloc int[64];
@@ -87,7 +86,7 @@ internal sealed class JpegEncoderComponent : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static Rgba32 Composite(Rgba32 p, Color background)
+    internal static Rgba32 Composite(Rgba32 p, Rgba32 background)
     {
         if (p.A == 255) return p;
         int inverse = 255 - p.A;

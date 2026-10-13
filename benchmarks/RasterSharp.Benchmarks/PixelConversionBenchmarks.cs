@@ -20,8 +20,8 @@ public class PixelConversionBenchmarks
     }
 
     [Benchmark]
-    public void CopyPixels() => _image.CopyPixels(_buffer, Format);
+    public void CopyPixels() => _image.CopyPixelDataTo(_buffer, Format);
 
     [Benchmark]
-    public void LoadPixels() => _image.LoadPixels(_buffer, Format);
+    public void LoadPixels() => _image.CopyPixelDataFrom(_buffer, Format);
 }

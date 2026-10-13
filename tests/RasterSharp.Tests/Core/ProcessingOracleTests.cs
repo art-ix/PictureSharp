@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -6,7 +7,7 @@ using RasterSharp.Tests.Infrastructure;
 
 namespace RasterSharp.Tests.Core;
 
-/// <summary>Compares resizing, compositing, grayscale and EXIF orientation with Pillow (tests/assets/processing_reference.py).</summary>
+/// <summary>Compares resizing (with anchors), compositing, background flattening, grayscale, enhancement, blur/sharpen filters, rotation, sepia and EXIF orientation with Pillow (tests/assets/processing_reference.py).</summary>
 public class ProcessingOracleTests
 {
     private static readonly (string Name, ResamplingFilter Filter)[] Filters =
@@ -15,13 +16,15 @@ public class ProcessingOracleTests
         ("bilinear", ResamplingFilter.Bilinear),
         ("bicubic", ResamplingFilter.Bicubic),
         ("lanczos", ResamplingFilter.Lanczos3),
+        ("box", ResamplingFilter.Box),
+        ("hamming", ResamplingFilter.Hamming),
     ];
 
     private static readonly (string Name, ResizeMode Mode)[] Modes =
     [
         ("stretch", ResizeMode.Stretch),
-        ("fit", ResizeMode.Fit),
-        ("fill", ResizeMode.Fill),
+        ("fit", ResizeMode.Max),
+        ("fill", ResizeMode.Crop),
         ("pad", ResizeMode.Pad),
     ];
 
@@ -65,8 +68,8 @@ public class ProcessingOracleTests
             {
                 ["noise.png"] = Noise(41, 29, 1),
                 ["gradient.png"] = Gradient(100, 3),
-                ["photo.png"] = Image.FromFile(Corpus.PathOf("jpeg/q90_444.jpg")),
-                ["alpha.png"] = Image.FromFile(Corpus.PathOf("png/odd_rgba.png")),
+                ["photo.png"] = Image.Load(Corpus.PathOf("jpeg/q90_444.jpg")),
+                ["alpha.png"] = Image.Load(Corpus.PathOf("png/odd_rgba.png")),
                 ["overlay.png"] = Noise(23, 17, 2),
             };
 
@@ -82,13 +85,35 @@ public class ProcessingOracleTests
             {
                 string name = $"{Path.GetFileNameWithoutExtension(input)}_{w}x{h}_{filter}_{mode}";
                 // Pillow rejects a Fit size that rounds to 0; we clamp it to 1 (tested separately).
-                if (expected.ContainsKey(name) || (input == "gradient.png" && w == 9 && m is ResizeMode.Fit or ResizeMode.Pad))
+                if (expected.ContainsKey(name) || (input == "gradient.png" && w == 9 && m is ResizeMode.Max or ResizeMode.Pad))
                 {
                     return;
                 }
 
                 jobs.Add(new() { ["name"] = name, ["input"] = input, ["op"] = "resize", ["width"] = w, ["height"] = h, ["filter"] = filter, ["mode"] = mode });
-                expected[name] = () => inputs[input].Clone().Resize(w, h, m, f);
+                expected[name] = () => inputs[input].Clone(x => x.Resize(w, h, m, f));
+            }
+
+            void AddAnchored(string input, int w, int h, string mode, ResizeMode m, AnchorPosition position)
+            {
+                (double cx, double cy) = position switch
+                {
+                    AnchorPosition.TopLeft => (0.0, 0.0),
+                    AnchorPosition.Top => (0.5, 0.0),
+                    AnchorPosition.Right => (1.0, 0.5),
+                    AnchorPosition.BottomRight => (1.0, 1.0),
+                    _ => throw new ArgumentOutOfRangeException(nameof(position)),
+                };
+                string name = $"{Path.GetFileNameWithoutExtension(input)}_{w}x{h}_{mode}_{position}";
+                jobs.Add(new()
+                {
+                    ["name"] = name, ["input"] = input, ["op"] = "resize", ["width"] = w, ["height"] = h,
+                    ["filter"] = "bicubic", ["mode"] = mode, ["centering"] = new[] { cx, cy },
+                });
+                expected[name] = () => inputs[input].Clone(x => x.Resize(new ResizeOptions
+                {
+                    Size = new(w, h), Mode = m, Filter = ResamplingFilter.Bicubic, Position = position,
+                }));
             }
 
             foreach (string input in new[] { "noise.png", "gradient.png", "photo.png", "alpha.png" })
@@ -119,18 +144,94 @@ public class ProcessingOracleTests
                 }
             }
 
+            foreach (AnchorPosition position in new[] { AnchorPosition.TopLeft, AnchorPosition.Top, AnchorPosition.Right, AnchorPosition.BottomRight })
+            {
+                foreach (string input in new[] { "noise.png", "photo.png" })
+                {
+                    AddAnchored(input, 17, 17, "fill", ResizeMode.Crop, position);
+                    AddAnchored(input, 9, 40, "fill", ResizeMode.Crop, position);
+                    AddAnchored(input, 17, 17, "pad", ResizeMode.Pad, position);
+                    AddAnchored(input, 64, 20, "pad", ResizeMode.Pad, position);
+                }
+            }
+
             foreach ((int x, int y) in new[] { (0, 0), (3, 5), (30, 20) })
             {
                 string name = $"composite_{x}_{y}";
                 jobs.Add(new() { ["name"] = name, ["input"] = "noise.png", ["op"] = "composite", ["overlay"] = "overlay.png", ["x"] = x, ["y"] = y });
-                expected[name] = () => inputs["noise.png"].Clone().DrawImage(inputs["overlay.png"], new Point(x, y));
+                expected[name] = () => inputs["noise.png"].Clone(c => c.DrawImage(inputs["overlay.png"], new Point(x, y)));
+            }
+
+            foreach (Rgba32 color in new[] { new Rgba32(255, 255, 255), new Rgba32(10, 200, 30, 128) })
+            {
+                string name = $"background_{color.ToHex()[1..]}";
+                jobs.Add(new() { ["name"] = name, ["input"] = "noise.png", ["op"] = "background", ["color"] = new[] { (int)color.R, color.G, color.B, color.A } });
+                expected[name] = () => inputs["noise.png"].Clone(x => x.BackgroundColor(color));
             }
 
             foreach (string input in new[] { "noise.png", "photo.png" })
             {
                 string name = $"gray_{Path.GetFileNameWithoutExtension(input)}";
                 jobs.Add(new() { ["name"] = name, ["input"] = input, ["op"] = "grayscale" });
-                expected[name] = () => inputs[input].Clone().Grayscale();
+                expected[name] = () => inputs[input].Clone(x => x.Grayscale());
+            }
+
+            foreach (string input in new[] { "noise.png", "photo.png" })
+            {
+                string stem = Path.GetFileNameWithoutExtension(input);
+                foreach ((string kind, float factor) in new[] { ("brightness", 0f), ("brightness", 0.6f), ("brightness", 1.7f), ("contrast", 0.3f), ("contrast", 2.5f), ("color", 0f), ("color", 1.8f), ("color", -0.4f) })
+                {
+                    string name = string.Create(CultureInfo.InvariantCulture, $"enhance_{stem}_{kind}_{factor}");
+                    jobs.Add(new() { ["name"] = name, ["input"] = input, ["op"] = "enhance", ["kind"] = kind, ["factor"] = factor });
+                    expected[name] = kind switch
+                    {
+                        "brightness" => () => inputs[input].Clone(x => x.Brightness(factor)),
+                        "contrast" => () => inputs[input].Clone(x => x.Contrast(factor)),
+                        _ => () => inputs[input].Clone(x => x.Saturate(factor)),
+                    };
+                }
+
+                foreach (float radius in new[] { 0.5f, 1f, 2.7f, 40f })
+                {
+                    string box = string.Create(CultureInfo.InvariantCulture, $"boxblur_{stem}_{radius}");
+                    jobs.Add(new() { ["name"] = box, ["input"] = input, ["op"] = "filter", ["kind"] = "box", ["radius"] = radius });
+                    expected[box] = () => inputs[input].Clone(x => x.BoxBlur(radius));
+                    string gaussian = string.Create(CultureInfo.InvariantCulture, $"gaussian_{stem}_{radius}");
+                    jobs.Add(new() { ["name"] = gaussian, ["input"] = input, ["op"] = "filter", ["kind"] = "gaussian", ["radius"] = radius });
+                    expected[gaussian] = () => inputs[input].Clone(x => x.GaussianBlur(radius));
+                }
+
+                foreach ((float radius, int percent, int threshold) in new[] { (2f, 150, 3), (0.8f, 300, 0), (5f, 60, 10) })
+                {
+                    string name = string.Create(CultureInfo.InvariantCulture, $"unsharp_{stem}_{radius}_{percent}_{threshold}");
+                    jobs.Add(new() { ["name"] = name, ["input"] = input, ["op"] = "filter", ["kind"] = "unsharp", ["radius"] = radius, ["percent"] = percent, ["threshold"] = threshold });
+                    expected[name] = () => inputs[input].Clone(x => x.UnsharpMask(radius, percent, threshold));
+                }
+
+                string sharpen = $"sharpen_{stem}";
+                jobs.Add(new() { ["name"] = sharpen, ["input"] = input, ["op"] = "filter", ["kind"] = "sharpen" });
+                expected[sharpen] = () => inputs[input].Clone(x => x.Sharpen());
+
+                string sepia = $"sepia_{stem}";
+                jobs.Add(new() { ["name"] = sepia, ["input"] = input, ["op"] = "sepia" });
+                expected[sepia] = () => inputs[input].Clone(x => x.Sepia());
+
+                foreach (float degrees in new[] { 30f, 45f, -12.5f, 100.25f, 200f, 270f })
+                {
+                    foreach ((string filter, ResamplingFilter f) in Filters.Take(3))
+                    {
+                        foreach (bool expand in new[] { true, false })
+                        {
+                            string name = string.Create(CultureInfo.InvariantCulture, $"rotate_{stem}_{degrees}_{filter}_{expand}");
+                            jobs.Add(new() { ["name"] = name, ["input"] = input, ["op"] = "rotate", ["angle"] = -(double)degrees, ["filter"] = filter, ["expand"] = expand });
+                            expected[name] = () => inputs[input].Clone(x => x.Rotate(degrees, f, expand: expand));
+                        }
+                    }
+
+                    string white = string.Create(CultureInfo.InvariantCulture, $"rotate_{stem}_{degrees}_white");
+                    jobs.Add(new() { ["name"] = white, ["input"] = input, ["op"] = "rotate", ["angle"] = -(double)degrees, ["filter"] = "bilinear", ["expand"] = true, ["fillcolor"] = new[] { 255, 255, 255, 255 } });
+                    expected[white] = () => inputs[input].Clone(x => x.Rotate(degrees, ResamplingFilter.Bilinear, Rgba32.White));
+                }
             }
 
             for (int orientation = 1; orientation <= 8; orientation++)
@@ -139,7 +240,12 @@ public class ProcessingOracleTests
                 File.Copy(Corpus.PathOf("jpeg/" + file), Path.Combine(dir, file));
                 string name = $"autoorient_{orientation}";
                 jobs.Add(new() { ["name"] = name, ["input"] = file, ["op"] = "exif_transpose" });
-                expected[name] = () => Image.FromFile(Path.Combine(dir, file)).AutoOrient();
+                expected[name] = () =>
+                {
+                    Image image = Image.Load(Path.Combine(dir, file));
+                    image.Mutate(x => x.AutoOrient());
+                    return image;
+                };
             }
 
             File.WriteAllText(Path.Combine(dir, "jobs.json"), JsonSerializer.Serialize(jobs));

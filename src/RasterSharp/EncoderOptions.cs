@@ -1,7 +1,12 @@
+using RasterSharp.Internal;
+
 namespace RasterSharp;
 
-/// <summary>Base class for format-specific encoder options.</summary>
-public abstract class EncoderOptions
+/// <summary>
+/// Base record for format-specific encoder options. Values are checked when they are set, and a modified copy can be
+/// made with <c>with</c>, e.g. <c>options with { Quality = 90 }</c>.
+/// </summary>
+public abstract record EncoderOptions
 {
     private protected EncoderOptions()
     {
@@ -11,9 +16,11 @@ public abstract class EncoderOptions
     public abstract ImageFormat Format { get; }
 
     /// <summary>Which metadata blocks to write when present on the image. Default: all.</summary>
-    public MetadataKinds Metadata { get; init; } = MetadataKinds.All;
-
-    internal abstract void Validate();
+    public MetadataKinds Metadata
+    {
+        get;
+        init => field = (value & ~MetadataKinds.All) == 0 ? value : throw new ArgumentOutOfRangeException(nameof(Metadata), value, "Unknown metadata kind.");
+    } = MetadataKinds.All;
 }
 
 /// <summary>Content presets that tune WebP lossy encoding parameters (as in libwebp's WebPPreset).</summary>
@@ -45,7 +52,7 @@ public enum WebPAlphaFilter
 }
 
 /// <summary>Options for the WebP encoder. Mirrors libwebp's WebPConfig.</summary>
-public sealed class WebPEncoderOptions : EncoderOptions
+public sealed record WebPEncoderOptions : EncoderOptions
 {
     /// <inheritdoc/>
     public override ImageFormat Format => ImageFormat.WebP;
@@ -54,58 +61,58 @@ public sealed class WebPEncoderOptions : EncoderOptions
     /// Quality 0–100. For lossy: visual quality (default 75). For lossless: compression effort
     /// (higher is smaller and slower).
     /// </summary>
-    public float Quality { get; init; } = 75f;
+    public float Quality { get; init => field = Check.Range(value, 0f, 100f); } = 75f;
 
     /// <summary>Use the lossless (VP8L) bitstream.</summary>
     public bool Lossless { get; init; }
 
     /// <summary>Quality/speed trade-off 0 (fast) – 6 (slow, best). Default: 4.</summary>
-    public int Method { get; init; } = 4;
+    public int Method { get; init => field = Check.Range(value, 0, 6); } = 4;
 
     /// <summary>Content preset; applied before the explicit tuning options below.</summary>
-    public WebPPreset Preset { get; init; } = WebPPreset.Default;
+    public WebPPreset Preset { get; init => field = Check.Defined(value); } = WebPPreset.Default;
 
     /// <summary>Alpha plane quality 0–100 (100 = lossless alpha). Default: 100.</summary>
-    public int AlphaQuality { get; init; } = 100;
+    public int AlphaQuality { get; init => field = Check.Range(value, 0, 100); } = 100;
 
     /// <summary>Compress the alpha plane with the lossless coder (otherwise stored raw). Default: true.</summary>
     public bool AlphaCompression { get; init; } = true;
 
     /// <summary>Predictive filter for the alpha plane. Default: <see cref="WebPAlphaFilter.Fast"/>.</summary>
-    public WebPAlphaFilter AlphaFilter { get; init; } = WebPAlphaFilter.Fast;
+    public WebPAlphaFilter AlphaFilter { get; init => field = Check.Defined(value); } = WebPAlphaFilter.Fast;
 
     /// <summary>Disable RGB cleanup under fully transparent pixels. Lossless mode preserves these RGB values exactly.</summary>
     public bool Exact { get; init; }
 
     /// <summary>Near-lossless preprocessing level 0–100 for lossless mode (100 = off). Default: 100.</summary>
-    public int NearLossless { get; init; } = 100;
+    public int NearLossless { get; init => field = Check.Range(value, 0, 100); } = 100;
 
     /// <summary>Spatial noise shaping strength 0–100. Null uses the preset value (default 50).</summary>
-    public int? SnsStrength { get; init; }
+    public int? SnsStrength { get; init => field = Check.Range(value, 0, 100); }
 
     /// <summary>Deblocking filter strength 0–100 (0 = off). Null uses the preset value (default 60).</summary>
-    public int? FilterStrength { get; init; }
+    public int? FilterStrength { get; init => field = Check.Range(value, 0, 100); }
 
     /// <summary>Deblocking filter sharpness 0 (sharpest filtering) – 7. Null uses the preset value.</summary>
-    public int? FilterSharpness { get; init; }
+    public int? FilterSharpness { get; init => field = Check.Range(value, 0, 7); }
 
     /// <summary>Automatically adjust filter strength.</summary>
     public bool AutoFilter { get; init; }
 
     /// <summary>Number of segments 1–4. Null uses the preset value (default 4).</summary>
-    public int? Segments { get; init; }
+    public int? Segments { get; init => field = Check.Range(value, 1, 4); }
 
     /// <summary>log2 of the number of token partitions 0–3. Default: 0.</summary>
-    public int Partitions { get; init; }
+    public int Partitions { get; init => field = Check.Range(value, 0, 3); }
 
     /// <summary>Target output size in bytes (0 = disabled). Takes precedence over <see cref="Quality"/>.</summary>
-    public int TargetSize { get; init; }
+    public int TargetSize { get; init => field = Check.AtLeast(value, 0); }
 
     /// <summary>Target PSNR in dB (0 = disabled).</summary>
-    public float TargetPsnr { get; init; }
+    public float TargetPsnr { get; init => field = Check.AtLeast(value, 0f); }
 
     /// <summary>Number of entropy-analysis passes 1–10. Default: 1.</summary>
-    public int Passes { get; init; } = 1;
+    public int Passes { get; init => field = Check.Range(value, 1, 10); } = 1;
 
     /// <summary>Use the slower, more accurate "sharp" RGB→YUV conversion.</summary>
     public bool UseSharpYuv { get; init; }
@@ -117,13 +124,17 @@ public sealed class WebPEncoderOptions : EncoderOptions
     public bool MinimizeSize { get; init; }
 
     /// <summary>Animation: lower bound of the keyframe search window (default 9). Normalized as in libwebp.</summary>
-    public int KeyframeMin { get; init; } = 9;
+    public int KeyframeMin { get; init => field = Check.AtLeast(value, 0); } = 9;
 
     /// <summary>Animation: maximum keyframe distance (default 17). Zero disables insertion; one makes every frame a keyframe.</summary>
-    public int KeyframeMax { get; init; } = 17;
+    public int KeyframeMax { get; init => field = Check.AtLeast(value, 0); } = 17;
 
     /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
-    public int MaxDegreeOfParallelism { get; init; } = -1;
+    public int MaxDegreeOfParallelism
+    {
+        get;
+        init => field = value == -1 || value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(MaxDegreeOfParallelism), value, "Expected -1 or a positive number.");
+    } = -1;
 
     internal WebPEncoderOptions ForAnimationFrame(bool lossless, bool blend) => new()
     {
@@ -136,27 +147,6 @@ public sealed class WebPEncoderOptions : EncoderOptions
         TargetPsnr = TargetPsnr, Passes = Passes, UseSharpYuv = UseSharpYuv,
         Metadata = MetadataKinds.None, MaxDegreeOfParallelism = MaxDegreeOfParallelism,
     };
-
-    internal override void Validate()
-    {
-        if (!float.IsFinite(Quality) || Quality is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(Quality), Quality, "Expected 0–100.");
-        if (!Enum.IsDefined(Preset)) throw new ArgumentOutOfRangeException(nameof(Preset));
-        if (!Enum.IsDefined(AlphaFilter)) throw new ArgumentOutOfRangeException(nameof(AlphaFilter));
-        if (MaxDegreeOfParallelism != -1 && MaxDegreeOfParallelism < 1) throw new ArgumentOutOfRangeException(nameof(MaxDegreeOfParallelism));
-        if (Method is < 0 or > 6) throw new ArgumentOutOfRangeException(nameof(Method), Method, "Expected 0–6.");
-        if (AlphaQuality is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(AlphaQuality), AlphaQuality, "Expected 0–100.");
-        if (NearLossless is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(NearLossless), NearLossless, "Expected 0–100.");
-        if (SnsStrength is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(SnsStrength), SnsStrength, "Expected 0–100.");
-        if (FilterStrength is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(FilterStrength), FilterStrength, "Expected 0–100.");
-        if (FilterSharpness is < 0 or > 7) throw new ArgumentOutOfRangeException(nameof(FilterSharpness), FilterSharpness, "Expected 0–7.");
-        if (Segments is < 1 or > 4) throw new ArgumentOutOfRangeException(nameof(Segments), Segments, "Expected 1–4.");
-        if (Partitions is < 0 or > 3) throw new ArgumentOutOfRangeException(nameof(Partitions), Partitions, "Expected 0–3.");
-        if (TargetSize < 0) throw new ArgumentOutOfRangeException(nameof(TargetSize), TargetSize, "Expected >= 0.");
-        if (!float.IsFinite(TargetPsnr) || TargetPsnr < 0) throw new ArgumentOutOfRangeException(nameof(TargetPsnr), TargetPsnr, "Expected >= 0.");
-        if (Passes is < 1 or > 10) throw new ArgumentOutOfRangeException(nameof(Passes), Passes, "Expected 1–10.");
-        if (KeyframeMin < 0) throw new ArgumentOutOfRangeException(nameof(KeyframeMin));
-        if (KeyframeMax < 0) throw new ArgumentOutOfRangeException(nameof(KeyframeMax));
-    }
 }
 
 /// <summary>PNG color type selection.</summary>
@@ -194,37 +184,29 @@ public enum PngFilterStrategy
 }
 
 /// <summary>Options for the PNG encoder.</summary>
-public sealed class PngEncoderOptions : EncoderOptions
+public sealed record PngEncoderOptions : EncoderOptions
 {
     /// <inheritdoc/>
     public override ImageFormat Format => ImageFormat.Png;
 
     /// <summary>Deflate compression level 0 (store) – 9 (best). Default: 6.</summary>
-    public int CompressionLevel { get; init; } = 6;
+    public int CompressionLevel { get; init => field = Check.Range(value, 0, 9); } = 6;
 
     /// <summary>Output color type. Default: automatic.</summary>
-    public PngColorType ColorType { get; init; } = PngColorType.Auto;
+    public PngColorType ColorType { get; init => field = Check.Defined(value); } = PngColorType.Auto;
 
     /// <summary>Scanline filter strategy. Default: adaptive.</summary>
-    public PngFilterStrategy FilterStrategy { get; init; } = PngFilterStrategy.Adaptive;
+    public PngFilterStrategy FilterStrategy { get; init => field = Check.Defined(value); } = PngFilterStrategy.Adaptive;
 
     /// <summary>Write an Adam7-interlaced image.</summary>
     public bool Interlace { get; init; }
 
-    /// <summary>Write all frames of animated images as APNG (otherwise only the active frame). Default: true.</summary>
+    /// <summary>Write all frames of animated images as APNG (otherwise only the first frame). Default: true.</summary>
     public bool SaveAnimation { get; init; } = true;
-
-    internal override void Validate()
-    {
-        if (CompressionLevel is < 0 or > 9)
-        {
-            throw new ArgumentOutOfRangeException(nameof(CompressionLevel), CompressionLevel, "Expected 0–9.");
-        }
-    }
 }
 
 /// <summary>Options for the BMP encoder.</summary>
-public sealed class BmpEncoderOptions : EncoderOptions
+public sealed record BmpEncoderOptions : EncoderOptions
 {
     /// <inheritdoc/>
     public override ImageFormat Format => ImageFormat.Bmp;
@@ -234,13 +216,9 @@ public sealed class BmpEncoderOptions : EncoderOptions
     /// a palette when the image is opaque and has at most 256 colors, 24 bits when it is opaque, otherwise 32 bits.
     /// Palette and 24-bit output drop the alpha channel. Default: 0.
     /// </summary>
-    public int BitsPerPixel { get; init; }
-
-    internal override void Validate()
+    public int BitsPerPixel
     {
-        if (BitsPerPixel is not (0 or 1 or 4 or 8 or 24 or 32))
-        {
-            throw new ArgumentOutOfRangeException(nameof(BitsPerPixel), BitsPerPixel, "Expected 0, 1, 4, 8, 24 or 32.");
-        }
+        get;
+        init => field = value is 0 or 1 or 4 or 8 or 24 or 32 ? value : throw new ArgumentOutOfRangeException(nameof(BitsPerPixel), value, "Expected 0, 1, 4, 8, 24 or 32.");
     }
 }

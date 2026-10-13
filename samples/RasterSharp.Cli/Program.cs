@@ -5,7 +5,7 @@ using RasterSharp;
 // rastersharp-cli: small front-end for the RasterSharp library.
 //   info <file>...
 //   convert <input> <output> [-q quality] [-m method] [-lossless]
-//   resize <input> <output> <width> <height> [-mode stretch|fit|fill|pad] [-filter nearest|bilinear|bicubic|lanczos3] [-q quality]
+//   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3] [-q quality]
 
 if (args.Length == 0)
 {
@@ -32,7 +32,7 @@ try
         {
             int iterations = args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 5;
             byte[] data = File.ReadAllBytes(args[1]);
-            using (Image warmup = Image.FromBytes(data.AsMemory()))
+            using (Image warmup = Image.Load(data.AsMemory()))
             {
                 Console.WriteLine($"{args[1]}: {warmup}");
             }
@@ -41,7 +41,7 @@ try
             for (int i = 0; i < iterations; i++)
             {
                 var watch = Stopwatch.StartNew();
-                using Image image = Image.FromBytes(data.AsMemory());
+                using Image image = Image.Load(data.AsMemory());
                 times.Add(watch.Elapsed.TotalMilliseconds);
             }
 
@@ -52,8 +52,8 @@ try
         case "raw" when args.Length >= 3:
         {
             // Writes the decoded RGBA pixels of the active frame (for comparisons with other decoders).
-            using Image image = Image.FromFile(args[1]);
-            File.WriteAllBytes(args[2], image.ToPixelArray(PixelFormat.Rgba32));
+            using Image image = Image.Load(args[1]);
+            File.WriteAllBytes(args[2], image.ToPixelData(PixelFormat.Rgba32));
             Console.WriteLine($"{image.Width}x{image.Height} RGBA -> {args[2]}");
             return 0;
         }
@@ -75,7 +75,7 @@ try
             }
 
             var sw = Stopwatch.StartNew();
-            using Image image = Image.FromFile(args[1], new DecoderOptions { ApplyExifOrientation = true });
+            using Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
             long decodeMs = sw.ElapsedMilliseconds;
             sw.Restart();
             Save(image, args[2], quality, method, lossless);
@@ -102,10 +102,10 @@ try
                 }
             }
 
-            using Image image = Image.FromFile(args[1], new DecoderOptions { ApplyExifOrientation = true });
+            using Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
             var sourceSize = image.Size;
             var sw = Stopwatch.StartNew();
-            image.Resize(width, height, mode, filter);
+            image.Mutate(x => x.Resize(width, height, mode, filter));
             long resizeMs = sw.ElapsedMilliseconds;
             Save(image, args[2], quality, 4, lossless: false);
             Console.WriteLine($"{args[1]} -> {args[2]}: {sourceSize.Width}x{sourceSize.Height} -> {image.Width}x{image.Height} " +
@@ -129,17 +129,17 @@ static void Save(Image image, string path, float quality, int method, bool lossl
     ImageFormat target = ImageFormat.FromExtension(path) ?? throw new ArgumentException("Unknown output extension.");
     if (target == ImageFormat.WebP)
     {
-        image.Save(path, new WebPEncoderOptions { Quality = quality, Method = method, Lossless = lossless });
+        image.SaveAsWebP(path, new() { Quality = quality, Method = method, Lossless = lossless });
     }
     else if (target == ImageFormat.Jpeg)
     {
         if (!float.IsFinite(quality) || quality != MathF.Truncate(quality))
             throw new ArgumentException("JPEG quality must be an integer from 1 to 100.");
-        image.SaveAsJpeg(path, (int)quality);
+        image.SaveAsJpeg(path, new() { Quality = (int)quality });
     }
     else
     {
-        image.Save(path, target);
+        image.Save(path);
     }
 }
 
@@ -149,6 +149,6 @@ static void PrintUsage() => Console.Error.WriteLine(
       rastersharp-cli info <file>...
       rastersharp-cli decode <file> [iterations]
       rastersharp-cli convert <input> <output> [-q quality] [-m method] [-lossless]
-      rastersharp-cli resize <input> <output> <width> <height> [-mode stretch|fit|fill|pad]
+      rastersharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]
                              [-filter nearest|bilinear|bicubic|lanczos3] [-q quality]
     """);

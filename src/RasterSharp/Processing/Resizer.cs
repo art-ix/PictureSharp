@@ -63,9 +63,34 @@ internal static class Resizer
         return (Math.Max(1, w), maxHeight);
     }
 
-    /// <summary>The centered source box with the aspect ratio of <paramref name="width"/>×<paramref name="height"/>.</summary>
-    // port: Pillow src/PIL/ImageOps.py fit (bleed 0, centering 0.5)
-    public static (float X0, float Y0, float X1, float Y1) FillBox(int srcWidth, int srcHeight, int width, int height)
+    /// <summary>The smallest size that covers <paramref name="minWidth"/>×<paramref name="minHeight"/> keeping the aspect ratio.</summary>
+    // Mirror of FitSize: the side that FitSize shrinks is the one that grows here.
+    public static (int Width, int Height) CoverSize(int srcWidth, int srcHeight, int minWidth, int minHeight)
+    {
+        double imRatio = (double)srcWidth / srcHeight;
+        double destRatio = (double)minWidth / minHeight;
+        if (imRatio == destRatio)
+        {
+            return (minWidth, minHeight);
+        }
+
+        if (imRatio > destRatio)
+        {
+            int w = (int)Math.Round((double)srcWidth / srcHeight * minHeight);
+            return (Math.Max(1, w), minHeight);
+        }
+
+        int h = (int)Math.Round((double)srcHeight / srcWidth * minWidth);
+        return (minWidth, Math.Max(1, h));
+    }
+
+    /// <summary>
+    /// The source box with the aspect ratio of <paramref name="width"/>×<paramref name="height"/>, placed by
+    /// <paramref name="centeringX"/>/<paramref name="centeringY"/> (0 = left/top, 1 = right/bottom).
+    /// </summary>
+    // port: Pillow src/PIL/ImageOps.py fit (bleed 0)
+    public static (float X0, float Y0, float X1, float Y1) FillBox(int srcWidth, int srcHeight, int width, int height,
+        double centeringX = 0.5, double centeringY = 0.5)
     {
         double liveRatio = (double)srcWidth / srcHeight;
         double outputRatio = (double)width / height;
@@ -86,8 +111,8 @@ internal static class Resizer
             cropHeight = srcWidth / outputRatio;
         }
 
-        double left = (srcWidth - cropWidth) * 0.5;
-        double top = (srcHeight - cropHeight) * 0.5;
+        double left = (srcWidth - cropWidth) * centeringX;
+        double top = (srcHeight - cropHeight) * centeringY;
         return ((float)left, (float)top, (float)(left + cropWidth), (float)(top + cropHeight));
     }
 
@@ -166,7 +191,7 @@ internal static class Resizer
         Rgba32[]? temp = null;
         try
         {
-            Premultiply(src.AsSpan(firstRow * srcWidth, rowCount * srcWidth), premul.AsSpan(0, rowCount * srcWidth));
+            Premultiplied.FromStraight(src.AsSpan(firstRow * srcWidth, rowCount * srcWidth), premul.AsSpan(0, rowCount * srcWidth));
 
             Rgba32[] current = premul;
             int currentWidth = srcWidth;
@@ -188,7 +213,7 @@ internal static class Resizer
                 ResampleVertical(current, currentWidth, dst, height, ksizeV, boundsV, kkV);
             }
 
-            Unpremultiply(dst);
+            Premultiplied.ToStraight(dst);
         }
         finally
         {
@@ -205,7 +230,8 @@ internal static class Resizer
     {
         double filterSupport = filter switch
         {
-            ResamplingFilter.Bilinear => 1.0,
+            ResamplingFilter.Box => 0.5,
+            ResamplingFilter.Bilinear or ResamplingFilter.Hamming => 1.0,
             ResamplingFilter.Bicubic => 2.0,
             _ => 3.0,
         };
@@ -270,10 +296,37 @@ internal static class Resizer
 
     private static double Filter(ResamplingFilter filter, double x) => filter switch
     {
+        ResamplingFilter.Box => BoxFilter(x),
         ResamplingFilter.Bilinear => BilinearFilter(x),
+        ResamplingFilter.Hamming => HammingFilter(x),
         ResamplingFilter.Bicubic => BicubicFilter(x),
         _ => LanczosFilter(x),
     };
+
+    // port: Pillow src/libImaging/Resample.c box_filter
+    private static double BoxFilter(double x) => x > -0.5 && x <= 0.5 ? 1.0 : 0.0;
+
+    // port: Pillow src/libImaging/Resample.c hamming_filter
+    private static double HammingFilter(double x)
+    {
+        if (x < 0.0)
+        {
+            x = -x;
+        }
+
+        if (x == 0.0)
+        {
+            return 1.0;
+        }
+
+        if (x >= 1.0)
+        {
+            return 0.0;
+        }
+
+        x *= Math.PI;
+        return Math.Sin(x) / x * (0.54 + (0.46 * Math.Cos(x)));
+    }
 
     // port: Pillow src/libImaging/Resample.c bilinear_filter
     private static double BilinearFilter(double x)
@@ -391,41 +444,6 @@ internal static class Resizer
                 ArrayPool<int>.Shared.Return(acc);
             }
         });
-    }
-
-    // port: Pillow src/libImaging/Convert.c rgbA2rgba (MULDIV255)
-    private static void Premultiply(ReadOnlySpan<Rgba32> src, Span<Rgba32> dst)
-    {
-        for (int i = 0; i < src.Length; i++)
-        {
-            Rgba32 p = src[i];
-            dst[i] = new Rgba32(MulDiv255(p.R, p.A), MulDiv255(p.G, p.A), MulDiv255(p.B, p.A), p.A);
-        }
-    }
-
-    // port: Pillow src/libImaging/Convert.c rgba2rgbA
-    private static void Unpremultiply(Span<Rgba32> pixels)
-    {
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            Rgba32 p = pixels[i];
-            int a = p.A;
-            if (a != 0 && a != 255)
-            {
-                pixels[i] = new Rgba32(
-                    (byte)Math.Min(255, 255 * p.R / a),
-                    (byte)Math.Min(255, 255 * p.G / a),
-                    (byte)Math.Min(255, 255 * p.B / a),
-                    p.A);
-            }
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static byte MulDiv255(int a, int b)
-    {
-        int tmp = (a * b) + 128;
-        return (byte)(((tmp >> 8) + tmp) >> 8);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -26,8 +26,9 @@ public class JpegEncoderTests
     public void Encode_IsByteExactWithPillow(string source, int quality, int sampling, bool optimize, bool progressive,
         string expected, int size, string pixels)
     {
-        using Image image = Image.FromFile(Corpus.PathOf(source));
-        image.SetResolution(96, 96);
+        using Image image = Image.Load(Corpus.PathOf(source));
+        image.Metadata.HorizontalResolution = 96;
+        image.Metadata.VerticalResolution = 96;
         byte[] encoded = image.ToJpeg(new JpegEncoderOptions
         {
             Quality = quality, Subsampling = (JpegSubsampling)sampling, OptimizeCoding = optimize,
@@ -35,35 +36,35 @@ public class JpegEncoderTests
         });
         Assert.Equal(size, encoded.Length);
         Assert.Equal(expected, Corpus.Sha256(encoded));
-        using Image decoded = Image.FromBytes(encoded.AsMemory());
-        Assert.Equal(pixels, Corpus.Sha256(decoded.ToPixelArray(PixelFormat.Rgba32)));
+        using Image decoded = Image.Load(encoded.AsMemory());
+        Assert.Equal(pixels, Corpus.Sha256(decoded.ToPixelData(PixelFormat.Rgba32)));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Metadata_Resolution_AndActiveFrame_RoundTrip(bool progressive)
+    public void Metadata_Resolution_AndFirstFrame_RoundTrip(bool progressive)
     {
         using var image = new Image(19, 13, Color.Red);
         using var frame = new Image(19, 13, Color.Blue);
         image.Frames.Add(frame, TimeSpan.FromMilliseconds(100));
-        image.SelectActiveFrame(1);
-        image.SetResolution(300, 150);
+        image.Metadata.HorizontalResolution = 300;
+        image.Metadata.VerticalResolution = 150;
         image.Metadata.IccProfile = Enumerable.Range(0, 140000).Select(i => (byte)i).ToArray();
         image.Metadata.Exif = [.. "II*\0"u8, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
         image.Metadata.Xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>"u8.ToArray();
-        using Image decoded = Image.FromBytes(image.ToJpeg(new JpegEncoderOptions { Progressive = progressive }));
+        using Image decoded = Image.Load(image.ToJpeg(new JpegEncoderOptions { Progressive = progressive }));
         Assert.Equal(1, decoded.FrameCount);
-        Assert.True(decoded[0, 0].B > 250);
-        Assert.Equal(300, decoded.HorizontalResolution);
-        Assert.Equal(150, decoded.VerticalResolution);
+        Assert.True(decoded[0, 0].R > 250 && decoded[0, 0].B < 5);
+        Assert.Equal(300, decoded.Metadata.HorizontalResolution);
+        Assert.Equal(150, decoded.Metadata.VerticalResolution);
         Assert.Equal(image.Metadata.IccProfile, decoded.Metadata.IccProfile);
         Assert.Equal(image.Metadata.Exif, decoded.Metadata.Exif);
         Assert.Equal(image.Metadata.Xmp, decoded.Metadata.Xmp);
         Assert.Equal(ExifOrientation.RightTop, decoded.Metadata.Orientation);
         foreach (MetadataKinds kind in new[] { MetadataKinds.None, MetadataKinds.Icc, MetadataKinds.Exif, MetadataKinds.Xmp })
         {
-            using Image selected = Image.FromBytes(image.ToJpeg(new JpegEncoderOptions { Metadata = kind }));
+            using Image selected = Image.Load(image.ToJpeg(new JpegEncoderOptions { Metadata = kind }));
             Assert.Equal(kind == MetadataKinds.Icc ? image.Metadata.IccProfile : null, selected.Metadata.IccProfile);
             Assert.Equal(kind == MetadataKinds.Exif ? image.Metadata.Exif : null, selected.Metadata.Exif);
             Assert.Equal(kind == MetadataKinds.Xmp ? image.Metadata.Xmp : null, selected.Metadata.Xmp);
@@ -77,7 +78,7 @@ public class JpegEncoderTests
         var random = new Random(55);
         foreach (ref Rgba32 p in image.GetPixelSpan())
             p = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
-        byte[] original = image.ToPixelArray(PixelFormat.Rgba32);
+        byte[] original = image.ToPixelData(PixelFormat.Rgba32);
         Color background = Color.FromArgb(17, 93, 201);
         using var flat = new Image(image.Width, image.Height);
         for (int y = 0; y < image.Height; y++)
@@ -89,7 +90,7 @@ public class JpegEncoderTests
                 (byte)((p.B * p.A + background.B * (255 - p.A) + 127) / 255), 255);
         }
         Assert.Equal(flat.ToJpeg(), image.ToJpeg(new JpegEncoderOptions { BackgroundColor = background }));
-        Assert.Equal(original, image.ToPixelArray(PixelFormat.Rgba32));
+        Assert.Equal(original, image.ToPixelData(PixelFormat.Rgba32));
     }
 
     [Fact]
@@ -107,7 +108,7 @@ public class JpegEncoderTests
                 Assert.Equal(image.ToJpeg(), File.ReadAllBytes(path));
             }
             string explicitPath = Path.Combine(directory, "explicit.jpg");
-            image.SaveAsJpeg(explicitPath, 90);
+            image.SaveAsJpeg(explicitPath, new() { Quality = 90 });
             Assert.Equal(image.ToJpeg(new JpegEncoderOptions { Quality = 90 }), File.ReadAllBytes(explicitPath));
             using var stream = new MemoryStream();
             image.Save(stream, ImageFormat.Jpeg);
@@ -125,24 +126,24 @@ public class JpegEncoderTests
     {
         using var image = new Image(1, 1);
         var random = new Random(5500);
-        var options = new List<JpegEncoderOptions>
+        var options = new List<Func<JpegEncoderOptions>>
         {
-            new() { Quality = 0 }, new() { Quality = 101 },
-            new() { RestartInterval = -1 }, new() { RestartInterval = 65536 },
-            new() { Subsampling = (JpegSubsampling)(-1) }, new() { Subsampling = (JpegSubsampling)4 },
-            new() { BackgroundColor = Color.Transparent }, new() { Metadata = (MetadataKinds)8 },
+            () => new() { Quality = 0 }, () => new() { Quality = 101 },
+            () => new() { RestartInterval = -1 }, () => new() { RestartInterval = 65536 },
+            () => new() { Subsampling = (JpegSubsampling)(-1) }, () => new() { Subsampling = (JpegSubsampling)4 },
+            () => new() { BackgroundColor = Color.Transparent }, () => new() { Metadata = (MetadataKinds)8 },
         };
         for (int i = 0; i < 100; i++)
         {
             int value = random.Next(101, int.MaxValue);
-            options.Add(new JpegEncoderOptions { Quality = value });
-            options.Add(new JpegEncoderOptions { Subsampling = (JpegSubsampling)value });
-            options.Add(new JpegEncoderOptions { RestartInterval = -value });
+            options.Add(() => new JpegEncoderOptions { Quality = value });
+            options.Add(() => new JpegEncoderOptions { Subsampling = (JpegSubsampling)value });
+            options.Add(() => new JpegEncoderOptions { RestartInterval = -value });
         }
-        foreach (JpegEncoderOptions option in options)
+        foreach (Func<JpegEncoderOptions> create in options)
         {
             using var stream = new MemoryStream();
-            Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(stream, option));
+            Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(stream, create()));
             Assert.Equal(0, stream.Length);
         }
     }
@@ -168,9 +169,10 @@ public class JpegEncoderTests
     public void JfifDensity_IsRoundedAndClamped()
     {
         using var image = new Image(1, 1);
-        image.SetResolution(float.MaxValue, 0.25f);
-        using Image decoded = Image.FromBytes(image.ToJpeg());
-        Assert.Equal(65535, decoded.HorizontalResolution);
-        Assert.Equal(1, decoded.VerticalResolution);
+        image.Metadata.HorizontalResolution = float.MaxValue;
+        image.Metadata.VerticalResolution = 0.25f;
+        using Image decoded = Image.Load(image.ToJpeg());
+        Assert.Equal(65535, decoded.Metadata.HorizontalResolution);
+        Assert.Equal(1, decoded.Metadata.VerticalResolution);
     }
 }

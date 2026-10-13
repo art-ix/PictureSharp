@@ -12,8 +12,8 @@ public class PngDecoderTests
     public void Decode_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = Image.FromFile(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Png, image.RawFormat);
+        using Image image = Image.Load(Corpus.PathOf(file));
+        Assert.Equal(ImageFormat.Png, image.SourceFormat);
         Assert.Equal(r.HasAlpha, image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
         if (r.Animated)
@@ -27,8 +27,8 @@ public class PngDecoderTests
 
         if (r.Dpi is { } dpi)
         {
-            Assert.Equal(dpi[0], image.HorizontalResolution, 1);
-            Assert.Equal(dpi[1], image.VerticalResolution, 1);
+            Assert.Equal(dpi[0], image.Metadata.HorizontalResolution, 1);
+            Assert.Equal(dpi[1], image.Metadata.VerticalResolution, 1);
         }
     }
 
@@ -50,14 +50,14 @@ public class PngDecoderTests
     [Fact]
     public void Decode_ExifOrientation()
     {
-        using Image image = Image.FromFile(Corpus.PathOf("png/exif.png"));
+        using Image image = Image.Load(Corpus.PathOf("png/exif.png"));
         Assert.Equal(ExifOrientation.BottomRight, image.Metadata.Orientation);
     }
 
     [Fact]
     public void Decode_FirstFrameOnly_Apng()
     {
-        using Image image = Image.FromFile(Corpus.PathOf("png/apng_alpha.png"), new DecoderOptions { FirstFrameOnly = true });
+        using Image image = Image.Load(Corpus.PathOf("png/apng_alpha.png"), new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(1, image.FrameCount);
         Assert.Equal(Corpus.References["png/apng_alpha.png"].Frames[0].Sha256,
             Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan())));
@@ -68,7 +68,7 @@ public class PngDecoderTests
     {
         byte[] data = Corpus.Read("png/rgb8.png");
         data[^20] ^= 0x40;  // inside the last IDAT, before IEND
-        Assert.Throws<ImageFormatException>(() => Image.FromBytes(data, new DecoderOptions { StrictChecksums = true }));
+        Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { StrictChecksums = true }));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class PngDecoderTests
 
                 try
                 {
-                    using Image img = Image.FromBytes(data);
+                    using Image img = Image.Load(data);
                 }
                 catch (ImageFormatException)
                 {

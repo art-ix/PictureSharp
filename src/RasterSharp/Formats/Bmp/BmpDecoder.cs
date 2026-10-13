@@ -66,11 +66,11 @@ internal sealed class BmpDecoder : IImageDecoder
             image = new Image(frames) { HasAlpha = h.HasAlpha };
         }
 
-        image.RawFormat = ImageFormat.Bmp;
+        image.SourceFormat = ImageFormat.Bmp;
         if (h.Compression != BmpCompression.Embedded || (h.XPelsPerMeter > 0 && h.YPelsPerMeter > 0))
         {
             (float dpiX, float dpiY) = Resolution(h);
-            image.SetResolution(dpiX, dpiY);
+            (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution) = (dpiX, dpiY);
         }
 
         if (!options.IgnoreMetadata && h.IccOffset >= 0)

@@ -24,8 +24,8 @@ public class LosslessDecoderTests
     [MemberData(nameof(LosslessFiles))]
     public void Decode_IsBitExactWithDwebp(string file)
     {
-        using Image image = Image.FromFile(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.WebP, image.RawFormat);
+        using Image image = Image.Load(Corpus.PathOf(file));
+        Assert.Equal(ImageFormat.WebP, image.SourceFormat);
         Assert.Equal(Corpus.References[file].HasAlpha, image.HasAlpha);
         AssertMatchesReference(file, image);
     }
@@ -33,7 +33,7 @@ public class LosslessDecoderTests
     [Fact]
     public void Decode_ReadsMetadata()
     {
-        using Image image = Image.FromFile(Corpus.PathOf("webp/meta/lossless_exif.webp"));
+        using Image image = Image.Load(Corpus.PathOf("webp/meta/lossless_exif.webp"));
         Assert.NotNull(image.Metadata.Exif);
         Assert.Equal(ExifOrientation.RightTop, image.Metadata.Orientation);
         AssertMatchesReference("webp/meta/lossless_exif.webp", image);
@@ -42,7 +42,7 @@ public class LosslessDecoderTests
     [Fact]
     public void Decode_ApplyExifOrientation_RotatesImage()
     {
-        using Image image = Image.FromFile(Corpus.PathOf("webp/meta/lossless_exif.webp"), new DecoderOptions { ApplyExifOrientation = true });
+        using Image image = Image.Load(Corpus.PathOf("webp/meta/lossless_exif.webp"), new DecoderOptions { ApplyExifOrientation = true });
         ReferenceEntry r = Corpus.References["webp/meta/lossless_exif.webp"];
         Assert.Equal((r.Height, r.Width), (image.Width, image.Height));
         Assert.Equal(ExifOrientation.TopLeft, image.Metadata.Orientation);
@@ -52,7 +52,7 @@ public class LosslessDecoderTests
     public void Decode_RespectsMaxPixels()
     {
         Assert.Throws<ImageFormatException>(() =>
-            Image.FromFile(Corpus.PathOf("webp/lossless/photo_ll_z6.webp"), new DecoderOptions { MaxPixels = 1000 }));
+            Image.Load(Corpus.PathOf("webp/lossless/photo_ll_z6.webp"), new DecoderOptions { MaxPixels = 1000 }));
     }
 
     public static TheoryData<string, int> Truncations => new()
@@ -72,7 +72,7 @@ public class LosslessDecoderTests
         byte[] truncated = data[..^cut];
         BitConverter.GetBytes(truncated.Length - 8).CopyTo(truncated, 4);
         BitConverter.GetBytes(truncated.Length - 20).CopyTo(truncated, 16);
-        Assert.Throws<ImageFormatException>(() => Image.FromBytes(truncated));
+        Assert.Throws<ImageFormatException>(() => Image.Load(truncated));
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class LosslessDecoderTests
 
             try
             {
-                using Image img = Image.FromBytes(data);
+                using Image img = Image.Load(data);
             }
             catch (ImageFormatException)
             {
