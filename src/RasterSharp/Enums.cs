@@ -100,3 +100,29 @@ public enum MetadataKinds
     /// <summary>All metadata.</summary>
     All = Icc | Exif | Xmp,
 }
+
+/// <summary>How <see cref="Image.Resize(int, int, ResizeMode, ResamplingFilter)"/> maps the image onto the requested size.</summary>
+public enum ResizeMode
+{
+    /// <summary>Scales to exactly the requested size, ignoring the aspect ratio.</summary>
+    Stretch = 0,
+    /// <summary>Keeps the aspect ratio and fits inside the requested size; one side may come out smaller.</summary>
+    Fit,
+    /// <summary>Keeps the aspect ratio and covers the requested size, cropping the excess around the center.</summary>
+    Fill,
+    /// <summary>Like <see cref="Fit"/>, then centers the result on a canvas of exactly the requested size.</summary>
+    Pad,
+}
+
+/// <summary>Interpolation kernels used for resizing.</summary>
+public enum ResamplingFilter
+{
+    /// <summary>Nearest neighbour: fastest, blocky, keeps exact colors.</summary>
+    Nearest = 0,
+    /// <summary>Triangle (linear) filter.</summary>
+    Bilinear,
+    /// <summary>Cubic convolution with a = -0.5 (Catmull-Rom).</summary>
+    Bicubic,
+    /// <summary>Windowed sinc with three lobes: sharpest, slowest.</summary>
+    Lanczos3,
+}

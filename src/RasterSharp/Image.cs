@@ -395,6 +395,114 @@ public sealed class Image : IDisposable, ICloneable
         return this;
     }
 
+    /// <summary>
+    /// Resizes all frames. Resampling runs on premultiplied alpha and matches Pillow's <c>Image.resize</c>;
+    /// <see cref="ResizeMode.Fit"/>, <see cref="ResizeMode.Fill"/> and <see cref="ResizeMode.Pad"/> follow
+    /// <c>ImageOps.contain</c>, <c>ImageOps.fit</c> and <c>ImageOps.pad</c>. Padding is transparent black.
+    /// </summary>
+    /// <param name="width">Requested width in pixels.</param>
+    /// <param name="height">Requested height in pixels.</param>
+    /// <param name="mode">How the image is mapped onto the requested size.</param>
+    /// <param name="filter">Interpolation kernel.</param>
+    public Image Resize(int width, int height, ResizeMode mode = ResizeMode.Stretch, ResamplingFilter filter = ResamplingFilter.Lanczos3) =>
+        Resize(width, height, mode, filter, Color.FromArgb(0));
+
+    /// <summary>Resizes all frames; with <see cref="ResizeMode.Pad"/> the borders are filled with <paramref name="padColor"/>.</summary>
+    /// <param name="width">Requested width in pixels.</param>
+    /// <param name="height">Requested height in pixels.</param>
+    /// <param name="mode">How the image is mapped onto the requested size.</param>
+    /// <param name="filter">Interpolation kernel.</param>
+    /// <param name="padColor">Border color for <see cref="ResizeMode.Pad"/>; ignored by the other modes.</param>
+    public Image Resize(int width, int height, ResizeMode mode, ResamplingFilter filter, Color padColor)
+    {
+        ImageFrame.ValidateSize(width, height);
+        CheckFilter(filter);
+        int srcWidth = Width;
+        int srcHeight = Height;
+        int w = width;
+        int h = height;
+        (float x0, float y0, float x1, float y1) = (0, 0, srcWidth, srcHeight);
+        switch (mode)
+        {
+            case ResizeMode.Stretch:
+                break;
+            case ResizeMode.Fit:
+            case ResizeMode.Pad:
+                (w, h) = Resizer.FitSize(srcWidth, srcHeight, width, height);
+                break;
+            case ResizeMode.Fill:
+                (x0, y0, x1, y1) = Resizer.FillBox(srcWidth, srcHeight, width, height);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown resize mode.");
+        }
+
+        bool pad = mode == ResizeMode.Pad && (w != width || h != height);
+        Rgba32 padValue = Rgba32.FromColor(padColor);
+        foreach (ImageFrame frame in Frames)
+        {
+            Rgba32[] pixels = Resizer.Resize(frame.Pixels, srcWidth, srcHeight, w, h, filter, x0, y0, x1, y1);
+            if (pad)
+            {
+                // port: Pillow src/PIL/ImageOps.py pad (centering 0.5, Python round)
+                var canvas = GC.AllocateUninitializedArray<Rgba32>(width * height);
+                canvas.AsSpan().Fill(padValue);
+                int left = w != width ? (int)Math.Round((width - w) * 0.5) : 0;
+                int top = w != width ? 0 : (int)Math.Round((height - h) * 0.5);
+                for (int y = 0; y < h; y++)
+                {
+                    pixels.AsSpan(y * w, w).CopyTo(canvas.AsSpan(((top + y) * width) + left, w));
+                }
+
+                frame.Replace(width, height, canvas);
+            }
+            else
+            {
+                frame.Replace(w, h, pixels);
+            }
+        }
+
+        if (pad && padValue.A != 255)
+        {
+            HasAlpha = true;
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Shrinks all frames to fit inside <paramref name="maxWidth"/>×<paramref name="maxHeight"/>, keeping the
+    /// aspect ratio. Images that already fit are left unchanged; the image is never enlarged.
+    /// </summary>
+    public Image Thumbnail(int maxWidth, int maxHeight, ResamplingFilter filter = ResamplingFilter.Lanczos3)
+    {
+        ImageFrame.ValidateSize(maxWidth, maxHeight);
+        CheckFilter(filter);
+        return Width <= maxWidth && Height <= maxHeight ? this : Resize(maxWidth, maxHeight, ResizeMode.Fit, filter);
+    }
+
+    /// <summary>Converts all frames to grayscale (BT.601 luma); alpha is kept.</summary>
+    public Image Grayscale()
+    {
+        foreach (ImageFrame frame in Frames)
+        {
+            ColorOps.Grayscale(frame.GetPixelSpan());
+        }
+
+        return this;
+    }
+
+    /// <summary>Inverts the color channels of all frames; alpha is kept.</summary>
+    public Image Invert()
+    {
+        foreach (ImageFrame frame in Frames)
+        {
+            ColorOps.Invert(frame.GetPixelSpan());
+        }
+
+        return this;
+    }
+
     /// <summary>Fills all frames with <paramref name="color"/>.</summary>
     public Image Clear(Color color)
     {
@@ -402,6 +510,82 @@ public sealed class Image : IDisposable, ICloneable
         foreach (ImageFrame frame in Frames)
         {
             frame.GetPixelSpan().Fill(value);
+        }
+
+        HasAlpha = value.A != 255;
+        return this;
+    }
+
+    /// <summary>
+    /// Overwrites the pixels inside <paramref name="rect"/> with <paramref name="color"/> on all frames (no blending).
+    /// The rectangle is clipped to the image bounds.
+    /// </summary>
+    public Image Fill(Rectangle rect, Color color)
+    {
+        rect.Intersect(new Rectangle(0, 0, Width, Height));
+        if (rect.IsEmpty)
+        {
+            return this;
+        }
+
+        Rgba32 value = Rgba32.FromColor(color);
+        foreach (ImageFrame frame in Frames)
+        {
+            ColorOps.Fill(frame, rect, value);
+        }
+
+        HasAlpha |= value.A != 255;
+        return this;
+    }
+
+    /// <summary>
+    /// Makes the color of the bottom-left pixel of the active frame transparent on all frames,
+    /// like System.Drawing.Bitmap.MakeTransparent().
+    /// </summary>
+    public Image MakeTransparent() => MakeTransparent(ActiveFrame[0, Height - 1].ToColor());
+
+    /// <summary>
+    /// Sets alpha to 0 on every pixel of every frame that equals <paramref name="transparentColor"/>
+    /// (all four channels). The color channels of those pixels are kept.
+    /// </summary>
+    public Image MakeTransparent(Color transparentColor)
+    {
+        Rgba32 key = Rgba32.FromColor(transparentColor);
+        foreach (ImageFrame frame in Frames)
+        {
+            ColorOps.MakeTransparent(frame.GetPixelSpan(), key);
+        }
+
+        HasAlpha = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Draws the active frame of <paramref name="source"/> over all frames of this image (source-over,
+    /// as Pillow's <c>Image.alpha_composite</c>), with its top-left corner at <paramref name="location"/>.
+    /// Parts outside this image are clipped.
+    /// </summary>
+    /// <param name="source">Image to draw; may be this image.</param>
+    /// <param name="location">Position of the source's top-left corner; may be negative.</param>
+    /// <param name="opacity">0–1, multiplies the source alpha.</param>
+    public Image DrawImage(Image source, Point location, float opacity = 1f)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (!(opacity >= 0f && opacity <= 1f))
+        {
+            throw new ArgumentOutOfRangeException(nameof(opacity), opacity, "Opacity must be between 0 and 1.");
+        }
+
+        ImageFrame src = source.ActiveFrame;
+        Rgba32[] pixels = ReferenceEquals(source, this) ? (Rgba32[])src.Pixels.Clone() : src.Pixels;
+        if (opacity == 0f)
+        {
+            return this;
+        }
+
+        foreach (ImageFrame frame in Frames)
+        {
+            Compositor.DrawOver(frame, pixels, src.Width, src.Height, location, opacity);
         }
 
         return this;
@@ -429,6 +613,24 @@ public sealed class Image : IDisposable, ICloneable
         foreach (ImageFrame frame in Frames)
         {
             frames.Add(new ImageFrame(rect.Width, rect.Height, Geometry.Crop(frame, rect)) { Duration = frame.Duration });
+        }
+
+        return CopyPropertiesTo(new Image(frames));
+    }
+
+    /// <summary>
+    /// Returns a new image of exactly <paramref name="thumbWidth"/>×<paramref name="thumbHeight"/> pixels
+    /// (all frames, stretched with <see cref="ResamplingFilter.Lanczos3"/>). This image is not modified.
+    /// </summary>
+    public Image GetThumbnailImage(int thumbWidth, int thumbHeight)
+    {
+        ImageFrame.ValidateSize(thumbWidth, thumbHeight);
+        var frames = new List<ImageFrame>(FrameCount);
+        foreach (ImageFrame frame in Frames)
+        {
+            Rgba32[] pixels = Resizer.Resize(frame.Pixels, frame.Width, frame.Height, thumbWidth, thumbHeight,
+                ResamplingFilter.Lanczos3, 0, 0, frame.Width, frame.Height);
+            frames.Add(new ImageFrame(thumbWidth, thumbHeight, pixels) { Duration = frame.Duration });
         }
 
         return CopyPropertiesTo(new Image(frames));
@@ -590,6 +792,14 @@ public sealed class Image : IDisposable, ICloneable
             rect.Right > Width || rect.Bottom > Height)
         {
             throw new ArgumentOutOfRangeException(paramName, rect, $"The rectangle must lie within the image bounds {Width}x{Height}.");
+        }
+    }
+
+    private static void CheckFilter(ResamplingFilter filter)
+    {
+        if ((uint)filter > (uint)ResamplingFilter.Lanczos3)
+        {
+            throw new ArgumentOutOfRangeException(nameof(filter), filter, "Unknown resampling filter.");
         }
     }
 

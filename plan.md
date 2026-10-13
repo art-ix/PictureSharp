@@ -399,6 +399,14 @@ Weryfikacja: `dotnet build -c Release --no-restore` (0 ostrzeżeń/błędów), `
   - `webpmux -get exif` zwraca nasz EXIF.
 
 ### Faza 9: przetwarzanie obrazu w `Image` (ok. 2k LOC)
+**Status: ukończona (2026-10-13), resize zgodny z Pillow 10.2.0 piksel w piksel.**
+Weryfikacja: `dotnet build RasterSharp.slnx -c Release` (0 ostrzeżeń/błędów), `dotnet test -c Release --no-build` (2151/2151, 0 pominiętych).
+- `Processing/Resizer.cs` portuje Pillow: `Resample.c` (wagi double → 22-bitowe stałoprzecinkowe, przebieg poziomy tylko dla potrzebnych wierszy, potem pionowy, pośredni bufor 8-bit), `Convert.c` (RGBA → RGBa → RGBA jak `Image.resize`) i `Geometry.c` `ImagingScaleAffine` dla Nearest (bez premultiplikacji, akumulacja współrzędnych w double). Wiersze idą przez `Parallel.For` powyżej progu pracy; sumy całkowite nie zależą od kolejności, więc wynik jest deterministyczny.
+- `ResizeMode` odwzorowuje `ImageOps`: Fit = `contain` (zaokrąglenie half-to-even, minimum 1 px tam, gdzie Pillow rzuca wyjątek), Fill = `fit` (ułamkowy box źródła w `float`), Pad = `pad` (domyślnie czarny przezroczysty, overload z kolorem). Do tego `Thumbnail` (Fit, nigdy nie powiększa) i `GetThumbnailImage` (nowy obraz).
+- `Grayscale` (luma BT.601 jak `L` w Pillow), `Invert`, `Clear` (ustawia `HasAlpha`), `Fill` (nadpisanie, przycięcie do granic), `MakeTransparent()`/`MakeTransparent(Color)`, `DrawImage` (port `AlphaComposite.c`, krycie skaluje alfę źródła, przycinanie, rysowanie obrazu na sobie samym).
+- Wyrocznia `tests/assets/processing_reference.py`: 277 zadań identycznych z Pillow (4 filtry × 4 tryby na szumie z alfą, pasku 100×3, zdjęciu i PNG z alfą; `alpha_composite`, grayscale, `exif_transpose` dla orientacji 1–8). Lokalnie także zdjęcie 12 MP (Fill Lanczos3, upscale Bicubic) zgodne bajt w bajt.
+- Testy właściwości: wszystkie 8 wariantów RotateFlip kontra naiwny obrót + flip, 4×obrót/2×flip = tożsamość, AutoOrient dla 8 orientacji EXIF, granice Crop/Clone, jednolity kolor i brak przecieku koloru spod alfy 0, wszystkie klatki animacji, LockBits/CopyPixels/LoadPixels dla każdego `PixelFormat` (ze stride).
+- Ograniczenie (jak w Pillow): kolory półprzezroczyste przechodzą przez 8-bitową premultiplikację i obcinające dzielenie, np. (200,100,50,α=77) → (198,99,49). Kolory nieprzezroczyste są zachowane dokładnie.
 - `Resizer`: separowalny splot dwuprzebiegowy z wagami liczonymi z góry, na alfie premultiplikowanej. Filtry Nearest, Bilinear, Bicubic (Catmull-Rom), Lanczos3. Pętla po wierszach przez `Parallel.For`.
 - Tryby `ResizeMode`: Stretch, Fit, Fill (z przycięciem), Pad.
 - `Crop`, `RotateFlip` (8 wariantów), `AutoOrient`.

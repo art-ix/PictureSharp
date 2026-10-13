@@ -4,9 +4,9 @@
 
 RasterSharp is a **pure C# image library for .NET 10 and later**. It reads WebP, PNG, BMP and JPEG, and writes lossy and lossless WebP, PNG, BMP and JPEG. The library has no NuGet dependencies, native libraries or P/Invoke calls. PNG compression uses its own managed deflate/inflate implementation.
 
-The `Image` API provides file and stream I/O, animation frames, metadata, pixel access and basic geometry operations. It uses `System.Drawing.Primitives` for types such as `Color` and `Rectangle`, without requiring `System.Drawing.Common`.
+The `Image` API provides file and stream I/O, animation frames, metadata, pixel access, resizing, geometry, color and compositing operations. It uses `System.Drawing.Primitives` for types such as `Color` and `Rectangle`, without requiring `System.Drawing.Common`.
 
-**Status:** in development. Phase 8 is complete, including animated WebP encoding alongside static lossy and lossless output. Further image processing is planned. See [plan.md](plan.md) for implementation phases and completion criteria.
+**Status:** in development. Phase 9 is complete: image processing (resizing, geometry, color and compositing) joins static and animated WebP, PNG, BMP and JPEG reading and writing. Performance work and the release are next. See [plan.md](plan.md) for implementation phases and completion criteria.
 
 ## Supported formats
 
@@ -108,7 +108,36 @@ byte[] webp = WebP.EncodeLosslessRgba(rgba, image.Width, image.Height);
 
 `Image.FromPixels`, `CopyPixels` and `LoadPixels` support explicit pixel formats and row strides. `GetPixel`/`SetPixel`, the pixel indexer and `LockBits` are also available. Pixel access operates on the active frame; use `Frames`, `FrameCount` and `SelectActiveFrame` to work with animations and frame durations.
 
-Implemented geometry operations include `Crop`, `RotateFlip`, `AutoOrient`, `Clone` and `Clear`. Resizing, resampling and additional color/compositing operations are planned.
+## Image processing
+
+```csharp
+using System.Drawing;
+using RasterSharp;
+
+using var photo = Image.FromFile("photo.jpg");
+photo.AutoOrient()
+     .Thumbnail(1920, 1080)
+     .SaveAsWebP("photo.webp", quality: 82);
+
+using var avatar = Image.FromFile("portrait.png");
+avatar.Resize(256, 256, ResizeMode.Fill, ResamplingFilter.Lanczos3);
+using var badge = Image.FromFile("badge.png");
+avatar.DrawImage(badge, new Point(200, 200), opacity: 0.8f);
+avatar.Save("avatar.png");
+```
+
+Operations modify the image in place, apply to every animation frame and return the same instance for chaining. `Clone()`, `Clone(Rectangle)` and `GetThumbnailImage` return new images.
+
+| Operation | Behavior |
+| --- | --- |
+| `Resize(width, height, mode, filter)` | `Nearest`, `Bilinear`, `Bicubic` (Catmull-Rom) or `Lanczos3` (default). `Stretch` ignores the aspect ratio, `Fit` fits inside, `Fill` covers and crops the center, `Pad` fits and centers on a transparent (or given color) canvas. |
+| `Thumbnail(maxWidth, maxHeight)` | Shrinks with `Fit`; never enlarges. |
+| `Crop`, `RotateFlip`, `AutoOrient` | Lossless geometry; `AutoOrient` applies EXIF orientation 1–8 and resets the tag. |
+| `Grayscale`, `Invert` | BT.601 luma; inversion of RGB. Alpha is kept. |
+| `Clear`, `Fill(Rectangle, Color)`, `MakeTransparent` | Overwrite pixels (no blending); `MakeTransparent` sets alpha to 0 on an exact color match. |
+| `DrawImage(source, location, opacity)` | Source-over compositing of the source's active frame, clipped to the image. |
+
+Resampling uses separable two-pass convolution with precomputed fixed-point weights on premultiplied alpha, parallelized over rows. It reproduces Pillow's `Image.resize`, `ImageOps.contain`/`fit`/`pad` and `Image.alpha_composite` pixel for pixel. As in Pillow, semi-transparent colors pass through 8-bit premultiplied values, so their RGB may shift slightly; opaque colors are preserved exactly.
 
 The `WebP` facade provides `TryGetInfo`, `DecodeImage`, `DecodeRgba`, `DecodeBgra`, `DecodeInto`, `Encode`, `EncodeLosslessRgba` and `Convert`. `Encode` and `Convert` use lossy WebP defaults unless lossless options are supplied.
 
@@ -123,13 +152,14 @@ dotnet test -c Release
 
 To use the library from a source checkout, add a project reference from your application to `src/RasterSharp/RasterSharp.csproj`. The library version is defined in [VERSION](VERSION).
 
-The sample CLI supports image inspection, conversion and decode timing:
+The sample CLI supports image inspection, conversion, resizing and decode timing:
 
 ```bash
 dotnet run -c Release --project samples/RasterSharp.Cli -- info input.webp
 dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.png output.webp -q 85 -m 4
 dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.png exact.webp -lossless -q 75 -m 4
 dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.webp output.jpg -q 90
+dotnet run -c Release --project samples/RasterSharp.Cli -- resize input.jpg thumb.webp 800 600 -mode fit -filter lanczos3 -q 80
 dotnet run -c Release --project samples/RasterSharp.Cli -- decode input.webp 10
 ```
 
@@ -146,7 +176,7 @@ dotnet test -c Release --filter Category=Oracle
 
 Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `RASTERSHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.
 
-The WebP decoder ports originated from libwebp 1.3.2. Recomputing the existing corpus references with 1.6.0 left all 248 entries unchanged. At completion of phase 8, all 2069 tests passed. The nine WebP encoder source images round-trip exactly through both decoders and meet the size limit of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless WebP output is not guaranteed. Lossy WebP was checked across 252 corpus configurations (nine images, four quality values, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and output size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks. JPEG encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
+The WebP decoder ports originated from libwebp 1.3.2. Recomputing the existing corpus references with 1.6.0 left all 248 entries unchanged. At completion of phase 9, all 2151 tests passed. The nine WebP encoder source images round-trip exactly through both decoders and meet the size limit of `cwebp -lossless -exact -q 75 -m 4` plus 1%; byte-identical lossless WebP output is not guaranteed. Lossy WebP was checked across 252 corpus configurations (nine images, four quality values, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and output size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks. JPEG encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
 
 Corpus regeneration requires libwebp 1.6.0 tools, ImageMagick, Python, NumPy and Pillow:
 
@@ -158,8 +188,10 @@ python3 -I tests/assets/make_jpeg_encoder_reference.py
 
 Animated WebP has 46 encoder tests, including 38 external checks through Pillow and webpmux 1.6.0. These compare complete decoded canvases, durations, loop counts, background color and EXIF extraction across lossy, lossless, mixed, blend/dispose and keyframe cases.
 
+Image processing has 82 tests. The Pillow 10.2.0 oracle (`tests/assets/processing_reference.py`) checks 277 resize, compositing, grayscale and EXIF orientation results for exact pixel equality.
+
 Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder references. Additional JPEG oracle tests use a C compiler and libjpeg development headers, with Pillow and ImageMagick for independent decoding. External corpora are optional; their download procedure is described in [plan.md](plan.md).
 
 ## License
 
-RasterSharp is licensed under [MIT](LICENSE). It includes ports from libwebp, libjpeg-turbo and zlib, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+RasterSharp is licensed under [MIT](LICENSE). It includes ports from libwebp, libjpeg-turbo, zlib and Pillow, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
