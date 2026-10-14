@@ -511,7 +511,7 @@ Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 
     - round-trip GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę.
 
 ### Faza 10: wydajność, odporność, wydanie
-**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD lossy) jako 0.4.1, etap 3 (SIMD lossless i filtry wierszowe) jako 0.4.2 (2026-10-14). Etap 4 (predyktory VP8L 10–12 i pomiary) ukończony jako 0.4.3 (2026-10-14).**
+**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD lossy) jako 0.4.1, etap 3 (SIMD lossless i filtry wierszowe) jako 0.4.2 (2026-10-14). Etap 4 (predyktory VP8L 10–12 i pomiary) ukończony jako 0.4.3 (2026-10-14). Etap 5 (dekoder VP8L, predyktory 5–7 i 13) ukończony jako 0.4.4 (2026-10-14).**
 Etap 1 (0.4.0), pomiary na i5-12500H (16 wątków logicznych) względem narzędzi libwebp 1.6.0:
 - Enkoder lossless: wierny port warstwy wysokiego poziomu z 1.6.0 (`EncoderAnalyze`/`AnalyzeEntropy`, konfiguracje crunch, `EncodeImageInternal`, `GetBackwardReferences`, `CalculateBestCacheSize`, predyktor z wyborem sampling, `OptimizeSampling`, `CostManager` w `TraceBackwards`, klastrowanie low-effort, `WebPReplaceTransparentPixels`). Wynik bajtowo identyczny z `cwebp` (72 konfiguracje korpusu, zdjęcia do 2,8 MP). 1920×1440: 44,7 s → 1,7 s (cwebp 1,28 s); konfiguracje m5/m6 liczone równolegle.
 - Enkoder lossy: przebieg tokenów jako deterministyczny wavefront (bariery przy odświeżaniu kosztów, odtwarzanie tokenów/statystyk/statystyk filtra w kolejności rastrowej), analiza równolegle. 12 MP q75: 3,6 s → 0,84 s (cwebp 0,75 s).
@@ -530,21 +530,42 @@ Etap 4 (0.4.3), mały etap dekodera VP8L:
 - BenchmarkDotNet dla rekonstrukcji (10/11/12/mieszane × kafle 4/8/32, 1920×1440) oraz pełnego dekodera VP8L (korpus i opcjonalne pliki lokalne). Przy stałej kompilacji JIT tryby 10/11/12 są 1,75–2,15× / 11,47–11,84× / 6,86–8,36× szybsze od skalaru; mieszane 7,13–7,69×. Wyniki dotyczą transformacji, nie całego dekodowania.
 - Na tych samych lokalnych plikach, z domyślnym JIT i względem początkowego katalogu roboczego 0.4.2: 1920×1440 w dwóch próbach 49,22 → 48,48 ms oraz 53,75 → 49,92 ms; 4000×3000 208,38 → 193,72 ms oraz 206,44 → 186,66 ms. Dwebp 1.6.0 raportuje wewnętrzne mediany 47 / 190 ms dla tych plików. Metodologia, rozrzut, alokacje i ograniczenia porównań: `docs/performance.md`.
 - Weryfikacja: pełny build/test Release, Oracle i odporność; dodatkowo testy predyktorów i zgodności dekoderów z `DOTNET_EnableAVX2=0` oraz `DOTNET_EnableHWIntrinsic=0`. Tryby kafli 2–9, granice 4/8 pikseli, remis Select, obcięcia i przepełnienia są pokryte testami. Publiczne API i enkoder pozostają zgodne z referencjami.
-Pozostaje (0.4.4+): pętla Huffmana dekodera lossless, predyktory 5–7 i 13, wyszukiwanie predyktora i klastrowanie enkodera, inflate, resize, szersze benchmarki kodeków i dokumentacja wydajności, ARM (AdvSimd).
-- BenchmarkDotNet: dekodowanie i kodowanie w porównaniu z czasami `cwebp`/`dwebp`. Cel: ≤3× wolniej od natywnego C z SIMD.
-- Ścieżki `Vector128`/`Vector256` (cross-platform intrinsics) dla:
-  - IDCT/FDCT,
-  - loop filter,
-  - YUV↔RGB,
-  - transformacji lossless,
-  - SSE/kosztów,
-  - resize,
-  - inflate/deflate CRC.
 
-  Każda ścieżka SIMD ma test, że daje **wynik identyczny ze skalarnym**.
-- Równoległość enkodera (analiza, próby lossless) i dekodera (filtrowanie wierszy). Wynik musi być deterministyczny.
-- Testy odporności: obcinanie i losowe mutacje korpusu. Wolno wylecieć wyłącznie `ImageFormatException` lub `NotSupportedException`; sprawdzamy też `MaxPixels`.
-- Dokumentacja XML, README z przykładami, CLI sample, pakiet NuGet (bez zależności), THIRD-PARTY-NOTICES.
+Etap 5 (0.4.4), dekoder VP8L:
+- Ustalona macierz: 7 statycznych plików VP8L korpusu i 2 lokalne zdjęcia (1920×1440 i 4000×3000), stałe bajty wejściowe względem 0.4.3. Kryterium: co najmniej 3% powtarzalnego zysku pełnego dekodowania na dużym wejściu w dwóch próbach, bez powtarzalnej regresji >3% i bez wzrostu alokacji; metodologia w `docs/performance.md`.
+- Pętla danych: ponowne użycie prefetcha w drugim poziomie tablic Huffmana, dostęp do wpisów przez `ref`, uzupełnianie okna bitowego słowami 32-bitowymi i szybkie kopiowanie powtórzeń o odległości 1/2. Zachowane kontrole granic i końcówka czytnika bitów.
+- PredictorAdd 5–7 i 13: SSE2 po kanałach koloru z sekwencyjną zależnością od lewego piksela; skalar dla krótkich przebiegów i CPU bez SSE2. Tryb 13 zachowuje obcięcie dzielenia liczb ujemnych do zera. Intrinsics i wybór ścieżek predyktorów są w `LosslessTransforms.Predictors.X86.cs`; kod core i wersje skalarne pozostają oddzielone od implementacji SIMD. Analogicznie wydzielone starsze fragmenty TrueMotion i wyszukiwania ostatniego współczynnika enkodera VP8.
+- Pełne dekodowanie przy stałym JIT, dwie próby: 2,8 MP szybsze o 6,3% / 10,7%, 12 MP o 9,6% / 6,8%. Osobna próba z domyślnym JIT: 7,8% / 9,8% dla tych rozmiarów. Bez powtarzalnej regresji >3% na macierzy i bez wzrostu alokacji. BenchmarkDotNet: 48 przypadków predyktorów i 9 wejść pełnego dekodera; nowe predyktory 1,84–3,89× szybsze od skalaru (zależnie od trybu i kafla), bez alokacji w rekonstrukcji.
+- Weryfikacja: pełny build Release bez ostrzeżeń i błędów, 3798/3798 testów (0 pominiętych, w tym Oracle, odporność, migawka API i zgodność enkoderów); dodatkowe przebiegi porównujące SIMD ze skalarem oraz dekodery i prymitywy enkoderów z AVX2 i wszystkimi intrinsics wyłączonymi. Szczegóły i ograniczenia pomiarów: `docs/performance.md`.
+
+#### Etapy od 0.4.4 i proponowane wydania (ustalenia 2026-10-14)
+
+0.4.4 jest ukończona; pozostałe numery są planowanym podziałem prac i nie oznaczają ukończenia ani wydania. Faza 10 obejmuje wydajność całej biblioteki, odporność i przygotowanie wydania; sama optymalizacja VP8L w 0.4.4 jej nie zamyka.
+
+**Pierwszy krok, przed dalszymi optymalizacjami:** ustalić i zapisać w `docs/performance.md` konkretną macierz benchmarków oraz kryteria zaliczenia:
+- reprezentatywne zdjęcia, grafikę, obrazy z alfą i animacje; małe i duże obrazy oraz istotne opcje kodeków;
+- kodowanie i dekodowanie WebP, PNG, BMP, JPEG i GIF oraz przetwarzanie (w tym resize); czas pełnej operacji, alokacje i pomocnicze pomiary gorących ścieżek;
+- stałe wejścia i konfiguracje, wersje narzędzi, sprzęt, runtime, GC/JIT, rozgrzewkę, liczbę prób i sposób raportowania rozrzutu;
+- bazę porównawczą przed zmianami, tolerancję regresji i minimalny powtarzalny zysk pozwalający przyjąć optymalizację;
+- dla WebP porównanie z `cwebp`/`dwebp` 1.6.0 przy tych samych parametrach i jasno opisanych granicach pomiaru. Cel: czas ≤3× czasu natywnego C z SIMD na ustalonej macierzy. Czas procesu, I/O i wewnętrzny czas kodeka raportujemy oddzielnie, jeśli nie da się ich porównać bezpośrednio.
+
+| Wersja | Zakres |
+| --- | --- |
+| **0.4.4 — ukończona** | Dekoder VP8L: profilowanie odczytu bitów, pętli Huffmana i kopiowania powtórzeń; optymalizacja dominujących kosztów; pozostałe predyktory 5–7 i 13. Pomiary całego dekodera względem 0.4.3. |
+| **0.4.5** | Enkoder VP8L: wyszukiwanie predyktora i klastrowanie histogramów, z zachowaniem zgodności bajtowej z `cwebp` 1.6.0 i deterministyczności. |
+| **0.4.6** | Pozostałe gorące ścieżki: inflate/deflate, CRC i resize. Przegląd pokrycia SIMD IDCT/FDCT, loop filter, YUV↔RGB, transformacji lossless i SSE/kosztów; uzupełnienia uzasadnione pomiarami. |
+| **0.4.7** | ARM/AdvSimd: optymalizacje i weryfikacja na rzeczywistym ARM64, w tym testy identyczności ze skalarem i benchmarki pełnych operacji. |
+| **0.5.0** | Pełna macierz benchmarków, końcowe testy odporności, dokumentacja i weryfikacja pakietu NuGet; zamknięcie fazy 10 po spełnieniu DoD. |
+
+Optymalizacje wynikają z profilowania. Duży zysk mikrobenchmarku nie zastępuje powtarzalnego przyspieszenia pełnej operacji. SIMD dodajemy tam, gdzie daje mierzalną korzyść; pozostawienie ścieżki skalarnej wymaga zapisania wyników i jawnego zaktualizowania zakresu planu. Brak korzyści nie jest powodem do dodawania SIMD wyłącznie dla pokrycia listy.
+
+#### DoD całej fazy 10
+
+- **Wydajność:** ukończona ustalona macierz benchmarków, opublikowane czasy, alokacje, metodologia i ograniczenia w `docs/performance.md`; spełniony cel WebP ≤3× natywnego C z SIMD. Każda przyjęta optymalizacja ma powtarzalny zysk bez regresji przekraczających ustaloną tolerancję i bez nieuzasadnionego wzrostu alokacji. Niespełnione kryteria pozostają otwarte, chyba że zakres planu zostanie jawnie zmieniony z uzasadnieniem.
+- **Poprawność:** każda ścieżka SIMD daje wynik identyczny ze skalarnym, co potwierdzają testy. Sprawdzone ścieżki x86, ARM64 i fallback skalarny; dekodery zgodne z referencjami, enkodery z właściwymi kryteriami zgodności, wynik niezależny od liczby wątków. Publiczne API pozostaje zgodne z zatwierdzoną migawką.
+- **Odporność:** obcięcia i losowe mutacje korpusu wszystkich formatów, limity `MaxPixels`, także dla animacji; dla uszkodzonych lub nieobsługiwanych danych wyłącznie `ImageFormatException`/`NotSupportedException`, bez niekontrolowanych wyjątków.
+- **Weryfikacja:** pełny build i testy Release oraz testy Oracle z dostępnymi wymaganymi narzędziami. Pominięty test nie stanowi potwierdzenia spełnienia kryterium; brakujące weryfikacje muszą zostać wykonane przed zamknięciem fazy.
+- **Gotowość wydania:** zweryfikowane XML docs, README, przewodniki i przykłady testowane przez `DocsExamplesTests`, CLI oraz dokumentacja wydajności. Pakiet NuGet dla `net10.0`, bez zależności biblioteki, zawiera `LICENSE` i aktualny `THIRD-PARTY-NOTICES.txt`; sprawdzone pakowanie i użycie pakietu w przykładowym projekcie. Numer wersji aktualizujemy przy przygotowaniu wydania; publikacja, commit i push pozostają osobnymi czynnościami na polecenie użytkownika.
 
 ## Wytyczne portowania z C
 - Portujemy funkcja po funkcji, z komentarzem źródła, np. `// port: src/dec/vp8_dec.c GetCoeffsFast`.

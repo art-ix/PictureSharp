@@ -1,10 +1,8 @@
-using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.Intrinsics;
 
 namespace RasterSharp.Formats.WebP.Lossy;
 
-internal sealed class Vp8EncoderProba
+internal sealed partial class Vp8EncoderProba
 {
     public byte[] Coefficients { get; } = Vp8Tables.CoeffsProba0.ToArray();
     public uint[] Statistics { get; } = new uint[1056];
@@ -72,13 +70,8 @@ internal sealed class Vp8EncoderProba
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int LevelCost(int type, int n, int context, int value) => Vp8EncoderTables.LevelFixedCosts[value] + LevelCosts[(3 * (8 * type + Vp8Tables.Bands[n]) + context) * 68 + Math.Min(value, 67)];
-    public static int Last(ReadOnlySpan<short> levels)
+    private static int LastScalar(ReadOnlySpan<short> levels)
     {
-        if (Vector256.IsHardwareAccelerated && levels.Length >= 16)
-        {
-            uint nonzero = ~Vector256.Equals(Vector256.Create(levels[..16]), Vector256<short>.Zero).ExtractMostSignificantBits() & 0xFFFF;
-            return 31 - BitOperations.LeadingZeroCount(nonzero);
-        }
         for (int n = 15; n >= 0; n--) if (levels[n] != 0) return n;
         return -1;
     }

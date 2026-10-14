@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using static RasterSharp.Formats.WebP.WebPConstants;
 
 namespace RasterSharp.Formats.WebP.Lossless;
@@ -167,14 +168,14 @@ internal sealed class Vp8LDecoder
     {
         uint val = br.PrefetchBits();
         int index = (int)(val & HuffmanTableBuilder.TableMask);
-        HuffmanCode code = table[index];
+        ref HuffmanCode code = ref table[index];
         int nbits = code.Bits - HuffmanTableBuilder.TableBits;
         if (nbits > 0)
         {
             br.BitPos += HuffmanTableBuilder.TableBits;
-            val = br.PrefetchBits();
+            val >>= HuffmanTableBuilder.TableBits;
             index += code.Value + (int)(val & ((1u << nbits) - 1));
-            code = table[index];
+            code = ref table[index];
         }
 
         br.BitPos += code.Bits;
@@ -778,11 +779,25 @@ internal sealed class Vp8LDecoder
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void CopyBlock32b(uint[] data, int dst, int dist, int length)
+    // port: src/dec/vp8l_dec.c CopyBlock32b, CopySmallPattern32b
+    internal static void CopyBlock32b(uint[] data, int dst, int dist, int length)
     {
         int src = dst - dist;
-        if (dist >= length)
+        if (dist == 1)
+        {
+            data.AsSpan(dst, length).Fill(data[src]);
+        }
+        else if (dist == 2 && length >= 4)
+        {
+            Span<uint> output = data.AsSpan(dst, length);
+            ulong pattern = MemoryMarshal.Read<ulong>(MemoryMarshal.AsBytes(data.AsSpan(src, 2)));
+            MemoryMarshal.Cast<uint, ulong>(output).Fill(pattern);
+            if ((length & 1) != 0)
+            {
+                output[^1] = data[src];
+            }
+        }
+        else if (dist >= length)
         {
             data.AsSpan(src, length).CopyTo(data.AsSpan(dst, length));
         }

@@ -10,7 +10,11 @@ public class LosslessDecodeBenchmarks
     public IEnumerable<InputFile> Files()
     {
         string root = FindRoot();
-        foreach (string name in new[] { "photo_ll_z6.webp", "graphic_ll_z6.webp", "photo_alpha_ll_z6.webp" })
+        foreach (string name in new[]
+        {
+            "photo_ll_z6.webp", "photo_ll_q0m0.webp", "graphic_ll_z6.webp",
+            "photo_alpha_ll_z6.webp", "graphic_alpha_ll_z6.webp", "odd_alpha_ll_z9.webp", "wide_ll_z6.webp",
+        })
         {
             yield return new InputFile(Path.Combine(root, "tests", "assets", "corpus", "webp", "lossless", name));
         }

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -10,6 +11,35 @@ namespace RasterSharp.Formats.WebP.Lossy;
 // stays in 32-bit lanes like the C code, and only the lane layout differs.
 internal static partial class Vp8EncoderDsp
 {
+    private static void TrueMotion(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top, int size)
+    {
+        if (Vector128.IsHardwareAccelerated && top.Length >= size)
+        {
+            TrueMotionSimd(output, left, top, size);
+        }
+        else
+        {
+            TrueMotionScalar(output, left, top, size);
+        }
+    }
+
+    private static void TrueMotionSimd(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top, int size)
+    {
+        // clip(top[x] + left[y] - left[0]) on 16-bit lanes.
+        Vector128<byte> above = size == 16 ? Vector128.Create(top[..16]) : Vector128.CreateScalar(BinaryPrimitives.ReadUInt64LittleEndian(top)).AsByte();
+        Vector128<short> low = Vector128.WidenLower(above).AsInt16(), high = Vector128.WidenUpper(above).AsInt16();
+        Vector128<short> max = Vector128.Create((short)255);
+        for (int y = 0; y < size; y++)
+        {
+            Vector128<short> delta = Vector128.Create((short)(left[y + 1] - left[0]));
+            Vector128<short> l = Vector128.Clamp(low + delta, Vector128<short>.Zero, max);
+            Vector128<short> h = Vector128.Clamp(high + delta, Vector128<short>.Zero, max);
+            Span<byte> row = output.Slice(y * Bps, size);
+            if (size == 16) Vector128.Narrow(l.AsUInt16(), h.AsUInt16()).CopyTo(row);
+            else Vector128.Narrow(l.AsUInt16(), l.AsUInt16()).GetLower().CopyTo(row);
+        }
+    }
+
     private const int BlockSpan = Vp8Dsp.BlockSpan;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

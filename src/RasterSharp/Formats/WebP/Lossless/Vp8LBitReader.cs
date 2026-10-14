@@ -49,13 +49,15 @@ internal sealed class Vp8LBitReader
     }
 
     // port: VP8LReadBits
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public uint ReadBits(int nBits)
     {
         if (!_eos && nBits <= MaxNumBitRead)
         {
             uint val = PrefetchBits() & ((1u << nBits) - 1);
             _bitPos += nBits;
-            ShiftBytes();
+            // Keep at least 32 bits available, refilling a word instead of shifting each consumed byte.
+            FillBitWindow();
             return val;
         }
 
@@ -74,29 +76,24 @@ internal sealed class Vp8LBitReader
         get => _eos || (_pos == _end && _bitPos > LBits);
     }
 
-    // port: VP8LFillBitWindow
+    // port: VP8LFillBitWindow, VP8LDoFillBitWindow
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void FillBitWindow()
     {
         if (_bitPos >= WBits)
         {
-            DoFillBitWindow();
+            if (_pos < _end - 8)
+            {
+                _val >>= WBits;
+                _bitPos -= WBits;
+                _val |= (ulong)BinaryPrimitives.ReadUInt32LittleEndian(_buf.AsSpan(_pos, 4)) << (LBits - WBits);
+                _pos += 4;
+            }
+            else
+            {
+                ShiftBytes();
+            }
         }
-    }
-
-    // port: VP8LDoFillBitWindow
-    private void DoFillBitWindow()
-    {
-        if (_pos + 8 < _end)
-        {
-            _val >>= WBits;
-            _bitPos -= WBits;
-            _val |= (ulong)BinaryPrimitives.ReadUInt32LittleEndian(_buf.AsSpan(_pos, 4)) << (LBits - WBits);
-            _pos += 4;
-            return;
-        }
-
-        ShiftBytes();
     }
 
     // port: ShiftBytes

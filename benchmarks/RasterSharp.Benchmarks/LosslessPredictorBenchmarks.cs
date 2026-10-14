@@ -10,7 +10,7 @@ public class LosslessPredictorBenchmarks
     private uint[] _pixels = null!;
     private Vp8LTransform _transform = null!;
 
-    [Params(10, 11, 12, -1)]
+    [Params(5, 6, 7, 10, 11, 12, 13, -1)]
     public int Mode { get; set; }
 
     [Params(2, 3, 5)]

@@ -4,6 +4,8 @@ Instrukcje dla agentów AI (i ludzi) pracujących nad **RasterSharp**: bibliotek
 
 Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.md](plan.md). Przed rozpoczęciem pracy przeczytaj go i ustal, w której fazie jesteś.
 
+Bieżący postęp zapisujemy w [progres.md](progres.md): wykonane zmiany, decyzje, wyniki testów i pomiarów, pozostałe zadania oraz następny krok. Czytamy aktualny stan przed kontynuowaniem pracy i aktualizujemy go po istotnym kroku oraz przed zakończeniem sesji. Zachowujemy wcześniejsze wpisy; `plan.md` opisuje zakres, DoD i status etapów. `progres.md` pozostaje plikiem lokalnym, poza commitami.
+
 ## Twarde zasady
 
 - **Target:** `net10.0`. Biblioteka ma działać na .NET 10 i nowszych.
@@ -56,6 +58,7 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
 - Stosujemy SOLID i Clean Code tam, gdzie upraszczają kod: jedna odpowiedzialność typu, małe interfejsy dla rzeczywistych granic i wspólne miejsce konfiguracji. Nie dodajemy interfejsów, fabryk ani warstw bez konkretnej potrzeby.
 - Nazwa pliku odpowiada głównemu typowi. Publiczne enumy mają osobne pliki; części typu `partial` nazywamy `Typ.Odpowiedzialność.cs`. Małe, ściśle powiązane typy wewnętrzne portów mogą pozostać razem.
 - Pliki grupujemy według funkcji: opcje, enumy i rozszerzenia formatu w `Formats/<Format>/`, kontekst i opcje przetwarzania w `Processing/`, pomocnicze operacje wejścia/wyjścia w `Internal/`. Publiczne typy nadal należą wyłącznie do namespace `RasterSharp`.
+- Implementacje SIMD wydzielamy do osobnych metod i plików częściowych (`Typ.Simd.cs`, `Typ.Odpowiedzialność.X86.cs`, analogicznie dla ARM). Kod core i wersje skalarne pozostają czytelne bez instrukcji wektorowych; dopuszczalne są krótkie wywołania wybierające ścieżkę SIMD i fallback skalarny. Wybór obsługiwanej architektury, intrinsics i pomocnicze operacje na wektorach grupujemy po stronie SIMD. Nie dodajemy abstrakcji ani wywołań pośrednich w gorących pętlach wyłącznie dla tego podziału.
 - Preferujemy dostępne idiomy C#: pattern matching, wyrażenia kolekcji, rekordy i `with`, `field` w walidowanych właściwościach oraz bloki `extension`. Stosujemy je, gdy poprawiają czytelność i zachowują semantykę, alokacje oraz zgodność portu.
 - Nullable włączone, `TreatWarningsAsErrors`. Publiczne API ma komentarze XML (`GenerateDocumentationFile`).
 - Gorące pętle:

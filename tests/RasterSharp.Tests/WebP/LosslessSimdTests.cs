@@ -83,6 +83,13 @@ public class LosslessSimdTests
     }
 
     [Theory]
+    [InlineData(5, 3, 0, 1, 2, 255, 0)]
+    [InlineData(6, 3, 2, 0, 0, 255, 1)]
+    [InlineData(7, 3, 0, 2, 0, 255, 1)]
+    [InlineData(13, 0, 3, 2, 0, 0, 0)] // Negative even difference.
+    [InlineData(13, 0, 2, 2, 0, 0, 1)] // Negative odd difference truncates toward zero.
+    [InlineData(13, 254, 0, 255, 0, 1, 0)] // Saturation precedes wrapping addition.
+    [InlineData(13, 0, 255, 0, 0, 255, 255)]
     [InlineData(10, 3, 0, 1, 2, 255, 0)] // Nested odd averages round down, then residual wraps.
     [InlineData(11, 255, 128, 1, 0, 0, 1)] // Equal distances choose top, although top differs from left.
     [InlineData(11, 200, 0, 10, 0, 0, 200)]

@@ -1,5 +1,98 @@
 # Performance
 
+## Phase 10 measurement contract
+
+Before accepting an optimization, compare the same encoded bytes and options with the preceding
+release on the same CPU/runtime/GC configuration. Record median, spread and allocated bytes for
+the complete operation; microbenchmarks explain a change but do not establish an end-to-end gain.
+Run performance jobs serially. Keep private photographs and raw benchmark artifacts out of Git.
+
+The 0.4.4 decode matrix contains seven committed static VP8L inputs:
+`photo_ll_z6`, `photo_ll_q0m0`, `graphic_ll_z6`, `photo_alpha_ll_z6`,
+`graphic_alpha_ll_z6`, `odd_alpha_ll_z9`, and `wide_ll_z6` (all `.webp`).
+It covers photo/graphic content, alpha, different encoder effort, odd dimensions and a wide row.
+Two optional local photo inputs (1920×1440 and 4000×3000) reuse the exact bytes from 0.4.3.
+Predictor microbenchmarks cover modes 5–7 and 13 as well as 10–12 and mixed 10–12,
+with tile bits 2/3/5, fixed seed 43 and a 1920×1440 residual buffer.
+
+For 0.4.4, require a repeatable full-decode median improvement of at least 3% on a large input
+in two independent batches, no repeatable regression above 3% elsewhere in this matrix,
+and unchanged allocations (apart from measurement noise). Investigate overlapping distributions
+with longer runs before drawing a conclusion. The comparison probe uses 40 warmups and 21 samples;
+small inputs use batches of 32 decodes per sample. Report fixed-JIT (`DOTNET_TieredCompilation=0`)
+and default-JIT results separately. BenchmarkDotNet remains the reproducible benchmark entry point.
+Validate scalar and SSE2 fallbacks separately from the default AVX2 path.
+
+The final phase-10 matrix must additionally cover encoding/decoding of WebP lossy, PNG, BMP,
+JPEG and GIF, animations, and processing (especially resize), with small and large images.
+Freeze the specific corpus files/options before each corresponding optimization stage. ARM64
+measurements require real hardware. For the final WebP gate, require at most 3× the native SIMD
+time on the frozen matrix using libwebp 1.6.0; disclose process startup, I/O and API timing differences.
+These broader measurements and the final gate remain pending; the VP8L matrix alone does not close phase 10.
+
+## VP8L decoding in 0.4.4
+
+The entropy loop now reuses the prefetched bits for the second Huffman table lookup and accesses
+table entries by reference. Bit reads refill a 32-bit word through the inlined fast path instead of
+shifting each consumed byte. The guarded byte-at-a-time tail remains in place. Backward references
+with distance 1 or 2 use span fills for repeating pixels/pairs, following libwebp's small-pattern copy.
+All backward-reference bounds checks remain before copying.
+
+Predictors 5–7 and 13 now use SSE2 across color channels while carrying the reconstructed left pixel
+sequentially. Mode 13 corrects negative odd differences before arithmetic shifting to preserve C's
+division toward zero. These paths also run on AVX2 CPUs; no separate AVX2 version is needed for
+this implementation. Short runs and CPUs without SSE2 retain scalar code.
+
+Diagnostic stage timing on the baseline attributed approximately 46 ms entropy / 7 ms inverse
+transforms at 1920×1440 and 164 ms / 35 ms at 4000×3000. This was temporary coarse instrumentation,
+not a sampling profile of individual Huffman or bit-reader instructions, and is not used for speedup claims.
+
+Fixed-JIT before/after measurements on the Intel Core i5-12500H, Linux x64, .NET SDK 10.0.112/runtime 10.0.12, workstation GC, and the input bytes described in the measurement contract
+(40 warmups, 21 samples; two independent serial batches):
+
+| Input | 0.4.3 medians, batches 1 / 2 (ms) | 0.4.4 medians, batches 1 / 2 (ms) | Reduction |
+| --- | ---: | ---: | ---: |
+| Photo, q0/m0 | 0.978 / 1.016 | 0.951 / 0.948 | 2.7% / 6.7% |
+| Graphic with alpha | 0.0517 / 0.0496 | 0.0396 / 0.0392 | 23.4% / 21.1% |
+| Odd dimensions with alpha | 0.1056 / 0.1025 | 0.0948 / 0.0964 | 10.2% / 5.9% |
+| Wide row | 0.0507 / 0.0509 | 0.0474 / 0.0472 | 6.4% / 7.4% |
+| Photo, z6 | 1.091 / 1.124 | 0.943 / 0.976 | 13.5% / 13.1% |
+| Graphic, z6 | 0.0843 / 0.0898 | 0.0869 / 0.0903 | −3.0% / −0.6% |
+| Photo with alpha | 0.671 / 0.682 | 0.578 / 0.595 | 13.9% / 12.8% |
+| Photo, 1920×1440 | 55.24 / 56.38 | 51.77 / 50.35 | 6.3% / 10.7% |
+| Photo, 4000×3000 | 210.63 / 204.41 | 190.41 / 190.43 | 9.6% / 6.8% |
+
+The graphic z6 result is effectively unchanged: the small slowdown was not repeatable above 3%.
+For the large inputs, batch-2 10th–90th percentile intervals were 51.78–57.71 → 46.69–53.36 ms
+and 202.62–208.37 → 188.65–198.58 ms. Corpus allocations were exactly unchanged; large-input
+allocations stayed approximately 21.6 / 92.7 MiB, with less than 256 bytes of per-call measurement noise.
+These are full `Image.Load` API measurements from memory, not a comparison against native process time.
+
+A separate default-JIT batch measured 49.19 → 45.34 ms (7.8%) and 187.63 → 169.17 ms (9.8%)
+for the two large inputs. On the seven corpus inputs, changes ranged from a 0.4% slowdown to a
+13.5% improvement; this batch did not show a regression above the 3% threshold. Do not mix these
+numbers with the fixed-JIT table: tiered compilation materially changes timings.
+
+An independent BenchmarkDotNet run of all nine decode inputs (fixed JIT, three warmups, eight
+100-ms target iterations) measured 52.41 ± 2.38 ms / 21.63 MiB and 202.95 ± 2.48 ms / 92.67 MiB
+for the large photos (mean ± standard deviation). GC scheduling and iteration setup differ from the
+comparison probe, so these absolute measurements must not replace its paired before/after results.
+
+BenchmarkDotNet 0.15.2 also ran all 48 predictor cases (eight mode settings × three tile sizes ×
+scalar/automatic), with fixed JIT, five warmups and twelve measured single-invocation iterations.
+New modes at tile bits 5 (mean ± standard deviation):
+
+| Predictor | Scalar (ms) | Automatic SSE2 (ms) | Speedup |
+| --- | ---: | ---: | ---: |
+| 5 | 11.420 ± 0.250 | 5.059 ± 0.168 | 2.26× |
+| 6 | 8.786 ± 0.280 | 2.857 ± 0.069 | 3.08× |
+| 7 | 8.751 ± 0.172 | 2.909 ± 0.114 | 3.01× |
+| 13 | 28.906 ± 0.292 | 8.026 ± 0.330 | 3.60× |
+
+Across tile bits 2/3/5, speedups were 2.02–2.26×, 1.86–3.08×, 1.84–3.01× and 3.60–3.89×
+respectively, with zero allocations. These short microbenchmarks measure reconstruction only;
+BenchmarkDotNet warns about their short iteration time.
+
 ## VP8L predictors in 0.4.3
 
 Release 0.4.3 adds SSE2 and AVX2 reconstruction for lossless WebP predictor modes 10 (nested averages), 11 (selection) and 12 (clamped addition/subtraction). The routines are ported from libwebp 1.6.0. Pixels still depend on the reconstructed pixel to their left: AVX2 prepares eight pixels, then carries that dependency through the two 128-bit halves. Short tails and CPUs without SSE2 use scalar code.
@@ -50,7 +143,7 @@ DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/RasterShar
 
 The iterations are deliberately short for this focused comparison. BenchmarkDotNet reports confidence intervals and warnings; use more launches/iterations when investigating small differences. Repeat with `DOTNET_EnableAVX2=0` to exercise SSE2, or `DOTNET_EnableHWIntrinsic=0` to exercise scalar fallbacks. For production-style tiered-JIT measurements, omit `DOTNET_TieredCompilation=0` and provide substantially longer warmup runs.
 
-The decoder benchmark reads each file once during setup, checks that it is a static lossless WebP, decodes from memory, and disposes each image. The committed photo, graphic and alpha-photo inputs work without reference tools:
+The decoder benchmark reads each file once during setup, checks that it is a static lossless WebP, decodes from memory, and disposes each image. The seven committed corpus inputs work without reference tools:
 
 ```bash
 DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
