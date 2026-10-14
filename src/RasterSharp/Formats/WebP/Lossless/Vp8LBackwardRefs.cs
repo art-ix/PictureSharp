@@ -16,6 +16,14 @@ internal sealed class Vp8LRefs(int capacity) : IDisposable
     public int Count { get; private set; }
     public ReadOnlySpan<Vp8LToken> Tokens => _tokens.AsSpan(0, Count);
     public void Add(Vp8LToken token) => _tokens[Count++] = token;
+
+    public Vp8LRefs Clone()
+    {
+        var copy = new Vp8LRefs(Math.Max(Count, 1));
+        Tokens.CopyTo(copy._tokens);
+        copy.Count = Count;
+        return copy;
+    }
     public void Dispose() => ArrayPool<Vp8LToken>.Shared.Return(_tokens);
 }
 
@@ -271,76 +279,142 @@ internal sealed class Vp8LBackwardRefs : IDisposable
         return result;
     }
 
-    // port: src/enc/backward_references_cost_enc.c VP8LBackwardReferencesTraceBackwards
-    // Range offers implement the same shortest-path recurrence without a linked interval pool.
+    // port: src/enc/backward_references_cost_enc.c VP8LBackwardReferencesTraceBackwards, BackwardReferencesHashChainDistanceOnly,
+    // TraceBackwards, BackwardReferencesHashChainFollowChosenPath, CostModelBuild, AddSingleLiteralWithCostModel
     public Vp8LRefs Trace(Vp8LRefs source, int cacheBits)
     {
         var histogram = new Vp8LHistogram(cacheBits);
         foreach (Vp8LToken token in source.Tokens) histogram.Add(token, _width);
-        long[][] costs = histogram.Costs();
-        long[] cost = ArrayPool<long>.Shared.Rent(_count + 1);
-        int[] previous = ArrayPool<int>.Shared.Rent(_count + 1);
-        int[] distance = ArrayPool<int>.Shared.Rent(_count + 1);
-        int[] cacheIndex = ArrayPool<int>.Shared.Rent(_count);
-        Span<uint> cache = stackalloc uint[1 << cacheBits]; cache.Clear();
+        long[][] model = histogram.Costs();
+        long[] costs = ArrayPool<long>.Shared.Rent(_count);
+        ushort[] distArray = ArrayPool<ushort>.Shared.Rent(_count);
+        uint[] cache = new uint[cacheBits > 0 ? 1 << cacheBits : 0];
         try
         {
-            cost.AsSpan(0, _count + 1).Fill(long.MaxValue); cost[0] = 0;
-            // Offers are activated at the first length of each prefix category.
-            var pending = new PriorityQueue<(int End, int Start, int Distance, long Cost), int>();
-            var active = new PriorityQueue<(int End, int Start, int Distance), long>();
-            for (int i = 0; i <= _count; i++)
+            var manager = new Vp8LCostManager(costs, distArray, _count, model[0]);
+            int offsetPrevious = -1, lengthPrevious = -1, firstOffsetIsConstant = -1, reach = 0;
+            long offsetCost = -1;
+            distArray[0] = 0;
+            AddLiteral(0, 0);
+            for (int i = 1; i < _count; i++)
             {
-                while (pending.TryPeek(out _, out int begin) && begin <= i)
+                long previousCost = costs[i - 1];
+                int offset = Distance(i), length = Length(i);
+                AddLiteral(i, previousCost);
+                if (length >= 2)
                 {
-                    var offer = pending.Dequeue(); active.Enqueue((offer.End, offer.Start, offer.Distance), offer.Cost);
+                    if (offset != offsetPrevious)
+                    {
+                        offsetCost = DistanceCost(PlaneCode(_width, offset));
+                        firstOffsetIsConstant = 1;
+                        manager.PushInterval(previousCost + offsetCost, i, length);
+                    }
+                    else
+                    {
+                        // Consecutive pixels with the same offset (e.g. constant regions) only need the
+                        // contributions that reach further than the previous ones.
+                        if (firstOffsetIsConstant == 1)
+                        {
+                            reach = i - 1 + lengthPrevious - 1;
+                            firstOffsetIsConstant = 0;
+                        }
+                        if (i + length - 1 > reach)
+                        {
+                            int offsetJ, lengthJ = 0, j;
+                            // Find the last consecutive pixel within [i, reach + 1] with the same offset.
+                            for (j = i; j <= reach; j++)
+                            {
+                                offsetJ = Distance(j + 1); lengthJ = Length(j + 1);
+                                if (offsetJ != offset)
+                                {
+                                    lengthJ = Length(j);
+                                    break;
+                                }
+                            }
+                            manager.UpdateCostAtIndex(j - 1, false);
+                            manager.UpdateCostAtIndex(j, false);
+                            manager.PushInterval(costs[j - 1] + offsetCost, j, lengthJ);
+                            reach = j + lengthJ - 1;
+                        }
+                    }
                 }
-                while (active.TryPeek(out var expired, out _) && expired.End < i) active.Dequeue();
-                if (active.TryPeek(out var best, out long bestCost) && bestCost < cost[i])
-                { cost[i] = bestCost; previous[i] = best.Start; distance[i] = best.Distance; }
-                if (i == _count) break;
-                uint pixel = _pixels[i];
-                int key = cacheBits > 0 ? (int)(unchecked(pixel * 0x1e35a7bdu) >> (32 - cacheBits)) : 0;
-                bool hit = cacheBits > 0 && cache[key] == pixel;
-                cacheIndex[i] = hit ? key : -1;
-                if (cacheBits > 0) cache[key] = pixel;
-                long literal = hit ? Vp8LEntropy.DivideRound(68 * costs[0][280 + key], 100)
-                    : Vp8LEntropy.DivideRound(82 * (costs[3][pixel >> 24] + costs[1][(pixel >> 16) & 255] + costs[0][(pixel >> 8) & 255] + costs[2][pixel & 255]), 100);
-                if (cost[i] + literal < cost[i + 1]) { cost[i + 1] = cost[i] + literal; previous[i + 1] = i; distance[i + 1] = 0; }
-                int length = Length(i), offset = Distance(i);
-                if (length < 2) continue;
-                var dp = Prefix(PlaneCode(_width, offset));
-                long baseCost = cost[i] + costs[4][dp.Code] + dp.Bits * Vp8LEntropy.One;
-                for (int start = 2; start <= length;)
-                {
-                    var lp = Prefix(start);
-                    int end = Math.Min(length, start + (1 << lp.Bits) - 1);
-                    pending.Enqueue((i + end, i, offset, baseCost + costs[0][256 + lp.Code] + lp.Bits * Vp8LEntropy.One), i + start);
-                    start = end + 1;
-                }
+                manager.UpdateCostAtIndex(i, true);
+                offsetPrevious = offset;
+                lengthPrevious = length;
             }
-            int endPos = _count, n = 0;
-            Vp8LToken[] path = ArrayPool<Vp8LToken>.Shared.Rent(_count);
-            try
-            {
-                while (endPos > 0)
-                {
-                    int start = previous[endPos], length = endPos - start;
-                    path[n++] = length > 1 ? Vp8LToken.Copy(distance[endPos], length)
-                        : cacheIndex[start] >= 0 ? Vp8LToken.Cache(cacheIndex[start]) : Vp8LToken.Literal(_pixels[start]);
-                    endPos = start;
-                }
-                var result = new Vp8LRefs(n);
-                while (n > 0) result.Add(path[--n]);
-                return result;
-            }
-            finally { ArrayPool<Vp8LToken>.Shared.Return(path); }
+            return FollowChosenPath(distArray, cacheBits);
         }
         finally
         {
-            ArrayPool<long>.Shared.Return(cost); ArrayPool<int>.Shared.Return(previous);
-            ArrayPool<int>.Shared.Return(distance); ArrayPool<int>.Shared.Return(cacheIndex);
+            ArrayPool<long>.Shared.Return(costs);
+            ArrayPool<ushort>.Shared.Return(distArray);
         }
+
+        void AddLiteral(int index, long previousCost)
+        {
+            long cost = previousCost;
+            uint color = _pixels[index];
+            int key = cacheBits > 0 ? (int)(unchecked(color * 0x1e35a7bdu) >> (32 - cacheBits)) : 0;
+            if (cacheBits > 0 && cache[key] == color)
+            {
+                cost += Vp8LEntropy.DivideRound(model[0][280 + key] * 68, 100);
+            }
+            else
+            {
+                if (cacheBits > 0) cache[key] = color;
+                cost += Vp8LEntropy.DivideRound((model[3][color >> 24] + model[1][(color >> 16) & 255] + model[0][(color >> 8) & 255] + model[2][color & 255]) * 82, 100);
+            }
+            if (costs[index] > cost)
+            {
+                costs[index] = cost;
+                distArray[index] = 1;
+            }
+        }
+
+        long DistanceCost(int distance)
+        {
+            var (code, bits, _) = Prefix(distance);
+            return model[4][code] + ((long)bits << 23);
+        }
+    }
+
+    // port: src/enc/backward_references_cost_enc.c TraceBackwards, BackwardReferencesHashChainFollowChosenPath
+    private Vp8LRefs FollowChosenPath(ushort[] distArray, int cacheBits)
+    {
+        int[] path = ArrayPool<int>.Shared.Rent(_count);
+        try
+        {
+            int size = 0;
+            for (int current = _count - 1; current >= 0; current -= distArray[current]) path[size++] = distArray[current];
+            var refs = new Vp8LRefs(size);
+            uint[] cache = new uint[cacheBits > 0 ? 1 << cacheBits : 0];
+            int i = 0;
+            for (int n = size - 1; n >= 0; n--)
+            {
+                int length = path[n];
+                if (length != 1)
+                {
+                    refs.Add(Vp8LToken.Copy(Distance(i), length));
+                    if (cacheBits > 0)
+                        for (int k = 0; k < length; k++) cache[(int)(unchecked(_pixels[i + k] * 0x1e35a7bdu) >> (32 - cacheBits))] = _pixels[i + k];
+                    i += length;
+                }
+                else
+                {
+                    uint pixel = _pixels[i];
+                    int key = cacheBits > 0 ? (int)(unchecked(pixel * 0x1e35a7bdu) >> (32 - cacheBits)) : 0;
+                    if (cacheBits > 0 && cache[key] == pixel) refs.Add(Vp8LToken.Cache(key));
+                    else
+                    {
+                        if (cacheBits > 0) cache[key] = pixel;
+                        refs.Add(Vp8LToken.Literal(pixel));
+                    }
+                    i++;
+                }
+            }
+            return refs;
+        }
+        finally { ArrayPool<int>.Shared.Return(path); }
     }
 
     public void Dispose() => ArrayPool<int>.Shared.Return(_matches);

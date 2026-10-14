@@ -535,9 +535,17 @@ public class ProcessingTests
         long Measure(Action<ImageProcessingContext> operation)
         {
             image.Mutate(operation);
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            image.Mutate(operation);
-            return GC.GetAllocatedBytesForCurrentThread() - before;
+            // The minimum of several runs ignores one-off runtime allocations (e.g. per-thread pool buckets)
+            // that can land in a measurement while other tests run in parallel.
+            long best = long.MaxValue;
+            for (int i = 0; i < 5; i++)
+            {
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                image.Mutate(operation);
+                best = Math.Min(best, GC.GetAllocatedBytesForCurrentThread() - before);
+            }
+
+            return best;
         }
 
         long baseline = Measure(static x => x.Invert());

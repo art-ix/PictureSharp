@@ -54,13 +54,38 @@ internal static class Vp8LEntropy
         return -DivideRound(bits, 10);
     }
 
-    // port: src/enc/histogram_enc.c BitsEntropyRefine
+    // port: src/enc/histogram_enc.c VP8LBitsEntropy; src/dsp/lossless_enc.c VP8LBitsEntropyUnrefined
     public static long Bits(ReadOnlySpan<uint> counts)
     {
         uint sum = 0, max = 0;
         int nonzero = 0;
         long entropy = 0;
-        foreach (uint count in counts) { sum += count; max = Math.Max(max, count); if (count != 0) nonzero++; entropy -= SLog(count); }
+        foreach (uint count in counts)
+        {
+            if (count == 0) continue;
+            sum += count; nonzero++; entropy -= SLog(count);
+            if (max < count) max = count;
+        }
+        return Refine(sum, max, nonzero, entropy);
+    }
+
+    // port: src/dsp/lossless_enc.c ShannonEntropy_C
+    public static long Shannon(ReadOnlySpan<uint> counts)
+    {
+        long result = 0;
+        uint sum = 0;
+        foreach (uint count in counts)
+        {
+            if (count == 0) continue;
+            sum += count; result += SLog(count);
+        }
+        return SLog(sum) - result;
+    }
+
+    // port: src/enc/histogram_enc.c BitsEntropyRefine
+    // Accumulated sum, maximum, non-zero count and -sum(SLog(count)) of a population.
+    public static long Refine(uint sum, uint max, int nonzero, long entropy)
+    {
         if (nonzero <= 1) return 0;
         entropy += SLog(sum);
         if (nonzero == 2) return DivideRound(99L * sum * One + entropy, 100);

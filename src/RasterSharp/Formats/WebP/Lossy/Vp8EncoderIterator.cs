@@ -27,7 +27,12 @@ internal sealed class Vp8EncoderIterator : IDisposable
     public Span<byte> TopUv => _analysis ? _analysisTop.AsSpan(16, 16) : Context.TopUv.AsSpan(X * 16, 16);
     private static ReadOnlySpan<byte> TopLeftI4 => [17, 21, 25, 29, 13, 17, 21, 25, 9, 13, 17, 21, 5, 9, 13, 17];
 
-    public Vp8EncoderIterator(Vp8EncoderContext context) { Context = context; Reset(); }
+    // Iterators of parallel workers leave the shared top context alone.
+    public Vp8EncoderIterator(Vp8EncoderContext context, bool resetContext = true)
+    {
+        Context = context;
+        if (resetContext) Reset();
+    }
 
     // port: src/enc/iterator_enc.c VP8IteratorReset, InitTop, InitLeft
     public void Reset()
@@ -117,6 +122,15 @@ internal sealed class Vp8EncoderIterator : IDisposable
             Output.AsSpan(7 * 32 + 16, 16).CopyTo(TopUv);
         }
     }
+
+    // Positions the iterator at the start of a row without touching the shared top context (parallel passes).
+    public void StartRow(int y)
+    {
+        X = 0; Y = y; _analysis = false;
+        InitLeft();
+    }
+
+    public void Advance() => X++;
 
     // port: src/enc/iterator_enc.c VP8IteratorNext
     public bool Next()

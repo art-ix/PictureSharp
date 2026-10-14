@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using RasterSharp.Formats.WebP.Lossy;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.WebP.ColorConversion;
 
@@ -29,23 +30,40 @@ internal static class YuvToRgb
     private static Rgba32 ToRgba(int y, int u, int v) => new(YuvToR(y, v), YuvToG(y, u, v), YuvToB(y, u), 255);
 
     /// <summary>Converts a decoded frame to opaque RGBA pixels (width × height, tightly packed).</summary>
-    public static void Convert(Vp8Frame frame, Span<Rgba32> dst, bool fancyUpsampling)
+    public static void Convert(Vp8Frame frame, Rgba32[] dst, bool fancyUpsampling, int maxDegreeOfParallelism = 1)
+    {
+        // Fancy upsampling works on row 0, then row pairs (2k-1, 2k), then a lone last row; sampling on rows.
+        // Units only read the frame, so bands of units convert independently.
+        int units = fancyUpsampling ? (frame.Height >> 1) + 1 : frame.Height;
+        int bands = Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)frame.Width * frame.Height, 1 << 18)
+            ? Math.Min(Environment.ProcessorCount * 4, Math.Max(1, units / 8)) : 1;
+        if (bands == 1)
+        {
+            ConvertUnits(frame, dst, fancyUpsampling, 0, units);
+            return;
+        }
+
+        Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism),
+            band => ConvertUnits(frame, dst, fancyUpsampling, (int)((long)units * band / bands), (int)((long)units * (band + 1) / bands)));
+    }
+
+    private static void ConvertUnits(Vp8Frame frame, Span<Rgba32> dst, bool fancyUpsampling, int start, int end)
     {
         if (fancyUpsampling)
         {
-            ConvertFancy(frame, dst);
+            ConvertFancy(frame, dst, start, end);
         }
         else
         {
-            ConvertSampled(frame, dst);
+            ConvertSampled(frame, dst, start, end);
         }
     }
 
     // port: EmitSampledRGB (point-sampled chroma)
-    private static void ConvertSampled(Vp8Frame f, Span<Rgba32> dst)
+    private static void ConvertSampled(Vp8Frame f, Span<Rgba32> dst, int start, int end)
     {
         int w = f.Width;
-        for (int y = 0; y < f.Height; y++)
+        for (int y = start; y < end; y++)
         {
             int yRow = y * f.YStride;
             int uvRow = (y >> 1) * f.UvStride;
@@ -57,28 +75,31 @@ internal static class YuvToRgb
         }
     }
 
-    // port: EmitFancyRGB applied to the whole frame
-    private static void ConvertFancy(Vp8Frame f, Span<Rgba32> dst)
+    // port: EmitFancyRGB applied to units [start, end): unit 0 is the first row, unit k the row pair (2k-1, 2k),
+    // or the last row of an even-sized picture.
+    private static void ConvertFancy(Vp8Frame f, Span<Rgba32> dst, int start, int end)
     {
-        int w = f.Width;
         int h = f.Height;
-
-        // First line is special cased: the u/v samples are mirrored at the boundary.
-        UpsampleLinePair(f, 0, -1, 0, 0, dst, -1);
-
-        // Pairs of rows (2k-1, 2k) interpolate between chroma rows k-1 and k.
-        int y = 1;
-        for (; y + 1 < h; y += 2)
+        for (int k = start; k < end; k++)
         {
-            int uvTop = (y - 1) >> 1;
-            UpsampleLinePair(f, y, y + 1, uvTop, uvTop + 1, dst, y + 1);
-        }
+            if (k == 0)
+            {
+                // The first line is special cased: the u/v samples are mirrored at the boundary.
+                UpsampleLinePair(f, 0, -1, 0, 0, dst, -1);
+                continue;
+            }
 
-        // Process the very last row of an even-sized picture.
-        if ((h & 1) == 0)
-        {
-            int uvLast = (h - 1) >> 1;
-            UpsampleLinePair(f, h - 1, -1, uvLast, uvLast, dst, -1);
+            int y = (2 * k) - 1;
+            if (y + 1 < h)
+            {
+                // Rows (2k-1, 2k) interpolate between chroma rows k-1 and k.
+                UpsampleLinePair(f, y, y + 1, k - 1, k, dst, y + 1);
+            }
+            else
+            {
+                // The very last row of an even-sized picture.
+                UpsampleLinePair(f, h - 1, -1, k - 1, k - 1, dst, -1);
+            }
         }
     }
 

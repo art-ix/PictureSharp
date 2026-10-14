@@ -1,16 +1,27 @@
 namespace RasterSharp.Formats.WebP.Lossy;
 
-internal readonly struct Vp8CoefficientWriter(Vp8EncoderProba probabilities, Vp8TokenBuffer? tokens = null, Vp8BitWriter? writer = null, bool record = true)
+internal readonly struct Vp8CoefficientWriter(Vp8EncoderProba probabilities, Vp8TokenBuffer? tokens = null, Vp8BitWriter? writer = null,
+    bool record = true, Vp8TokenRecorder? recorder = null)
 {
+    private bool TokenPath => tokens is not null || recorder is not null;
+
     private bool Put(bool bit, int index, int statsIndex = -1)
     {
+        int statistics = statsIndex < 0 ? index : statsIndex;
+        if (recorder is not null)
+        {
+            // Statistics are replayed later in raster order.
+            recorder.Add(bit, index, false, statistics);
+            return bit;
+        }
         tokens?.Add(bit, index, false);
         writer?.Put(bit, probabilities.Coefficients[index]);
-        if (record) probabilities.Record(bit, statsIndex < 0 ? index : statsIndex);
+        if (record) probabilities.Record(bit, statistics);
         return bit;
     }
     private void Constant(bool bit, int probability)
     {
+        recorder?.Add(bit, probability, true, 0);
         tokens?.Add(bit, probability, true); writer?.Put(bit, probability);
     }
 
@@ -56,12 +67,12 @@ internal readonly struct Vp8CoefficientWriter(Vp8EncoderProba probabilities, Vp8
                     {
                         Put(true, id + 8);
                         // The token path in libwebp 1.6.0 records Cat5/6 at stats slot 9, while emitting slot 10.
-                        Put(false, id + 10, tokens is null ? id + 10 : id + 9);
+                        Put(false, id + 10, TokenPath ? id + 9 : id + 10);
                         residue -= 32; mask = 16; table = Vp8Tables.Cat5;
                     }
                     else
                     {
-                        Put(true, id + 8); Put(true, id + 10, tokens is null ? id + 10 : id + 9);
+                        Put(true, id + 8); Put(true, id + 10, TokenPath ? id + 9 : id + 10);
                         residue -= 64; mask = 1024; table = Vp8Tables.Cat6;
                     }
                     for (int i = 0; mask != 0; i++, mask >>= 1) Constant((residue & mask) != 0, table[i]);

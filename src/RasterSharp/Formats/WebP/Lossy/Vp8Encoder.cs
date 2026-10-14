@@ -2,7 +2,7 @@ using RasterSharp.Formats.WebP.ColorConversion;
 
 namespace RasterSharp.Formats.WebP.Lossy;
 
-internal static class Vp8Encoder
+internal static partial class Vp8Encoder
 {
     private const long Partition0Limit = ((1L << 19) - 2048) << 11;
 
@@ -64,18 +64,26 @@ internal static class Vp8Encoder
             bool last = Math.Abs(stats.Delta) <= .4 || remaining == 0 || maxHeaderBits == 0;
             it.Reset(); SetLoopParams(context, probabilities, stats.Quality);
             if (last) { probabilities.Statistics.AsSpan().Clear(); filter.Reset(); }
-            tokens.Clear(); int count = refresh; long header = 0, distortion = 0;
-            var writer = new Vp8CoefficientWriter(probabilities, tokens);
-            do
+            tokens.Clear(); long header = 0, distortion = 0;
+            if (UseParallelPass(context))
             {
-                it.Import();
-                if (--count < 0) { probabilities.FinalizeTokenProbas(); probabilities.CalculateLevelCosts(); count = refresh; }
-                Vp8ModeScore rd = default;
-                Vp8ModeDecision.Decimate(it, probabilities, ref rd, context.Config.RdLevel, maxHeaderBits);
-                Residuals(it, rd, writer); header += rd.H; distortion += rd.D;
-                if (last) filter.Store(it);
-                it.SaveBoundary();
-            } while (it.Next());
+                ParallelPass(context, probabilities, filter, tokens, refresh, last, maxHeaderBits, out header, out distortion);
+            }
+            else
+            {
+                int count = refresh;
+                var writer = new Vp8CoefficientWriter(probabilities, tokens);
+                do
+                {
+                    it.Import();
+                    if (--count < 0) { probabilities.FinalizeTokenProbas(); probabilities.CalculateLevelCosts(); count = refresh; }
+                    Vp8ModeScore rd = default;
+                    Vp8ModeDecision.Decimate(it, probabilities, ref rd, context.Config.RdLevel, maxHeaderBits);
+                    Residuals(it, rd, writer); header += rd.H; distortion += rd.D;
+                    if (last) filter.Store(it);
+                    it.SaveBoundary();
+                } while (it.Next());
+            }
             header += probabilities.SegmentSize;
             if (stats.SizeSearch)
             {

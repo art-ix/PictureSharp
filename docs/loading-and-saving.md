@@ -46,6 +46,7 @@ using var image = Image.Load("upload.jpg", options);
 | `StrictChecksums` | false | PNG: fail on CRC mismatches instead of ignoring them. |
 | `WebPFancyUpsampling` | true | WebP lossy: smooth chroma upsampling, as libwebp. |
 | `WebPBypassFiltering` | false | WebP lossy: skip the deblocking filter (faster, lower quality). |
+| `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Decoded pixels do not depend on it. |
 
 `DecoderOptions.Default` is a shared instance with the defaults. Options are records, so `DecoderOptions.Default with { MaxPixels = 1_000_000 }` creates a variant.
 

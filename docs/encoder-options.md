@@ -47,7 +47,7 @@ image.SaveAsWebP("target.webp", new() { TargetSize = 50_000, Passes = 6 });
 
 Preset values (`SnsStrength`/`FilterStrength`/`FilterSharpness`): `Picture` 80/35/4, `Photo` 80/30/3, `Drawing` 25/10/6, `Icon` 0/0/0, `Text` 0/0/0 with 2 segments. Explicit values override the preset.
 
-Across the test corpus, lossy output of opaque images is byte-identical to `cwebp` 1.6.0 with the same settings, and lossless output decodes to identical pixels. Reaching `TargetSize`/`TargetPsnr` exactly depends on the image.
+Across the test corpus, lossy output of opaque images and lossless output (every method, quality, `NearLossless` and `Exact`) are byte-identical to `cwebp` 1.6.0 with the same settings. Encoding uses several threads by default; the bytes are the same for any `MaxDegreeOfParallelism`. Reaching `TargetSize`/`TargetPsnr` exactly depends on the image.
 
 ## PNG
 

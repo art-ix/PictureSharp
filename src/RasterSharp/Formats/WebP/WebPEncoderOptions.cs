@@ -81,11 +81,7 @@ public sealed record WebPEncoderOptions : EncoderOptions
     public int KeyframeMax { get; init => field = Check.AtLeast(value, 0); } = 17;
 
     /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
-    public int MaxDegreeOfParallelism
-    {
-        get;
-        init => field = value == -1 || value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(MaxDegreeOfParallelism), value, "Expected -1 or a positive number.");
-    } = -1;
+    public int MaxDegreeOfParallelism { get; init => field = Check.Parallelism(value); } = -1;
 
     internal WebPEncoderOptions ForAnimationFrame(bool lossless, bool blend) => new()
     {

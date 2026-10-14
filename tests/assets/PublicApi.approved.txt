@@ -26,6 +26,7 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     property System.Boolean StrictChecksums { get; init; }
     property System.Boolean WebPBypassFiltering { get; init; }
     property System.Boolean WebPFancyUpsampling { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
     property System.Int64 MaxPixels { get; init; }
     property static DecoderOptions Default { get; }
 abstract record EncoderOptions : System.IEquatable<EncoderOptions>

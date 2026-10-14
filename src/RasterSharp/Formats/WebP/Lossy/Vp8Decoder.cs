@@ -1,3 +1,4 @@
+using RasterSharp.Internal;
 using static RasterSharp.Formats.WebP.Lossy.Vp8Dsp;
 
 namespace RasterSharp.Formats.WebP.Lossy;
@@ -132,7 +133,7 @@ internal sealed class Vp8Decoder
     private static ImageFormatException Error(string message) => new(ImageFormat.WebP, message);
 
     /// <summary>Decodes a VP8 bitstream (the payload of a "VP8 " chunk) into YUV planes.</summary>
-    public static Vp8Frame Decode(byte[] data, int offset, int length, bool bypassFiltering = false)
+    public static Vp8Frame Decode(byte[] data, int offset, int length, bool bypassFiltering = false, int maxDegreeOfParallelism = 1)
     {
         var dec = new Vp8Decoder(data);
         dec.GetHeaders(offset, length);
@@ -143,8 +144,7 @@ internal sealed class Vp8Decoder
 
         dec.PrecomputeFilterStrengths();
         dec.AllocateMemory();
-        dec.ParseFrame();
-        dec.FilterFrame();
+        dec.ParseAndFilterFrame(maxDegreeOfParallelism);
         return new Vp8Frame
         {
             Width = dec._width,
@@ -534,7 +534,33 @@ internal sealed class Vp8Decoder
     }
 
     // port: ParseFrame
-    private void ParseFrame()
+    // Filtering only touches reconstructed rows and reconstruction reads its top context from separate buffers,
+    // so a parallel filter can follow the parser row by row.
+    private void ParseAndFilterFrame(int maxDegreeOfParallelism)
+    {
+        if (_filterType == 0 || !Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)_mbW * _mbH, 256) || _mbW <= 2 || _mbH <= 1)
+        {
+            ParseFrame(null);
+            FilterFrame();
+            return;
+        }
+
+        var gate = new Parallelism.RowGate();
+        Task filter = Task.Run(() => Parallelism.Wavefront(_mbW, _mbH, maxDegreeOfParallelism, DoFilter, gate));
+        try
+        {
+            ParseFrame(gate);
+        }
+        catch
+        {
+            gate.Abort();
+            try { filter.Wait(); } catch (AggregateException) { }
+            throw;
+        }
+        filter.GetAwaiter().GetResult();
+    }
+
+    private void ParseFrame(Parallelism.RowGate? gate)
     {
         for (int mbY = 0; mbY < _mbH; ++mbY)
         {
@@ -555,6 +581,7 @@ internal sealed class Vp8Decoder
 
             InitScanline();  // prepare for next scanline
             ReconstructRow(mbY);
+            gate?.Publish(mbY + 1);
         }
     }
 
@@ -1082,7 +1109,10 @@ internal sealed class Vp8Decoder
 
     // ------------------------------------------------------------------ filtering
 
-    // port: FilterRow / DoFilter, over the whole frame in raster order
+    // port: FilterRow / DoFilter, over the whole frame
+    // A macroblock's filters touch columns 16x-3..16x+15 and rows 16y-3..16y+15 (8x-3..8x+7 for chroma), which
+    // overlap only the left, top and top-right neighbours that precede it in raster order (and the bottom-left
+    // one that follows it): a wavefront keeps the raster order of every conflicting access.
     private void FilterFrame()
     {
         if (_filterType == 0)

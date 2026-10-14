@@ -511,6 +511,14 @@ Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 
     - round-trip GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę.
 
 ### Faza 10: wydajność, odporność, wydanie
+**Status: w toku. Etap 1 wydany jako 0.4.0 (2026-10-14); dalsze optymalizacje w 0.4.1.**
+Etap 1 (0.4.0), pomiary na i5-12500H (16 wątków logicznych) względem narzędzi libwebp 1.6.0:
+- Enkoder lossless: wierny port warstwy wysokiego poziomu z 1.6.0 (`EncoderAnalyze`/`AnalyzeEntropy`, konfiguracje crunch, `EncodeImageInternal`, `GetBackwardReferences`, `CalculateBestCacheSize`, predyktor z wyborem sampling, `OptimizeSampling`, `CostManager` w `TraceBackwards`, klastrowanie low-effort, `WebPReplaceTransparentPixels`). Wynik bajtowo identyczny z `cwebp` (72 konfiguracje korpusu, zdjęcia do 2,8 MP). 1920×1440: 44,7 s → 1,7 s (cwebp 1,28 s); konfiguracje m5/m6 liczone równolegle.
+- Enkoder lossy: przebieg tokenów jako deterministyczny wavefront (bariery przy odświeżaniu kosztów, odtwarzanie tokenów/statystyk/statystyk filtra w kolejności rastrowej), analiza równolegle. 12 MP q75: 3,6 s → 0,84 s (cwebp 0,75 s).
+- Dekoder lossy: filtr pętli jako wavefront nadążający za parserem, równoległa konwersja YUV→RGB. 12 MP: 266 → 136 ms (dwebp 89 ms).
+- `DecoderOptions.MaxDegreeOfParallelism` i `WebPEncoderOptions.MaxDegreeOfParallelism`; testy, że wynik nie zależy od liczby wątków.
+- Testy odporności całego korpusu: obcięcia, 120 losowych mutacji na plik, `MaxPixels` — wyłącznie `ImageFormatException`/`NotSupportedException`.
+Pozostaje (0.4.1+): ścieżki SIMD z testami identyczności ze skalarem, BenchmarkDotNet dla kodeków, szybszy deflate/PNG, dokumentacja wydajności i NuGet.
 - BenchmarkDotNet: dekodowanie i kodowanie w porównaniu z czasami `cwebp`/`dwebp`. Cel: ≤3× wolniej od natywnego C z SIMD.
 - Ścieżki `Vector128`/`Vector256` (cross-platform intrinsics) dla:
   - IDCT/FDCT,

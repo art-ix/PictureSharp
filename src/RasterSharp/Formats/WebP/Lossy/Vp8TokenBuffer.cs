@@ -11,11 +11,11 @@ internal sealed class Vp8TokenBuffer : IDisposable
     // port: src/enc/token_enc.c AddToken, AddConstantToken, TBufferNewPage
     public void Add(bool bit, int probability, bool constant)
     {
-        int page = _count / PageSize, offset = _count % PageSize;
-        if (page == _pages.Count) _pages.Add(ArrayPool<ushort>.Shared.Rent(PageSize));
-        _pages[page][offset] = (ushort)((bit ? 1 << 15 : 0) | (constant ? 1 << 14 : 0) | probability);
-        _count++;
+        AddRaw(Token(bit, probability, constant));
     }
+
+    public static ushort Token(bool bit, int probability, bool constant) =>
+        (ushort)((bit ? 1 << 15 : 0) | (constant ? 1 << 14 : 0) | probability);
 
     // port: src/enc/token_enc.c VP8EmitTokens, VP8EstimateTokenSize
     public long Emit(Vp8BitWriter? writer, ReadOnlySpan<byte> probabilities)
@@ -31,6 +31,14 @@ internal sealed class Vp8TokenBuffer : IDisposable
         }
         return size;
     }
+    public void AddRaw(ushort token)
+    {
+        int page = _count / PageSize, offset = _count % PageSize;
+        if (page == _pages.Count) _pages.Add(ArrayPool<ushort>.Shared.Rent(PageSize));
+        _pages[page][offset] = token;
+        _count++;
+    }
+
     public void Clear() => _count = 0;
     public void Dispose() { foreach (ushort[] page in _pages) ArrayPool<ushort>.Shared.Return(page); _pages.Clear(); }
 }

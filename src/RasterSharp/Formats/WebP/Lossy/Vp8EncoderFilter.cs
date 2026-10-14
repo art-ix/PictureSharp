@@ -7,12 +7,14 @@ internal sealed class Vp8EncoderFilter(bool autoFilter)
     public void Reset() => _statistics?.AsSpan().Clear();
 
     // port: src/enc/filter_enc.c VP8StoreFilterStats, DoFilter, GetILevel
-    public void Store(Vp8EncoderIterator it)
+    public void AddStatistic(int index, double value) => _statistics![index] += value;
+
+    public void Store(Vp8EncoderIterator it, Vp8TokenRecorder? deferred = null)
     {
         if (_statistics is null || it.Block.Type == 1 && it.Block.Skip) return;
         int segment = it.Block.Segment, strength = it.Context.Segments[segment].FilterStrength;
         int delta = it.Context.Segments[segment].Quant, step = 2 * delta >= 4 ? 4 : 1;
-        _statistics[segment * 64] += MacroblockSsim(it.Input, it.Output);
+        Add(segment * 64, MacroblockSsim(it.Input, it.Output));
         for (int d = -delta; d <= delta; d += step)
         {
             int level = strength + d;
@@ -26,7 +28,13 @@ internal sealed class Vp8EncoderFilter(bool autoFilter)
             Vp8Dsp.HFilter8i(it.Output2, 16, it.Output2, 24, 32, limit, inner, hev);
             Vp8Dsp.VFilter16i(it.Output2, 0, 32, limit, inner, hev);
             Vp8Dsp.VFilter8i(it.Output2, 16, it.Output2, 24, 32, limit, inner, hev);
-            _statistics[segment * 64 + level] += MacroblockSsim(it.Input, it.Output2);
+            Add(segment * 64 + level, MacroblockSsim(it.Input, it.Output2));
+        }
+
+        void Add(int index, double value)
+        {
+            if (deferred is not null) deferred.AddFilterStatistic(index, value);
+            else _statistics![index] += value;
         }
     }
 

@@ -21,4 +21,7 @@ internal static class Check
     public static T Defined<T>(T value, [CallerMemberName] string? name = null)
         where T : struct, Enum =>
         Enum.IsDefined(value) ? value : throw new ArgumentOutOfRangeException(name, value, $"Unknown {typeof(T).Name} value.");
+
+    public static int Parallelism(int value, [CallerMemberName] string? name = null) =>
+        value == -1 || value >= 1 ? value : throw new ArgumentOutOfRangeException(name, value, "Expected -1 or a positive number.");
 }

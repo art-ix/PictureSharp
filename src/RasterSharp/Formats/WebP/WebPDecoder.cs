@@ -109,10 +109,10 @@ internal sealed class WebPDecoder : IImageDecoder
         }
         else
         {
-            Vp8Frame yuv = Vp8Decoder.Decode(array, offset + info.Image.Offset, info.Image.Length, options.WebPBypassFiltering);
+            Vp8Frame yuv = Vp8Decoder.Decode(array, offset + info.Image.Offset, info.Image.Length, options.WebPBypassFiltering, options.MaxDegreeOfParallelism);
             ImageFrame frame = ImageFrame.CreateUninitialized(yuv.Width, yuv.Height);
             Span<Rgba32> pixels = frame.GetPixelSpan();
-            YuvToRgb.Convert(yuv, pixels, options.WebPFancyUpsampling);
+            YuvToRgb.Convert(yuv, frame.Pixels, options.WebPFancyUpsampling, options.MaxDegreeOfParallelism);
             if (!info.Alpha.IsEmpty)
             {
                 byte[] alpha = AlphaDecoder.Decode(array, offset + info.Alpha.Offset, info.Alpha.Length, yuv.Width, yuv.Height);

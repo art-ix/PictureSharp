@@ -5,10 +5,10 @@ internal static class Vp8Analysis
     // port: src/enc/analysis_enc.c GetAlpha
     private static int GetAlpha((int MaxValue, int LastNonZero) histogram) => histogram.MaxValue > 1 ? 510 * histogram.LastNonZero / histogram.MaxValue : 0;
 
-    // port: src/enc/analysis_enc.c VP8EncAnalyze, MBAnalyze
+    // port: src/enc/analysis_enc.c VP8EncAnalyze, MBAnalyze, DoSegmentsJob
+    // Macroblocks are analyzed independently from the source, so rows run in parallel; the sums are integers.
     public static void Analyze(Vp8EncoderContext context)
     {
-        using var iterator = new Vp8EncoderIterator(context);
         if (context.SegmentCount == 1 && context.Config.Options.Method > 1)
         {
             for (int i = 0; i < context.MbCount; i++) context.Blocks[i] = new Vp8Macroblock { Type = 1 };
@@ -16,20 +16,39 @@ internal static class Vp8Analysis
             context.Segments[0].Alpha = context.Segments[0].Beta = 0;
             return;
         }
-        Span<int> histogram = stackalloc int[256]; histogram.Clear();
-        int alphaSum = 0, uvAlphaSum = 0;
-        do
-        {
-            iterator.Import(analysis: true); iterator.MakePredictions();
-            iterator.SetIntra16Mode(0); iterator.Block.Skip = false; iterator.Block.Segment = 0;
-            int alpha = context.Config.Options.Method <= 1 ? FastAnalyze(iterator) : AnalyzeLuma(iterator);
-            int uvAlpha = AnalyzeUv(iterator);
-            alpha = Math.Clamp(255 - ((3 * alpha + uvAlpha + 2) >> 2), 0, 255);
-            histogram[alpha]++;
-            iterator.Block.Alpha = (byte)alpha;
-            alphaSum += alpha; uvAlphaSum += uvAlpha;
-        } while (iterator.Next());
-        context.Alpha = alphaSum / context.MbCount; context.UvAlpha = uvAlphaSum / context.MbCount;
+        int[] histogram = new int[256];
+        long alphaSum = 0, uvAlphaSum = 0;
+        object gate = new();
+        int degree = context.Config.Options.MaxDegreeOfParallelism;
+        Parallel.For(0, context.MbHeight, new ParallelOptions { MaxDegreeOfParallelism = degree },
+            () => (Iterator: new Vp8EncoderIterator(context, resetContext: false), Histogram: new int[256], Alpha: 0L, UvAlpha: 0L),
+            (y, _, local) =>
+            {
+                Vp8EncoderIterator iterator = local.Iterator;
+                iterator.StartRow(y);
+                for (int x = 0; x < context.MbWidth; x++, iterator.Advance())
+                {
+                    iterator.Import(analysis: true); iterator.MakePredictions();
+                    iterator.SetIntra16Mode(0); iterator.Block.Skip = false; iterator.Block.Segment = 0;
+                    int alpha = context.Config.Options.Method <= 1 ? FastAnalyze(iterator) : AnalyzeLuma(iterator);
+                    int uvAlpha = AnalyzeUv(iterator);
+                    alpha = Math.Clamp(255 - ((3 * alpha + uvAlpha + 2) >> 2), 0, 255);
+                    local.Histogram[alpha]++;
+                    iterator.Block.Alpha = (byte)alpha;
+                    local.Alpha += alpha; local.UvAlpha += uvAlpha;
+                }
+                return local;
+            },
+            local =>
+            {
+                lock (gate)
+                {
+                    for (int i = 0; i < 256; i++) histogram[i] += local.Histogram[i];
+                    alphaSum += local.Alpha; uvAlphaSum += local.UvAlpha;
+                }
+                local.Iterator.Dispose();
+            });
+        context.Alpha = (int)(alphaSum / context.MbCount); context.UvAlpha = (int)(uvAlphaSum / context.MbCount);
         AssignSegments(context, histogram);
     }
 

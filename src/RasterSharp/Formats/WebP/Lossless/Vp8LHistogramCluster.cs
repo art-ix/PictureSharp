@@ -2,10 +2,12 @@ namespace RasterSharp.Formats.WebP.Lossless;
 
 internal static class Vp8LHistogramCluster
 {
-    private readonly record struct Pair(int A, int B, long Difference);
+    private record struct Pair(int A, int B, long Difference, Vp8LChannelCosts Costs);
 
     // port: src/enc/histogram_enc.c VP8LGetHistoImageSymbols (libwebp 1.6.0)
-    public static (Vp8LHistogram[] Groups, int[] Symbols) Build(Vp8LRefs refs, int width, int height, int bits, int cacheBits, int quality)
+    private const int NumPartitions = 4, BinSize = NumPartitions * NumPartitions * NumPartitions, MaxHistoGreedy = 100;
+
+    public static (Vp8LHistogram[] Groups, int[] Symbols) Build(Vp8LRefs refs, int width, int height, int bits, int cacheBits, int quality, bool lowEffort)
     {
         int tw = Vp8LDecoder.SubSampleSize(width, bits), th = Vp8LDecoder.SubSampleSize(height, bits), count = tw * th;
         var originals = new Vp8LHistogram?[count];
@@ -22,19 +24,29 @@ internal static class Vp8LHistogramCluster
             if (h is null) continue;
             var copy = new Vp8LHistogram(cacheBits); copy.Add(h); groups.Add(copy);
         }
-        if (groups.Count > 128 && quality < 100) CombineBins(groups, count, quality);
-        int threshold = 1 + (int)Vp8LEntropy.DivideRound(quality * quality * quality * 99, 1000000);
-        if (CombineStochastic(groups, threshold)) CombineGreedy(groups);
+        // The bin heuristic is skipped for few histograms (sparse bins) and at q == 100 (to keep the gains).
+        bool entropyCombine = groups.Count > (lowEffort ? NumPartitions : BinSize) * 2 && quality < 100;
+        if (entropyCombine) CombineBins(groups, count, quality, lowEffort);
+        if (!lowEffort || !entropyCombine)
+        {
+            // Cubic ramp between 1 and MaxHistoGreedy.
+            int threshold = 1 + (int)Vp8LEntropy.DivideRound(quality * quality * quality * (MaxHistoGreedy - 1), 100 * 100 * 100);
+            if (CombineStochastic(groups, threshold)) CombineGreedy(groups);
+        }
         var map = new int[count];
         for (int i = 0; i < count; i++)
         {
             Vp8LHistogram? h = originals[i];
             if (h is null) { map[i] = i > 0 ? map[i - 1] : 0; continue; }
             long best = long.MaxValue;
+            Vp8LChannelCosts costs = default;
             for (int j = 0; j < groups.Count; j++)
             {
-                long delta = groups[j].CombinedCost(h) - groups[j].ClusterCost;
-                if (delta < best) { best = delta; map[i] = j; }
+                long cluster = groups[j].ClusterCost;
+                if (groups[j].TryCombinedCost(h, SaturatingAdd(best, cluster), ref costs, out long combined))
+                {
+                    best = combined - cluster; map[i] = j;
+                }
             }
         }
         var rebuilt = new Vp8LHistogram[groups.Count];
@@ -43,8 +55,8 @@ internal static class Vp8LHistogramCluster
         return (rebuilt, map);
     }
 
-    // port: src/enc/histogram_enc.c HistogramAnalyzeEntropyBin, HistogramCombineEntropyBin
-    private static void CombineBins(List<Vp8LHistogram> groups, int count, int quality)
+    // port: src/enc/histogram_enc.c HistogramAnalyzeEntropyBin, GetHistoBinIndex, GetBinIdForEntropy, HistogramCombineEntropyBin
+    private static void CombineBins(List<Vp8LHistogram> groups, int count, int quality, bool lowEffort)
     {
         long[] min = [long.MaxValue, long.MaxValue, long.MaxValue], max = new long[3];
         foreach (Vp8LHistogram h in groups)
@@ -52,9 +64,23 @@ internal static class Vp8LHistogramCluster
         var bins = new List<int>(groups.Count);
         foreach (Vp8LHistogram h in groups)
         {
+            // Literal, red and blue are the dominant costs; low effort bins on the literal cost only.
             int bin = 0;
-            for (int c = 0; c < 3; c++) bin = bin * 4 + (max[c] == min[c] ? 0 : (int)(3.999999 * (h.ChannelCosts[c] - min[c]) / (max[c] - min[c])));
+            for (int c = 0; c < (lowEffort ? 1 : 3); c++)
+                bin = bin * NumPartitions + (max[c] == min[c] ? 0 : (int)((NumPartitions - 1e-6) * (ulong)(h.ChannelCosts[c] - min[c]) / (ulong)(max[c] - min[c])));
             bins.Add(bin);
+        }
+        if (lowEffort)
+        {
+            int[] firsts = new int[NumPartitions]; Array.Fill(firsts, -1);
+            for (int i = 0; i < groups.Count;)
+            {
+                int head = firsts[bins[i]];
+                if (head < 0) { firsts[bins[i]] = i++; continue; }
+                groups[head].Add(groups[i]); groups[i] = groups[^1]; groups.RemoveAt(groups.Count - 1);
+                bins[i] = bins[^1]; bins.RemoveAt(bins.Count - 1);
+            }
+            return;
         }
         int factor = 16;
         if (quality < 90)
@@ -69,8 +95,9 @@ internal static class Vp8LHistogramCluster
         {
             int bin = bins[i], a = first[bin];
             if (a < 0) { first[bin] = i++; continue; }
-            long difference = groups[a].CombinedCost(groups[i]) - groups[a].ClusterCost - groups[i].ClusterCost;
-            if (difference < -Vp8LEntropy.DivideRound(groups[i].ClusterCost * factor, 100))
+            Vp8LChannelCosts costs = default;
+            long threshold = groups[a].ClusterCost + groups[i].ClusterCost - Vp8LEntropy.DivideRound(groups[i].ClusterCost * factor, 100);
+            if (groups[a].TryCombinedCost(groups[i], threshold, ref costs, out _))
             {
                 bool trivial = true;
                 for (int c = 1; c <= 3; c++) trivial &= groups[a].Symbols[c] >= 0 && groups[a].Symbols[c] == groups[i].Symbols[c];
@@ -78,7 +105,7 @@ internal static class Vp8LHistogramCluster
                 for (int c = 1; c <= 3; c++) { nontrivialA |= groups[a].Symbols[c] < 0; nontrivialB |= groups[i].Symbols[c] < 0; }
                 if (trivial || (nontrivialA && nontrivialB) || failures[bin] >= 32)
                 {
-                    Merge(groups, a, i); bins[i] = bins[^1]; bins.RemoveAt(bins.Count - 1); continue;
+                    Merge(groups, a, i, costs); bins[i] = bins[^1]; bins.RemoveAt(bins.Count - 1); continue;
                 }
                 failures[bin]++;
             }
@@ -107,7 +134,7 @@ internal static class Vp8LHistogramCluster
             }
             if (queue.Count == 0) continue;
             int first = queue[0].A, second = queue[0].B;
-            Merge(groups, first, second);
+            Merge(groups, first, second, queue[0].Costs);
             for (int j = 0; j < queue.Count;)
             {
                 Pair p = queue[j];
@@ -117,9 +144,8 @@ internal static class Vp8LHistogramCluster
                 {
                     p = Fix(p, second, first);
                     Pair current = Fix(p, groups.Count, second);
-                    long delta = groups[current.A].CombinedCost(groups[current.B]) - groups[current.A].ClusterCost - groups[current.B].ClusterCost;
-                    if (delta >= 0) { Remove(queue, j); continue; }
-                    p = p with { Difference = delta };
+                    if (!TryPair(groups, current.A, current.B, 0, out Pair updated)) { Remove(queue, j); continue; }
+                    p = p with { Difference = updated.Difference, Costs = updated.Costs };
                 }
                 queue[j] = Fix(p, groups.Count, second); UpdateHead(queue, j); j++;
             }
@@ -136,7 +162,7 @@ internal static class Vp8LHistogramCluster
         while (queue.Count > 0)
         {
             int a = queue[0].A, b = queue[0].B;
-            Merge(groups, a, b);
+            Merge(groups, a, b, queue[0].Costs);
             for (int i = 0; i < queue.Count;)
             {
                 Pair p = queue[i];
@@ -147,23 +173,35 @@ internal static class Vp8LHistogramCluster
         }
     }
 
-    private static void Merge(List<Vp8LHistogram> groups, int a, int b)
+    private static void Merge(List<Vp8LHistogram> groups, int a, int b, in Vp8LChannelCosts costs)
     {
-        groups[a].Add(groups[b]); groups[b] = groups[^1]; groups.RemoveAt(groups.Count - 1);
+        groups[a].Add(groups[b], costs); groups[b] = groups[^1]; groups.RemoveAt(groups.Count - 1);
     }
 
+    // port: src/enc/histogram_enc.c HistoQueuePush
     private static long Push(List<Vp8LHistogram> groups, List<Pair> queue, int a, int b, long threshold)
     {
         if (a > b) (a, b) = (b, a);
-        long delta = groups[a].CombinedCost(groups[b]) - groups[a].ClusterCost - groups[b].ClusterCost;
-        if (delta >= threshold) return 0;
-        queue.Add(new Pair(a, b, delta)); UpdateHead(queue, queue.Count - 1); return delta;
+        if (!TryPair(groups, a, b, threshold, out Pair pair)) return 0;
+        queue.Add(pair); UpdateHead(queue, queue.Count - 1); return pair.Difference;
     }
+
+    // port: src/enc/histogram_enc.c HistoQueueUpdatePair
+    private static bool TryPair(List<Vp8LHistogram> groups, int a, int b, long threshold, out Pair pair)
+    {
+        long sum = groups[a].ClusterCost + groups[b].ClusterCost;
+        Vp8LChannelCosts costs = default;
+        bool better = groups[a].TryCombinedCost(groups[b], SaturatingAdd(threshold, sum), ref costs, out long combined);
+        pair = new Pair(a, b, combined - sum, costs);
+        return better;
+    }
+
+    private static long SaturatingAdd(long a, long b) => b > 0 && a > long.MaxValue - b ? long.MaxValue : a + b;
 
     private static Pair Fix(Pair p, int from, int to)
     {
         int a = p.A == from ? to : p.A, b = p.B == from ? to : p.B;
-        return new Pair(Math.Min(a, b), Math.Max(a, b), p.Difference);
+        return p with { A = Math.Min(a, b), B = Math.Max(a, b) };
     }
 
     private static void Remove(List<Pair> queue, int index) { queue[index] = queue[^1]; queue.RemoveAt(queue.Count - 1); }

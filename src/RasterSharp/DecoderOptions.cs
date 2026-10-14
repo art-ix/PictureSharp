@@ -29,6 +29,9 @@ public sealed record DecoderOptions
     /// <summary>PNG: fail on CRC mismatches instead of ignoring them. Default: false.</summary>
     public bool StrictChecksums { get; init; }
 
+    /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
+    public int MaxDegreeOfParallelism { get; init => field = Check.Parallelism(value); } = -1;
+
     internal void ValidateDimensions(ImageFormat format, long width, long height)
     {
         if (width <= 0 || height <= 0)
