@@ -1,4 +1,6 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace RasterSharp.Formats.WebP.Lossless;
 
@@ -9,7 +11,7 @@ internal struct Vp8LChannelCosts
     private long _element;
 }
 
-internal sealed class Vp8LHistogram
+internal sealed partial class Vp8LHistogram
 {
     private static readonly uint[] Zeros = new uint[280 + (1 << 11)];
     public uint[][] Counts { get; }
@@ -104,36 +106,86 @@ internal sealed class Vp8LHistogram
     // port: src/enc/histogram_enc.c PopulationCost, FinalHuffmanCost
     public static long PopulationCost(ReadOnlySpan<uint> counts) => PopulationCost(counts, Zeros.AsSpan(0, counts.Length));
 
-    // port: src/dsp/lossless_enc.c GetCombinedEntropyUnrefined_C; src/enc/histogram_enc.c BitsEntropyRefine, FinalHuffmanCost
-    // Cost of x + y in one pass, without materializing the sum.
+    // port: src/dsp/lossless_enc.c GetCombinedEntropyUnrefined_C, GetEntropyUnrefinedHelper; src/enc/histogram_enc.c BitsEntropyRefine, FinalHuffmanCost
+    // Cost of x + y without materializing the sum. The population statistics and the streaks are gathered in
+    // separate passes (integer sums, so the order does not matter); fewer live values keep the loops in registers.
     public static long PopulationCost(ReadOnlySpan<uint> x, ReadOnlySpan<uint> y)
     {
-        y = y[..x.Length];
-        uint sum = 0, max = 0;
-        int nonzero = 0, zeroRuns = 0, nonzeroRuns = 0, shortZero = 0, longZero = 0, shortNonzero = 0, longNonzero = 0;
-        long entropy = 0;
-        int i = 0;
-        while (i < x.Length)
+        int length = x.Length;
+        y = y[..length];
+        ref uint px = ref MemoryMarshal.GetReference(x), py = ref MemoryMarshal.GetReference(y);
+        int i = SumMaxZerosSimd(ref px, ref py, length, out uint sum, out uint max, out int zeros);
+        for (; i < length; i++)
         {
-            uint value = x[i] + y[i];
-            int end = i + 1;
-            while (end < x.Length && x[end] + y[end] == value) end++;
-            int run = end - i;
-            if (value == 0) { if (run > 3) { zeroRuns++; longZero += run; } else shortZero += run; }
-            else
-            {
-                if (run > 3) { nonzeroRuns++; longNonzero += run; } else shortNonzero += run;
-                sum += value * (uint)run; nonzero += run; max = Math.Max(max, value);
-                entropy -= Vp8LEntropy.SLog(value) * run;
-            }
-            i = end;
+            uint value = Unsafe.Add(ref px, i) + Unsafe.Add(ref py, i);
+            sum += value;
+            max = Math.Max(max, value);
+            if (value == 0) zeros++;
         }
+        int nonzero = length - zeros;
+        long entropy = Streaks(ref px, ref py, length, out long longZero, out long longNonzero);
+        if (max >= Vp8LEntropy.SLogCacheSize)
+        {
+            // Streaks clamped the SLog of large values.
+            for (i = 0; i < length; i++)
+            {
+                uint value = Unsafe.Add(ref px, i) + Unsafe.Add(ref py, i);
+                if (value >= Vp8LEntropy.SLogCacheSize) entropy -= Vp8LEntropy.SLog(value) - Vp8LEntropy.SLogClamped(value);
+            }
+        }
+        int zeroRuns = (int)(longZero >> 32), nonzeroRuns = (int)(longNonzero >> 32);
+        int longZeroLength = (int)longZero, longNonzeroLength = (int)longNonzero;
+        int shortZero = zeros - longZeroLength, shortNonzero = nonzero - longNonzeroLength;
         long overhead = 57 * Vp8LEntropy.One - Vp8LEntropy.DivideRound(91 * Vp8LEntropy.One, 10);
-        overhead += (zeroRuns * 1600L + 240L * longZero) << 13;
-        overhead += (nonzeroRuns * 2640L + 720L * longNonzero) << 13;
+        overhead += (zeroRuns * 1600L + 240L * longZeroLength) << 13;
+        overhead += (nonzeroRuns * 2640L + 720L * longNonzeroLength) << 13;
         overhead += 1840L * shortZero << 13;
         overhead += 3360L * shortNonzero << 13;
         return Vp8LEntropy.Refine(sum, max, nonzero, entropy) + overhead;
+    }
+
+    // -sum(SLog(value) * streak) with SLog clamped, and the streaks longer than 3 of zeros and non-zeros:
+    // their count in the high and their total length in the low 32 bits.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long Streaks(ref uint px, ref uint py, int length, out long longZero, out long longNonzero)
+    {
+        long entropy = 0, zeroStreaks = 0, nonzeroStreaks = 0;
+        int runStart = 0, i = 1;
+        uint value = px + py;
+        // Starts of runs, eight positions at a time.
+        for (; i + 8 <= length && TryRunStarts8(ref px, ref py, i, out uint starts); i += 8)
+        {
+            for (; starts != 0; starts &= starts - 1)
+            {
+                int end = i + BitOperations.TrailingZeroCount(starts);
+                AddStreak(ref entropy, ref zeroStreaks, ref nonzeroStreaks, value, end - runStart);
+                runStart = end;
+                value = Unsafe.Add(ref px, end) + Unsafe.Add(ref py, end);
+            }
+        }
+        for (; i < length; i++)
+        {
+            uint next = Unsafe.Add(ref px, i) + Unsafe.Add(ref py, i);
+            if (next == value) continue;
+            AddStreak(ref entropy, ref zeroStreaks, ref nonzeroStreaks, value, i - runStart);
+            runStart = i;
+            value = next;
+        }
+        AddStreak(ref entropy, ref zeroStreaks, ref nonzeroStreaks, value, length - runStart);
+        longZero = zeroStreaks;
+        longNonzero = nonzeroStreaks;
+        return entropy;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void AddStreak(ref long entropy, ref long zeroStreaks, ref long nonzeroStreaks, uint value, int run)
+    {
+        entropy -= Vp8LEntropy.SLogClamped(value) * run;
+        if (run > 3)
+        {
+            if (value != 0) nonzeroStreaks += (1L << 32) + run;
+            else zeroStreaks += (1L << 32) + run;
+        }
     }
 
     // port: src/enc/histogram_enc.c VP8LHistogramEstimateBits

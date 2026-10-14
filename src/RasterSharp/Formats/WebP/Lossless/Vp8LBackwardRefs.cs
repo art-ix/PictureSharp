@@ -27,7 +27,7 @@ internal sealed class Vp8LRefs(int capacity) : IDisposable
     public void Dispose() => ArrayPool<Vp8LToken>.Shared.Return(_tokens);
 }
 
-internal sealed class Vp8LBackwardRefs : IDisposable
+internal sealed partial class Vp8LBackwardRefs : IDisposable
 {
     private readonly int[] _matches;
     private readonly uint[] _pixels;
@@ -65,15 +65,14 @@ internal sealed class Vp8LBackwardRefs : IDisposable
         return (2 * highest + ((v >> bits) & 1), bits, v & ((1 << bits) - 1));
     }
 
-    public Vp8LBackwardRefs(uint[] pixels, int width, int height, int quality, bool lowEffort, bool box = false)
+    public Vp8LBackwardRefs(uint[] pixels, int width, int height, int quality, bool lowEffort, bool box = false, int maxDegreeOfParallelism = 1)
     {
         _pixels = pixels; _width = width; _count = width * height;
         _matches = ArrayPool<int>.Shared.Rent(_count);
-        Fill(quality, lowEffort);
+        Fill(quality, lowEffort, maxDegreeOfParallelism);
         if (box) FillBox();
     }
 
-    private static int Hash(uint first, uint second) => (int)(unchecked(second * 0xc6a4a793u + first * 0x5bd1e996u) >> 14);
     private int Length(int pos) => _matches[pos] & 4095;
     private int Distance(int pos) => (int)((uint)_matches[pos] >> 12);
     // port: src/dsp/lossless_common.h VP8LFindMatchLength (VP8LVectorMismatch is vectorized by the BCL)
@@ -81,80 +80,6 @@ internal sealed class Vp8LBackwardRefs : IDisposable
     {
         if (_pixels[a + best] != _pixels[b + best]) return 0;
         return _pixels.AsSpan(a, limit).CommonPrefixLength(_pixels.AsSpan(b, limit));
-    }
-
-    // port: src/enc/backward_references_enc.c VP8LHashChainFill
-    private void Fill(int quality, bool lowEffort, bool box = false)
-    {
-        _matches.AsSpan(0, _count).Clear();
-        if (_count <= 2) return;
-        int[] heads = ArrayPool<int>.Shared.Rent(1 << 18);
-        heads.AsSpan(0, 1 << 18).Fill(-1);
-        try
-        {
-            int pos = 0;
-            bool equal = _pixels[0] == _pixels[1];
-            while (pos < _count - 2)
-            {
-                bool next = _pixels[pos + 1] == _pixels[pos + 2];
-                if (equal && next)
-                {
-                    int length = 1;
-                    while (pos + length + 2 < _count && _pixels[pos + length + 2] == _pixels[pos]) length++;
-                    if (length > MaxLength)
-                    {
-                        _matches.AsSpan(pos, length - MaxLength).Fill(-1);
-                        pos += length - MaxLength; length = MaxLength;
-                    }
-                    while (length > 0)
-                    {
-                        int hash = Hash(_pixels[pos], (uint)length--);
-                        _matches[pos] = heads[hash]; heads[hash] = pos++;
-                    }
-                    equal = false;
-                }
-                else
-                {
-                    int hash = Hash(_pixels[pos], _pixels[pos + 1]);
-                    _matches[pos] = heads[hash]; heads[hash] = pos++; equal = next;
-                }
-            }
-            _matches[pos] = heads[Hash(_pixels[pos], _pixels[pos + 1])];
-        }
-        finally { ArrayPool<int>.Shared.Return(heads); }
-        int window = Math.Min(Window, quality > 75 ? Window : _width << (quality > 50 ? 8 : quality > 25 ? 6 : 4));
-        _matches[0] = _matches[_count - 1] = 0;
-        for (int start = _count - 2; start > 0;)
-        {
-            int limit = Math.Min(MaxLength, _count - 1 - start), iterations = 8 + quality * quality / 128;
-            int best = 0, distance = 0, min = Math.Max(0, start - window), pos = _matches[start];
-            if (!lowEffort)
-            {
-                if (start >= _width) { best = Match(start, start - _width, 0, limit); if (best > 0) distance = _width; iterations--; }
-                int length = Match(start, start - 1, best, limit);
-                if (length > best) { best = length; distance = 1; }
-                iterations--;
-                if (best == MaxLength) pos = min - 1;
-            }
-            for (; pos >= min && --iterations != 0; pos = _matches[pos])
-            {
-                int length = Match(start, pos, best, limit);
-                if (length > best)
-                {
-                    best = length; distance = start - pos;
-                    if (best >= Math.Min(limit, 256)) break;
-                }
-            }
-            int maxStart = start;
-            while (true)
-            {
-                _matches[start] = (distance << 12) | best;
-                start--;
-                if (distance == 0 || start == 0 || start < distance || _pixels[start - distance] != _pixels[start]) break;
-                if (best == MaxLength && distance != 1 && start + MaxLength < maxStart) break;
-                if (best < MaxLength) { best++; maxStart = start; }
-            }
-        }
     }
 
     // port: src/enc/backward_references_enc.c BackwardReferencesLz77, BackwardReferencesRle

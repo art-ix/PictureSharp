@@ -511,7 +511,7 @@ Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 
     - round-trip GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę.
 
 ### Faza 10: wydajność, odporność, wydanie
-**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD lossy) jako 0.4.1, etap 3 (SIMD lossless i filtry wierszowe) jako 0.4.2 (2026-10-14). Etap 4 (predyktory VP8L 10–12 i pomiary) ukończony jako 0.4.3 (2026-10-14). Etap 5 (dekoder VP8L, predyktory 5–7 i 13) ukończony jako 0.4.4 (2026-10-14).**
+**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD lossy) jako 0.4.1, etap 3 (SIMD lossless i filtry wierszowe) jako 0.4.2 (2026-10-14). Etap 4 (predyktory VP8L 10–12 i pomiary) ukończony jako 0.4.3 (2026-10-14). Etap 5 (dekoder VP8L, predyktory 5–7 i 13) ukończony jako 0.4.4 (2026-10-14). Etap 6 (enkoder VP8L) ukończony jako 0.4.5 (2026-10-14).**
 Etap 1 (0.4.0), pomiary na i5-12500H (16 wątków logicznych) względem narzędzi libwebp 1.6.0:
 - Enkoder lossless: wierny port warstwy wysokiego poziomu z 1.6.0 (`EncoderAnalyze`/`AnalyzeEntropy`, konfiguracje crunch, `EncodeImageInternal`, `GetBackwardReferences`, `CalculateBestCacheSize`, predyktor z wyborem sampling, `OptimizeSampling`, `CostManager` w `TraceBackwards`, klastrowanie low-effort, `WebPReplaceTransparentPixels`). Wynik bajtowo identyczny z `cwebp` (72 konfiguracje korpusu, zdjęcia do 2,8 MP). 1920×1440: 44,7 s → 1,7 s (cwebp 1,28 s); konfiguracje m5/m6 liczone równolegle.
 - Enkoder lossy: przebieg tokenów jako deterministyczny wavefront (bariery przy odświeżaniu kosztów, odtwarzanie tokenów/statystyk/statystyk filtra w kolejności rastrowej), analiza równolegle. 12 MP q75: 3,6 s → 0,84 s (cwebp 0,75 s).
@@ -538,9 +538,16 @@ Etap 5 (0.4.4), dekoder VP8L:
 - Pełne dekodowanie przy stałym JIT, dwie próby: 2,8 MP szybsze o 6,3% / 10,7%, 12 MP o 9,6% / 6,8%. Osobna próba z domyślnym JIT: 7,8% / 9,8% dla tych rozmiarów. Bez powtarzalnej regresji >3% na macierzy i bez wzrostu alokacji. BenchmarkDotNet: 48 przypadków predyktorów i 9 wejść pełnego dekodera; nowe predyktory 1,84–3,89× szybsze od skalaru (zależnie od trybu i kafla), bez alokacji w rekonstrukcji.
 - Weryfikacja: pełny build Release bez ostrzeżeń i błędów, 3798/3798 testów (0 pominiętych, w tym Oracle, odporność, migawka API i zgodność enkoderów); dodatkowe przebiegi porównujące SIMD ze skalarem oraz dekodery i prymitywy enkoderów z AVX2 i wszystkimi intrinsics wyłączonymi. Szczegóły i ograniczenia pomiarów: `docs/performance.md`.
 
+Etap 6 (0.4.5), enkoder VP8L:
+- Ustalona macierz: 6 źródeł korpusu (m0/m4/m5 q75, m6 q100), grafika 8× nearest 1600×1200 oraz zdjęcia 1920×1440 (m0/m4/m5/m6) i 4000×3000 (m4) z tych samych plików co 0.4.3/0.4.4; razem 35 kodowań, także jednowątkowe. Wszystkie wyjścia bajtowo identyczne z 0.4.4 (również bez AVX2 i bez intrinsics); VP8L zdjęcia 1920×1440 m4 identyczny z `cwebp` 1.6.0.
+- Profil etapów wskazał: residua predyktorów, cross color, hash chain, klastrowanie (`PopulationCost`), wybór rozmiaru cache, zapis bitów. Zakres rozszerzono poza predyktor i klastrowanie, bo pomiary pokazały te koszty jako dominujące.
+- Predyktor: port `PredictorSub0..13` SSE2/AVX2 dla niemodyfikowanych wierszy; przyrostowe składniki entropii histogramu skumulowanego; `CombinedShannonEntropy` tylko po niezerowych wpisach. Cross color: port `CollectColorRed/BlueTransforms` SSE2/AVX2, składniki entropii raz na kafel. Klastrowanie: `PopulationCost` z wektorowymi sumami i granicami serii, tablica 4096 dokładnych `SLog`, równoległy remap kafli. Hash chain: równoległe segmenty spekulatywne z deterministycznym scalaniem (parytet sekwencyjny z libwebp potwierdzony harnessem C). Wybór cache bez osobnych histogramów na rozmiar; zapis bitów słowami 64-bitowymi.
+- Pomiary (domyślny JIT, mediany): 1920×1440 m0 388 → 130 ms, m4 1504 → 732 ms (cwebp 960), m5 2017 → 893 ms, m6 q100 3705 → 2163 ms; 4000×3000 m4 7801 → 3264 ms (cwebp 4820); grafika 1600×1200 m5 464 → 193 ms; małe zdjęcia m4/m5 o 50–72% szybsze. Grafika 1600×1200 m4 bez zmian (1,4× cwebp). Alokacje bez wzrostu. Szczegóły: `docs/performance.md`.
+- Weryfikacja: build Release bez ostrzeżeń, 3809/3809 testów (0 pominiętych, w tym Oracle), testy SIMD == skalar enkodera, `PopulationCost` i entropii z implementacją referencyjną, zapis bitów, determinizm hash chain dla 1–16 wątków; 180/180 testów enkodera/SIMD/determinizmu z `DOTNET_EnableAVX2=0` i z `DOTNET_EnableHWIntrinsic=0`.
+
 #### Etapy od 0.4.4 i proponowane wydania (ustalenia 2026-10-14)
 
-0.4.4 jest ukończona; pozostałe numery są planowanym podziałem prac i nie oznaczają ukończenia ani wydania. Faza 10 obejmuje wydajność całej biblioteki, odporność i przygotowanie wydania; sama optymalizacja VP8L w 0.4.4 jej nie zamyka.
+0.4.4 i 0.4.5 są ukończone; pozostałe numery są planowanym podziałem prac i nie oznaczają ukończenia ani wydania. Faza 10 obejmuje wydajność całej biblioteki, odporność i przygotowanie wydania; sama optymalizacja VP8L w 0.4.4 jej nie zamyka.
 
 **Pierwszy krok, przed dalszymi optymalizacjami:** ustalić i zapisać w `docs/performance.md` konkretną macierz benchmarków oraz kryteria zaliczenia:
 - reprezentatywne zdjęcia, grafikę, obrazy z alfą i animacje; małe i duże obrazy oraz istotne opcje kodeków;
@@ -552,7 +559,7 @@ Etap 5 (0.4.4), dekoder VP8L:
 | Wersja | Zakres |
 | --- | --- |
 | **0.4.4 — ukończona** | Dekoder VP8L: profilowanie odczytu bitów, pętli Huffmana i kopiowania powtórzeń; optymalizacja dominujących kosztów; pozostałe predyktory 5–7 i 13. Pomiary całego dekodera względem 0.4.3. |
-| **0.4.5** | Enkoder VP8L: wyszukiwanie predyktora i klastrowanie histogramów, z zachowaniem zgodności bajtowej z `cwebp` 1.6.0 i deterministyczności. |
+| **0.4.5 — ukończona** | Enkoder VP8L: wyszukiwanie predyktora i klastrowanie histogramów, z zachowaniem zgodności bajtowej z `cwebp` 1.6.0 i deterministyczności; dodatkowo cross color, równoległy hash chain, wybór cache i zapis bitów (wg profilu). |
 | **0.4.6** | Pozostałe gorące ścieżki: inflate/deflate, CRC i resize. Przegląd pokrycia SIMD IDCT/FDCT, loop filter, YUV↔RGB, transformacji lossless i SSE/kosztów; uzupełnienia uzasadnione pomiarami. |
 | **0.4.7** | ARM/AdvSimd: optymalizacje i weryfikacja na rzeczywistym ARM64, w tym testy identyczności ze skalarem i benchmarki pełnych operacji. |
 | **0.5.0** | Pełna macierz benchmarków, końcowe testy odporności, dokumentacja i weryfikacja pakietu NuGet; zamknięcie fazy 10 po spełnieniu DoD. |

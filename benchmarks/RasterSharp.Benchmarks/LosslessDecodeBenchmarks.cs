@@ -50,7 +50,7 @@ public class LosslessDecodeBenchmarks
         return image.Width;
     }
 
-    private static string FindRoot()
+    internal static string FindRoot()
     {
         for (string? directory = AppContext.BaseDirectory; directory is not null; directory = Path.GetDirectoryName(directory))
         {

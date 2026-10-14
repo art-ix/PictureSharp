@@ -54,8 +54,10 @@ internal static class Vp8LEncoder
         {
             if (configs.Length > 1 && options.MaxDegreeOfParallelism != 1)
             {
+                // The configurations already use the threads; nested parallelism would only add buffers.
+                WebPEncoderOptions inner = options with { MaxDegreeOfParallelism = 1 };
                 Parallel.For(0, configs.Length, new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism },
-                    i => results[i] = EncodeConfig(argb, width, height, options, configs[i], paletteSorted, histoBits, transformBits, redAndBlueAlwaysZero));
+                    i => results[i] = EncodeConfig(argb, width, height, inner, configs[i], paletteSorted, histoBits, transformBits, redAndBlueAlwaysZero));
             }
             else
             {
@@ -267,7 +269,7 @@ internal static class Vp8LEncoder
                 WriteTransform(writer, colors, currentWidth, height, bits, 1, quality, lowEffort);
             }
             writer.Put(0, 1);
-            Vp8LEntropyEncoder.EncodeImageInternal(writer, work, currentWidth, height, quality, lowEffort, config.SubConfigs, ref cacheBits, histoBits);
+            Vp8LEntropyEncoder.EncodeImageInternal(writer, work, currentWidth, height, quality, lowEffort, config.SubConfigs, ref cacheBits, histoBits, options.MaxDegreeOfParallelism);
             return writer;
         }
         catch

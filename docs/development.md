@@ -51,7 +51,7 @@ Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder 
 
 ## What the tests verify
 
-In version 0.4.4, all 3798 tests pass, including the Oracle tests against libwebp 1.6.0.
+In version 0.4.5, all 3809 tests pass, including the Oracle tests against libwebp 1.6.0.
 
 - **Decoders:** pixels match `dwebp` and Pillow exactly (SHA-256 of RGBA in `tests/assets/reference.json`). The WebP decoder ports originated from libwebp 1.3.2; recomputing the 248 corpus references with 1.6.0 changed none.
 - **Lossless WebP:** the nine encoder source images round-trip exactly through both decoders, and the VP8L bitstream is byte-identical to `cwebp` 1.6.0 in 72 configurations (methods 0–6, qualities 50–100, near-lossless, `-exact`).
@@ -63,6 +63,7 @@ In version 0.4.4, all 3798 tests pass, including the Oracle tests against libweb
 - **Threads:** lossy and lossless encoding and lossy decoding give the same bytes and pixels for any `MaxDegreeOfParallelism`.
 - **VP8L predictors in 0.4.3:** modes 10–12 add SSE2/AVX2 paths. Tests cover tile bits 2–9, vector and tile boundaries, nested rounding, selection ties, clamping and residual wraparound. The predictor and decoder tests also run with AVX2 disabled and with all hardware intrinsics disabled. See [Performance](performance.md) for timings and benchmark commands.
 - **VP8L decoding in 0.4.4:** word-based bit-window refill, two-level Huffman lookup and short repeating backward references are optimized; predictor modes 5–7 and 13 use SSE2. Tests cover bit reads across window/slice boundaries, overlapping copies, negative division rounding, saturation and pixel wraparound. Core/scalar routines are kept separate from SIMD implementations in partial files. The same separation now covers VP8 TrueMotion and last-coefficient lookup.
+- **VP8L encoding in 0.4.5:** predictor residuals, cross-color histograms, combined entropy, histogram population costs and the hash chain are optimized while every output stays byte-identical. Tests compare `PredictorSub` (all 14 modes), the cross-color collectors and the non-zero mask with scalar code, the prepared combined entropy and `PopulationCost` with reference implementations, the bit writer with a bit-by-bit writer, and the parallel hash chain search with the single-threaded one for 2–16 threads. See [Performance](performance.md).
 - **Robustness:** every corpus file is truncated at over a hundred lengths and mutated 120 times (bit flips, extreme length fields, inserted and removed blocks); decoding and identification may only throw `ImageFormatException` or `NotSupportedException`, and `MaxPixels` is enforced for every file.
 - **Image processing:** 140 tests. The Pillow 10.2.0 oracle (`tests/assets/processing_reference.py`) checks 569 results for exact pixel equality: resizing with all filters, modes and anchors, compositing, background flattening, grayscale, enhancement, blur and sharpening, rotation, sepia and EXIF orientation.
 

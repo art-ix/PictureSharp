@@ -1,16 +1,36 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace RasterSharp.Formats.WebP.Lossless;
 
-internal static class Vp8LEntropy
+internal static partial class Vp8LEntropy
 {
     public const long One = 1L << 23;
 
     // port: src/dsp/lossless_common.h DivRound (libwebp 1.6.0)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static long DivideRound(long a, long b) => ((a < 0) == (b < 0) ? a + b / 2 : a - b / 2) / b;
 
-    // port: src/dsp/lossless_enc.c FastSLog2Slow_C, FastLog2Slow_C
-    public static long SLog(uint v)
+    // Most histogram counts are small; a table of the exact values avoids the poorly predicted branch below.
+    public const int SLogCacheSize = 4096;
+    private static readonly long[] SLogCache = BuildSLogCache();
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static long SLog(uint v) => v < SLogCacheSize ? SLogCache[v] : SLogSlow(v);
+
+    // SLog(min(v, SLogCacheSize - 1)): no call in loops that correct the few larger values afterwards.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static long SLogClamped(uint v) => SLogCache[(int)Math.Min(v, SLogCacheSize - 1u)];
+
+    private static long[] BuildSLogCache()
+    {
+        var cache = new long[SLogCacheSize];
+        for (uint v = 0; v < SLogCacheSize; v++) cache[v] = SLogSlow(v);
+        return cache;
+    }
+
+    // port: src/dsp/lossless_enc.c VP8LFastSLog2, FastSLog2Slow_C, FastLog2Slow_C
+    private static long SLogSlow(uint v)
     {
         if (v < 256) return SLogTable[(int)v];
         if (v >= 65536) return (long)(12102203.161561485379934310913085937500 * v * Math.Log(v) + 0.5);
@@ -42,16 +62,85 @@ internal static class Vp8LEntropy
         return result + SLog(sumX) + SLog(sumXY);
     }
 
+    // The terms of CombinedShannonEntropy that depend only on y: SLog of each count, their sum and the
+    // population. Integer sums are exact, so Combined with them equals Combined(x, y) for every x.
+    public static long PrepareCombined(ReadOnlySpan<uint> y, Span<long> sLogY, out uint sumY)
+    {
+        long total = 0;
+        sumY = 0;
+        for (int i = 0; i < 256; i++)
+        {
+            uint count = y[i];
+            long value = SLog(count);
+            sLogY[i] = value;
+            total += value;
+            sumY += count;
+        }
+        return total;
+    }
+
+    // Adds x to y and keeps the terms prepared by PrepareCombined up to date; only the non-zero entries of x change.
+    public static void AddToCombined(ReadOnlySpan<uint> x, Span<uint> y, Span<long> sLogY, ref uint sumY, ref long sLogYTotal)
+    {
+        x = x[..256]; y = y[..256]; sLogY = sLogY[..256];
+        for (int block = 0; block < 256; block += 32)
+        {
+            for (uint mask = NonZeroMask32(x.Slice(block, 32)); mask != 0; mask &= mask - 1)
+            {
+                int i = block + BitOperations.TrailingZeroCount(mask);
+                uint count = x[i];
+                y[i] += count;
+                sumY += count;
+                long value = SLog(y[i]);
+                sLogYTotal += value - sLogY[i];
+                sLogY[i] = value;
+            }
+        }
+    }
+
+    // CombinedShannonEntropy_C rewritten over the non-zero entries of x only:
+    // sum(x == 0) SLog(y) = sLogYTotal - sum(x != 0) SLog(y), and sumXY = sumX + sumY.
+    public static long Combined(ReadOnlySpan<uint> x, ReadOnlySpan<uint> y, ReadOnlySpan<long> sLogY, uint sumY, long sLogYTotal)
+    {
+        x = x[..256]; y = y[..256]; sLogY = sLogY[..256];
+        long result = 0;
+        uint sumX = 0;
+        for (int block = 0; block < 256; block += 32)
+        {
+            for (uint mask = NonZeroMask32(x.Slice(block, 32)); mask != 0; mask &= mask - 1)
+            {
+                int i = block + BitOperations.TrailingZeroCount(mask);
+                uint count = x[i];
+                sumX += count;
+                result += SLog(count) + SLog(count + y[i]) - sLogY[i];
+            }
+        }
+        return SLog(sumX) + SLog(sumX + sumY) - result - sLogYTotal;
+    }
+
     // port: src/enc/predictor_enc.c PredictionCostBias
+    // The exponents depend only on the initial value, so the two used ones are precomputed.
     public static long Spatial(ReadOnlySpan<uint> counts, int weight, int exponent)
     {
-        long bits = weight * (long)counts[0] * One, exp = exponent * One;
+        ReadOnlySpan<long> exp = exponent == 94 ? Exponents94 : exponent == 240 ? Exponents240 : SpatialExponents(exponent);
+        counts = counts[..256];
+        long bits = weight * (long)counts[0] * One;
+        for (int i = 1; i < 16; i++) bits += DivideRound(exp[i] * (counts[i] + counts[256 - i]), 100);
+        return -DivideRound(bits, 10);
+    }
+
+    private static readonly long[] Exponents94 = SpatialExponents(94), Exponents240 = SpatialExponents(240);
+
+    private static long[] SpatialExponents(int exponent)
+    {
+        var result = new long[16];
+        long exp = exponent * One;
         for (int i = 1; i < 16; i++)
         {
-            bits += DivideRound(exp * (counts[i] + counts[256 - i]), 100);
+            result[i] = exp;
             exp = DivideRound(6 * exp, 10);
         }
-        return -DivideRound(bits, 10);
+        return result;
     }
 
     // port: src/enc/histogram_enc.c VP8LBitsEntropy; src/dsp/lossless_enc.c VP8LBitsEntropyUnrefined

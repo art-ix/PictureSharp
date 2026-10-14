@@ -30,6 +30,76 @@ measurements require real hardware. For the final WebP gate, require at most 3×
 time on the frozen matrix using libwebp 1.6.0; disclose process startup, I/O and API timing differences.
 These broader measurements and the final gate remain pending; the VP8L matrix alone does not close phase 10.
 
+The 0.4.5 lossless encode matrix and its results are described in the next section.
+
+## VP8L encoding in 0.4.5
+
+The 0.4.5 encode matrix uses the committed corpus sources `photo`, `graphic`, `photo_alpha`, `graphic_alpha`,
+`odd_alpha` and `wide` (`tests/assets/corpus/src/*.png`) at methods 0, 4 and 5 (quality 75) and method 6
+(quality 100); `graphic.png` scaled 8× with nearest-neighbour sampling to 1600×1200; and the two local photos
+decoded from the exact 0.4.3/0.4.4 benchmark files (1920×1440 at methods 0/4/5/6, 4000×3000 at method 4).
+Every output (35 encodes, including single-threaded variants) is byte-identical to 0.4.4, with AVX2 disabled
+and with all hardware intrinsics disabled as well; the VP8L chunk of the 1920×1440 method-4 output matches
+`cwebp` 1.6.0. Acceptance followed the phase-10 contract: a repeatable gain on large inputs, no repeatable
+regression above 3%, and no allocation growth.
+
+Changes, all in integer arithmetic, so the order of summation never alters a cost:
+
+- **Predictor search:** residuals of a tile row use ports of `PredictorSub0..13` (SSE2/AVX2) whenever the row is
+  not modified (exact mode, or no near-lossless and no fully transparent pixel in the run). The entropy terms of
+  the accumulated histograms are kept up to date incrementally, and `CombinedShannonEntropy` only visits the
+  non-zero entries of the tile histogram (found with a vector mask).
+- **Cross-color search:** `CollectColorRedTransforms`/`CollectColorBlueTransforms` are ported from SSE2/AVX2; the
+  accumulated histogram's entropy terms are computed once per tile instead of for every candidate multiplier.
+- **Histogram clustering:** `PopulationCost` of two histograms gathers sum, maximum and zeros with vectors and
+  finds streak boundaries eight positions at a time; `SLog` uses a 4096-entry table of the exact fixed-point
+  values. Remapping tiles to clusters runs in parallel (each tile is independent).
+- **Hash chain:** the match search runs in parallel segments. Each segment searches speculatively from its top
+  and records where searches started; a sequential pass then follows the true order and, as soon as it reaches a
+  recorded start, reuses the rest of that segment, because a search result depends only on the position. The
+  result equals the sequential one. A native harness linked against libwebp 1.6.0 gave the same matches with
+  equal sequential speed (86 vs 89 ms at 1920×1440, 997 vs 975 ms at 4000×3000, raw pixels), so the remaining
+  gain comes from threads. When several crunch configurations already run in parallel (methods 5–6), the
+  search inside each stays sequential to avoid extra buffers.
+- **Other:** the cache-size estimate counts literals once and subtracts each size's hits; the bit writer ORs one
+  64-bit word per write.
+
+Default-JIT medians on the Intel Core i5-12500H, Linux x64, .NET 10.0.12, workstation GC, default
+`MaxDegreeOfParallelism` (complete `Image.ToWebP` API calls from memory; 7 samples for 0.4.4, 5 for 0.4.5;
+batch 2 of 0.4.4 covers the inputs it lists). `cwebp -v` 1.6.0 reports its internal single-threaded encode time
+(minimum of three runs), excluding process start, PNG reading and file writing:
+
+| Input | 0.4.4, batches 1 / 2 (ms) | 0.4.5 (ms) | Reduction | cwebp internal (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Photo 256×192, m4 | 66.05 / 62.73 | 25.01 | 60–62% | 37 |
+| Photo with alpha 200×160, m4 | 40.21 / 38.34 | 15.94 | 58–60% | 22 |
+| Graphic 1600×1200, m4 | 54.01 / 53.30 | 52.55 | 1–3% | 38 |
+| Graphic 1600×1200, m5 | 464.46 / 453.45 | 192.96 | 57–58% | 223 |
+| Photo 1920×1440, m0 | 388.50 / 387.94 | 129.56 | 67% | 275 |
+| Photo 1920×1440, m4 | 1504.39 / 1480.83 | 731.68 | 51% | 960 |
+| Photo 1920×1440, m4, one thread | 1513.13 | 993.16 | 34% | 960 |
+| Photo 1920×1440, m5 | 2016.94 | 893.11 | 56% | 1313 |
+| Photo 1920×1440, m6 q100 | 3705.44 | 2163.04 | 42% | — |
+| Photo 4000×3000, m4 | 7800.96 | 3264.28 | 58% | 4820 |
+
+`cwebp` needed about 7.75 s of wall time for the 1920×1440 m6 q100 encode (process time, not comparable).
+On the small corpus sources, methods 4 and 5 of the photo, alpha, odd-size and wide images became 50–72% faster;
+the small graphic encodes at methods 0 and 4 (0.2–1.7 ms) stayed within measurement noise. The 1600×1200 graphic
+at m4 is dominated by backward-reference tracing of long runs and takes about 1.4× the native time; the
+single-threaded 1920×1440 m4 encode takes 1.03×, and the other listed inputs are faster than `cwebp`.
+
+Allocations per encode stayed equal or decreased (photo m4 7.73 → 7.72 MiB, 1920×1440 m4 23.36 → 23.35 MiB,
+4000×3000 m4 68.99 → 68.99 MiB). Method-6 allocations vary between runs with thread-pool reuse of rented buffers
+(84–110 MiB for 0.4.4 at 1920×1440; 82 MiB in the final 0.4.5 run).
+
+A fixed-JIT batch (`DOTNET_TieredCompilation=0`, 5 samples) measured the build before the last two changes (buffer
+pooling and sequential search inside parallel configurations, which do not affect these single-configuration
+encodes): photo m4 58.22 → 26.35 ms, photo with alpha m4 38.97 → 16.91 ms, graphic m4 53.99 → 53.94 ms,
+1920×1440 m0 427.15 → 137.62 ms and m4 1603.29 → 738.87 ms.
+
+`LosslessEncodeBenchmarks` covers the six corpus sources at methods 0, 4 and 5; add local images through
+`RASTERSHARP_BENCHMARK_ENCODE_FILES` (same path separator rules as the decode benchmark).
+
 ## VP8L decoding in 0.4.4
 
 The entropy loop now reuses the prefetched bits for the second Huffman table lookup and accesses
@@ -159,6 +229,14 @@ DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/RasterShar
   --filter '*LosslessDecodeBenchmarks*' --launchCount 1 --warmupCount 3 \
   --iterationCount 8 --iterationTime 100
 reference/libwebp-1.6.0-build/dwebp -v /absolute/photo-12mp.webp
+```
+
+The encoder benchmark loads each image once and encodes it losslessly at quality 75:
+
+```bash
+RASTERSHARP_BENCHMARK_ENCODE_FILES='/absolute/photo.png' \
+dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+  --filter '*LosslessEncodeBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 8
 ```
 
 Keep CPU, runtime, GC settings, input bytes and workload identical when comparing versions. Measure serially, inspect the spread, and repeat any apparent regression. BenchmarkDotNet writes timing and allocation reports to `BenchmarkDotNet.Artifacts/`.

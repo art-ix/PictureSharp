@@ -45,11 +45,17 @@ internal static partial class Vp8LForwardTransforms
         uint[] rows = ArrayPool<uint>.Shared.Rent(2 * (width + 1));
         byte[] maxDiffs = ArrayPool<byte>.Shared.Rent(width);
         uint[] residuals = ArrayPool<uint>.Shared.Rent(1 << Vp8LEncoder.MaxTransformBits);
+        // Entropy terms of the accumulated histograms (see Vp8LEntropy.PrepareCombined), all zero at first.
+        long[] sLogAccumulated = ArrayPool<long>.Shared.Rent((maxSubsamplingIndex + 1) * HistoSize);
+        long[] totalAccumulated = ArrayPool<long>.Shared.Rent((maxSubsamplingIndex + 1) * 4);
         try
         {
             allArgb.AsSpan(0, argbCount).Clear();
+            sLogAccumulated.AsSpan(0, (maxSubsamplingIndex + 1) * HistoSize).Clear();
+            totalAccumulated.AsSpan(0, (maxSubsamplingIndex + 1) * 4).Clear();
             var accumulated = new uint[(maxSubsamplingIndex + 1) * HistoSize];
             var predictorHistos = new uint[(maxSubsamplingIndex + 1) * NumPredModes];
+            var sumAccumulated = new uint[(maxSubsamplingIndex + 1) * 4];
             var allModes = new uint[maxSubsamplingIndex + 1][];
             for (int i = 0; i <= maxSubsamplingIndex; i++)
                 allModes[i] = new uint[Vp8LDecoder.SubSampleSize(width, minBits + i) * Vp8LDecoder.SubSampleSize(height, minBits + i)];
@@ -68,7 +74,7 @@ internal static partial class Vp8LForwardTransforms
                 {
                     int superTilesPerRow = Vp8LDecoder.SubSampleSize(width, minBits + subsamplingIndex);
                     GetBestPredictorForTile(allArgb, subsamplingIndex, tileX >> subsamplingIndex, tileY >> subsamplingIndex,
-                        superTilesPerRow, accumulated, allModes, predictorHistos);
+                        superTilesPerRow, accumulated, sLogAccumulated, sumAccumulated, totalAccumulated, allModes, predictorHistos);
                     if (subsamplingIndex == maxSubsamplingIndex) break;
                     subsamplingIndex++;
                     if (subsamplingIndex > updateUpToIndex && subsamplingIndex <= maxSubsamplingIndex)
@@ -124,17 +130,22 @@ internal static partial class Vp8LForwardTransforms
         {
             ArrayPool<uint>.Shared.Return(allArgb); ArrayPool<uint>.Shared.Return(rows);
             ArrayPool<byte>.Shared.Return(maxDiffs); ArrayPool<uint>.Shared.Return(residuals);
+            ArrayPool<long>.Shared.Return(sLogAccumulated); ArrayPool<long>.Shared.Return(totalAccumulated);
         }
     }
 
     // port: src/enc/predictor_enc.c GetBestPredictorForTile, PredictionCostSpatialHistogram
     private static void GetBestPredictorForTile(uint[] allArgb, int subsamplingIndex, int tileX, int tileY, int tilesPerRow,
-        uint[] allAccumulated, uint[][] allModes, uint[] predictorHistos)
+        uint[] allAccumulated, long[] allSLogAccumulated, uint[] allSumAccumulated, long[] allTotalAccumulated,
+        uint[][] allModes, uint[] predictorHistos)
     {
         Span<uint> accumulated = allAccumulated.AsSpan(subsamplingIndex * HistoSize, HistoSize);
         uint[] modes = allModes[subsamplingIndex];
         int leftMode = tileX > 0 ? (int)((modes[tileY * tilesPerRow + tileX - 1] >> 8) & 0xff) : 0xff;
         int aboveMode = tileY > 0 ? (int)((modes[(tileY - 1) * tilesPerRow + tileX] >> 8) & 0xff) : 0xff;
+        Span<long> sLogAccumulated = allSLogAccumulated.AsSpan(subsamplingIndex * HistoSize, HistoSize);
+        Span<uint> sumAccumulated = allSumAccumulated.AsSpan(subsamplingIndex * 4, 4);
+        Span<long> totalAccumulated = allTotalAccumulated.AsSpan(subsamplingIndex * 4, 4);
         long bestDiff = long.MaxValue;
         int bestMode = 0, bestOffset = 0;
         for (int mode = 0; mode < NumPredModes; mode++)
@@ -145,14 +156,20 @@ internal static partial class Vp8LForwardTransforms
             for (int i = 0; i < 4; i++)
             {
                 cost += Vp8LEntropy.Spatial(tile.Slice(i * 256, 256), 1, 94);
-                cost += Vp8LEntropy.Combined(tile.Slice(i * 256, 256), accumulated.Slice(i * 256, 256));
+                cost += Vp8LEntropy.Combined(tile.Slice(i * 256, 256), accumulated.Slice(i * 256, 256),
+                    sLogAccumulated.Slice(i * 256, 256), sumAccumulated[i], totalAccumulated[i]);
             }
             // Favor keeping the areas locally similar.
             if (mode == leftMode) cost -= SpatialPredictorBias;
             if (mode == aboveMode) cost -= SpatialPredictorBias;
             if (cost < bestDiff) { bestDiff = cost; bestMode = mode; bestOffset = offset; }
         }
-        AddVectorEq(allArgb.AsSpan(bestOffset, HistoSize), accumulated);
+        ReadOnlySpan<uint> best = allArgb.AsSpan(bestOffset, HistoSize);
+        for (int i = 0; i < 4; i++)
+        {
+            Vp8LEntropy.AddToCombined(best.Slice(i * 256, 256), accumulated.Slice(i * 256, 256), sLogAccumulated.Slice(i * 256, 256),
+                ref sumAccumulated[i], ref totalAccumulated[i]);
+        }
         modes[tileY * tilesPerRow + tileX] = WebPConstants.ArgbBlack | ((uint)bestMode << 8);
         predictorHistos[subsamplingIndex * NumPredModes + bestMode]++;
     }
@@ -243,6 +260,12 @@ internal static partial class Vp8LForwardTransforms
     private static void GetResidual(int width, int height, uint[] rows, int upper, int current, byte[] maxDiffs, int mode,
         int xStart, int xEnd, int y, int maxQuantization, bool exact, bool usedSubtractGreen, Span<uint> output)
     {
+        // Without near-lossless or transparent pixels to clean, the row is not modified (PredictBatch).
+        if (y > 0 && (exact || (maxQuantization == 1 && !AnyTransparent(rows.AsSpan(current + xStart, xEnd - xStart)))))
+        {
+            PredictBatch(rows, upper, current, mode, xStart, xEnd, output);
+            return;
+        }
         for (int x = xStart; x < xEnd; x++)
         {
             uint predict = y == 0 ? x == 0 ? WebPConstants.ArgbBlack : rows[current + x - 1]
@@ -275,6 +298,38 @@ internal static partial class Vp8LForwardTransforms
             }
             output[x - xStart] = residual;
         }
+    }
+
+    // port: src/enc/predictor_enc.c PredictBatch; src/dsp/lossless_enc.c VP8LPredictorsSub_C
+    // Residuals of the pixels xStart..xEnd of a row below the first one.
+    // Reads rows[upper + xStart - 1 .. upper + xEnd] and rows[current + xStart - 1 .. current + xEnd - 1].
+    internal static void PredictBatch(uint[] rows, int upper, int current, int mode, int xStart, int xEnd, Span<uint> output)
+    {
+        int x = xStart;
+        if (x >= xEnd) return;
+        if (x == 0)
+        {
+            output[0] = SubPixels(rows[current], rows[upper]);
+            x = 1;
+        }
+        if (x < xEnd)
+        {
+            x += PredictorSubSimd(mode, ref rows[current + x], ref rows[upper + x], xEnd - x, ref output[x - xStart]);
+        }
+        PredictBatchScalar(rows, upper, current, mode, x, xEnd, output[(x - xStart)..]);
+    }
+
+    internal static void PredictBatchScalar(uint[] rows, int upper, int current, int mode, int xStart, int xEnd, Span<uint> output)
+    {
+        for (int x = xStart; x < xEnd; x++)
+            output[x - xStart] = x == 0 ? SubPixels(rows[current], rows[upper]) : SubPixels(rows[current + x], Predict(mode, rows[current + x - 1], rows, upper + x));
+    }
+
+    private static bool AnyTransparent(ReadOnlySpan<uint> pixels)
+    {
+        if (AnyTransparentSimd(pixels, out int i)) return true;
+        for (; i < pixels.Length; i++) if ((pixels[i] & MaskAlpha) == 0) return true;
+        return false;
     }
 
     // port: src/dsp/lossless.c VP8LPredictor0_C .. VP8LPredictor13_C

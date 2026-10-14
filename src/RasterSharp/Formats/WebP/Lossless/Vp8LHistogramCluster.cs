@@ -7,7 +7,8 @@ internal static class Vp8LHistogramCluster
     // port: src/enc/histogram_enc.c VP8LGetHistoImageSymbols (libwebp 1.6.0)
     private const int NumPartitions = 4, BinSize = NumPartitions * NumPartitions * NumPartitions, MaxHistoGreedy = 100;
 
-    public static (Vp8LHistogram[] Groups, int[] Symbols) Build(Vp8LRefs refs, int width, int height, int bits, int cacheBits, int quality, bool lowEffort)
+    public static (Vp8LHistogram[] Groups, int[] Symbols) Build(Vp8LRefs refs, int width, int height, int bits, int cacheBits, int quality, bool lowEffort,
+        int maxDegreeOfParallelism = 1)
     {
         int tw = Vp8LDecoder.SubSampleSize(width, bits), th = Vp8LDecoder.SubSampleSize(height, bits), count = tw * th;
         var originals = new Vp8LHistogram?[count];
@@ -33,11 +34,25 @@ internal static class Vp8LHistogramCluster
             int threshold = 1 + (int)Vp8LEntropy.DivideRound(quality * quality * quality * (MaxHistoGreedy - 1), 100 * 100 * 100);
             if (CombineStochastic(groups, threshold)) CombineGreedy(groups);
         }
+        // port: src/enc/histogram_enc.c HistogramRemap
+        // Tiles are independent; the groups are analyzed up front so that threads only read them.
         var map = new int[count];
-        for (int i = 0; i < count; i++)
+        foreach (Vp8LHistogram group in groups) _ = group.ClusterCost;
+        if (maxDegreeOfParallelism != 1 && count * groups.Count >= 4096)
+            Parallel.For(0, count, new ParallelOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism }, i => Remap(i));
+        else
+            for (int i = 0; i < count; i++) Remap(i);
+        // Empty tiles take the previous symbol.
+        for (int i = 0; i < count; i++) if (originals[i] is null) map[i] = i > 0 ? map[i - 1] : 0;
+        var rebuilt = new Vp8LHistogram[groups.Count];
+        for (int i = 0; i < rebuilt.Length; i++) rebuilt[i] = new Vp8LHistogram(cacheBits);
+        for (int i = 0; i < count; i++) if (originals[i] is { } h) rebuilt[map[i]].Add(h);
+        return (rebuilt, map);
+
+        void Remap(int i)
         {
             Vp8LHistogram? h = originals[i];
-            if (h is null) { map[i] = i > 0 ? map[i - 1] : 0; continue; }
+            if (h is null) return;
             long best = long.MaxValue;
             Vp8LChannelCosts costs = default;
             for (int j = 0; j < groups.Count; j++)
@@ -49,10 +64,6 @@ internal static class Vp8LHistogramCluster
                 }
             }
         }
-        var rebuilt = new Vp8LHistogram[groups.Count];
-        for (int i = 0; i < rebuilt.Length; i++) rebuilt[i] = new Vp8LHistogram(cacheBits);
-        for (int i = 0; i < count; i++) if (originals[i] is { } h) rebuilt[map[i]].Add(h);
-        return (rebuilt, map);
     }
 
     // port: src/enc/histogram_enc.c HistogramAnalyzeEntropyBin, GetHistoBinIndex, GetBinIdForEntropy, HistogramCombineEntropyBin

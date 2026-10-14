@@ -1,3 +1,4 @@
+using RasterSharp.Formats.WebP.Lossless;
 using RasterSharp.Tests.Infrastructure;
 
 namespace RasterSharp.Tests.WebP;
@@ -92,5 +93,45 @@ public class ParallelDeterminismTests
         using Image three = Image.Load(encoded, options with { MaxDegreeOfParallelism = 3 });
         Assert.Equal(single.ToPixelData(), parallel.ToPixelData());
         Assert.Equal(single.ToPixelData(), three.ToPixelData());
+    }
+
+    // The hash chain search runs in speculative segments merged in sequential order; matches must not depend on it.
+    [Theory]
+    [InlineData(75, false)]
+    [InlineData(100, false)]
+    [InlineData(25, false)]
+    [InlineData(75, true)]
+    public void HashChain_IsIndependentOfThreadCount(int quality, bool lowEffort)
+    {
+        const int Width = 700, Height = 420;
+        uint[] pixels = HashChainPixels(Width, Height);
+        using var single = new Vp8LBackwardRefs(pixels, Width, Height, quality, lowEffort);
+        using Vp8LRefs expected = single.Greedy(false), expectedRle = single.Greedy(true);
+        foreach (int threads in new[] { 2, 3, 5, 16, -1 })
+        {
+            using var parallel = new Vp8LBackwardRefs(pixels, Width, Height, quality, lowEffort, maxDegreeOfParallelism: threads);
+            using Vp8LRefs actual = parallel.Greedy(false), actualRle = parallel.Greedy(true);
+            Assert.True(expected.Tokens.SequenceEqual(actual.Tokens), $"{threads} threads");
+            Assert.True(expectedRle.Tokens.SequenceEqual(actualRle.Tokens), $"{threads} threads, RLE");
+        }
+    }
+
+    // Noise, constant runs, short periodic patterns and long copies, in blocks that straddle segment boundaries.
+    private static uint[] HashChainPixels(int width, int height)
+    {
+        var rng = new Random(31);
+        uint[] pixels = new uint[width * height];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = ((i / 6007) % 4) switch
+            {
+                0 => (uint)rng.Next() & 0xff0f0f0fu,
+                1 => 0xff204060u,
+                2 => 0xff000000u | (uint)(i % 37 * 0x010203),
+                _ => i >= 70000 ? pixels[i - 70000] : (uint)rng.Next(),
+            };
+        }
+
+        return pixels;
     }
 }

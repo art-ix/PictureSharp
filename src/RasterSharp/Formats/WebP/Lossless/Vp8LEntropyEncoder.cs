@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace RasterSharp.Formats.WebP.Lossless;
 
 [Flags]
@@ -9,9 +11,9 @@ internal static class Vp8LEntropyEncoder
 {
     // port: src/enc/vp8l_enc.c EncodeImageInternal
     public static void EncodeImageInternal(Vp8LBitWriter writer, uint[] pixels, int width, int height, int quality, bool lowEffort,
-        ReadOnlySpan<Vp8LCrunchSubConfig> subConfigs, ref int cacheBits, int histoBits)
+        ReadOnlySpan<Vp8LCrunchSubConfig> subConfigs, ref int cacheBits, int histoBits, int maxDegreeOfParallelism)
     {
-        using var matches = new Vp8LBackwardRefs(pixels, width, height, quality, lowEffort);
+        using var matches = new Vp8LBackwardRefs(pixels, width, height, quality, lowEffort, maxDegreeOfParallelism: maxDegreeOfParallelism);
         Vp8LBackwardRefs? box = null;
         // A non-zero value was set by the palette analysis.
         int cacheBitsInit = cacheBits == 0 ? Vp8LEncoder.MaxColorCacheBits : cacheBits;
@@ -20,7 +22,7 @@ internal static class Vp8LEntropyEncoder
         {
             foreach (Vp8LCrunchSubConfig sub in subConfigs)
             {
-                var refs = GetBackwardReferences(pixels, width, height, quality, lowEffort, sub.Lz77, cacheBitsInit, sub.DoNoCache, matches, ref box, out int cacheBitsBest);
+                var refs = GetBackwardReferences(pixels, width, height, quality, lowEffort, sub.Lz77, cacheBitsInit, sub.DoNoCache, matches, ref box, out int cacheBitsBest, maxDegreeOfParallelism);
                 try
                 {
                     for (int iCache = 0; iCache < (sub.DoNoCache ? 2 : 1); iCache++)
@@ -28,7 +30,7 @@ internal static class Vp8LEntropyEncoder
                         int cacheBitsTmp = iCache == 0 ? cacheBitsBest : 0;
                         // The no-cache case was already studied when the best cache size is 0.
                         if (iCache == 1 && cacheBitsBest == 0) break;
-                        Vp8LBitWriter candidate = StoreImage(refs[iCache]!, width, height, quality, lowEffort, cacheBitsTmp, histoBits);
+                        Vp8LBitWriter candidate = StoreImage(refs[iCache]!, width, height, quality, lowEffort, cacheBitsTmp, histoBits, maxDegreeOfParallelism);
                         if (best is null || candidate.ByteCount < best.ByteCount)
                         {
                             best?.Dispose();
@@ -45,10 +47,11 @@ internal static class Vp8LEntropyEncoder
         finally { best?.Dispose(); box?.Dispose(); }
     }
 
-    private static Vp8LBitWriter StoreImage(Vp8LRefs refs, int width, int height, int quality, bool lowEffort, int cacheBits, int histoBits)
+    private static Vp8LBitWriter StoreImage(Vp8LRefs refs, int width, int height, int quality, bool lowEffort, int cacheBits, int histoBits,
+        int maxDegreeOfParallelism)
     {
         var writer = new Vp8LBitWriter();
-        var (groups, symbols) = Vp8LHistogramCluster.Build(refs, width, height, histoBits, cacheBits, quality, lowEffort);
+        var (groups, symbols) = Vp8LHistogramCluster.Build(refs, width, height, histoBits, cacheBits, quality, lowEffort, maxDegreeOfParallelism);
         Vp8LHuffmanEncoder[][] codes = groups.Select(static h => h.Codes()).ToArray();
         if (cacheBits > 0) { writer.Put(1, 1); writer.Put(cacheBits, 4); }
         else writer.Put(0, 1);
@@ -78,7 +81,7 @@ internal static class Vp8LEntropyEncoder
     {
         using var matches = new Vp8LBackwardRefs(pixels, width, height, quality, lowEffort);
         Vp8LBackwardRefs? box = null;
-        var refs = GetBackwardReferences(pixels, width, height, quality, false, Vp8LLz77.Standard | Vp8LLz77.Rle, 0, false, matches, ref box, out _);
+        var refs = GetBackwardReferences(pixels, width, height, quality, false, Vp8LLz77.Standard | Vp8LLz77.Rle, 0, false, matches, ref box, out _, 1);
         try
         {
             var histogram = new Vp8LHistogram(0);
@@ -96,7 +99,7 @@ internal static class Vp8LEntropyEncoder
     // Returns the references with a color cache (index 0) and, when requested, without one (index 1).
     // Their distances are raw; plane codes are applied when the tokens are stored, as BackwardReferences2DLocality does.
     private static Vp8LRefs?[] GetBackwardReferences(uint[] pixels, int width, int height, int quality, bool lowEffort, Vp8LLz77 types,
-        int cacheBitsMax, bool doNoCache, Vp8LBackwardRefs matches, ref Vp8LBackwardRefs? box, out int cacheBitsBest)
+        int cacheBitsMax, bool doNoCache, Vp8LBackwardRefs matches, ref Vp8LBackwardRefs? box, out int cacheBitsBest, int maxDegreeOfParallelism)
     {
         var refs = new Vp8LRefs?[2];
         if (lowEffort)
@@ -117,7 +120,7 @@ internal static class Vp8LEntropyEncoder
                 {
                     Vp8LLz77.Rle => matches.Greedy(true),
                     Vp8LLz77.Standard => matches.Greedy(false),
-                    _ => (box ??= new Vp8LBackwardRefs(pixels, width, height, quality, false, box: true)).Greedy(false),
+                    _ => (box ??= new Vp8LBackwardRefs(pixels, width, height, quality, false, box: true, maxDegreeOfParallelism)).Greedy(false),
                 };
                 long bitCost = 0;
                 try
@@ -190,66 +193,82 @@ internal static class Vp8LEntropyEncoder
     }
 
     // port: src/enc/backward_references_enc.c CalculateBestCacheSize
+    // Every cache size sees all the literals except its hits, so the literal counts are accumulated once and
+    // each size only records the literals it turns into cache hits; the final counts are identical.
     private static int CalculateBestCacheSize(uint[] pixels, int quality, Vp8LRefs refs, int cacheBitsMax)
     {
         if (quality <= 25) cacheBitsMax = 0;
         if (cacheBitsMax == 0) return 0;
-        var histograms = new Vp8LHistogram[cacheBitsMax + 1];
-        var caches = new uint[cacheBitsMax + 1][];
-        for (int i = 0; i <= cacheBitsMax; i++)
+        int levels = cacheBitsMax + 1, cacheSize = 2 << cacheBitsMax;
+        int bufferSize = 2 * cacheSize + (levels + 1) * 1024 + 24;
+        uint[] buffer = ArrayPool<uint>.Shared.Rent(bufferSize);
+        try
         {
-            histograms[i] = new Vp8LHistogram(i);
-            caches[i] = new uint[1 << i];
-        }
-        int pos = 0;
-        foreach (Vp8LToken token in refs.Tokens)
-        {
-            if (token.Kind == 0)
+            Span<uint> all = buffer.AsSpan(0, bufferSize);
+            all.Clear();
+            // Caches (and their hit counts) of all sizes back to back: size i starts at 2^i (index 0 is unused).
+            Span<uint> caches = all[..cacheSize], hits = all.Slice(cacheSize, cacheSize);
+            Span<uint> literals = all.Slice(2 * cacheSize, 1024), hitLiterals = all.Slice(2 * cacheSize + 1024, levels * 1024);
+            Span<uint> lengths = all.Slice(2 * cacheSize + (levels + 1) * 1024, 24);
+            int pos = 0;
+            foreach (Vp8LToken token in refs.Tokens)
             {
-                uint pix = pixels[pos++];
-                int a = (int)(pix >> 24), r = (int)((pix >> 16) & 255), g = (int)((pix >> 8) & 255), b = (int)(pix & 255);
-                // The keys of the smaller caches derive from the longest one.
-                int key = (int)(unchecked(pix * 0x1e35a7bdu) >> (32 - cacheBitsMax));
-                AddLiteral(histograms[0], a, r, g, b);
-                for (int i = cacheBitsMax; i >= 1; i--, key >>= 1)
+                if (token.Kind == 0)
                 {
-                    if (caches[i][key] == pix) histograms[i].Counts[0][280 + key]++;
-                    else
+                    uint pix = pixels[pos++];
+                    int a = (int)(pix >> 24), r = (int)((pix >> 16) & 255), g = (int)((pix >> 8) & 255), b = (int)(pix & 255);
+                    // The keys of the smaller caches derive from the longest one.
+                    int key = (int)(unchecked(pix * 0x1e35a7bdu) >> (32 - cacheBitsMax));
+                    literals[g]++; literals[256 + r]++; literals[512 + b]++; literals[768 + a]++;
+                    for (int i = cacheBitsMax; i >= 1; i--, key >>= 1)
                     {
-                        caches[i][key] = pix;
-                        AddLiteral(histograms[i], a, r, g, b);
+                        int slot = (1 << i) + key;
+                        if (caches[slot] == pix)
+                        {
+                            hits[slot]++;
+                            int offset = i * 1024;
+                            hitLiterals[offset + g]++; hitLiterals[offset + 256 + r]++; hitLiterals[offset + 512 + b]++; hitLiterals[offset + 768 + a]++;
+                        }
+                        else caches[slot] = pix;
+                    }
+                }
+                else
+                {
+                    // Distances contribute the same for every cache size; only the length prefix matters.
+                    lengths[Vp8LBackwardRefs.Prefix(token.Length).Code]++;
+                    uint previous = pixels[pos] ^ 0xffffffffu;
+                    for (int k = 0; k < token.Length; k++, pos++)
+                    {
+                        uint pix = pixels[pos];
+                        if (pix == previous) continue;
+                        int key = (int)(unchecked(pix * 0x1e35a7bdu) >> (32 - cacheBitsMax));
+                        for (int i = cacheBitsMax; i >= 1; i--, key >>= 1) caches[(1 << i) + key] = pix;
+                        previous = pix;
                     }
                 }
             }
-            else
+            int best = 0;
+            long minimum = long.MaxValue;
+            for (int i = 0; i <= cacheBitsMax; i++)
             {
-                // Distances contribute the same for every cache size; only the length prefix matters.
-                int code = Vp8LBackwardRefs.Prefix(token.Length).Code;
-                for (int i = 0; i <= cacheBitsMax; i++) histograms[i].Counts[0][256 + code]++;
-                uint previous = pixels[pos] ^ 0xffffffffu;
-                for (int k = 0; k < token.Length; k++, pos++)
+                var histogram = new Vp8LHistogram(i);
+                uint[][] counts = histogram.Counts;
+                for (int v = 0; v < 256; v++)
                 {
-                    uint pix = pixels[pos];
-                    if (pix == previous) continue;
-                    int key = (int)(unchecked(pix * 0x1e35a7bdu) >> (32 - cacheBitsMax));
-                    for (int i = cacheBitsMax; i >= 1; i--, key >>= 1) caches[i][key] = pix;
-                    previous = pix;
+                    int offset = i * 1024 + v;
+                    counts[0][v] = literals[v] - hitLiterals[offset];
+                    counts[1][v] = literals[256 + v] - hitLiterals[offset + 256];
+                    counts[2][v] = literals[512 + v] - hitLiterals[offset + 512];
+                    counts[3][v] = literals[768 + v] - hitLiterals[offset + 768];
                 }
+                lengths.CopyTo(counts[0].AsSpan(256));
+                if (i > 0) hits.Slice(1 << i, 1 << i).CopyTo(counts[0].AsSpan(280));
+                long entropy = histogram.Estimate();
+                if (i == 0 || entropy < minimum) { minimum = entropy; best = i; }
             }
+            return best;
         }
-        int best = 0;
-        long minimum = long.MaxValue;
-        for (int i = 0; i <= cacheBitsMax; i++)
-        {
-            long entropy = histograms[i].Estimate();
-            if (i == 0 || entropy < minimum) { minimum = entropy; best = i; }
-        }
-        return best;
-
-        static void AddLiteral(Vp8LHistogram h, int a, int r, int g, int b)
-        {
-            h.Counts[2][b]++; h.Counts[0][g]++; h.Counts[1][r]++; h.Counts[3][a]++;
-        }
+        finally { ArrayPool<uint>.Shared.Return(buffer); }
     }
 
     // port: src/enc/vp8l_enc.c StoreImageToBitMask
