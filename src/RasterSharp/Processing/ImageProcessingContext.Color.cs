@@ -14,10 +14,7 @@ public readonly ref partial struct ImageProcessingContext
     /// <summary>Overwrites every pixel with <paramref name="color"/> (no blending).</summary>
     public ImageProcessingContext Fill(Rgba32 color)
     {
-        foreach (ImageFrame frame in _state.WritableFrames)
-        {
-            frame.GetPixelSpan().Fill(color);
-        }
+        ForEachPixelSpan(color, static (pixels, value) => pixels.Fill(value));
 
         Target.HasAlpha = color.A != 255;
         return this;
@@ -44,10 +41,7 @@ public readonly ref partial struct ImageProcessingContext
     /// <summary>Sets alpha to 0 on every pixel equal to <paramref name="color"/> (all four channels); their color channels are kept.</summary>
     public ImageProcessingContext MakeTransparent(Rgba32 color)
     {
-        foreach (ImageFrame frame in _state.WritableFrames)
-        {
-            ColorOps.MakeTransparent(frame.GetPixelSpan(), color);
-        }
+        ForEachPixelSpan(color, static (pixels, value) => ColorOps.MakeTransparent(pixels, value));
 
         Target.HasAlpha = true;
         return this;
@@ -59,10 +53,7 @@ public readonly ref partial struct ImageProcessingContext
     /// </summary>
     public ImageProcessingContext BackgroundColor(Rgba32 color)
     {
-        foreach (ImageFrame frame in _state.WritableFrames)
-        {
-            ColorOps.BackgroundColor(frame.GetPixelSpan(), color);
-        }
+        ForEachPixelSpan(color, static (pixels, value) => ColorOps.BackgroundColor(pixels, value));
 
         if (color.A == 255)
         {
@@ -81,10 +72,7 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        foreach (ImageFrame frame in _state.WritableFrames)
-        {
-            ColorOps.Opacity(frame.GetPixelSpan(), opacity);
-        }
+        ForEachPixelSpan(opacity, static (pixels, value) => ColorOps.Opacity(pixels, value));
 
         Target.HasAlpha = true;
         return this;

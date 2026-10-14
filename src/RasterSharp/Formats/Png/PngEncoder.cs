@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using RasterSharp.Compression;
 using RasterSharp.Processing;
+using RasterSharp.Formats.Metadata;
 
 namespace RasterSharp.Formats.Png;
 
@@ -45,7 +46,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
         }
 
         ImageMetadata meta = image.Metadata;
-        if ((options.Metadata & MetadataKinds.Icc) != 0 && meta.IccProfile is { Length: > 0 } icc)
+        if (MetadataSelection.Select(meta.IccProfile, options.Metadata, MetadataKinds.Icc) is { } icc)
         {
             byte[] name = "ICC Profile\0\0"u8.ToArray();
             byte[] compressed = Deflater.CompressZlib(icc, 9);
@@ -61,7 +62,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             writer.Write("pHYs", phys);
         }
 
-        if ((options.Metadata & MetadataKinds.Exif) != 0 && meta.Exif is { Length: > 0 } exif)
+        if (MetadataSelection.Select(meta.Exif, options.Metadata, MetadataKinds.Exif) is { } exif)
         {
             writer.Write("eXIf", exif);
         }
@@ -139,7 +140,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             }
         }
 
-        if ((options.Metadata & MetadataKinds.Xmp) != 0 && meta.Xmp is { Length: > 0 } xmp)
+        if (MetadataSelection.Select(meta.Xmp, options.Metadata, MetadataKinds.Xmp) is { } xmp)
         {
             // iTXt: keyword, NUL, compression flag, compression method, language tag NUL, translated keyword NUL, text
             byte[] header = [.. Encoding.ASCII.GetBytes(PngConstants.XmpKeyword), 0, 0, 0, 0, 0];

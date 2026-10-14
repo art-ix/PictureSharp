@@ -117,4 +117,80 @@ public readonly ref partial struct ImageProcessingContext
 
         return this;
     }
+
+    /// <summary>
+    /// Rotates clockwise by <paramref name="degrees"/>, as Pillow's <c>Image.rotate(-degrees)</c>. With
+    /// <paramref name="expand"/> the canvas grows to hold the whole image, otherwise the corners are cut off;
+    /// uncovered areas are filled with <paramref name="background"/>. Multiples of 90° are exact.
+    /// </summary>
+    /// <param name="degrees">Clockwise angle.</param>
+    /// <param name="filter"><see cref="ResamplingFilter.Nearest"/>, <see cref="ResamplingFilter.Bilinear"/> or <see cref="ResamplingFilter.Bicubic"/>.</param>
+    /// <param name="background">Fill for the uncovered corners. Default: transparent black.</param>
+    /// <param name="expand">Whether the canvas grows to fit the rotated image. Default: true.</param>
+    public ImageProcessingContext Rotate(float degrees, ResamplingFilter filter = ResamplingFilter.Bicubic, Rgba32 background = default, bool expand = true)
+    {
+        CheckFinite(degrees, nameof(degrees));
+        if (filter is not (ResamplingFilter.Nearest or ResamplingFilter.Bilinear or ResamplingFilter.Bicubic))
+        {
+            throw new ArgumentOutOfRangeException(nameof(filter), filter, "Rotation supports the Nearest, Bilinear and Bicubic filters.");
+        }
+
+        // Pillow rotates counter-clockwise; angle % 360.0 follows Python's sign rules.
+        double angle = -(double)degrees % 360.0;
+        if (angle < 0)
+        {
+            angle += 360.0;
+        }
+
+        Image image = Target;
+        (int w, int h) = (image.Width, image.Height);
+        if (angle == 0)
+        {
+            return this;
+        }
+
+        if (angle == 180)
+        {
+            return RotateFlip(2, false);
+        }
+
+        if (angle is 90 or 270 && (expand || w == h))
+        {
+            return RotateFlip(angle == 90 ? 3 : 1, false);
+        }
+
+        (double[] matrix, int width, int height) = Affine.RotationMatrix(w, h, angle, expand);
+        ImageFrame.ValidateSize(width, height);
+        bool premultiplied = filter != ResamplingFilter.Nearest;
+        Rgba32 fill = background;
+        if (premultiplied)
+        {
+            Span<Rgba32> one = [background];
+            Premultiplied.FromStraight(one, one);
+            fill = one[0];
+        }
+
+        Rgba32[]? scratch = premultiplied ? GC.AllocateUninitializedArray<Rgba32>(w * h) : null;
+        foreach (ImageFrame frame in _state.Frames)
+        {
+            var output = GC.AllocateUninitializedArray<Rgba32>(width * height);
+            output.AsSpan().Fill(fill);
+            if (scratch is null)
+            {
+                Affine.TransformNearest(frame.Pixels, w, h, output, width, height, matrix);
+            }
+            else
+            {
+                Premultiplied.FromStraight(frame.Pixels, scratch);
+                Affine.TransformFiltered(scratch, w, h, output, width, height, matrix, filter);
+                Premultiplied.ToStraight(output);
+            }
+
+            frame.Replace(width, height, output);
+        }
+
+        _state.FramesReplaced();
+        image.HasAlpha |= background.A != 255;
+        return this;
+    }
 }

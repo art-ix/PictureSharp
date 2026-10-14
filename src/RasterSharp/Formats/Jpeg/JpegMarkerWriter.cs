@@ -1,3 +1,5 @@
+using RasterSharp.Formats.Metadata;
+
 namespace RasterSharp.Formats.Jpeg;
 
 internal sealed class JpegMarkerWriter(Stream output)
@@ -50,9 +52,9 @@ internal sealed class JpegMarkerWriter(Stream output)
         jfif[12] = jfif[13] = 0;
         Segment(0xE0, [], jfif);
         ImageMetadata m = image.Metadata;
-        if (kinds.HasFlag(MetadataKinds.Exif) && m.Exif is { Length: > 0 } exif)
+        if (MetadataSelection.Select(m.Exif, kinds, MetadataKinds.Exif) is { } exif)
             Segment(0xE1, "Exif\0\0"u8, exif);
-        if (kinds.HasFlag(MetadataKinds.Icc) && m.IccProfile is { Length: > 0 } icc)
+        if (MetadataSelection.Select(m.IccProfile, kinds, MetadataKinds.Icc) is { } icc)
         {
             int count = (icc.Length + 65518) / 65519;
             Span<byte> prefix = stackalloc byte[14];
@@ -65,7 +67,7 @@ internal sealed class JpegMarkerWriter(Stream output)
             }
         }
 
-        if (kinds.HasFlag(MetadataKinds.Xmp) && m.Xmp is { Length: > 0 } xmp)
+        if (MetadataSelection.Select(m.Xmp, kinds, MetadataKinds.Xmp) is { } xmp)
             Segment(0xE1, "http://ns.adobe.com/xap/1.0/\0"u8, xmp);
     }
 

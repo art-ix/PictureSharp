@@ -527,4 +527,31 @@ public class ProcessingTests
 
         return r;
     }
+
+    [Fact]
+    public void ParameterizedPixelOperations_AllocateNoMoreThanStatelessOperation()
+    {
+        using var image = new Image(64, 64, new Rgba32(10, 20, 30, 255));
+        long Measure(Action<ImageProcessingContext> operation)
+        {
+            image.Mutate(operation);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            image.Mutate(operation);
+            return GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        long baseline = Measure(static x => x.Invert());
+        Assert.Equal(baseline, Measure(static x => x.Brightness(1.1f)));
+        Assert.Equal(baseline, Measure(static x => x.Contrast(0.9f)));
+        Assert.Equal(baseline, Measure(static x => x.Saturate(1.2f)));
+        Assert.Equal(baseline, Measure(static x => x.Opacity(0.9f)));
+        Assert.Equal(baseline, Measure(static x => x.Fill(new Rgba32(1, 2, 3, 255))));
+        Assert.Equal(baseline, Measure(static x => x.MakeTransparent(new Rgba32(1, 2, 3, 4))));
+        Assert.Equal(baseline, Measure(static x => x.BackgroundColor(new Rgba32(5, 6, 7, 255))));
+
+        // Spatial filters allocate the premultiplied scratch and result buffers, but no closures.
+        long pixelBytes = 64 * 64 * 4;
+        Assert.InRange(Measure(static x => x.BoxBlur(1.5f)), 2 * pixelBytes, (3 * pixelBytes) + 4096);
+        Assert.InRange(Measure(static x => x.UnsharpMask(2f, 50, 3)), 2 * pixelBytes, (4 * pixelBytes) + 4096);
+    }
 }

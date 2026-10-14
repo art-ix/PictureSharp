@@ -1,4 +1,5 @@
-using System.Buffers.Binary;
+using System.Drawing;
+using RasterSharp.Formats.Metadata;
 
 namespace RasterSharp.Formats.Gif;
 
@@ -60,6 +61,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         int height = image.Height;
         bool animated = frames.Count > 1;
         using var stream = new MemoryStream();
+        var writer = new GifBlockWriter(stream);
 
         GifFramePalette first;
         Rgba32[] firstRendered;
@@ -80,19 +82,19 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
             firstRendered = GifPaletteBuilder.Render(first);
         }
 
-        bool hasMetadata = Icc(image, options) is not null || Xmp(image, options) is not null;
+        byte[]? icc = MetadataSelection.Select(image.Metadata.IccProfile, options.Metadata, MetadataKinds.Icc);
+        byte[]? xmp = MetadataSelection.Select(image.Metadata.Xmp, options.Metadata, MetadataKinds.Xmp);
+        bool hasMetadata = icc is not null || xmp is not null;
         bool extended = animated || first.TransparentIndex >= 0 || hasMetadata;
-        WriteHeader(stream, image, width, height, first, extended);
+        writer.WriteHeader(width, height, first.Colors, BackgroundIndex(image.AnimationBackgroundColor, first), extended);
         if (animated && image.LoopCount != 1)
         {
             // NETSCAPE2.0 stores the number of repetitions after the first play (0 = forever).
             int repetitions = image.LoopCount == 0 ? 0 : Math.Min(image.LoopCount - 1, ushort.MaxValue);
-            stream.Write([GifConstants.ExtensionIntroducer, GifConstants.ApplicationLabel, 11]);
-            stream.Write(GifConstants.Netscape);
-            stream.Write([3, 1, (byte)repetitions, (byte)(repetitions >> 8), 0]);
+            writer.WriteLoopCount(repetitions);
         }
 
-        WriteMetadata(stream, image, options);
+        writer.WriteMetadata(icc, xmp);
 
         var pending = new PendingFrame
         {
@@ -129,7 +131,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
                 }
             }
 
-            if (!WriteFrame(stream, pending, palettes, width, animated, options))
+            if (!WriteFrame(writer, pending, palettes, width, animated, options))
             {
                 return null;
             }
@@ -147,12 +149,12 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
             };
         }
 
-        if (!WriteFrame(stream, pending, palettes, width, animated, options))
+        if (!WriteFrame(writer, pending, palettes, width, animated, options))
         {
             return null;
         }
 
-        stream.WriteByte(GifConstants.Trailer);
+        writer.WriteTrailer();
         return stream.ToArray();
     }
 
@@ -232,20 +234,6 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         return (x0, y0, x1, y1);
     }
 
-    private static void WriteHeader(Stream stream, Image image, int width, int height, GifFramePalette first, bool extended)
-    {
-        int bits = TableBits(first.Colors.Length);
-        Span<byte> header = stackalloc byte[13];
-        (extended ? "GIF89a"u8 : "GIF87a"u8).CopyTo(header);
-        BinaryPrimitives.WriteUInt16LittleEndian(header[6..], (ushort)width);
-        BinaryPrimitives.WriteUInt16LittleEndian(header[8..], (ushort)height);
-        header[10] = (byte)(0x80 | ((bits - 1) << 4) | (bits - 1));
-        header[11] = (byte)BackgroundIndex(image.AnimationBackgroundColor, first);
-        header[12] = 0;
-        stream.Write(header);
-        WriteColorTable(stream, first.Colors, bits);
-    }
-
     /// <summary>The global table entry matching the background color; the transparent entry for a transparent background.</summary>
     private static int BackgroundIndex(Rgba32 background, GifFramePalette palette)
     {
@@ -265,45 +253,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         return 0;
     }
 
-    private static void WriteMetadata(Stream stream, Image image, GifEncoderOptions options)
-    {
-        if (Icc(image, options) is { } icc)
-        {
-            stream.Write([GifConstants.ExtensionIntroducer, GifConstants.ApplicationLabel, 11]);
-            stream.Write(GifConstants.IccIdentifier);
-            for (int pos = 0; pos < icc.Length; pos += 255)
-            {
-                int size = Math.Min(255, icc.Length - pos);
-                stream.WriteByte((byte)size);
-                stream.Write(icc, pos, size);
-            }
-
-            stream.WriteByte(0);
-        }
-
-        if (Xmp(image, options) is { } xmp)
-        {
-            // The packet is stored raw; the "magic trailer" (0x01, 0xFF, 0xFE, …, 0x00) lets sub-block readers skip it.
-            stream.Write([GifConstants.ExtensionIntroducer, GifConstants.ApplicationLabel, 11]);
-            stream.Write(GifConstants.XmpIdentifier);
-            stream.Write(xmp);
-            stream.WriteByte(1);
-            for (int value = 255; value >= 0; value--)
-            {
-                stream.WriteByte((byte)value);
-            }
-
-            stream.WriteByte(0);
-        }
-    }
-
-    private static byte[]? Icc(Image image, GifEncoderOptions options) =>
-        (options.Metadata & MetadataKinds.Icc) != 0 && image.Metadata.IccProfile is { Length: > 0 } icc ? icc : null;
-
-    private static byte[]? Xmp(Image image, GifEncoderOptions options) =>
-        (options.Metadata & MetadataKinds.Xmp) != 0 && image.Metadata.Xmp is { Length: > 0 } xmp ? xmp : null;
-
-    private static bool WriteFrame(Stream stream, PendingFrame frame, GifPaletteBuilder palettes, int canvasWidth, bool animated, GifEncoderOptions options)
+    private static bool WriteFrame(GifBlockWriter writer, PendingFrame frame, GifPaletteBuilder palettes, int canvasWidth, bool animated, GifEncoderOptions options)
     {
         GifFramePalette? palette = frame.Palette
             ?? palettes.BuildLocal(frame.Rendered, frame.Before, canvasWidth, (frame.X0, frame.Y0, frame.X1, frame.Y1), options.OptimizeFrames);
@@ -316,28 +266,15 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         int delay = animated ? (int)Math.Clamp(Math.Round(frame.DurationMs / 10, MidpointRounding.AwayFromZero), 0, ushort.MaxValue) : 0;
         if (animated || transparent >= 0 || frame.Disposal != GifDisposal.None)
         {
-            int packed = ((int)frame.Disposal << 2) | (transparent >= 0 ? 1 : 0);
-            stream.Write([GifConstants.ExtensionIntroducer, GifConstants.GraphicControlLabel, 4, (byte)packed,
-                (byte)delay, (byte)(delay >> 8), (byte)Math.Max(transparent, 0), 0]);
+            writer.WriteGraphicControl(delay, transparent, frame.Disposal);
         }
 
         int width = frame.X1 - frame.X0;
         int height = frame.Y1 - frame.Y0;
-        int bits = TableBits(palette.Colors.Length);
-        Span<byte> descriptor = stackalloc byte[10];
-        descriptor[0] = GifConstants.ImageSeparator;
-        BinaryPrimitives.WriteUInt16LittleEndian(descriptor[1..], (ushort)frame.X0);
-        BinaryPrimitives.WriteUInt16LittleEndian(descriptor[3..], (ushort)frame.Y0);
-        BinaryPrimitives.WriteUInt16LittleEndian(descriptor[5..], (ushort)width);
-        BinaryPrimitives.WriteUInt16LittleEndian(descriptor[7..], (ushort)height);
         // The first frame's palette is the global color table in the header.
         bool local = !palette.IsGlobal && !frame.IsFirst;
-        descriptor[9] = (byte)((local ? 0x80 | (bits - 1) : 0) | (options.Interlace ? 0x40 : 0));
-        stream.Write(descriptor);
-        if (local)
-        {
-            WriteColorTable(stream, palette.Colors, bits);
-        }
+        int minCodeSize = writer.WriteImageDescriptor(new Rectangle(frame.X0, frame.Y0, width, height),
+            palette.Colors, local, options.Interlace);
 
         // Unchanged pixels become transparent, which keeps runs long for LZW.
         var indices = new byte[width * height];
@@ -355,33 +292,8 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
             }
         }
 
-        GifLzwEncoder.Encode(indices, Math.Max(2, bits), stream);
+        writer.WriteImageData(indices, minCodeSize);
         return true;
-    }
-
-    /// <summary>Number of bits for a color table holding <paramref name="count"/> entries (at least 2 entries).</summary>
-    private static int TableBits(int count)
-    {
-        int bits = 1;
-        while ((1 << bits) < count)
-        {
-            bits++;
-        }
-
-        return bits;
-    }
-
-    private static void WriteColorTable(Stream stream, Rgba32[] colors, int bits)
-    {
-        var table = new byte[3 << bits];
-        for (int i = 0; i < colors.Length; i++)
-        {
-            table[3 * i] = colors[i].R;
-            table[(3 * i) + 1] = colors[i].G;
-            table[(3 * i) + 2] = colors[i].B;
-        }
-
-        stream.Write(table);
     }
 
     /// <summary>The position in the output of source row <paramref name="y"/> when rows are stored in four interlace passes.</summary>

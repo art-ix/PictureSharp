@@ -59,7 +59,15 @@ public sealed partial class Image
         await stream.WriteAsync(data, cancellationToken).ConfigureAwait(false);
     }
 
-    internal byte[] Encode(EncoderOptions options)
+    /// <summary>Encodes the image into a new byte array using the format's default options.</summary>
+    public byte[] Encode(ImageFormat format)
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        return Encode(format.CreateDefaultEncoderOptions());
+    }
+
+    /// <summary>Encodes the image into a new byte array; the options decide the format.</summary>
+    public byte[] Encode(EncoderOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         using var ms = new MemoryStream();

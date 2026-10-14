@@ -91,7 +91,7 @@ try
             {
                 // Like gif2webp: lossless unless a quality is given, with its keyframe distances for each mode.
                 bool lossy = !lossless && (quality is not null || method is not null);
-                WebP.Convert(args[1], args[2], !lossy && method is null ? null : new()
+                WebPConverter.Convert(args[1], args[2], !lossy && method is null ? null : new()
                 {
                     Lossless = !lossy, Quality = quality ?? 75, Method = method ?? 4,
                     KeyframeMin = lossy ? 3 : 9, KeyframeMax = lossy ? 5 : 17,

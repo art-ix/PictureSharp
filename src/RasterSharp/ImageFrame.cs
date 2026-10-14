@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Runtime.InteropServices;
 
 namespace RasterSharp;
@@ -5,7 +6,7 @@ namespace RasterSharp;
 /// <summary>
 /// One frame of an <see cref="Image"/>: a full-canvas RGBA pixel buffer plus its display duration.
 /// </summary>
-public sealed class ImageFrame
+public sealed partial class ImageFrame
 {
     private Rgba32[] _pixels;
 
@@ -30,6 +31,12 @@ public sealed class ImageFrame
 
     /// <summary>Height in pixels.</summary>
     public int Height { get; private set; }
+
+    /// <summary>Width and height.</summary>
+    public Size Size => new(Width, Height);
+
+    /// <summary>The rectangle (0, 0, Width, Height).</summary>
+    public Rectangle Bounds => new(0, 0, Width, Height);
 
     /// <summary>How long the frame is displayed in an animation.</summary>
     public TimeSpan Duration { get; set; }
@@ -65,8 +72,11 @@ public sealed class ImageFrame
     /// <summary>Returns all pixels, row by row, without padding.</summary>
     public Span<Rgba32> GetPixelSpan() => _pixels;
 
-    /// <summary>Returns all pixels as bytes in R, G, B, A order.</summary>
-    public Span<byte> GetPixelBytes() => MemoryMarshal.AsBytes(_pixels.AsSpan());
+    /// <summary>
+    /// Returns a writable view of all RGBA bytes without a copy.
+    /// An operation replacing the pixel buffer detaches this view from the frame.
+    /// </summary>
+    public Span<byte> GetPixelByteSpan() => MemoryMarshal.AsBytes(_pixels.AsSpan());
 
     /// <summary>Returns a deep copy.</summary>
     public ImageFrame Clone() => new(Width, Height, (Rgba32[])_pixels.Clone()) { Duration = Duration };

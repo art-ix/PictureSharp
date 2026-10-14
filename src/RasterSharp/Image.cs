@@ -61,10 +61,10 @@ public sealed partial class Image : IDisposable
     public ImageFormat? SourceFormat { get; internal set; }
 
     /// <summary>
-    /// Whether the image has an alpha channel (declared by the source format). Use <see cref="IsOpaque"/>
-    /// to check whether any pixel is actually transparent.
+    /// Alpha-channel hint maintained by decoding and processing. Direct pixel writes do not update it.
+    /// Use <see cref="IsOpaque"/> to check whether any pixel is actually transparent.
     /// </summary>
-    public bool HasAlpha { get; set; }
+    public bool HasAlpha { get; internal set; }
 
     /// <summary>Resolution, ICC profile, EXIF and XMP metadata.</summary>
     public ImageMetadata Metadata { get; internal set; } = new();

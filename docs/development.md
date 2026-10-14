@@ -16,7 +16,7 @@ The library version comes from the [VERSION](../VERSION) file, read by `Director
 
 | Path | Contents |
 | --- | --- |
-| `src/RasterSharp/` | The library: `Image`, options, the `WebP` facade, `Formats/` (codecs), `Compression/` (deflate/inflate), `Processing/`, `Internal/` |
+| `src/RasterSharp/` | The library: `Image`, options, the `WebPConverter`, `Formats/` (codecs), `Compression/` (deflate/inflate), `Processing/`, `Internal/` |
 | `tests/RasterSharp.Tests/` | xUnit tests |
 | `tests/assets/` | Corpus, reference hashes, oracle scripts, public API snapshot |
 | `benchmarks/` | BenchmarkDotNet |
@@ -58,7 +58,7 @@ At completion of phase 9.9 (release 0.2.0), all 2682 tests passed.
 - **Lossy WebP:** checked across 252 corpus configurations (nine images, four qualities, all seven methods). Opaque outputs are byte-identical to `cwebp`; where alpha compression differs, decoded pixels match exactly and the size stays within +1%. Presets, filters, alpha settings, SharpYuv, target size/PSNR and token partitions also have native oracle checks.
 - **Animated WebP:** 46 encoder tests, including 38 external checks through Pillow and webpmux 1.6.0 comparing decoded canvases, durations, loop counts, background color and EXIF extraction across lossy, lossless, mixed, blend/dispose and keyframe cases.
 - **JPEG encoder:** reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
-- **GIF:** decoded frames of the 30 corpus files match `anim_dump` 1.6.0 (or `gif2webp` where `anim_util.c` restores the wrong canvas, Pillow for files libwebp rejects); 147 quantization results are identical to Pillow 10.2.0 (median cut, octree, Floyd–Steinberg); RasterSharp's GIF files decode identically in `anim_dump` and Pillow; `WebP.Convert` matches `gif2webp` frame for frame, and GIF → lossless WebP → GIF round-trips exactly.
+- **GIF:** decoded frames of the 30 corpus files match `anim_dump` 1.6.0 (or `gif2webp` where `anim_util.c` restores the wrong canvas, Pillow for files libwebp rejects); 147 quantization results are identical to Pillow 10.2.0 (median cut, octree, Floyd–Steinberg); RasterSharp's GIF files decode identically in `anim_dump` and Pillow; `WebPConverter.Convert` matches `gif2webp` frame for frame, and GIF → lossless WebP → GIF round-trips exactly.
 - **Image processing:** 140 tests. The Pillow 10.2.0 oracle (`tests/assets/processing_reference.py`) checks 569 results for exact pixel equality: resizing with all filters, modes and anchors, compositing, background flattening, grayscale, enhancement, blur and sharpening, rotation, sepia and EXIF orientation.
 
 ## Public API snapshot

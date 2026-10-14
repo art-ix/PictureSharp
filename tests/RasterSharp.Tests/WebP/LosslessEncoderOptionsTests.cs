@@ -126,17 +126,18 @@ public class LosslessEncoderOptionsTests
     }
 
     [Fact]
-    public void Facade_EncodesPaddedRgba_AndSaveLeavesStreamOpen()
+    public void Image_EncodesPaddedRgba_AndSaveLeavesStreamOpen()
     {
         byte[] rgba = [1, 2, 3, 4, 5, 6, 7, 8, 99, 99, 99, 99, 9, 10, 11, 12, 13, 14, 15, 16];
-        byte[] encoded = RasterSharp.WebP.EncodeLosslessRgba(rgba, 2, 2, 12);
+        using Image source = Image.LoadPixelData(rgba, 2, 2, PixelFormat.Rgba32, 12);
+        byte[] encoded = source.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
         using Image image = Image.Load(encoded.AsMemory());
         Assert.Equal((byte[])[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], image.ToPixelData(PixelFormat.Rgba32));
         using var output = new MemoryStream();
         image.Save(output, new WebPEncoderOptions { Lossless = true, Exact = true });
         Assert.True(output.CanWrite);
         Assert.Equal(encoded, output.ToArray());
-        Assert.Equal(encoded, RasterSharp.WebP.Encode(image, new WebPEncoderOptions { Lossless = true, Exact = true }));
+        Assert.Equal(encoded, image.Encode(new WebPEncoderOptions { Lossless = true, Exact = true }));
         Assert.True(ImageFormat.WebP.CanEncode);
     }
 

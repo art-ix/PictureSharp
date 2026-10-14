@@ -42,10 +42,11 @@ foreach (ref Rgba32 p in all)
 | `image[x, y]` | Get or set one pixel (bounds-checked). |
 | `GetRowSpan(y)` | `Span<Rgba32>` over one row. |
 | `GetPixelSpan()` | `Span<Rgba32>` over all pixels, row by row. |
-| `GetPixelMemory()` | `Memory<Rgba32>` over all pixels; `Pin()` it to pass a pointer to native code without copying. Valid until an operation changes the size. |
+| `GetPixelMemory()` | `Memory<Rgba32>` over all pixels; `Pin()` it to pass a pointer to native code without copying. A writable view without a copy; buffer replacement detaches it from the current pixels, even when the dimensions stay the same. |
+| `GetPixelByteSpan()` | Writable RGBA bytes without a copy, independent of the encoded file format. |
 | `IsOpaque()` | True when no pixel of any frame is transparent. |
 
-These members work on the first frame; other frames are `image.Frames[i]`, with the same indexer, `GetRowSpan` and `GetPixelSpan` (see [Animation](animation.md)). For per-pixel work inside a processing chain, use `Mutate(x => x.Apply(frame => ...))`.
+Pixel access on `Image` works on the first frame. Each `image.Frames[i]` exposes the same pixel access, copying and conversion methods, plus `Size` and `Bounds`. `ImageFrame.IsOpaque()` checks that frame; `Image.IsOpaque()` checks all frames (see [Animation](animation.md)). For per-pixel work inside a processing chain, use `Mutate(x => x.Apply(frame => ...))`.
 
 ## Raw buffers and pixel formats
 
@@ -70,6 +71,10 @@ using Image fromStructs = Image.LoadPixelData(rgbaPixels, width, height);   // R
 | `Gray8` | 1 | BT.601 luma | OCR, analysis |
 | `Rgba32Premultiplied` | 4 | R, G, B, A, color × alpha | SkiaSharp `Premul` |
 | `Bgra32Premultiplied` | 4 | B, G, R, A, color × alpha | WPF `Pbgra32`, Direct2D |
+
+`CopyPixelDataFrom(ReadOnlySpan<Rgba32>)` copies exactly one frame of pixels and ignores extra input; `CopyPixelDataTo(Span<Rgba32>)` leaves extra destination pixels untouched. Both reject buffers too small for a complete frame.
+
+`Image.HasAlpha` is a read-only hint maintained by decoding and processing. Direct writes through pixel views do not update it; use `IsOpaque()` to inspect actual transparency. Views remain attached to the old buffer after replacement (for example, by a blur or resize).
 
 `stride` is the number of bytes per row; 0 means tightly packed. `PixelFormat.BytesPerPixel()` and `HasAlpha()` help size buffers. `LoadPixelData` with a format without alpha sets `HasAlpha = false`.
 
@@ -121,24 +126,22 @@ finally
 }
 ```
 
-## The `WebP` one-call API
+## Decode and encode raw buffers
 
-The static `WebP` class mirrors libwebp's `decode.h`/`encode.h` for code that works with raw buffers:
+The same `Image` API handles every supported format. Request the first frame explicitly when exporting one pixel buffer:
 
 ```csharp
 byte[] data = File.ReadAllBytes("image.webp");
-if (WebP.TryGetInfo(data, out ImageInfo info))
-{
-    Console.WriteLine($"{info.Width}x{info.Height}, {info.WebPCompression}");
-}
+ImageInfo info = Image.Identify(data);
+using Image decoded = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
+byte[] rgba = decoded.ToPixelData();
+byte[] bgra = decoded.ToPixelData(PixelFormat.Bgra32);
+var buffer = new byte[decoded.Width * decoded.Height * 4];
+decoded.CopyPixelDataTo(buffer, PixelFormat.Bgra32);
 
-byte[] rgba = WebP.DecodeRgba(data, out int width, out int height);          // like WebPDecodeRGBA
-byte[] bgra = WebP.DecodeBgra(data, out width, out height);
-var buffer = new byte[width * height * 4];
-Size size = WebP.DecodeInto(data, buffer, stride: 0, PixelFormat.Bgra32);  // into your buffer
-byte[] lossless = WebP.EncodeLosslessRgba(rgba, width, height);              // exact, keeps hidden RGB
-using Image all = WebP.DecodeImage(data);                                    // every frame
-WebP.Convert("input.png", "output.webp", new() { Quality = 80 });           // any supported input
+using Image fromRgba = Image.LoadPixelData(rgba, decoded.Width, decoded.Height, PixelFormat.Rgba32);
+byte[] lossless = fromRgba.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
+WebPConverter.Convert("input.png", "output.webp", new() { Quality = 80 });
 ```
 
-The decode functions return the first frame of animations. `WebP.Encode(image, options)` equals `image.ToWebP(options)`.
+`Image.Load` detects the format from the contents. To require WebP, check `Image.Identify(data).Format == ImageFormat.WebP` before decoding.

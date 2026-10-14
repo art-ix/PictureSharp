@@ -74,15 +74,19 @@ sealed class Image : System.IDisposable
     method Image Clone()
     method Image Clone(System.Action<ImageProcessingContext> operation)
     method System.Boolean IsOpaque()
+    method System.Byte[] Encode(EncoderOptions options)
+    method System.Byte[] Encode(ImageFormat format)
     method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
     method System.Memory<Rgba32> GetPixelMemory()
     method System.Span<Rgba32> GetPixelSpan()
     method System.Span<Rgba32> GetRowSpan(System.Int32 y)
+    method System.Span<System.Byte> GetPixelByteSpan()
     method System.String ToString()
     method System.Threading.Tasks.Task SaveAsync(System.IO.Stream stream, EncoderOptions options, System.Threading.CancellationToken cancellationToken = default)
     method System.Threading.Tasks.Task SaveAsync(System.IO.Stream stream, ImageFormat format, System.Threading.CancellationToken cancellationToken = default)
     method System.Threading.Tasks.Task SaveAsync(System.String path, EncoderOptions options, System.Threading.CancellationToken cancellationToken = default)
     method System.Threading.Tasks.Task SaveAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
+    method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
     method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
     method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
     method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
@@ -104,6 +108,7 @@ sealed class Image : System.IDisposable
     method static ImageFormat? DetectFormat(System.ReadOnlySpan<System.Byte> header)
     method static ImageFormat? DetectFormat(System.String path)
     method static ImageInfo Identify(System.IO.Stream stream)
+    method static ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data)
     method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data)
     method static ImageInfo Identify(System.String path)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
@@ -117,7 +122,7 @@ sealed class Image : System.IDisposable
     property ImageMetadata Metadata { get; }
     property Rgba32 AnimationBackgroundColor { get; set; }
     property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
-    property System.Boolean HasAlpha { get; set; }
+    property System.Boolean HasAlpha { get; }
     property System.Boolean IsAnimated { get; }
     property System.Drawing.Rectangle Bounds { get; }
     property System.Drawing.Size Size { get; }
@@ -151,10 +156,19 @@ class ImageFormatException : System.FormatException, System.Runtime.Serializatio
 sealed class ImageFrame
     ctor(System.Int32 width, System.Int32 height)
     method ImageFrame Clone()
+    method System.Boolean IsOpaque()
+    method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
+    method System.Memory<Rgba32> GetPixelMemory()
     method System.Span<Rgba32> GetPixelSpan()
     method System.Span<Rgba32> GetRowSpan(System.Int32 y)
-    method System.Span<System.Byte> GetPixelBytes()
+    method System.Span<System.Byte> GetPixelByteSpan()
+    method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
+    method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
+    method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
+    method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
     property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
+    property System.Drawing.Rectangle Bounds { get; }
+    property System.Drawing.Size Size { get; }
     property System.Int32 Height { get; }
     property System.Int32 Width { get; }
     property System.TimeSpan Duration { get; set; }
@@ -354,16 +368,6 @@ enum RotateMode
     Rotate90 = 90
     Rotate180 = 180
     Rotate270 = 270
-static class WebP
-    method static Image DecodeImage(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options = null)
-    method static System.Boolean TryGetInfo(System.ReadOnlySpan<System.Byte> data, out ImageInfo info)
-    method static System.Byte[] Decode(System.ReadOnlySpan<System.Byte> data, PixelFormat format, out System.Int32 width, out System.Int32 height)
-    method static System.Byte[] DecodeBgra(System.ReadOnlySpan<System.Byte> data, out System.Int32 width, out System.Int32 height)
-    method static System.Byte[] DecodeRgba(System.ReadOnlySpan<System.Byte> data, out System.Int32 width, out System.Int32 height)
-    method static System.Byte[] Encode(Image image, WebPEncoderOptions? options = null)
-    method static System.Byte[] EncodeLosslessRgba(System.ReadOnlySpan<System.Byte> rgba, System.Int32 width, System.Int32 height, System.Int32 stride = 0)
-    method static System.Drawing.Size DecodeInto(System.ReadOnlySpan<System.Byte> data, System.Span<System.Byte> output, System.Int32 stride, PixelFormat format)
-    method static System.Void Convert(System.String inputPath, System.String outputPath, WebPEncoderOptions? options = null)
 enum WebPAlphaFilter
     None = 0
     Fast = 1
@@ -373,6 +377,8 @@ enum WebPCompression
     Lossy = 1
     Lossless = 2
     Mixed = 3
+static class WebPConverter
+    method static System.Void Convert(System.String inputPath, System.String outputPath, WebPEncoderOptions? options = null)
 sealed record WebPEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<WebPEncoderOptions>
     ctor()
     property ImageFormat Format { get; }

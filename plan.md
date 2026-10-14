@@ -37,7 +37,7 @@ RasterSharp/
     Image.cs, ImageFrame.cs, ImageFrameCollection.cs, ImageInfo.cs, ImageFormat.cs,
     Rgba32.cs, PixelFormat.cs, ImageMetadata.cs, BitmapData.cs, enums (RotateFlipType,
     ResizeMode, ResamplingFilter, ImageLockMode, ExifOrientation), DecoderOptions.cs,
-    EncoderOptions.cs, WebP.cs (fasada),
+    EncoderOptions.cs, Formats/WebP/WebPConverter.cs,
     ImageFormatException.cs
     Formats/
       IImageFormatDetector.cs, IImageDecoder.cs, IImageEncoder.cs, CodecRegistry.cs, ImageCodec.cs (internal)
@@ -94,7 +94,7 @@ static Image Load(string path | Stream | ReadOnlySpan<byte> | ReadOnlyMemory<byt
 static Task<Image> LoadAsync(string path | Stream [, DecoderOptions? o], CancellationToken ct = default);
 static Image LoadPixelData(ReadOnlySpan<byte> px, int w, int h, PixelFormat fmt, int stride = 0);
 static Image LoadPixelData(ReadOnlySpan<Rgba32> px, int w, int h);
-static ImageInfo Identify(path | Stream | ReadOnlySpan<byte>);  static Task<ImageInfo> IdentifyAsync(path | Stream, ct);
+static ImageInfo Identify(path | Stream | ReadOnlySpan<byte> | ReadOnlyMemory<byte>);  static Task<ImageInfo> IdentifyAsync(path | Stream, ct);
 static ImageFormat? DetectFormat(ReadOnlySpan<byte> | string path | Stream);
 static Image CreateAnimation(TimeSpan frameDuration, params ReadOnlySpan<Image> frames);  // + IEnumerable<Image>
 Image(int w, int h);  Image(int w, int h, Rgba32 background);
@@ -108,7 +108,7 @@ ImageFrameCollection Frames;  int FrameCount;  bool IsAnimated;  int LoopCount; 
 Rgba32 this[int x, int y] { get; set; }   // Color konwertuje się niejawnie
 Span<Rgba32> GetRowSpan(int y);  Span<Rgba32> GetPixelSpan();  Memory<Rgba32> GetPixelMemory();
 void CopyPixelDataTo(Span<Rgba32>);  void CopyPixelDataTo(Span<byte>, PixelFormat, int stride = 0);
-void CopyPixelDataFrom(ReadOnlySpan<byte>, PixelFormat, int stride = 0);  byte[] ToPixelData(PixelFormat = Rgba32);
+void CopyPixelDataFrom(ReadOnlySpan<Rgba32>); void CopyPixelDataFrom(ReadOnlySpan<byte>, PixelFormat, int stride = 0);  byte[] ToPixelData(PixelFormat = Rgba32);
 bool IsOpaque();
 
 // Przetwarzanie: Mutate zmienia obraz, Clone zwraca nowy (kopiuje piksele leniwie)
@@ -127,7 +127,7 @@ Task SaveAsync(...);   // te same warianty + CancellationToken
   - `Crop(Rectangle | x, y, w, h | w, h, anchor)`, `Pad(w, h, color, anchor)`, `Rotate(RotateMode)`, `Flip(FlipMode)`, `RotateFlip`, `AutoOrient`, `Rotate(float degrees, filter, background, expand)`;
   - `Grayscale`, `Invert`, `Sepia`, `Brightness`, `Contrast`, `Saturate`, `Fill(color[, rect])`, `MakeTransparent`, `BackgroundColor`, `Opacity`;
   - `BoxBlur`, `GaussianBlur`, `UnsharpMask`, `Sharpen`, `DrawImage(source, Point | AnchorPosition, opacity)`, `Apply(Action<ImageFrame>)`.
-- **`ImageFrame`:** `Width`, `Height`, `Duration` (TimeSpan), indeksator `Rgba32`, `GetRowSpan`, `GetPixelSpan`, `GetPixelBytes`, `Clone()`. Każda klatka to pełne płótno, a dekoder zwraca klatki już skomponowane, jak `WebPAnimDecoder`.
+- **`ImageFrame`:** `Width`, `Height`, `Duration` (TimeSpan), indeksator `Rgba32`, `GetRowSpan`, `GetPixelSpan`, `GetPixelByteSpan`, `Clone()`. Każda klatka to pełne płótno, a dekoder zwraca klatki już skomponowane, jak `WebPAnimDecoder`.
 - **`ImageFrameCollection`:** `IReadOnlyList<ImageFrame>` plus `RootFrame`, `Add(ImageFrame)`, `Add(Image, TimeSpan)`, `Insert`, `RemoveAt`, `Move`, `CloneFrame(i)`, `ExportFrame(i)`. Wymiary klatek muszą być równe wymiarom obrazu.
 - **`Rgba32`:** `Parse`/`TryParse` (`ISpanParsable`: `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, nazwy kolorów), `ToHex`, `Deconstruct`, niejawne konwersje z/do `Color`.
 - **`AutoOrient()`** stosuje orientację EXIF 1–8 i ustawia tag na 1 bezpośrednio w bajtach EXIF.
@@ -164,16 +164,11 @@ Opcje są rekordami (`with`), a wartości sprawdzamy przy ustawianiu (`init` ze 
   - `ColorCount` (2–256, domyślnie 256), `Quantizer` (Auto/MedianCut/Octree), `Dither` (None/FloydSteinberg)
   - `TransparencyThreshold` (0–255, domyślnie 128), `Interlace`, `SaveAnimation`, `OptimizeFrames`, `Metadata` (XMP/ICC)
 
-### Fasada `WebP` (odwzorowuje proste API z `decode.h`/`encode.h`)
+### Kodowanie do pamięci i konwersja WebP
 
-```csharp
-static bool TryGetInfo(ReadOnlySpan<byte> data, out ImageInfo info);
-static byte[] DecodeRgba(ReadOnlySpan<byte> data, out int width, out int height);   // WebPDecodeRGBA
-static byte[] DecodeBgra(...);  static Size DecodeInto(ReadOnlySpan<byte> data, Span<byte> dst, int stride, PixelFormat f);
-static byte[] EncodeLosslessRgba(ReadOnlySpan<byte> rgba, int w, int h, int stride = 0);
-static byte[] Encode(Image image, WebPEncoderOptions? o = null);
-static void Convert(string inPath, string outPath, WebPEncoderOptions? o = null);   // jpg/png/bmp/gif/webp -> webp
-```
+`Image.Encode(EncoderOptions | ImageFormat)` zwraca bajty wybranego formatu. `Image.Identify(ReadOnlyMemory<byte>)` identyfikuje obraz bez kopii bufora. Odczyt i eksport pikseli korzystają z `Image.Load` i `ToPixelData`/`CopyPixelDataTo`.
+
+`WebPConverter.Convert(string inputPath, string outputPath, WebPEncoderOptions? options = null)` zachowuje konwencje gif2webp. Dawna fasada `WebP` została usunięta.
 
 Przykład użycia:
 
@@ -235,7 +230,7 @@ Każda faza kończy się zielonymi testami.
 - ALPH: tryby raw i lossless (przez VP8L), filtry none/horizontal/vertical/gradient.
 - Animacja: kompozycja z ANIM/ANMF (blend, dispose, offsety ×2, czas trwania klatki, loop, kolor tła). Wynikiem są pełne klatki płótna, jak w `anim_decode.c`.
 - Metadane ICCP/EXIF/XMP trafiają do `ImageMetadata`.
-- Fasada `WebP.Decode*`.
+- Odczyt przez `Image.Load`, eksport przez `ToPixelData`/`CopyPixelDataTo` (pierwotnie fasada `WebP.Decode*`, usunięta po 0.2.0).
 - **DoD:**
   - hashe identyczne z `dwebp -pam` dla korpusu lossy+alfa oraz dla wektorów libwebp-test-data,
   - klatki animacji identyczne z Pillow.
@@ -339,7 +334,7 @@ Specyfikacje: ITU-T T.81 (w tym Annex K: tablice kwantyzacji i Huffmana), JFIF 1
 Weryfikacja: `dotnet build -c Release` (0 ostrzeżeń/błędów), `dotnet test -c Release --no-build` (2012/2012, w tym 87 nowych testów enkodera).
 - 9 syntetycznych źródeł PNG: identyczne RGBA po dekodowaniu naszym dekoderem i `dwebp` 1.6.0; wszystkie rozmiary mieszczą się w limicie `cwebp -lossless -exact -q 75 -m 4` +1%. Jest to kryterium zastępcze DoD; pełna zgodność bajtowa z `cwebp` nie jest deklarowana.
 - Testy metod 0–6 i jakości 0/25/75/100, granic palety i wymiarów, długich powtórzeń, color cache, `Exact`, poziomów `NearLossless`, limitów Huffmana i kosztów stałoprzecinkowych zgodnych z 1.6.0.
-- Zapis statycznego VP8L przez `Image.Save`/`SaveAsWebP`/`ToWebP`, `WebP.Encode`, `WebP.EncodeLosslessRgba` i `WebP.Convert`; ICC/EXIF/XMP, padding RIFF, strumienie bez seek, walidacja przed zapisem. Tryb VP8L wybiera `Lossless = true`; enkoder lossy opisano w fazie 7, a zapis animacji pozostaje w fazie 8.
+- Zapis statycznego VP8L przez `Image.Save`/`SaveAsWebP`/`ToWebP`, `Image.Encode` i `WebPConverter.Convert`; ICC/EXIF/XMP, padding RIFF, strumienie bez seek, walidacja przed zapisem. Tryb VP8L wybiera `Lossless = true`; enkoder lossy opisano w fazie 7, a zapis animacji pozostaje w fazie 8.
 - Tryby transformacji i referencje LZ77 są porównywane według rzeczywistego rozmiaru strumienia. Port jest skalarny; dalsza optymalizacja szybkości i alokacji pozostaje w fazie wydajnościowej.
 - Przejście wyroczni na 1.6.0 nie zmieniło 248 wpisów `reference.json`; źródła i narzędzia natywne pozostają wyłącznie w ignorowanym `reference/`.
 
@@ -442,7 +437,7 @@ Weryfikacja: `dotnet build RasterSharp.slnx -c Release` (0 ostrzeżeń/błędów
 - Dekoder: 30 plików korpusu (Pillow, ImageMagick, ręcznie złożone: deferred clear, kod 8 bitów przy małej palecie, palety lokalne, brak GCE, disposal background→previous, rozszerzenia, ekran 0×0, brak palety, indeksy poza paletą, śmieci zamiast trailera) zgodnych piksel w piksel z `anim_dump` 1.6.0; w jednym przypadku (`hand_bg_then_previous`) `anim_util.c` przywraca niewłaściwe płótno, więc referencją jest `gif2webp`, a pliki odrzucane przez libwebp mają referencję z Pillow. Czasy, pętla, tło, XMP/ICC i `Identify` zgodne z referencją. Testy obcięć, błędnych kodów, przycinania klatek poza ekranem, limitu `MaxPixels` dla wszystkich klatek i 900 losowych mutacji (wyłącznie `ImageFormatException`).
 - Kwantyzacja: port `Quant.c`/`QuantHash.c`/`QuantHeap.c` (median cut), `QuantOctree.c` i ditheringu FS z `Convert.c`/`Palette.c`; 147 wyników (7 źródeł, w tym >65536 kolorów, × 7 liczb kolorów × 3 metody) identycznych z Pillow 10.2.0 co do palety i indeksów, a zapis obrazów statycznych daje te same piksele co `Image.quantize`.
 - Enkoder: round-trip bez strat dla wszystkich GIF-ów korpusu (także z przeplotem i bez optymalizacji), animacji WebP z ≤256 kolorami i 40 losowych animacji z przezroczystością; palety: wspólna dokładna, lokalne dokładne (tylko kolory rysowanych pikseli), a w ostateczności wspólna kwantyzowana. Nasze pliki dekodują się identycznie w `anim_dump` i Pillow (3 zestawy opcji × 39 wejść).
-- Konwersja: `WebP.Convert` daje klatki, czasy, pętlę, tło i XMP identyczne z `gif2webp` 1.6.0 dla 27 plików korpusu (pozostałe 3 `gif2webp` odrzuca albo czyta inaczej z wyboru); `webpmux -info` poprawnie listuje klatki; GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę; `gif2webp` czyta nasze GIF-y z tymi samymi klatkami.
+- Konwersja: `WebPConverter.Convert` daje klatki, czasy, pętlę, tło i XMP identyczne z `gif2webp` 1.6.0 dla 27 plików korpusu (pozostałe 3 `gif2webp` odrzuca albo czyta inaczej z wyboru); `webpmux -info` poprawnie listuje klatki; GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę; `gif2webp` czyta nasze GIF-y z tymi samymi klatkami.
 - Rozmiar względem Pillow `save_all=True, optimize=True`: 6 z 7 animacji korpusu WebP mniejszych (0,26–0,60×). Wyjątek `alpha_lossy` (6040 B wobec 1607 B): zapisujemy ją bezstratnie z lokalnymi paletami, a Pillow redukuje ją do 8 kolorów i psuje przezroczystość (poprawny wariant Pillow z `disposal=2` ma 2020 B). Kryterium „≤ Pillow +10%” spełnione dla przypadków bez utraty jakości; `ColorCount = 64` daje 1866 B.
 - Rozbieżności semantyki opisane w testach: Pillow powiększa płótno do klatek wychodzących poza ekran i inaczej usuwa klatki (tłem z palety), `gif2webp` zostawia klatki bez palety przezroczyste (my: skala szarości jak Pillow).
 
@@ -491,8 +486,8 @@ Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 
   - `ImageFormat.Gif.CanEncode = true`;
   - migawka `PublicApi.approved.txt`.
 - Konwersja:
-  - GIF→WebP przez `Image.Load(...).SaveAsWebP(...)`, `WebP.Convert` (przyjmuje `.gif`) i CLI `convert anim.gif anim.webp`;
-  - `WebP.Convert` i CLI dla wejścia GIF bez jawnych opcji używają domyślnych ustawień `gif2webp`: lossless, kmin/kmax 9/17 (lossy 3/5) i czasy ≤10 ms → 100 ms;
+  - GIF→WebP przez `Image.Load(...).SaveAsWebP(...)`, `WebPConverter.Convert` (przyjmuje `.gif`) i CLI `convert anim.gif anim.webp`;
+  - `WebPConverter.Convert` i CLI dla wejścia GIF bez jawnych opcji używają domyślnych ustawień `gif2webp`: lossless, kmin/kmax 9/17 (lossy 3/5) i czasy ≤10 ms → 100 ms;
   - WebP→GIF przez `SaveAsGif` i CLI `convert anim.webp anim.gif`;
   - `docs/` (animation, loading-and-saving, encoder-options, cli) z przykładami testowanymi przez `DocsExamplesTests`.
 - Korpus (`generate_corpus.py`):
@@ -511,7 +506,7 @@ Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 
     - nasze pliki otwierają Pillow, ImageMagick i `gif2webp` z pikselami równymi naszemu dekoderowi;
     - rozmiar animacji ≤ Pillow `save_all=True, optimize=True` +10%;
   - konwersja:
-    - GIF→WebP przez `WebP.Convert` daje klatki (po `anim_dump`/Pillow), czasy i pętlę identyczne z wynikiem `gif2webp` 1.6.0, a `webpmux -info` poprawnie listuje klatki;
+    - GIF→WebP przez `WebPConverter.Convert` daje klatki (po `anim_dump`/Pillow), czasy i pętlę identyczne z wynikiem `gif2webp` 1.6.0, a `webpmux -info` poprawnie listuje klatki;
     - WebP→GIF dla 7 animacji korpusu daje klatki zgodne ze źródłem po progu alfy i kwantyzacji (dokładnie przy ≤256 kolorach);
     - round-trip GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę.
 

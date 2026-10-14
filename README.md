@@ -44,7 +44,7 @@ thumbnail.SaveAsPng("thumbnail.png");
 - [Loading and saving](docs/loading-and-saving.md): files, streams, memory, async, format detection, web responses
 - [Encoder options](docs/encoder-options.md): WebP, PNG, JPEG, BMP and GIF settings with recipes
 - [Image processing](docs/image-processing.md): resize modes, geometry, color, filters, compositing, custom operations
-- [Pixels and interop](docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, the `WebP` one-call API
+- [Pixels and interop](docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, frame pixel access and conversion
 - [Animation](docs/animation.md): frames, durations, animated WebP, APNG and GIF, GIF ↔ WebP conversion
 - [Metadata](docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
 - [Command-line sample](docs/cli.md): `info`, `convert`, `resize` and `decode`

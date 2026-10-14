@@ -1,6 +1,6 @@
 # Encoder options
 
-Every format has an options record: `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions`, `BmpEncoderOptions` and `GifEncoderOptions`, all deriving from `EncoderOptions`. Pass them to `Save`, `SaveAsync`, `SaveAs*` or `To*`:
+Every format has an options record: `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions`, `BmpEncoderOptions` and `GifEncoderOptions`, all deriving from `EncoderOptions`. Pass them to `Save`, `SaveAsync`, `SaveAs*`, `Encode` or `To*`:
 
 ```csharp
 image.SaveAsWebP("photo.webp", new() { Quality = 85, Method = 6 });

@@ -80,7 +80,7 @@ public class LossyEncoderOptionsTests
         using var image = new Image(17, 19, System.Drawing.Color.CornflowerBlue);
         byte[] encoded = image.ToWebP();
         Assert.True(encoded.AsSpan(12, 4).SequenceEqual("VP8 "u8));
-        Assert.Equal(encoded, RasterSharp.WebP.Encode(image));
+        Assert.Equal(encoded, image.Encode(ImageFormat.WebP));
         using var output = new MemoryStream(); image.Save(output, ImageFormat.WebP);
         Assert.True(output.CanWrite); Assert.Equal(encoded, output.ToArray());
         using var decoded = Image.Load(encoded.AsMemory());

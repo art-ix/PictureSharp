@@ -337,21 +337,26 @@ public sealed class DocsExamplesTests : IDisposable
         using Image fromSkia = Image.LoadPixelData(skiaBuffer, image.Width, image.Height, PixelFormat.Rgba32, rowBytes);
         Assert.Equal(image.GetPixelSpan().ToArray(), fromSkia.GetPixelSpan().ToArray());
 
-        // The WebP one-call API.
+        // The format-independent image API and WebP converter.
         image.SaveAsWebP(P("image.webp"), new() { Lossless = true, Exact = true });
         byte[] data = File.ReadAllBytes(P("image.webp"));
-        Assert.True(RasterSharp.WebP.TryGetInfo(data, out ImageInfo info));
+        ImageInfo info = Image.Identify(data);
         Assert.Equal(WebPCompression.Lossless, info.WebPCompression);
-        byte[] rgba = RasterSharp.WebP.DecodeRgba(data, out int width, out int height);
-        byte[] bgraDecoded = RasterSharp.WebP.DecodeBgra(data, out width, out height);
+        using Image decoded = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
+        (int width, int height) = (decoded.Width, decoded.Height);
+        byte[] rgba = decoded.ToPixelData();
+        byte[] bgraDecoded = decoded.ToPixelData(PixelFormat.Bgra32);
         var target = new byte[width * height * 4];
-        Size size = RasterSharp.WebP.DecodeInto(data, target, stride: 0, PixelFormat.Bgra32);
-        byte[] lossless = RasterSharp.WebP.EncodeLosslessRgba(rgba, width, height);
-        using Image allFrames = RasterSharp.WebP.DecodeImage(data);
-        RasterSharp.WebP.Convert(P("input.png"), P("output.webp"), new() { Quality = 80 });
+        decoded.CopyPixelDataTo(target, PixelFormat.Bgra32);
+        Size size = decoded.Size;
+        using Image fromRgba = Image.LoadPixelData(rgba, width, height, PixelFormat.Rgba32);
+        byte[] lossless = fromRgba.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
+        using Image allFrames = Image.Load(data);
+        RasterSharp.WebPConverter.Convert(P("input.png"), P("output.webp"), new() { Quality = 80 });
         Assert.Equal(bgraDecoded, target);
         Assert.Equal(image.Size, size);
-        Assert.Equal(rgba, RasterSharp.WebP.DecodeRgba(lossless, out _, out _));
+        using Image roundTrip = Image.Load(lossless, new DecoderOptions { FirstFrameOnly = true });
+        Assert.Equal(rgba, roundTrip.ToPixelData());
         Assert.Equal(image.ToPixelData(), rgba);
     }
 
@@ -404,7 +409,7 @@ public sealed class DocsExamplesTests : IDisposable
         built.SaveAsGif(P("small.gif"), new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
         Assert.Equal(2, Image.Identify(P("animation.gif")).FrameCount);
 
-        RasterSharp.WebP.Convert(P("animation.gif"), P("animation.webp"));
+        RasterSharp.WebPConverter.Convert(P("animation.gif"), P("animation.webp"));
         using (var gif = Image.Load(P("animation.gif")))
         {
             gif.SaveAsWebP(P("lossy.webp"), new() { Quality = 80, KeyframeMin = 3, KeyframeMax = 5 });

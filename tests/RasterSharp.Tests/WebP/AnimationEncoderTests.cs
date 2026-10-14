@@ -27,7 +27,7 @@ public class AnimationEncoderTests
         Rgba32[][] before = image.Frames.Select(f => f.GetPixelSpan().ToArray()).ToArray();
         var options = new WebPEncoderOptions { Lossless = lossless, Exact = true, Method = 0, AllowMixed = mixed, MinimizeSize = minimize };
         byte[] encoded = image.ToWebP(options);
-        Assert.Equal(encoded, RasterSharp.WebP.Encode(image, options));
+        Assert.Equal(encoded, image.Encode(options));
         using Image decoded = Image.Load(encoded.AsMemory());
         Assert.Equal((width, height), (decoded.Width, decoded.Height));
         Assert.Equal(image.FrameCount, decoded.FrameCount);
@@ -314,7 +314,7 @@ public class AnimationEncoderTests
         using Image decoded = Image.Load(path);
         Assert.Equal(image.FrameCount, decoded.FrameCount);
         for (int i = 0; i < decoded.FrameCount; i++)
-            Assert.Equal(decoded.Frames[i].GetPixelBytes().ToArray(), File.ReadAllBytes(Path.Combine(directory, $"frame-{i}.rgba")));
+            Assert.Equal(decoded.Frames[i].GetPixelByteSpan().ToArray(), File.ReadAllBytes(Path.Combine(directory, $"frame-{i}.rgba")));
         using var metadata = System.Text.Json.JsonDocument.Parse(pillow);
         Assert.Equal(image.LoopCount, metadata.RootElement.GetProperty("loop").GetInt32());
         Assert.Equal(image.Frames.Select(f => (int)Math.Round(f.Duration.TotalMilliseconds, MidpointRounding.AwayFromZero)),

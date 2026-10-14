@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using RasterSharp.Formats;
 using RasterSharp.Internal;
 
@@ -21,6 +22,10 @@ public sealed partial class Image
 
     /// <summary>Reads the dimensions and basic properties of an encoded image without decoding its pixels.</summary>
     public static ImageInfo Identify(ReadOnlySpan<byte> data) => ImageCodec.Identify(data.ToArray(), DecoderOptions.Default);
+
+    /// <summary>Reads basic properties without decoding pixels or copying the input buffer. Byte arrays bind to this overload.</summary>
+    [OverloadResolutionPriority(1)]
+    public static ImageInfo Identify(ReadOnlyMemory<byte> data) => ImageCodec.Identify(data, DecoderOptions.Default);
 
     /// <summary>Reads a file asynchronously and returns its basic properties without decoding its pixels.</summary>
     public static async Task<ImageInfo> IdentifyAsync(string path, CancellationToken cancellationToken = default)

@@ -24,7 +24,7 @@ third.SaveAsPng("frame-3.png");
 | `image.LoopCount` | Number of plays; 0 means forever (GIF's NETSCAPE repeat count is converted as `gif2webp` does: no extension is 1 play, *n* repeats are *n* + 1 plays). |
 | `image.AnimationBackgroundColor` | Background hint stored in the container (viewers often ignore it). |
 | `frame.Duration` | Display time of a frame. |
-| `frame[x, y]`, `frame.GetRowSpan(y)`, `frame.GetPixelSpan()`, `frame.GetPixelBytes()` | Pixel access per frame. |
+| `frame[x, y]`, `frame.GetRowSpan(y)`, `frame.GetPixelSpan()`, `frame.GetPixelByteSpan()` | Pixel access per frame. |
 
 Pixel members on `Image` itself (`image[x, y]`, `GetPixelSpan()`, `ToPixelData()`, ...) work on the first frame. Use `DecoderOptions.FirstFrameOnly` to skip the rest when you only need a still.
 
@@ -100,7 +100,7 @@ GIF frames are composited like browsers and libwebp's `gif2webp` do: the canvas 
 ## Converting between GIF and WebP
 
 ```csharp
-WebP.Convert("animation.gif", "animation.webp");                 // like gif2webp: lossless, short frames get 100 ms
+WebPConverter.Convert("animation.gif", "animation.webp");                 // like gif2webp: lossless, short frames get 100 ms
 
 using var gif = Image.Load("animation.gif");
 gif.SaveAsWebP("lossy.webp", new() { Quality = 80, KeyframeMin = 3, KeyframeMax = 5 });
@@ -109,4 +109,4 @@ using var webp = Image.Load("animated.webp");
 webp.SaveAsGif("animated.gif");
 ```
 
-`WebP.Convert` follows `gif2webp` 1.6.0: frames shown for 10 ms or less get 100 ms (as browsers display them) and frames are lossless unless options are passed; the loop count and background color carry over. Over the test corpus its frames, durations and loop counts are identical to `gif2webp` output. Converting the lossless WebP back to GIF restores the original frames.
+`WebPConverter.Convert` follows `gif2webp` 1.6.0: frames shown for 10 ms or less get 100 ms (as browsers display them) and frames are lossless unless options are passed; the loop count and background color carry over. Over the test corpus its frames, durations and loop counts are identical to `gif2webp` output. Converting the lossless WebP back to GIF restores the original frames.

@@ -112,7 +112,7 @@ public class GifOracleTests
                     continue;   // gif2webp rejects files RasterSharp reads tolerantly
                 }
 
-                RasterSharp.WebP.Convert(Corpus.PathOf(key), actualPath);
+                RasterSharp.WebPConverter.Convert(Corpus.PathOf(key), actualPath);
                 using Image expected = Image.Load(expectedPath);
                 using Image actual = Image.Load(actualPath);
                 Assert.Equal(expected.FrameCount, actual.FrameCount);

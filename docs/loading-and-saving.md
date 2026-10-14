@@ -52,12 +52,14 @@ using var image = Image.Load("upload.jpg", options);
 ## Inspecting without decoding
 
 ```csharp
-ImageInfo info = Image.Identify("photo.webp");                 // also Stream and ReadOnlySpan<byte>; IdentifyAsync
+ImageInfo info = Image.Identify("photo.webp");                 // also Stream, ReadOnlyMemory<byte>, ReadOnlySpan<byte>; IdentifyAsync
 Console.WriteLine($"{info.Format.Name} {info.Width}x{info.Height}, alpha: {info.HasAlpha}, frames: {info.FrameCount}");
 
 ImageFormat? format = Image.DetectFormat("unknown.bin");       // first 12 bytes; also Stream and ReadOnlySpan<byte>
 if (format == ImageFormat.Png) { /* ... */ }
 ```
+
+`Identify(ReadOnlyMemory<byte>)` does not copy the input buffer; `byte[]` binds to this overload. Keep the input unchanged during the call. The span overload copies the input.
 
 `ImageInfo` also reports `IsAnimated`, `BitsPerChannel`, `Orientation`, the resolution and, for WebP, `WebPCompression` (lossy, lossless or mixed). `DetectFormat(Stream)` rewinds seekable streams to where they were.
 
@@ -82,6 +84,8 @@ await image.SaveAsJpegAsync("photo.jpg", new() { Quality = 90, Progressive = tru
 await image.SaveAsBmpAsync(stream, cancellationToken: ct);
 byte[] webp = image.ToWebP();
 byte[] png = image.ToPng(new() { CompressionLevel = 9 });
+byte[] encoded = image.Encode(ImageFormat.Png);                // runtime format, default options
+byte[] custom = image.Encode(new PngEncoderOptions { CompressionLevel = 9 });
 ```
 
 | Format | Path / stream | Async | To bytes |
@@ -130,6 +134,6 @@ ImageFormat target = ImageFormat.FromMimeType(request.Accept) ?? ImageFormat.Png
 image.Save(response.Body, target);
 ```
 
-### One-call WebP functions
+### WebP conversion
 
-The static `WebP` class mirrors libwebp's simple API (`WebPGetInfo`, `WebPDecodeRGBA`, ...) for code that works with raw buffers; see [Pixels and interop](pixels-and-interop.md#the-webp-one-call-api).
+`WebPConverter.Convert(inputPath, outputPath, options)` preserves the `gif2webp` conversion conventions: GIF defaults to lossless and delays of 10 ms or less become 100 ms. Ordinary `Image.Load(...).SaveAsWebP(...)` preserves the original frame durations. See [Animation](animation.md).

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using RasterSharp.Formats.Metadata;
 
 namespace RasterSharp.Formats.Bmp;
 
@@ -17,7 +18,7 @@ internal sealed class BmpEncoder : IImageEncoder<BmpEncoderOptions>
         int height = frame.Height;
 
         (int bits, Rgba32[]? palette) = ChooseLayout(pixels, options.BitsPerPixel);
-        byte[]? icc = (options.Metadata & MetadataKinds.Icc) != 0 && image.Metadata.IccProfile is { Length: > 0 } p ? p : null;
+        byte[]? icc = MetadataSelection.Select(image.Metadata.IccProfile, options.Metadata, MetadataKinds.Icc);
 
         // BITMAPINFOHEADER is the most widely readable; the alpha mask and the ICC profile need BITMAPV5HEADER.
         int headerSize = bits == 32 || icc is not null ? BmpConstants.V5HeaderSize : BmpConstants.InfoHeaderSize;
