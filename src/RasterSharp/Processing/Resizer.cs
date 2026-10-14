@@ -9,7 +9,7 @@ namespace RasterSharp.Processing;
 /// Follows Pillow's Resample.c and Image.resize (RGBA is converted to RGBa and back), so results
 /// match Pillow pixel for pixel.
 /// </summary>
-internal static class Resizer
+internal static partial class Resizer
 {
     // port: Pillow src/libImaging/Resample.c PRECISION_BITS
     private const int PrecisionBits = 32 - 8 - 2;
@@ -187,13 +187,30 @@ internal static class Resizer
         // Image.resize works on RGBa: premultiply only the source rows the passes read.
         int firstRow = needHorizontal ? yboxFirst : 0;
         int rowCount = needHorizontal ? yboxLast - yboxFirst : srcHeight;
-        Rgba32[] premul = ArrayPool<Rgba32>.Shared.Rent(rowCount * srcWidth);
+        // Premultiplying leaves opaque pixels unchanged, so an opaque source is read in place.
+        int regionStart = firstRow * srcWidth;
+        int regionLength = rowCount * srcWidth;
+        bool opaque = Premultiplied.IsOpaque(src.AsSpan(regionStart, regionLength));
+        Rgba32[]? premul = opaque ? null : ArrayPool<Rgba32>.Shared.Rent(regionLength);
         Rgba32[]? temp = null;
         try
         {
-            Premultiplied.FromStraight(src.AsSpan(firstRow * srcWidth, rowCount * srcWidth), premul.AsSpan(0, rowCount * srcWidth));
+            Rgba32[] source = src;
+            int sourceStart = regionStart;
+            if (premul is not null)
+            {
+                const int band = 64;
+                ForRows((rowCount + band - 1) / band, (long)band * srcWidth, b =>
+                {
+                    int start = b * band * srcWidth;
+                    int length = Math.Min(band * srcWidth, regionLength - start);
+                    Premultiplied.FromStraight(src.AsSpan(regionStart + start, length), premul.AsSpan(start, length));
+                });
+                source = premul;
+                sourceStart = 0;
+            }
 
-            Rgba32[] current = premul;
+            Rgba32[] current = source;
             int currentWidth = srcWidth;
             if (needHorizontal)
             {
@@ -203,7 +220,7 @@ internal static class Resizer
                 }
 
                 Rgba32[] target = needVertical ? (temp = ArrayPool<Rgba32>.Shared.Rent(rowCount * width)) : dst;
-                ResampleHorizontal(premul, srcWidth, target, width, rowCount, ksizeH, boundsH, kkH);
+                ResampleHorizontal(source, sourceStart, srcWidth, target, width, rowCount, ksizeH, boundsH, kkH);
                 current = target;
                 currentWidth = width;
             }
@@ -217,7 +234,11 @@ internal static class Resizer
         }
         finally
         {
-            ArrayPool<Rgba32>.Shared.Return(premul);
+            if (premul is not null)
+            {
+                ArrayPool<Rgba32>.Shared.Return(premul);
+            }
+
             if (temp is not null)
             {
                 ArrayPool<Rgba32>.Shared.Return(temp);
@@ -378,72 +399,92 @@ internal static class Resizer
         -3.0 <= x && x < 3.0 ? SincFilter(x) * SincFilter(x / 3) : 0.0;
 
     // port: Pillow src/libImaging/Resample.c ImagingResampleHorizontal_8bpc (4 bands)
-    private static void ResampleHorizontal(Rgba32[] src, int srcWidth, Rgba32[] dst, int width, int rows,
+    private static void ResampleHorizontal(Rgba32[] src, int srcStart, int srcWidth, Rgba32[] dst, int width, int rows,
         int ksize, int[] bounds, int[] kk)
     {
         ForRows(rows, (long)width * ksize, y =>
         {
-            ReadOnlySpan<byte> inRow = MemoryMarshal.AsBytes(src.AsSpan(y * srcWidth, srcWidth));
+            ReadOnlySpan<byte> inRow = MemoryMarshal.AsBytes(src.AsSpan(srcStart + (y * srcWidth), srcWidth));
             Span<Rgba32> outRow = dst.AsSpan(y * width, width);
-            for (int xx = 0; xx < width; xx++)
-            {
-                int xmin = bounds[xx * 2];
-                int xmax = bounds[(xx * 2) + 1];
-                ReadOnlySpan<int> k = kk.AsSpan(xx * ksize, xmax);
-                ReadOnlySpan<byte> px = inRow.Slice(xmin * 4, xmax * 4);
-                int ss0 = 1 << (PrecisionBits - 1);
-                int ss1 = ss0, ss2 = ss0, ss3 = ss0;
-                for (int x = 0; x < k.Length; x++)
-                {
-                    int c = k[x];
-                    ss0 += px[x * 4] * c;
-                    ss1 += px[(x * 4) + 1] * c;
-                    ss2 += px[(x * 4) + 2] * c;
-                    ss3 += px[(x * 4) + 3] * c;
-                }
-
-                outRow[xx] = new Rgba32(Clip8(ss0), Clip8(ss1), Clip8(ss2), Clip8(ss3));
-            }
+            int done = HorizontalRowSimd(inRow, outRow, ksize, bounds, kk);
+            HorizontalRowScalar(inRow, outRow, ksize, bounds, kk, done);
         });
     }
 
-    // port: Pillow src/libImaging/Resample.c ImagingResampleVertical_8bpc (4 bands). Rows are accumulated
-    // one source row at a time; integer sums are order independent, so the result is unchanged.
+    /// <summary>Output pixels from <paramref name="start"/> on; the vector path is in <c>Resizer.Simd.cs</c>.</summary>
+    internal static void HorizontalRowScalar(ReadOnlySpan<byte> inRow, Span<Rgba32> outRow, int ksize, int[] bounds, int[] kk, int start)
+    {
+        for (int xx = start; xx < outRow.Length; xx++)
+        {
+            int xmin = bounds[xx * 2];
+            int xmax = bounds[(xx * 2) + 1];
+            ReadOnlySpan<int> k = kk.AsSpan(xx * ksize, xmax);
+            ReadOnlySpan<byte> px = inRow.Slice(xmin * 4, xmax * 4);
+            int ss0 = 1 << (PrecisionBits - 1);
+            int ss1 = ss0, ss2 = ss0, ss3 = ss0;
+            for (int x = 0; x < k.Length; x++)
+            {
+                int c = k[x];
+                ss0 += px[x * 4] * c;
+                ss1 += px[(x * 4) + 1] * c;
+                ss2 += px[(x * 4) + 2] * c;
+                ss3 += px[(x * 4) + 3] * c;
+            }
+
+            outRow[xx] = new Rgba32(Clip8(ss0), Clip8(ss1), Clip8(ss2), Clip8(ss3));
+        }
+    }
+
+    // port: Pillow src/libImaging/Resample.c ImagingResampleVertical_8bpc (4 bands). Integer sums are order
+    // independent, so accumulating per source row or per output byte gives the same result.
     private static void ResampleVertical(Rgba32[] src, int width, Rgba32[] dst, int height,
         int ksize, int[] bounds, int[] kk)
     {
-        int n = width * 4;
         ForRows(height, (long)width * ksize, yy =>
         {
-            int[] acc = ArrayPool<int>.Shared.Rent(n);
-            try
-            {
-                Span<int> sums = acc.AsSpan(0, n);
-                sums.Fill(1 << (PrecisionBits - 1));
-                int ymin = bounds[yy * 2];
-                int ymax = bounds[(yy * 2) + 1];
-                ReadOnlySpan<int> k = kk.AsSpan(yy * ksize, ymax);
-                for (int y = 0; y < k.Length; y++)
-                {
-                    int c = k[y];
-                    ReadOnlySpan<byte> inRow = MemoryMarshal.AsBytes(src.AsSpan((y + ymin) * width, width));
-                    for (int i = 0; i < sums.Length; i++)
-                    {
-                        sums[i] += inRow[i] * c;
-                    }
-                }
-
-                Span<byte> outRow = MemoryMarshal.AsBytes(dst.AsSpan(yy * width, width));
-                for (int i = 0; i < outRow.Length; i++)
-                {
-                    outRow[i] = Clip8(sums[i]);
-                }
-            }
-            finally
-            {
-                ArrayPool<int>.Shared.Return(acc);
-            }
+            int ymin = bounds[yy * 2];
+            int ymax = bounds[(yy * 2) + 1];
+            ReadOnlySpan<int> k = kk.AsSpan(yy * ksize, ymax);
+            ReadOnlySpan<byte> rows = MemoryMarshal.AsBytes(src.AsSpan(ymin * width, ymax * width));
+            Span<byte> outRow = MemoryMarshal.AsBytes(dst.AsSpan(yy * width, width));
+            int done = VerticalRowSimd(rows, width * 4, k, outRow);
+            VerticalRowScalar(rows, width * 4, k, outRow, done);
         });
+    }
+
+    /// <summary>Output bytes from <paramref name="start"/> on; <paramref name="rows"/> holds the source rows the taps cover.</summary>
+    internal static void VerticalRowScalar(ReadOnlySpan<byte> rows, int stride, ReadOnlySpan<int> k, Span<byte> outRow, int start)
+    {
+        int n = outRow.Length - start;
+        if (n <= 0)
+        {
+            return;
+        }
+
+        int[] acc = ArrayPool<int>.Shared.Rent(n);
+        try
+        {
+            Span<int> sums = acc.AsSpan(0, n);
+            sums.Fill(1 << (PrecisionBits - 1));
+            for (int y = 0; y < k.Length; y++)
+            {
+                int c = k[y];
+                ReadOnlySpan<byte> inRow = rows.Slice((y * stride) + start, n);
+                for (int i = 0; i < sums.Length; i++)
+                {
+                    sums[i] += inRow[i] * c;
+                }
+            }
+
+            for (int i = 0; i < sums.Length; i++)
+            {
+                outRow[start + i] = Clip8(sums[i]);
+            }
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(acc);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

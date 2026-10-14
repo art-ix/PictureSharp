@@ -10,6 +10,24 @@ internal sealed partial class PngEncoder
         public Dictionary<uint, byte>? PaletteIndex;
     }
 
+    /// <summary>Whether any pixel is not opaque, and whether all pixels are gray.</summary>
+    internal static (bool HasAlpha, bool IsGray) ScanAlphaAndGray(ReadOnlySpan<Rgba32> pixels)
+    {
+        (int done, bool hasAlpha, bool isGray) = ScanAlphaAndGraySimd(pixels);
+        if (hasAlpha && !isGray)
+        {
+            return (true, false);
+        }
+
+        foreach (Rgba32 p in pixels[done..])
+        {
+            hasAlpha |= p.A != 255;
+            isGray &= p.R == p.G && p.G == p.B;
+        }
+
+        return (hasAlpha, isGray);
+    }
+
     private static Layout ChooseLayout(List<ImageFrame> frames, PngColorType requested)
     {
         bool hasAlpha = false;
@@ -18,11 +36,15 @@ internal sealed partial class PngEncoder
         bool fitsPalette = true;
         foreach (ImageFrame frame in frames)
         {
-            foreach (Rgba32 p in frame.GetPixelSpan())
+            ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
+            int i = 0;
+            uint last = 0;
+            for (; fitsPalette && i < pixels.Length; i++)
             {
+                Rgba32 p = pixels[i];
                 hasAlpha |= p.A != 255;
                 isGray &= p.R == p.G && p.G == p.B;
-                if (fitsPalette && !colors.ContainsKey(p.PackedValue))
+                if ((i == 0 || p.PackedValue != last) && !colors.ContainsKey(p.PackedValue))
                 {
                     if (colors.Count == 256)
                     {
@@ -33,7 +55,18 @@ internal sealed partial class PngEncoder
                         colors.Add(p.PackedValue, 0);
                     }
                 }
+
+                last = p.PackedValue;
             }
+
+            if (hasAlpha && !isGray)
+            {
+                continue;
+            }
+
+            (bool alpha, bool gray) = ScanAlphaAndGray(pixels[i..]);
+            hasAlpha |= alpha;
+            isGray &= gray;
         }
 
         PngColorType type = requested;

@@ -2,8 +2,8 @@ using System.Buffers.Binary;
 
 namespace RasterSharp.Compression;
 
-/// <summary>CRC-32 (ISO 3309 / ITU-T V.42, as used by PNG and gzip), slicing-by-8.</summary>
-internal static class Crc32
+/// <summary>CRC-32 (ISO 3309 / ITU-T V.42, as used by PNG and gzip), slicing-by-8 or carry-less multiplication.</summary>
+internal static partial class Crc32
 {
     private static readonly uint[] Table = CreateTable();
 
@@ -38,6 +38,13 @@ internal static class Crc32
 
     /// <summary>Continues a CRC computation (pass the previous result as <paramref name="crc"/>).</summary>
     public static uint Update(uint crc, ReadOnlySpan<byte> data)
+    {
+        int done = UpdateSimd(ref crc, data);
+        return UpdateScalar(crc, data[done..]);
+    }
+
+    /// <summary>Slicing-by-8 <see cref="Update"/>; the vector path is in <c>Crc32.X86.cs</c>.</summary>
+    internal static uint UpdateScalar(uint crc, ReadOnlySpan<byte> data)
     {
         uint[] t = Table;
         crc = ~crc;

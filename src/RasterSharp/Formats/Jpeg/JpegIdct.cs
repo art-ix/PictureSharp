@@ -1,7 +1,7 @@
 namespace RasterSharp.Formats.Jpeg;
 
 /// <summary>Accurate integer inverse DCT (libjpeg's "islow"), bit-exact with libjpeg-turbo.</summary>
-internal static class JpegIdct
+internal static partial class JpegIdct
 {
     private const int ConstBits = 13;
     private const int Pass1Bits = 2;
@@ -46,8 +46,16 @@ internal static class JpegIdct
     private static long Descale(long x, int n) => (x + (1L << (n - 1))) >> n;
 
     /// <summary>Dequantizes a block (natural order) and writes the 8x8 samples to <paramref name="output"/>.</summary>
-    // port: libjpeg-turbo jidctint.c jpeg_idct_islow
     public static void Transform(ReadOnlySpan<short> block, ReadOnlySpan<short> quant, Span<byte> output, int stride)
+    {
+        if (!TransformSimd(block, quant, output, stride))
+        {
+            TransformScalar(block, quant, output, stride);
+        }
+    }
+
+    // port: libjpeg-turbo jidctint.c jpeg_idct_islow
+    internal static void TransformScalar(ReadOnlySpan<short> block, ReadOnlySpan<short> quant, Span<byte> output, int stride)
     {
         Span<int> ws = stackalloc int[64];
         byte[] range = RangeLimit;

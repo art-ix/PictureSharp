@@ -1,6 +1,9 @@
-using System.Runtime.Intrinsics.X86;
+using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 using RasterSharp.Compression;
 using RasterSharp.Formats.Metadata;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.Png;
 
@@ -41,7 +44,7 @@ internal sealed partial class PngDecoder : IImageDecoder
         int loopCount = 0;
         if (png.Animation is { } anim && anim.Frames.Count > 0 && !options.FirstFrameOnly)
         {
-            frames = DecodeAnimation(span, png, anim);
+            frames = DecodeAnimation(span, png, anim, options.MaxDegreeOfParallelism);
             loopCount = anim.NumPlays;
         }
         else
@@ -51,7 +54,7 @@ internal sealed partial class PngDecoder : IImageDecoder
                 throw Error("Missing IDAT chunk.");
             }
 
-            var frame = new ImageFrame(png.Width, png.Height, DecodeImage(span, png, png.Idat, 0, png.Width, png.Height));
+            var frame = new ImageFrame(png.Width, png.Height, DecodeImage(span, png, png.Idat, 0, png.Width, png.Height, options.MaxDegreeOfParallelism));
             frames = [frame];
         }
 
@@ -80,7 +83,8 @@ internal sealed partial class PngDecoder : IImageDecoder
     // ------------------------------------------------------------------ pixel data
 
     /// <summary>Inflates, unfilters and converts one image (or APNG frame) to RGBA.</summary>
-    private static Rgba32[] DecodeImage(ReadOnlySpan<byte> file, PngFile png, List<(int Offset, int Length)> parts, int skip, int width, int height)
+    private static Rgba32[] DecodeImage(ReadOnlySpan<byte> file, PngFile png, List<(int Offset, int Length)> parts, int skip, int width, int height,
+        int maxDegreeOfParallelism)
     {
         // Concatenate the compressed data (fdAT payloads start with a 4-byte sequence number).
         int total = 0;
@@ -121,6 +125,12 @@ internal sealed partial class PngDecoder : IImageDecoder
             throw Error("Image is too large.");
         }
 
+        var rowConverter = new RowConverter(png);
+        if (!png.Interlaced && Parallelism.IsWorthwhile(maxDegreeOfParallelism, expected, PipelineMinimumBytes))
+        {
+            return DecodePipelined(compressed, png, width, height, bpp, (int)expected, rowConverter);
+        }
+
         byte[] raw;
         try
         {
@@ -138,7 +148,6 @@ internal sealed partial class PngDecoder : IImageDecoder
         }
 
         var pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
-        var rowConverter = new RowConverter(png);
         if (!png.Interlaced)
         {
             Unfilter(raw, 0, width, height, bpp);
@@ -185,47 +194,59 @@ internal sealed partial class PngDecoder : IImageDecoder
     /// <summary>Reverses the scanline filters in place. Each row is preceded by its filter type byte.</summary>
     internal static void Unfilter(byte[] data, int offset, int width, int height, int bitsPerPixel)
     {
-        if (Sse2.IsSupported)
+        WalkRows(data, offset, width, height, bitsPerPixel, UnfilterRow);
+    }
+
+    /// <summary>Scalar scanline reconstruction. The vector path is in <c>PngDecoder.Simd.cs</c>.</summary>
+    internal static void UnfilterScalar(byte[] data, int offset, int width, int height, int bitsPerPixel) =>
+        WalkRows(data, offset, width, height, bitsPerPixel, UnfilterRowScalar);
+
+    /// <summary>Reverses the filter of one row; <paramref name="previous"/> is empty for the first row.</summary>
+    private static void UnfilterRow(Span<byte> row, ReadOnlySpan<byte> previous, int bpp, int filter)
+    {
+        if (Vector128.IsHardwareAccelerated)
         {
-            UnfilterX86(data, offset, width, height, bitsPerPixel);
+            UnfilterRowSimd(row, previous, bpp, filter);
         }
         else
         {
-            UnfilterScalar(data, offset, width, height, bitsPerPixel);
+            UnfilterRowScalar(row, previous, bpp, filter);
         }
     }
 
-    /// <summary>Scalar scanline reconstruction. The x86 path is in <c>PngDecoder.Simd.cs</c>.</summary>
-    internal static void UnfilterScalar(byte[] data, int offset, int width, int height, int bitsPerPixel)
+    private static void UnfilterRowScalar(Span<byte> row, ReadOnlySpan<byte> prev, int bpp, int filter)
     {
-        WalkRows(data, offset, width, height, bitsPerPixel, static (row, prev, bpp, filter) =>
+        switch (filter)
         {
-            switch (filter)
-            {
-                case 1:
-                    UnfilterSubScalar(row, bpp);
-                    break;
-                case 2:
-                    if (!prev.IsEmpty)
-                    {
-                        UnfilterUpScalar(row, prev);
-                    }
+            case 1:
+                UnfilterSubScalar(row, bpp);
+                break;
+            case 2:
+                if (!prev.IsEmpty)
+                {
+                    UnfilterUpScalar(row, prev);
+                }
 
-                    break;
-                case 3:
-                    UnfilterAverageScalar(row, prev, bpp);
-                    break;
-                case 4:
-                    UnfilterPaethScalar(row, prev, bpp);
-                    break;
-                case not 0:
-                    throw Error($"Invalid scanline filter type {filter}.");
-            }
-        });
+                break;
+            case 3:
+                UnfilterAverageScalar(row, prev, bpp);
+                break;
+            case 4:
+                UnfilterPaethScalar(row, prev, bpp);
+                break;
+            case not 0:
+                throw Error($"Invalid scanline filter type {filter}.");
+        }
     }
 
     private static void UnfilterSubScalar(Span<byte> row, int bpp)
     {
+        if (bpp is 3 or 4)
+        {
+            UnfilterSubPixels(row, bpp);
+            return;
+        }
+
         for (int i = bpp; i < row.Length; i++)
         {
             row[i] += row[i - bpp];
@@ -242,22 +263,102 @@ internal sealed partial class PngDecoder : IImageDecoder
 
     private static void UnfilterAverageScalar(Span<byte> row, ReadOnlySpan<byte> previous, int bpp)
     {
-        for (int i = 0; i < row.Length; i++)
+        if (bpp is 3 or 4)
         {
-            int left = i >= bpp ? row[i - bpp] : 0;
-            int up = previous.IsEmpty ? 0 : previous[i];
-            row[i] += (byte)((left + up) >> 1);
+            UnfilterAveragePixels(row, previous, bpp);
+            return;
+        }
+
+        if (previous.IsEmpty)
+        {
+            for (int i = bpp; i < row.Length; i++)
+            {
+                row[i] += (byte)(row[i - bpp] >> 1);
+            }
+
+            return;
+        }
+
+        int head = Math.Min(bpp, row.Length);
+        for (int i = 0; i < head; i++)
+        {
+            row[i] += (byte)(previous[i] >> 1);
+        }
+
+        for (int i = bpp; i < row.Length; i++)
+        {
+            row[i] += (byte)((row[i - bpp] + previous[i]) >> 1);
         }
     }
 
     private static void UnfilterPaethScalar(Span<byte> row, ReadOnlySpan<byte> previous, int bpp)
     {
-        for (int i = 0; i < row.Length; i++)
+        // Without a previous row Paeth predicts the left byte; in the first pixel it predicts the byte above.
+        if (previous.IsEmpty)
         {
-            int left = i >= bpp ? row[i - bpp] : 0;
-            int up = previous.IsEmpty ? 0 : previous[i];
-            int upLeft = i >= bpp && !previous.IsEmpty ? previous[i - bpp] : 0;
-            row[i] += PngConstants.Paeth(left, up, upLeft);
+            UnfilterSubScalar(row, bpp);
+            return;
+        }
+
+        int head = Math.Min(bpp, row.Length);
+        for (int i = 0; i < head; i++)
+        {
+            row[i] += previous[i];
+        }
+
+        for (int i = bpp; i < row.Length; i++)
+        {
+            row[i] += PngConstants.Paeth(row[i - bpp], previous[i], previous[i - bpp]);
+        }
+    }
+
+    // Sub for 3 and 4 bytes per pixel, a pixel at a time (per-byte addition in a uint).
+    private static void UnfilterSubPixels(Span<byte> row, int bpp)
+    {
+        uint left = 0;
+        int last = row.Length - bpp;
+        for (int i = 0; i <= last; i += bpp)
+        {
+            left = AddBytes(LoadPixel(row, i, bpp), left);
+            StorePixel(row, i, bpp, left);
+        }
+    }
+
+    private static void UnfilterAveragePixels(Span<byte> row, ReadOnlySpan<byte> previous, int bpp)
+    {
+        uint left = 0;
+        int last = row.Length - bpp;
+        for (int i = 0; i <= last; i += bpp)
+        {
+            uint up = previous.IsEmpty ? 0 : LoadPixel(previous, i, bpp);
+            left = AddBytes(LoadPixel(row, i, bpp), AverageBytes(left, up));
+            StorePixel(row, i, bpp, left);
+        }
+    }
+
+    // Per-byte (x + y) mod 256 of four packed bytes.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static uint AddBytes(uint x, uint y) => ((x & 0x7f7f7f7fu) + (y & 0x7f7f7f7fu)) ^ ((x ^ y) & 0x80808080u);
+
+    // Per-byte (a + b) >> 1 of four packed bytes.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static uint AverageBytes(uint a, uint b) => (a & b) + (((a ^ b) >> 1) & 0x7f7f7f7fu);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static uint LoadPixel(ReadOnlySpan<byte> data, int i, int bpp) =>
+        bpp == 4 ? BinaryPrimitives.ReadUInt32LittleEndian(data[i..]) : (uint)(BinaryPrimitives.ReadUInt16LittleEndian(data[i..]) | (data[i + 2] << 16));
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StorePixel(Span<byte> data, int i, int bpp, uint value)
+    {
+        if (bpp == 4)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(data[i..], value);
+        }
+        else
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(data[i..], (ushort)value);
+            data[i + 2] = (byte)(value >> 16);
         }
     }
 

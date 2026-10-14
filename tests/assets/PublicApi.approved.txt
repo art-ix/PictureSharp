@@ -253,6 +253,7 @@ sealed record JpegEncoderOptions : EncoderOptions, System.IEquatable<EncoderOpti
     property Rgba32 BackgroundColor { get; init; }
     property System.Boolean OptimizeCoding { get; init; }
     property System.Boolean Progressive { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
     property System.Int32 Quality { get; init; }
     property System.Int32 RestartInterval { get; init; }
 static class JpegImageExtensions
@@ -299,6 +300,7 @@ sealed record PngEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptio
     property System.Boolean Interlace { get; init; }
     property System.Boolean SaveAnimation { get; init; }
     property System.Int32 CompressionLevel { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
 enum PngFilterStrategy
     Adaptive = 0
     None = 1

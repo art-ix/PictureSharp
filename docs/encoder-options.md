@@ -65,6 +65,7 @@ image.SaveAsPng("interlaced.png", new() { Interlace = true });
 | `FilterStrategy` | `Adaptive` | Per-row filter choice; or a fixed `None`, `Sub`, `Up`, `Average`, `Paeth`. |
 | `Interlace` | false | Adam7 interlacing. |
 | `SaveAnimation` | true | Write animated images as APNG (otherwise only the first frame). |
+| `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Output does not depend on it. |
 
 ## JPEG
 
@@ -83,6 +84,7 @@ image.SaveAsJpeg("on-black.jpg", new() { BackgroundColor = Color.Black });   // 
 | `OptimizeCoding` | false | Optimal Huffman tables computed in an extra pass. |
 | `RestartInterval` | 0 | MCUs between restart markers (0–65535); 0 disables them. |
 | `BackgroundColor` | white | Opaque color under transparent pixels; JPEG has no alpha. |
+| `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Output does not depend on it. |
 
 JPEG writes the first frame only. Grayscale images are detected and written with a single component. The encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
 

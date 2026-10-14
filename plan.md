@@ -511,7 +511,7 @@ Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 
     - round-trip GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę.
 
 ### Faza 10: wydajność, odporność, wydanie
-**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD lossy) jako 0.4.1, etap 3 (SIMD lossless i filtry wierszowe) jako 0.4.2 (2026-10-14). Etap 4 (predyktory VP8L 10–12 i pomiary) ukończony jako 0.4.3 (2026-10-14). Etap 5 (dekoder VP8L, predyktory 5–7 i 13) ukończony jako 0.4.4 (2026-10-14). Etap 6 (enkoder VP8L) ukończony jako 0.4.5 (2026-10-14).**
+**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD lossy) jako 0.4.1, etap 3 (SIMD lossless i filtry wierszowe) jako 0.4.2 (2026-10-14). Etap 4 (predyktory VP8L 10–12 i pomiary) ukończony jako 0.4.3 (2026-10-14). Etap 5 (dekoder VP8L, predyktory 5–7 i 13) ukończony jako 0.4.4 (2026-10-14). Etap 6 (enkoder VP8L) ukończony jako 0.4.5 (2026-10-14). Etap 7 (deflate/inflate, CRC, PNG, resize, JPEG i przegląd SIMD) ukończony jako 0.4.6 (2026-10-14).**
 Etap 1 (0.4.0), pomiary na i5-12500H (16 wątków logicznych) względem narzędzi libwebp 1.6.0:
 - Enkoder lossless: wierny port warstwy wysokiego poziomu z 1.6.0 (`EncoderAnalyze`/`AnalyzeEntropy`, konfiguracje crunch, `EncodeImageInternal`, `GetBackwardReferences`, `CalculateBestCacheSize`, predyktor z wyborem sampling, `OptimizeSampling`, `CostManager` w `TraceBackwards`, klastrowanie low-effort, `WebPReplaceTransparentPixels`). Wynik bajtowo identyczny z `cwebp` (72 konfiguracje korpusu, zdjęcia do 2,8 MP). 1920×1440: 44,7 s → 1,7 s (cwebp 1,28 s); konfiguracje m5/m6 liczone równolegle.
 - Enkoder lossy: przebieg tokenów jako deterministyczny wavefront (bariery przy odświeżaniu kosztów, odtwarzanie tokenów/statystyk/statystyk filtra w kolejności rastrowej), analiza równolegle. 12 MP q75: 3,6 s → 0,84 s (cwebp 0,75 s).
@@ -545,9 +545,20 @@ Etap 6 (0.4.5), enkoder VP8L:
 - Pomiary (domyślny JIT, mediany): 1920×1440 m0 388 → 130 ms, m4 1504 → 732 ms (cwebp 960), m5 2017 → 893 ms, m6 q100 3705 → 2163 ms; 4000×3000 m4 7801 → 3264 ms (cwebp 4820); grafika 1600×1200 m5 464 → 193 ms; małe zdjęcia m4/m5 o 50–72% szybsze. Grafika 1600×1200 m4 bez zmian (1,4× cwebp). Alokacje bez wzrostu. Szczegóły: `docs/performance.md`.
 - Weryfikacja: build Release bez ostrzeżeń, 3809/3809 testów (0 pominiętych, w tym Oracle), testy SIMD == skalar enkodera, `PopulationCost` i entropii z implementacją referencyjną, zapis bitów, determinizm hash chain dla 1–16 wątków; 180/180 testów enkodera/SIMD/determinizmu z `DOTNET_EnableAVX2=0` i z `DOTNET_EnableHWIntrinsic=0`.
 
+Etap 7 (0.4.6), pozostałe gorące ścieżki:
+- Ustalona macierz 40 operacji na stałych bajtach (PNG dekod/zapis l1/l6/l9, resize wszystkimi filtrami w dół/w górę i z alfą, JPEG dekod baseline/progresywny/12 MP i zapis 4:2:0/4:4:4/progresywny, WebP lossy dekod/zapis, BMP, GIF); wszystkie wyjścia identyczne z 0.4.5, także bez AVX2 i bez intrinsics. Metodologia i tabela: `docs/performance.md`.
+- Deflate: szybszy match finder i zapis bitów; równoległy parse spekulatywnych segmentów 64 KB z deterministycznym łączeniem (stan świeżego wyszukiwania zależy tylko od pozycji), w potoku z zapisem bloków. Inflate: szybka pętla z buforem bitów w rejestrach; dekod PNG w potoku inflate → odfiltrowanie/konwersja. CRC-32 PCLMULQDQ i Adler-32 SSSE3 (port Chromium zlib, nota w `THIRD-PARTY-NOTICES.txt`).
+- PNG: koszty 5 filtrów w jednym przebiegu `Vector128`, pasma wierszy równolegle; odfiltrowanie Sub/Average SWAR i Paeth wektorowo na piksel. Resize: przebiegi `Vector128<int>`, premultiplikacja wektorowo i równolegle, pominięta dla nieprzezroczystych źródeł.
+- JPEG: zapis — konwersja kolorów raz, bloki równolegle, FDCT AVX2, kwantyzacja przez dokładną odwrotność, współczynniki w kolejności zygzakowej, kodowanie maskami niezerowych; dekod — IDCT AVX2 w int32 z kontrolą zakresu (poza nim skalar 64-bit), konwersja kolorów i IDCT progresywnego równolegle.
+- Przegląd SIMD VP8/VP8L: IDCT/FDCT, loop filter, YUV→RGB, transformacje lossless i SSE/koszty miały SIMD od 0.4.1–0.4.5; dekod lossy na poziomie `dwebp`, zapis lossy szybszy od `cwebp` przy wątkach (2,3× jednowątkowo). Uzupełniono równoległe RGB→YUV enkodera; dalsze SIMD bez uzasadnienia pomiarem.
+- Nowe opcje: `PngEncoderOptions.MaxDegreeOfParallelism`, `JpegEncoderOptions.MaxDegreeOfParallelism`.
+- Pomiary (domyślny JIT, dwie próby): PNG zapis 1920×1440 l6 640 → 79 ms (Pillow 463; jednowątkowo 435), l9 1440 → 176 ms, 4000×3000 2750 → 323 ms; PNG dekod 1920×1440 54 → 31 ms, plik Pillow 68 → 33,5 ms (Pillow 50,5), 4000×3000 291 → 136 ms (Pillow 228); resize 4000×3000→1920×1440 Lanczos 43,4 → 16,8 ms (Pillow 106); JPEG dekod 1920×1440 33 → 18 ms (Pillow 10,5), zapis q75 72 → 15,5 ms (Pillow 6,7), progresywny 157 → 46 ms. Alokacje PNG niższe (93 → 45 MiB), JPEG zapis +0,7 MiB.
+- Weryfikacja: build Release bez ostrzeżeń, 3880/3880 testów; 2177/2177 testów dotkniętych obszarów z `DOTNET_EnableAVX2=0` i `DOTNET_EnableHWIntrinsic=0`; nowe testy SIMD == skalar/wzorzec (filtry PNG, odfiltrowanie, CRC/Adler, resize, premultiplikacja, FDCT/IDCT z blokami poza zakresem, kwantyzacja, maski, zapis bitów JPEG), determinizm wątków (deflate 2–16 wątków, PNG, JPEG) i odporność dekodu PNG w potoku.
+- Otwarte (poza zakresem 0.4.6): kwantyzacja GIF (~80 ms dla 256×192), sekwencyjne kodowanie Huffmana JPEG (główna różnica względem libjpeg-turbo).
+
 #### Etapy od 0.4.4 i proponowane wydania (ustalenia 2026-10-14)
 
-0.4.4 i 0.4.5 są ukończone; pozostałe numery są planowanym podziałem prac i nie oznaczają ukończenia ani wydania. Faza 10 obejmuje wydajność całej biblioteki, odporność i przygotowanie wydania; sama optymalizacja VP8L w 0.4.4 jej nie zamyka.
+0.4.4, 0.4.5 i 0.4.6 są ukończone; pozostałe numery są planowanym podziałem prac i nie oznaczają ukończenia ani wydania. Faza 10 obejmuje wydajność całej biblioteki, odporność i przygotowanie wydania; sama optymalizacja VP8L w 0.4.4 jej nie zamyka.
 
 **Pierwszy krok, przed dalszymi optymalizacjami:** ustalić i zapisać w `docs/performance.md` konkretną macierz benchmarków oraz kryteria zaliczenia:
 - reprezentatywne zdjęcia, grafikę, obrazy z alfą i animacje; małe i duże obrazy oraz istotne opcje kodeków;
@@ -560,7 +571,7 @@ Etap 6 (0.4.5), enkoder VP8L:
 | --- | --- |
 | **0.4.4 — ukończona** | Dekoder VP8L: profilowanie odczytu bitów, pętli Huffmana i kopiowania powtórzeń; optymalizacja dominujących kosztów; pozostałe predyktory 5–7 i 13. Pomiary całego dekodera względem 0.4.3. |
 | **0.4.5 — ukończona** | Enkoder VP8L: wyszukiwanie predyktora i klastrowanie histogramów, z zachowaniem zgodności bajtowej z `cwebp` 1.6.0 i deterministyczności; dodatkowo cross color, równoległy hash chain, wybór cache i zapis bitów (wg profilu). |
-| **0.4.6** | Pozostałe gorące ścieżki: inflate/deflate, CRC i resize. Przegląd pokrycia SIMD IDCT/FDCT, loop filter, YUV↔RGB, transformacji lossless i SSE/kosztów; uzupełnienia uzasadnione pomiarami. |
+| **0.4.6 — ukończona** | Pozostałe gorące ścieżki: inflate/deflate (równoległy deflate, potok dekodu PNG), CRC/Adler, filtry PNG i resize; JPEG FDCT/IDCT AVX2 i równoległe przygotowanie/konwersja. Przegląd pokrycia SIMD VP8/VP8L bez dalszych braków uzasadnionych pomiarem. |
 | **0.4.7** | ARM/AdvSimd: optymalizacje i weryfikacja na rzeczywistym ARM64, w tym testy identyczności ze skalarem i benchmarki pełnych operacji. |
 | **0.5.0** | Pełna macierz benchmarków, końcowe testy odporności, dokumentacja i weryfikacja pakietu NuGet; zamknięcie fazy 10 po spełnieniu DoD. |
 

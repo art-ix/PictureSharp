@@ -1,8 +1,10 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using RasterSharp.Compression;
 using RasterSharp.Processing;
 using RasterSharp.Formats.Metadata;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.Png;
 
@@ -116,7 +118,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             }
 
             byte[] raw = Serialize(frame, layout, options);
-            byte[] compressed = Deflater.CompressZlib(raw, options.CompressionLevel);
+            byte[] compressed = Deflater.CompressZlib(raw, options.CompressionLevel, options.MaxDegreeOfParallelism);
             const int maxChunk = 1 << 20;
             for (int offset = 0; offset < compressed.Length || offset == 0; offset += maxChunk)
             {
@@ -169,7 +171,6 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
         int width = frame.Width;
         int height = frame.Height;
         int bpp = PngConstants.Channels(layout.Color) * layout.BitDepth;
-        int filterBpp = Math.Max(1, bpp / 8);
 
         // Palette and low bit depth images compress best unfiltered (libpng's recommendation).
         PngFilterStrategy strategy = o.FilterStrategy;
@@ -178,140 +179,163 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             strategy = PngFilterStrategy.None;
         }
 
-        using var ms = new MemoryStream();
-        if (!o.Interlace)
+        int passCount = o.Interlace ? 7 : 1;
+        long total = 0;
+        for (int pass = 0; pass < passCount; pass++)
         {
-            WritePass(frame, layout, 0, 0, 1, 1, width, height, bpp, filterBpp, strategy, ms);
+            int pw = o.Interlace ? PngConstants.PassWidth(width, pass) : width;
+            int ph = o.Interlace ? PngConstants.PassHeight(height, pass) : height;
+            if (pw > 0 && ph > 0)
+            {
+                total += ph * (PngConstants.RowBytes(pw, bpp) + 1);
+            }
+        }
+
+        byte[] output = GC.AllocateUninitializedArray<byte>(checked((int)total));
+        int offset = 0;
+        for (int pass = 0; pass < passCount; pass++)
+        {
+            var p = new Pass
+            {
+                Frame = frame, Layout = layout, Strategy = strategy, Bpp = bpp,
+                X0 = o.Interlace ? PngConstants.Adam7XStart[pass] : 0,
+                Y0 = o.Interlace ? PngConstants.Adam7YStart[pass] : 0,
+                Dx = o.Interlace ? PngConstants.Adam7XStep[pass] : 1,
+                Dy = o.Interlace ? PngConstants.Adam7YStep[pass] : 1,
+                Width = o.Interlace ? PngConstants.PassWidth(width, pass) : width,
+                Height = o.Interlace ? PngConstants.PassHeight(height, pass) : height,
+            };
+            if (p.Width > 0 && p.Height > 0)
+            {
+                offset += WritePass(p, output, offset, o.MaxDegreeOfParallelism);
+            }
+        }
+
+        return output;
+    }
+
+    private readonly record struct Pass
+    {
+        public required ImageFrame Frame { get; init; }
+
+        public required Layout Layout { get; init; }
+
+        public required PngFilterStrategy Strategy { get; init; }
+
+        public required int Bpp { get; init; }
+
+        public required int X0 { get; init; }
+
+        public required int Y0 { get; init; }
+
+        public required int Dx { get; init; }
+
+        public required int Dy { get; init; }
+
+        public required int Width { get; init; }
+
+        public required int Height { get; init; }
+
+        public int RowBytes => (int)PngConstants.RowBytes(Width, Bpp);
+    }
+
+    // Each band of rows packs the row above it again, so bands are independent and the output does not
+    // depend on how rows are split.
+    private static int WritePass(Pass pass, byte[] output, int offset, int maxDegreeOfParallelism)
+    {
+        int stride = pass.RowBytes + 1;
+        int size = pass.Height * stride;
+        if (Parallelism.IsWorthwhile(maxDegreeOfParallelism, size, 1 << 18) && pass.Height > 1)
+        {
+            int degree = maxDegreeOfParallelism > 0 ? maxDegreeOfParallelism : Environment.ProcessorCount;
+            int band = Math.Max(8, pass.Height / (4 * degree));
+            int bands = (pass.Height + band - 1) / band;
+            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism), b =>
+            {
+                int first = b * band;
+                WriteRows(pass, output.AsSpan(offset, size), first, Math.Min(pass.Height, first + band));
+            });
         }
         else
         {
-            for (int pass = 0; pass < 7; pass++)
-            {
-                int pw = PngConstants.PassWidth(width, pass);
-                int ph = PngConstants.PassHeight(height, pass);
-                if (pw > 0 && ph > 0)
-                {
-                    WritePass(frame, layout, PngConstants.Adam7XStart[pass], PngConstants.Adam7YStart[pass],
-                        PngConstants.Adam7XStep[pass], PngConstants.Adam7YStep[pass], pw, ph, bpp, filterBpp, strategy, ms);
-                }
-            }
+            WriteRows(pass, output.AsSpan(offset, size), 0, pass.Height);
         }
 
-        return ms.ToArray();
+        return size;
     }
 
-    private static void WritePass(ImageFrame frame, Layout layout, int x0, int y0, int dx, int dy, int pw, int ph,
-        int bpp, int filterBpp, PngFilterStrategy strategy, MemoryStream output)
+    private static void WriteRows(Pass pass, Span<byte> output, int first, int end)
     {
-        int rowBytes = (int)PngConstants.RowBytes(pw, bpp);
-        var prev = new byte[rowBytes];
-        var cur = new byte[rowBytes];
-        var pixels = new Rgba32[pw];
-        var filtered = new byte[5][];
-        for (int f = 0; f < 5; f++)
+        int rowBytes = pass.RowBytes;
+        int stride = rowBytes + 1;
+        int pad = Math.Max(1, pass.Bpp / 8);
+        int padded = pad + rowBytes;
+        byte[] buffers = ArrayPool<byte>.Shared.Rent(2 * padded);
+        Rgba32[]? gathered = pass.Dx != 1 || pass.X0 != 0 ? ArrayPool<Rgba32>.Shared.Rent(pass.Width) : null;
+        try
         {
-            filtered[f] = new byte[rowBytes];
-        }
-
-        for (int j = 0; j < ph; j++)
-        {
-            Span<Rgba32> row = frame.GetRowSpan(y0 + (j * dy));
-            for (int i = 0; i < pw; i++)
+            Span<byte> prev = buffers.AsSpan(0, padded);
+            Span<byte> cur = buffers.AsSpan(padded, padded);
+            prev[..pad].Clear();
+            cur[..pad].Clear();
+            if (first == 0)
             {
-                pixels[i] = row[x0 + (i * dx)];
+                prev.Clear();
+            }
+            else
+            {
+                PackRow(pass, first - 1, gathered, prev[pad..]);
             }
 
-            PackRow(pixels, layout, cur);
-            bool first = j == 0;
-            int best;
-            switch (strategy)
+            for (int j = first; j < end; j++)
             {
-                case PngFilterStrategy.None:
-                    best = 0;
-                    cur.CopyTo(filtered[0], 0);
-                    break;
-                case PngFilterStrategy.Sub:
-                case PngFilterStrategy.Up:
-                case PngFilterStrategy.Average:
-                case PngFilterStrategy.Paeth:
-                    best = (int)strategy - 1;
-                    ApplyFilter(best, cur, first ? null : prev, filterBpp, filtered[best]);
-                    break;
-                default:
+                PackRow(pass, j, gathered, cur[pad..]);
+                int filter = pass.Strategy switch
                 {
-                    best = 0;
-                    long bestSum = long.MaxValue;
-                    for (int f = 0; f < 5; f++)
-                    {
-                        ApplyFilter(f, cur, first ? null : prev, filterBpp, filtered[f]);
-                        long sum = 0;
-                        foreach (byte b in filtered[f])
-                        {
-                            sum += b < 128 ? b : 256 - b;
-                        }
-
-                        if (sum < bestSum)
-                        {
-                            bestSum = sum;
-                            best = f;
-                        }
-                    }
-
-                    break;
-                }
+                    PngFilterStrategy.None => 0,
+                    PngFilterStrategy.Adaptive => SelectFilter(cur, prev, pad),
+                    _ => (int)pass.Strategy - 1,
+                };
+                Span<byte> row = output.Slice(j * stride, stride);
+                row[0] = (byte)filter;
+                ApplyFilter(filter, cur, prev, pad, row[1..]);
+                Span<byte> swap = prev;
+                prev = cur;
+                cur = swap;
             }
-
-            output.WriteByte((byte)best);
-            output.Write(filtered[best]);
-            (prev, cur) = (cur, prev);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffers);
+            if (gathered is not null)
+            {
+                ArrayPool<Rgba32>.Shared.Return(gathered);
+            }
         }
     }
 
-    private static void ApplyFilter(int filter, byte[] row, byte[]? prev, int bpp, byte[] dst)
+    private static void PackRow(Pass pass, int j, Rgba32[]? gathered, Span<byte> dst)
     {
-        int n = row.Length;
-        switch (filter)
+        Span<Rgba32> source = pass.Frame.GetRowSpan(pass.Y0 + (j * pass.Dy));
+        ReadOnlySpan<Rgba32> pixels;
+        if (gathered is null)
         {
-            case 0:
-                row.CopyTo(dst, 0);
-                break;
-            case 1:
-                for (int i = 0; i < n; i++)
-                {
-                    dst[i] = (byte)(row[i] - (i >= bpp ? row[i - bpp] : 0));
-                }
-
-                break;
-            case 2:
-                for (int i = 0; i < n; i++)
-                {
-                    dst[i] = (byte)(row[i] - (prev is null ? 0 : prev[i]));
-                }
-
-                break;
-            case 3:
-                for (int i = 0; i < n; i++)
-                {
-                    int left = i >= bpp ? row[i - bpp] : 0;
-                    int up = prev is null ? 0 : prev[i];
-                    dst[i] = (byte)(row[i] - ((left + up) >> 1));
-                }
-
-                break;
-            default:
-                for (int i = 0; i < n; i++)
-                {
-                    int left = i >= bpp ? row[i - bpp] : 0;
-                    int up = prev is null ? 0 : prev[i];
-                    int upLeft = i >= bpp && prev is not null ? prev[i - bpp] : 0;
-                    dst[i] = (byte)(row[i] - PngConstants.Paeth(left, up, upLeft));
-                }
-
-                break;
+            pixels = source[..pass.Width];
         }
+        else
+        {
+            for (int i = 0; i < pass.Width; i++)
+            {
+                gathered[i] = source[pass.X0 + (i * pass.Dx)];
+            }
+
+            pixels = gathered.AsSpan(0, pass.Width);
+        }
+
+        PackRow(pixels, pass.Layout, dst);
     }
 
-    private static void PackRow(ReadOnlySpan<Rgba32> pixels, Layout layout, byte[] dst)
+    private static void PackRow(ReadOnlySpan<Rgba32> pixels, Layout layout, Span<byte> dst)
     {
         switch (layout.Color)
         {
@@ -342,21 +366,34 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             {
                 Dictionary<uint, byte> index = layout.PaletteIndex!;
                 int depth = layout.BitDepth;
-                if (depth == 8)
+                if (depth < 8)
                 {
-                    for (int i = 0; i < pixels.Length; i++)
-                    {
-                        dst[i] = index[pixels[i].PackedValue];
-                    }
+                    dst.Clear();
                 }
-                else
+
+                int perByte = 8 / depth;
+                uint lastColor = 0;
+                byte lastIndex = 0;
+                bool hasLast = false;
+                for (int i = 0; i < pixels.Length; i++)
                 {
-                    Array.Clear(dst);
-                    int perByte = 8 / depth;
-                    for (int i = 0; i < pixels.Length; i++)
+                    // Neighbouring pixels usually repeat, so remember the last lookup.
+                    uint color = pixels[i].PackedValue;
+                    if (!hasLast || color != lastColor)
+                    {
+                        lastIndex = index[color];
+                        lastColor = color;
+                        hasLast = true;
+                    }
+
+                    if (depth == 8)
+                    {
+                        dst[i] = lastIndex;
+                    }
+                    else
                     {
                         int shift = 8 - (depth * ((i % perByte) + 1));
-                        dst[i / perByte] |= (byte)(index[pixels[i].PackedValue] << shift);
+                        dst[i / perByte] |= (byte)(lastIndex << shift);
                     }
                 }
 

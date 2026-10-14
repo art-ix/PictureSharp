@@ -1,3 +1,6 @@
+using System.Numerics;
+using System.Runtime.CompilerServices;
+
 namespace RasterSharp.Formats.Jpeg;
 
 internal readonly record struct JpegEncoderScan(int Component, int Start, int End, int High, int Low)
@@ -5,7 +8,7 @@ internal readonly record struct JpegEncoderScan(int Component, int Start, int En
     public bool Interleaved => Component < 0;
 }
 
-internal sealed class JpegScanEncoder
+internal sealed partial class JpegScanEncoder
 {
     private readonly JpegEncoderComponent[] _components;
     private readonly JpegEncoderScan _scan;
@@ -80,27 +83,80 @@ internal sealed class JpegScanEncoder
 
     private void Bits(int value, int count) => _writer?.Write(value, count);
 
-    // port: libjpeg-turbo jchuff.c encode_one_block; jcphuff.c encode_mcu_DC_refine
+    // A Huffman symbol followed by its 'count' extra bits, in one write.
+    private void SymbolBits(int table, int symbol, int value, int count)
+    {
+        if (_writer is null) Frequencies[table][symbol]++;
+        else
+        {
+            JpegHuffmanEncoder huffman = _tables[table]!;
+            int size = huffman.Sizes[symbol];
+            if (size == 0) throw new InvalidOperationException("Missing JPEG Huffman symbol.");
+            _writer.Write((huffman.Codes[symbol] << count) | (value & ((1 << count) - 1)), size + count);
+        }
+    }
+
+    // port: libjpeg-turbo jchuff.c encode_one_block (jchuff-sse2.asm finds the non-zero coefficients with a bit mask)
+    private void EncodeBaseline(ReadOnlySpan<short> block, int component, int table)
+    {
+        EncodeDc(block[0], component, table);
+        ReadOnlySpan<short> zigzag = block;
+        ulong mask = JpegScanEncoder.NonZeroMask(zigzag) & ~1UL;
+        if (_writer is null)
+        {
+            CountBaseline(zigzag, mask, Frequencies[table + 1]);
+            return;
+        }
+
+        JpegHuffmanEncoder huffman = _tables[table + 1]!;
+        ushort[] codes = huffman.Codes;
+        byte[] sizes = huffman.Sizes;
+        JpegBitWriter writer = _writer;
+        int last = 0;
+        while (mask != 0)
+        {
+            int k = BitOperations.TrailingZeroCount(mask);
+            mask &= mask - 1;
+            int run = k - last - 1;
+            last = k;
+            for (; run >= 16; run -= 16) writer.Write(codes[0xF0], Size(sizes, 0xF0));
+            int value = zigzag[k];
+            int size = JpegHuffmanEncoder.MagnitudeBits(value);
+            int symbol = (run << 4) | size;
+            writer.Write((codes[symbol] << size) | ((value < 0 ? value - 1 : value) & ((1 << size) - 1)), Size(sizes, symbol) + size);
+        }
+
+        if (last != 63) writer.Write(codes[0], Size(sizes, 0));
+    }
+
+    private static void CountBaseline(ReadOnlySpan<short> zigzag, ulong mask, long[] frequencies)
+    {
+        int last = 0;
+        while (mask != 0)
+        {
+            int k = BitOperations.TrailingZeroCount(mask);
+            mask &= mask - 1;
+            int run = k - last - 1;
+            last = k;
+            for (; run >= 16; run -= 16) frequencies[0xF0]++;
+            frequencies[(run << 4) | JpegHuffmanEncoder.MagnitudeBits(zigzag[k])]++;
+        }
+
+        if (last != 63) frequencies[0]++;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Size(byte[] sizes, int symbol)
+    {
+        int size = sizes[symbol];
+        return size != 0 ? size : throw new InvalidOperationException("Missing JPEG Huffman symbol.");
+    }
+
+    // port: libjpeg-turbo jchuff.c encode_one_block; jcphuff.c encode_mcu_DC_refine. Blocks are in zigzag order.
     private void EncodeBlock(ReadOnlySpan<short> block, int component)
     {
         int table = component == 0 ? 0 : 2;
-        if (!_progressive)
-        {
-            EncodeDc(block[0], component, table);
-            int run = 0;
-            for (int k = 1; k < 64; k++)
-            {
-                int value = block[JpegTables.NaturalOrder[k]];
-                if (value == 0) { run++; continue; }
-                while (run >= 16) { Symbol(table + 1, 0xF0); run -= 16; }
-                int size = JpegHuffmanEncoder.MagnitudeBits(value);
-                Symbol(table + 1, (run << 4) | size);
-                Bits(value < 0 ? value - 1 : value, size);
-                run = 0;
-            }
-
-            if (run != 0) Symbol(table + 1, 0);
-        }
+        if (!_progressive) EncodeBaseline(block, component, table);
         else if (_scan.Start == 0)
         {
             if (_scan.High == 0) EncodeDc(block[0] >> _scan.Low, component, table);
@@ -116,8 +172,7 @@ internal sealed class JpegScanEncoder
         int delta = value - _lastDc[component];
         _lastDc[component] = value;
         int size = JpegHuffmanEncoder.MagnitudeBits(delta);
-        Symbol(table, size);
-        Bits(delta < 0 ? delta - 1 : delta, size);
+        SymbolBits(table, size, delta < 0 ? delta - 1 : delta, size);
     }
 
     // port: libjpeg-turbo jcphuff.c emit_eobrun
@@ -135,36 +190,46 @@ internal sealed class JpegScanEncoder
     // port: libjpeg-turbo jcphuff.c encode_mcu_AC_first
     private void EncodeAcFirst(ReadOnlySpan<short> block)
     {
-        int run = 0;
-        for (int k = _scan.Start; k <= _scan.End; k++)
+        // Coefficients that stay non-zero after the point transform, within the band.
+        ulong band = (_scan.End == 63 ? ulong.MaxValue : (2UL << _scan.End) - 1) & ~((1UL << _scan.Start) - 1);
+        ulong mask = JpegScanEncoder.AtLeastMask(block, 1 << _scan.Low) & band;
+        int last = _scan.Start - 1;
+        while (mask != 0)
         {
-            int original = block[JpegTables.NaturalOrder[k]];
+            int k = BitOperations.TrailingZeroCount(mask);
+            mask &= mask - 1;
+            int run = k - last - 1;
+            last = k;
+            int original = block[k];
             int value = Math.Abs(original) >> _scan.Low;
-            if (value == 0) { run++; continue; }
             EmitEobRun();
             while (run >= 16) { Symbol(AcTable, 0xF0); run -= 16; }
             int size = JpegHuffmanEncoder.MagnitudeBits(value);
-            Symbol(AcTable, (run << 4) | size);
-            Bits(original < 0 ? ~value : value, size);
-            run = 0;
+            SymbolBits(AcTable, (run << 4) | size, original < 0 ? ~value : value, size);
         }
 
-        if (run > 0 && ++_eobRun == 0x7FFF) EmitEobRun();
+        if (last < _scan.End && ++_eobRun == 0x7FFF) EmitEobRun();
     }
 
     // port: libjpeg-turbo jcphuff.c encode_mcu_AC_refine
     private void EncodeAcRefine(ReadOnlySpan<short> block)
     {
+        // Only non-zero coefficients matter: zeros extend the run, coefficients that were already non-zero add a
+        // correction bit, and newly non-zero ones (value 1) emit a symbol.
         Span<byte> corrections = stackalloc byte[64];
-        int count = 0, run = 0, lastNew = 0;
-        for (int k = _scan.Start; k <= _scan.End; k++)
-            if ((Math.Abs(block[JpegTables.NaturalOrder[k]]) >> _scan.Low) == 1) lastNew = k;
-
-        for (int k = _scan.Start; k <= _scan.End; k++)
+        ulong band = (_scan.End == 63 ? ulong.MaxValue : (2UL << _scan.End) - 1) & ~((1UL << _scan.Start) - 1);
+        ulong nonZero = JpegScanEncoder.AtLeastMask(block, 1 << _scan.Low) & band;
+        ulong newlyNonZero = nonZero & ~JpegScanEncoder.AtLeastMask(block, 2 << _scan.Low);
+        int lastNew = newlyNonZero == 0 ? 0 : 63 - BitOperations.LeadingZeroCount(newlyNonZero);
+        int count = 0, run = 0, previous = _scan.Start - 1;
+        while (nonZero != 0)
         {
-            int original = block[JpegTables.NaturalOrder[k]];
+            int k = BitOperations.TrailingZeroCount(nonZero);
+            nonZero &= nonZero - 1;
+            run += k - previous - 1;
+            previous = k;
+            int original = block[k];
             int value = Math.Abs(original) >> _scan.Low;
-            if (value == 0) { run++; continue; }
             while (run > 15 && k <= lastNew)
             {
                 EmitEobRun();
@@ -183,6 +248,7 @@ internal sealed class JpegScanEncoder
             run = 0;
         }
 
+        run += _scan.End - previous;
         if (run > 0 || count > 0)
         {
             _eobRun++;

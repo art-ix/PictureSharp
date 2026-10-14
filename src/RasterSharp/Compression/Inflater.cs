@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using RasterSharp.Formats.WebP.Lossless;
 
 namespace RasterSharp.Compression;
@@ -43,13 +45,14 @@ internal sealed class Inflater
     private byte[] _output;
     private int _outputPos;
     private readonly long _maxOutput;
+    private Action<byte[], int>? _progress;
 
     private Inflater(byte[] input, int offset, int length, int expectedSize, long maxOutput)
     {
         _input = input;
         _inputPos = offset;
         _inputEnd = offset + length;
-        _output = new byte[Math.Max(expectedSize, 64)];
+        _output = GC.AllocateUninitializedArray<byte>(Math.Max(expectedSize, 64));
         _maxOutput = maxOutput;
     }
 
@@ -61,7 +64,12 @@ internal sealed class Inflater
     /// <param name="maxOutput">Maximum allowed output size; protects against decompression bombs.</param>
     /// <param name="verifyChecksum">Whether to verify the Adler-32 trailer.</param>
     /// <param name="stopAtExpectedSize">Stop once <paramref name="expectedSize"/> bytes are produced (tolerates trailing junk, like libpng).</param>
-    public static byte[] InflateZlib(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool verifyChecksum = true, bool stopAtExpectedSize = false)
+    /// <param name="progress">
+    /// Called after each block with the output buffer and the number of bytes produced. Bytes already produced never
+    /// change; a later call may pass a larger copy of the buffer.
+    /// </param>
+    public static byte[] InflateZlib(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool verifyChecksum = true,
+        bool stopAtExpectedSize = false, Action<byte[], int>? progress = null)
     {
         if (length < 2)
         {
@@ -80,9 +88,9 @@ internal sealed class Inflater
             throw new InvalidDataStreamException("zlib preset dictionaries are not supported.");
         }
 
-        var inflater = new Inflater(input, offset + 2, length - 2, expectedSize, maxOutput);
+        var inflater = new Inflater(input, offset + 2, length - 2, expectedSize, maxOutput) { _progress = progress };
         bool complete = inflater.Run(stopAtExpectedSize ? expectedSize : -1);
-        byte[] result = inflater._output.AsSpan(0, inflater._outputPos).ToArray();
+        byte[] result = inflater.TakeOutput();
 
         if (complete && verifyChecksum)
         {
@@ -107,8 +115,11 @@ internal sealed class Inflater
     {
         var inflater = new Inflater(input, offset, length, expectedSize, maxOutput);
         inflater.Run(-1);
-        return inflater._output.AsSpan(0, inflater._outputPos).ToArray();
+        return inflater.TakeOutput();
     }
+
+    // The output buffer itself when it is exactly full (the usual case with an exact size hint).
+    private byte[] TakeOutput() => _outputPos == _output.Length ? _output : _output.AsSpan(0, _outputPos).ToArray();
 
     // Returns true when the final block was fully decoded, false when stopped at 'stopAt' bytes.
     private bool Run(int stopAt)
@@ -141,6 +152,7 @@ internal sealed class Inflater
                     throw new InvalidDataStreamException("Invalid deflate block type.");
             }
 
+            _progress?.Invoke(_output, _outputPos);
             if (stopAt >= 0 && _outputPos >= stopAt)
             {
                 return final;
@@ -313,6 +325,11 @@ internal sealed class Inflater
     {
         while (true)
         {
+            if (FastHuffmanBlock(litLen, dist))
+            {
+                return;
+            }
+
             int sym = DecodeSymbol(litLen, LitLenRootBits);
             if (sym < 256)
             {
@@ -366,6 +383,148 @@ internal sealed class Inflater
             }
 
             _outputPos += length;
+        }
+    }
+
+    /// <summary>
+    /// Decodes symbols while at least 8 input bytes and room for a whole match (plus 8 bytes of copy overrun)
+    /// remain; returns true at the end of the block. The checks match <see cref="HuffmanBlock"/>, which takes over
+    /// near the end of the input or output.
+    /// </summary>
+    // One refill leaves at least 56 bits: enough for a length code with extra bits (15 + 5) and a distance
+    // code with extra bits (15 + 13). Bits above the count may hold copies of the next input bytes; they are
+    // cleared before returning, because Refill expects zeros there.
+    private bool FastHuffmanBlock(HuffmanCode[] litLen, HuffmanCode[]? dist)
+    {
+        byte[] input = _input;
+        byte[] output = _output;
+        int ip = _inputPos;
+        int op = _outputPos;
+        int inputLimit = _inputEnd - sizeof(ulong);
+        int outputLimit = output.Length - (258 + sizeof(ulong));
+        if (ip > inputLimit || op > outputLimit)
+        {
+            return false;
+        }
+
+        ulong bits = _bitBuf;
+        int count = _bitCount;
+        ref byte inputRef = ref MemoryMarshal.GetArrayDataReference(input);
+        ref byte outputRef = ref MemoryMarshal.GetArrayDataReference(output);
+        ref HuffmanCode litLenRef = ref MemoryMarshal.GetArrayDataReference(litLen);
+        // Exceptions leave the state as it is: the inflater is not used after a failure. (A try/finally here would
+        // keep the bit buffer in memory instead of registers.)
+        bool endOfBlock = false;
+        while (ip <= inputLimit && op <= outputLimit)
+        {
+            if (count < 56)
+            {
+                bits |= BinaryPrimitives.ReadUInt64LittleEndian(MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref inputRef, ip), sizeof(ulong))) << count;
+                ip += (63 - count) >> 3;
+                count |= 56;
+            }
+
+            int sym = Decode(ref litLenRef, LitLenRootBits, ref bits, ref count);
+            if (sym < 256)
+            {
+                Unsafe.Add(ref outputRef, op++) = (byte)sym;
+                continue;
+            }
+
+            if (sym == EndOfBlock)
+            {
+                endOfBlock = true;
+                break;
+            }
+
+            sym -= 257;
+            if (sym >= 29)
+            {
+                throw new InvalidDataStreamException("Invalid deflate length code.");
+            }
+
+            int extra = LengthExtra[sym];
+            int length = LengthBase[sym] + (int)(bits & ((1UL << extra) - 1));
+            bits >>= extra;
+            count -= extra;
+            if (dist is null)
+            {
+                throw new InvalidDataStreamException("Deflate block has no distance codes.");
+            }
+
+            int dsym = Decode(ref MemoryMarshal.GetArrayDataReference(dist), DistRootBits, ref bits, ref count);
+            if (dsym >= 30)
+            {
+                throw new InvalidDataStreamException("Invalid deflate distance code.");
+            }
+
+            extra = DistExtra[dsym];
+            int distance = DistBase[dsym] + (int)(bits & ((1UL << extra) - 1));
+            bits >>= extra;
+            count -= extra;
+            if (distance > op)
+            {
+                throw new InvalidDataStreamException("Deflate distance too far back.");
+            }
+
+            CopyMatch(ref outputRef, op, distance, length);
+            op += length;
+        }
+
+        _bitBuf = bits & ((1UL << count) - 1);
+        _bitCount = count;
+        _inputPos = ip;
+        _outputPos = op;
+        return endOfBlock;
+    }
+
+    // Decodes one symbol from a full bit buffer (at least 30 bits); see DecodeSymbol.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Decode(ref HuffmanCode table, int rootBits, ref ulong bits, ref int count)
+    {
+        int index = (int)(bits & ((1UL << rootBits) - 1));
+        HuffmanCode code = Unsafe.Add(ref table, index);
+        if (code.Bits > rootBits)
+        {
+            index += code.Value + (int)((bits >> rootBits) & ((1UL << (code.Bits - rootBits)) - 1));
+            code = Unsafe.Add(ref table, index);
+            bits >>= rootBits;
+            count -= rootBits;
+        }
+
+        if (code.Bits == 0)
+        {
+            throw new InvalidDataStreamException("Invalid Huffman code in deflate stream.");
+        }
+
+        bits >>= code.Bits;
+        count -= code.Bits;
+        return code.Value;
+    }
+
+    // Copies an LZ77 match; may write up to 8 bytes past the match (the caller leaves room).
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CopyMatch(ref byte output, int op, int distance, int length)
+    {
+        ref byte dst = ref Unsafe.Add(ref output, op);
+        ref byte src = ref Unsafe.Add(ref output, op - distance);
+        if (distance >= sizeof(ulong))
+        {
+            for (int i = 0; i < length; i += sizeof(ulong))
+            {
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, i), Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref src, i)));
+            }
+        }
+        else if (distance == 1)
+        {
+            MemoryMarshal.CreateSpan(ref dst, length).Fill(src);
+        }
+        else
+        {
+            for (int i = 0; i < length; i++)
+            {
+                Unsafe.Add(ref dst, i) = Unsafe.Add(ref src, i);
+            }
         }
     }
 

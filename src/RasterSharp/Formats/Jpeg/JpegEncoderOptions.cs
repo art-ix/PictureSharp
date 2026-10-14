@@ -29,4 +29,7 @@ public sealed record JpegEncoderOptions : EncoderOptions
         get;
         init => field = value.A == 255 ? value : throw new ArgumentOutOfRangeException(nameof(BackgroundColor), value, "Expected an opaque background.");
     } = Rgba32.White;
+
+    /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
+    public int MaxDegreeOfParallelism { get; init => field = Check.Parallelism(value); } = -1;
 }

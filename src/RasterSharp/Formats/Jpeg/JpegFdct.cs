@@ -2,10 +2,15 @@ using System.Runtime.CompilerServices;
 
 namespace RasterSharp.Formats.Jpeg;
 
-internal static class JpegFdct
+internal static partial class JpegFdct
 {
-    // port: libjpeg-turbo jfdctint.c jpeg_fdct_islow (8-bit, CONST_BITS=13, PASS1_BITS=2)
     public static void Transform(Span<int> data)
+    {
+        if (!TransformSimd(data)) TransformScalar(data);
+    }
+
+    // port: libjpeg-turbo jfdctint.c jpeg_fdct_islow (8-bit, CONST_BITS=13, PASS1_BITS=2)
+    internal static void TransformScalar(Span<int> data)
     {
         for (int pass = 0; pass < 2; pass++)
         {
@@ -45,6 +50,43 @@ internal static class JpegFdct
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Descale(int value, int bits) => (value + (1 << (bits - 1))) >> bits;
+
+    /// <summary>Quantization divisors (8 × table entry) with exact reciprocals.</summary>
+    public sealed class Divisors
+    {
+        internal readonly int[] Half = new int[64];
+        internal readonly ulong[] Reciprocal = new ulong[64];
+
+        // Lemire et al., "Faster Remainder by Direct Computation": with M = floor((2^64 - 1) / d) + 1,
+        // the high 64 bits of M * n equal n / d for every 32-bit n.
+        public Divisors(ReadOnlySpan<byte> table)
+        {
+            for (int i = 0; i < 64; i++)
+            {
+                int divisor = table[i] * 8;
+                Half[i] = divisor / 2;
+                Reciprocal[i] = ulong.MaxValue / (uint)divisor + 1;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Quantize(ReadOnlySpan{int}, ReadOnlySpan{byte}, Span{short})"/> without division, writing the
+    /// coefficients in zigzag order.
+    /// </summary>
+    public static void QuantizeZigzag(ReadOnlySpan<int> data, Divisors divisors, Span<short> result)
+    {
+        int[] half = divisors.Half;
+        ulong[] reciprocal = divisors.Reciprocal;
+        ReadOnlySpan<byte> order = JpegTables.NaturalOrder;
+        for (int k = 0; k < 64; k++)
+        {
+            int i = order[k];
+            int v = data[i];
+            int value = (int)Math.BigMul(reciprocal[i], (ulong)(uint)(Math.Abs(v) + half[i]), out _);
+            result[k] = (short)(v < 0 ? -value : value);
+        }
+    }
 
     // port: libjpeg-turbo jcdctmgr.c quantize (division equivalent of reciprocal implementation)
     public static void Quantize(ReadOnlySpan<int> data, ReadOnlySpan<byte> table, Span<short> result)

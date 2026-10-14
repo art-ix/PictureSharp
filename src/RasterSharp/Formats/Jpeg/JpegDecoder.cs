@@ -1,4 +1,5 @@
 using RasterSharp.Formats.Metadata;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.Jpeg;
 
@@ -33,11 +34,11 @@ internal sealed class JpegDecoder : IImageDecoder
         {
             foreach (JpegComponent c in frame.Components)
             {
-                InverseDct(c);
+                InverseDct(c, options.MaxDegreeOfParallelism);
             }
         }
 
-        Rgba32[] pixels = JpegColorConverter.Convert(frame, file.ColorSpace());
+        Rgba32[] pixels = JpegColorConverter.Convert(frame, file.ColorSpace(), options.MaxDegreeOfParallelism);
         var image = new Image([new ImageFrame(frame.Width, frame.Height, pixels)]) { SourceFormat = ImageFormat.Jpeg };
         (float dpiX, float dpiY) = file.Resolution();
         (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution) = (dpiX, dpiY);
@@ -52,21 +53,34 @@ internal sealed class JpegDecoder : IImageDecoder
     }
 
     /// <summary>Transforms the coefficients collected by a progressive decode into samples.</summary>
-    private static void InverseDct(JpegComponent c)
+    private static void InverseDct(JpegComponent c, int maxDegreeOfParallelism)
     {
         if (c.Quant is not { } quant)
         {
             return;   // never appeared in a scan: the plane stays mid-gray, as libjpeg's zeroed multipliers give
         }
 
+        // Blocks are independent; rows of blocks may run in parallel.
         short[] coefficients = c.Coefficients!;
-        for (int by = 0; by < c.HeightInBlocks; by++)
+        if (c.HeightInBlocks > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)c.WidthInBlocks * c.HeightInBlocks, 1024))
         {
-            for (int bx = 0; bx < c.WidthInBlocks; bx++)
+            Parallel.For(0, c.HeightInBlocks, Parallelism.Options(maxDegreeOfParallelism), by => TransformRow(c, coefficients, quant, by));
+        }
+        else
+        {
+            for (int by = 0; by < c.HeightInBlocks; by++)
             {
-                int block = (by * c.BlocksPerLine) + bx;
-                JpegIdct.Transform(coefficients.AsSpan(block * 64, 64), quant, c.Plane.AsSpan((by * 8 * c.PlaneStride) + (bx * 8)), c.PlaneStride);
+                TransformRow(c, coefficients, quant, by);
             }
+        }
+    }
+
+    private static void TransformRow(JpegComponent c, short[] coefficients, short[] quant, int by)
+    {
+        for (int bx = 0; bx < c.WidthInBlocks; bx++)
+        {
+            int block = (by * c.BlocksPerLine) + bx;
+            JpegIdct.Transform(coefficients.AsSpan(block * 64, 64), quant, c.Plane.AsSpan((by * 8 * c.PlaneStride) + (bx * 8)), c.PlaneStride);
         }
     }
 }

@@ -12,7 +12,7 @@ internal static partial class Vp8Encoder
         var config = new Vp8EncoderConfig(options);
         using var source = new RgbToYuv(image.Width, image.Height);
         if (options.UseSharpYuv) SharpYuv.Convert(image.GetPixelSpan(), source);
-        else source.Convert(image.GetPixelSpan(), config.Dithering);
+        else source.Convert(image.Frames.RootFrame.Pixels, config.Dithering, options.MaxDegreeOfParallelism);
         if (!options.Exact) source.CleanupTransparent(image.GetPixelSpan());
         using var context = new Vp8EncoderContext(source, config);
         Vp8Analysis.Analyze(context);

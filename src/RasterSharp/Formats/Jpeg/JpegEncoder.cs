@@ -24,10 +24,8 @@ internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
         try
         {
             for (int c = 0; c < components.Length; c++)
-            {
                 components[c] = new JpegEncoderComponent(image.Width, image.Height, c == 0 ? h : 1, c == 0 ? v : 1, h, v);
-                components[c].Prepare(image, c, h, v, options.BackgroundColor, quantization[c == 0 ? 0 : 1]);
-            }
+            JpegEncoderComponent.PrepareAll(image, components, h, v, options.BackgroundColor, quantization, options.MaxDegreeOfParallelism);
 
             var markers = new JpegMarkerWriter(output);
             markers.Header(image, options.Metadata);

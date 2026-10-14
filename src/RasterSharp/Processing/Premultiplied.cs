@@ -3,10 +3,17 @@ using System.Runtime.CompilerServices;
 namespace RasterSharp.Processing;
 
 /// <summary>Straight ↔ premultiplied alpha as Pillow's RGBA ↔ RGBa conversions, so filters match Pillow run on "RGBa".</summary>
-internal static class Premultiplied
+internal static partial class Premultiplied
 {
     // port: Pillow src/libImaging/Convert.c rgbA2rgba (MULDIV255)
     public static void FromStraight(ReadOnlySpan<Rgba32> src, Span<Rgba32> dst)
+    {
+        int done = FromStraightSimd(src, dst);
+        FromStraightScalar(src[done..], dst[done..]);
+    }
+
+    /// <summary>Scalar <see cref="FromStraight"/>; the vector path is in <c>Premultiplied.Simd.cs</c>.</summary>
+    internal static void FromStraightScalar(ReadOnlySpan<Rgba32> src, Span<Rgba32> dst)
     {
         for (int i = 0; i < src.Length; i++)
         {
@@ -20,6 +27,13 @@ internal static class Premultiplied
     {
         for (int i = 0; i < pixels.Length; i++)
         {
+            // Opaque and fully transparent pixels stay as they are; skip runs of them.
+            i += CountUnchanged(pixels[i..]);
+            if (i >= pixels.Length)
+            {
+                break;
+            }
+
             Rgba32 p = pixels[i];
             int a = p.A;
             if (a != 0 && a != 255)

@@ -1,4 +1,5 @@
 using System.Buffers;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.Jpeg;
 
@@ -60,10 +61,30 @@ internal static class JpegColorConverter
         }
     }
 
-    public static Rgba32[] Convert(JpegFrame frame, JpegColorSpace colorSpace)
+    /// <summary>Converts the planes to RGBA; bands of rows are independent and may run in parallel.</summary>
+    public static Rgba32[] Convert(JpegFrame frame, JpegColorSpace colorSpace, int maxDegreeOfParallelism = 1)
     {
         int width = frame.Width;
         int height = frame.Height;
+        Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
+        const int band = 16;
+        int bands = (height + band - 1) / band;
+        if (bands > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)width * height, 1 << 17))
+        {
+            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism),
+                b => ConvertRows(frame, colorSpace, pixels, b * band, Math.Min(height, (b + 1) * band)));
+        }
+        else
+        {
+            ConvertRows(frame, colorSpace, pixels, 0, height);
+        }
+
+        return pixels;
+    }
+
+    private static void ConvertRows(JpegFrame frame, JpegColorSpace colorSpace, Rgba32[] pixels, int firstRow, int endRow)
+    {
+        int width = frame.Width;
         JpegComponent[] comps = frame.Components;
         int n = colorSpace == JpegColorSpace.Gray ? 1 : comps.Length;
         var modes = new Upsampling[n];
@@ -75,12 +96,11 @@ internal static class JpegColorConverter
         }
 
         byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferLength * n);
-        var cachedRow = new int[n];
-        Array.Fill(cachedRow, -1);
+        Span<int> cachedRow = stackalloc int[n];
+        cachedRow.Fill(-1);
         try
         {
-            Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
-            for (int y = 0; y < height; y++)
+            for (int y = firstRow; y < endRow; y++)
             {
                 Span<Rgba32> dst = pixels.AsSpan(y * width, width);
                 ReadOnlySpan<byte> c0 = Row(frame, comps[0], modes[0], y, buffer.AsSpan(0, bufferLength), ref cachedRow[0])[..width];
@@ -115,8 +135,6 @@ internal static class JpegColorConverter
                         break;
                 }
             }
-
-            return pixels;
         }
         finally
         {

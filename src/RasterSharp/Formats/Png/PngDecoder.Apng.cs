@@ -2,7 +2,7 @@ namespace RasterSharp.Formats.Png;
 
 internal sealed partial class PngDecoder
 {
-    private static List<ImageFrame> DecodeAnimation(ReadOnlySpan<byte> file, PngFile png, PngAnimation anim)
+    private static List<ImageFrame> DecodeAnimation(ReadOnlySpan<byte> file, PngFile png, PngAnimation anim, int maxDegreeOfParallelism)
     {
         int width = png.Width;
         int height = png.Height;
@@ -23,7 +23,7 @@ internal sealed partial class PngDecoder
                 throw Error("APNG frame has no image data.");
             }
 
-            Rgba32[] pixels = DecodeImage(file, png, f.Parts, f.IsDefaultImage ? 0 : 4, f.Width, f.Height);
+            Rgba32[] pixels = DecodeImage(file, png, f.Parts, f.IsDefaultImage ? 0 : 4, f.Width, f.Height, maxDegreeOfParallelism);
 
             // The first frame's "previous" disposal is treated as "background".
             int dispose = index == 0 && f.DisposeOp == 2 ? 1 : f.DisposeOp;

@@ -30,7 +30,95 @@ measurements require real hardware. For the final WebP gate, require at most 3×
 time on the frozen matrix using libwebp 1.6.0; disclose process startup, I/O and API timing differences.
 These broader measurements and the final gate remain pending; the VP8L matrix alone does not close phase 10.
 
-The 0.4.5 lossless encode matrix and its results are described in the next section.
+The 0.4.6 matrix (PNG, deflate, resizing, JPEG, WebP lossy, BMP and GIF) and the 0.4.5 lossless encode matrix
+are described in the next sections.
+
+## Hot paths in 0.4.6
+
+The 0.4.6 matrix freezes 40 operations on fixed bytes: PNG decoding of the corpus `photo` and `photo_alpha`
+sources, a palette graphic scaled 8× (1600×1200), and local photos at 1920×1440 and 4000×3000 (written by
+RasterSharp 0.4.5 and by Pillow 10.2.0); PNG encoding at levels 1, 6 and 9; resizing with every kernel, down and
+up, opaque and with alpha; JPEG decoding (Pillow quality 85, baseline and progressive, and a 4032×3024 camera
+file) and encoding (4:2:0 q75, 4:4:4 q90, progressive with optimized tables); WebP lossy decoding and encoding;
+BMP and GIF encoding. Every output (encoded bytes or decoded/resized pixels) is identical to 0.4.5, also with
+AVX2 disabled and with all hardware intrinsics disabled. Acceptance followed the phase-10 contract.
+
+Changes:
+
+- **Deflate:** the match finder compares two-byte pairs at the start and at the current best length before a full
+  comparison, measures matches eight bytes at a time and maps distances to codes through zlib's table; the bit
+  writer reserves space per block. Inputs of 256 KiB and more are parsed in parallel 64 KiB segments: the state at
+  a search that starts without a pending match is only the position (every earlier position is in the hash chains
+  and the chains reach back 32 KiB), so a segment parsed speculatively from its first byte agrees with the true
+  parse from the first such position they share. The join replays the true parse until it meets the segment and
+  copies the rest, while the next wave of segments is being parsed. The compressed bytes do not depend on threads.
+- **Inflate:** a fast loop keeps the bit buffer in registers, refills 64 bits at once and copies matches in 8-byte
+  words while enough input and output remain; the exact-size output buffer is returned without a copy. PNG
+  decoding is pipelined: another thread unfilters (in a copy of each row) and converts rows as soon as each deflate
+  block completes.
+- **Checksums:** CRC-32 folds 64 bytes per step with PCLMULQDQ and Adler-32 uses SSSE3, ported from Chromium's
+  zlib (about 12× and 8× faster on 8 MB).
+- **PNG filters:** the encoder computes the cost of all five filters in one `Vector128` pass and writes only the
+  chosen one; bands of rows are filtered in parallel (each band packs the row above it). Decoding uses per-pixel
+  Sub/Average for 3 and 4 bytes per pixel (byte-wise addition inside a `uint`) and a vector Paeth per pixel.
+- **Resize:** both passes accumulate the same 32-bit sums with `Vector128<int>` (the vertical pass keeps 16 output
+  bytes in registers); premultiplication runs in 16-bit lanes and in parallel, and an opaque source is read in place.
+- **JPEG:** the encoder converts colors once, prepares rows of blocks in parallel, runs the forward DCT with AVX2 on
+  transposed 8×8 blocks, quantizes by exact reciprocal multiplication, stores coefficients in zigzag order and
+  walks non-zero coefficients through bit masks. The decoder runs the inverse DCT with AVX2 in 32-bit lanes when a
+  block's dequantized inputs and first-pass results stay below 12000 (no intermediate can then overflow; other
+  blocks use the 64-bit scalar code), and converts colors and progressive blocks in parallel.
+- **WebP lossy encoding:** RGB→YUV conversion runs in parallel bands when no dithering is requested.
+
+New options: `PngEncoderOptions.MaxDegreeOfParallelism` and `JpegEncoderOptions.MaxDegreeOfParallelism`
+(default -1, automatic), as for WebP.
+
+Default-JIT medians on the Intel Core i5-12500H, Linux x64, .NET 10.0.12, workstation GC, default parallelism,
+complete API calls from memory, 9 samples, two alternating batches each (pixel copies of decoded images are included
+in both versions). Pillow 10.2.0 (zlib 1.3, libjpeg-turbo) times are single-threaded medians of the same operation
+from Python, for context:
+
+| Operation | 0.4.5 (ms) | 0.4.6 (ms) | Reduction | Pillow (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| PNG decode 1920×1440 (RasterSharp file) | 54.70 / 53.28 | 31.33 / 31.15 | 42–43% | — |
+| PNG decode 1920×1440 (Pillow file) | 68.77 / 67.28 | 33.47 / 33.51 | 50–51% | 50.5 |
+| PNG decode 4000×3000 (Pillow file) | 296.97 / 285.82 | 135.63 / 136.28 | 52–54% | 227.7 |
+| PNG decode photo 256×192 | 4.42 / 5.05 | 2.11 / 2.07 | 52–59% | — |
+| PNG encode 1920×1440, level 1 | 302.22 / 302.08 | 62.14 / 61.96 | 79% | 142.1 |
+| PNG encode 1920×1440, level 6 | 642.15 / 637.13 | 80.38 / 77.83 | 88% | 463.0 |
+| PNG encode 1920×1440, level 6, one thread | 642.15 / 637.13 | 435.14 / 434.05 | 32% | 463.0 |
+| PNG encode 1920×1440, level 9 | 1454.01 / 1427.78 | 177.06 / 175.61 | 88% | 930.6 |
+| PNG encode 4000×3000, level 6 | 2804.71 / 2698.79 | 321.04 / 325.61 | 88% | 2055.2 |
+| PNG encode graphic 1600×1200, level 6 | 20.95 / 21.27 | 8.11 / 8.23 | 61% | — |
+| Resize 1920×1440 → 800×600, Lanczos | 11.70 / 15.15 | 5.16 / 4.04 | 56–73% | 23.5 |
+| Resize 1920×1440 → 800×600, bilinear | 8.26 / 10.29 | 2.68 / 3.02 | 68–71% | — |
+| Resize 4000×3000 → 1920×1440, Lanczos | 43.68 / 43.15 | 16.80 / 16.87 | 61% | 106.2¹ |
+| Resize 4000×3000 → 400×300, box | 20.06 / 19.92 | 5.08 / 5.19 | 74–75% | — |
+| Resize 200×160 with alpha → 800×640, bicubic | 4.75 / 4.59 | 2.72 / 2.81 | 39–43% | — |
+| JPEG decode 1920×1440 | 34.12 / 31.12 | 16.86 / 18.46 | 41–51% | 10.5 |
+| JPEG decode 1920×1440, one thread | 34.12 / 31.12 | 23.33 / 23.50 | 25–32% | 10.5 |
+| JPEG decode 1920×1440, progressive | 58.98 / 53.31 | 36.33 / 38.07 | 29–38% | 28.7 |
+| JPEG decode 4032×3024 | 122.71 / 124.92 | 67.69 / 71.06 | 43–45% | 52.4 |
+| JPEG encode 1920×1440, q75 4:2:0 | 71.61 / 72.64 | 15.49 / 15.54 | 78–79% | 6.7 |
+| JPEG encode 1920×1440, q75, one thread | 71.61 / 72.64 | 49.48 / 48.52 | 31–33% | 6.7 |
+| JPEG encode 1920×1440, q90 4:4:4 | 123.58 / 121.53 | 25.29 / 25.45 | 79–80% | — |
+| JPEG encode 1920×1440, progressive | 157.99 / 156.72 | 45.36 / 46.76 | 70–71% | — |
+
+¹ Pillow resized the 4032×3024 JPEG photo, not the identical 4000×3000 source.
+
+WebP lossy decoding (1920×1440: 32.1 ms, `dwebp -v` 30 ms; 4032×3024: 83 ms, `dwebp` 88 ms) and encoding (1920×1440
+q75: 135–139 ms with threads, 442–450 ms on one thread; `cwebp -v` 200 ms) stayed within noise of 0.4.5 apart from
+the parallel color conversion (2–3%); their DSP functions already had SIMD since 0.4.1. BMP and GIF encoding are
+unchanged (GIF quantization of a 256×192 photo still takes about 80 ms and remains open).
+
+Allocations dropped for PNG (1920×1440 encode 93 → 45 MiB, decode 42 → 34 MiB, 4000×3000 encode 374 → 182 MiB)
+and stayed equal for resizing and JPEG decoding. JPEG encoding allocates about 0.7 MiB more at 1920×1440
+(2.0 → 2.7 MiB; parallel work items and quantization divisors; the color planes are pooled).
+The remaining gaps to libjpeg-turbo are the sequential Huffman coding (JPEG decode and encode) and, on one thread,
+the color conversion and downsampling of the JPEG encoder; the single-threaded PNG encoder is now at Pillow's speed.
+
+`CodecBenchmarks` (BenchmarkDotNet) covers PNG and JPEG encoding and decoding and Lanczos halving of three corpus
+sources; add local images through `RASTERSHARP_BENCHMARK_CODEC_FILES`.
 
 ## VP8L encoding in 0.4.5
 
@@ -237,6 +325,14 @@ The encoder benchmark loads each image once and encodes it losslessly at quality
 RASTERSHARP_BENCHMARK_ENCODE_FILES='/absolute/photo.png' \
 dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
   --filter '*LosslessEncodeBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 8
+```
+
+The codec benchmark encodes and decodes PNG and JPEG and halves each image with Lanczos:
+
+```bash
+RASTERSHARP_BENCHMARK_CODEC_FILES='/absolute/photo.png' \
+dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+  --filter '*CodecBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 8
 ```
 
 Keep CPU, runtime, GC settings, input bytes and workload identical when comparing versions. Measure serially, inspect the spread, and repeat any apparent regression. BenchmarkDotNet writes timing and allocation reports to `BenchmarkDotNet.Artifacts/`.

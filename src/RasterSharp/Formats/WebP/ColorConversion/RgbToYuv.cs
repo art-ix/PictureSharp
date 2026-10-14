@@ -1,4 +1,5 @@
 using System.Buffers;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.WebP.ColorConversion;
 
@@ -20,11 +21,33 @@ internal sealed class RgbToYuv : IDisposable
         V = ArrayPool<byte>.Shared.Rent(UvWidth * UvHeight);
     }
 
-    // port: src/enc/picture_csp_enc.c ImportYUVAFromRGBA, AccumulateRGB, AccumulateRGBA
-    public void Convert(ReadOnlySpan<Rgba32> pixels, float dithering = 0)
+    /// <summary>
+    /// Converts <paramref name="pixels"/>. Without dithering, pairs of rows are independent and bands of them may run
+    /// in parallel; dithering draws random numbers in raster order, so it stays sequential.
+    /// </summary>
+    public void Convert(ReadOnlySpan<Rgba32> pixels, float dithering = 0) =>
+        ConvertRows(pixels, 0, Height, dithering > 0 ? new DitherRandom(dithering) : null);
+
+    /// <inheritdoc cref="Convert(ReadOnlySpan{Rgba32}, float)"/>
+    public void Convert(Rgba32[] pixels, float dithering, int maxDegreeOfParallelism)
     {
-        var random = dithering > 0 ? new DitherRandom(dithering) : null;
-        for (int y = 0; y < Height; y += 2)
+        const int band = 32;
+        int bands = (Height + band - 1) / band;
+        if (dithering <= 0 && bands > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)Width * Height, 1 << 18))
+        {
+            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism),
+                b => ConvertRows(pixels, b * band, Math.Min(Height, (b + 1) * band), null));
+        }
+        else
+        {
+            ConvertRows(pixels, 0, Height, dithering > 0 ? new DitherRandom(dithering) : null);
+        }
+    }
+
+    // port: src/enc/picture_csp_enc.c ImportYUVAFromRGBA, AccumulateRGB, AccumulateRGBA ('first' is even)
+    private void ConvertRows(ReadOnlySpan<Rgba32> pixels, int first, int last, DitherRandom? random)
+    {
+        for (int y = first; y < last; y += 2)
         {
             int end = Math.Min(y + 2, Height);
             for (int row = y; row < end; row++)

@@ -22,4 +22,7 @@ public sealed record PngEncoderOptions : EncoderOptions
 
     /// <summary>Write all frames of animated images as APNG (otherwise only the first frame). Default: true.</summary>
     public bool SaveAnimation { get; init; } = true;
+
+    /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
+    public int MaxDegreeOfParallelism { get; init => field = Check.Parallelism(value); } = -1;
 }
