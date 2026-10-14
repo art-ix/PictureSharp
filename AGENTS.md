@@ -1,115 +1,84 @@
-# AGENTS.md
+# Working on RasterSharp
 
-Instrukcje dla agentów AI (i ludzi) pracujących nad **RasterSharp**: biblioteką .NET do przetwarzania obrazów oraz odczytu i zapisu WebP, PNG, BMP, JPEG i GIF, napisaną w 100% w C#.
+RasterSharp is a .NET image-processing library written entirely in C#. It reads and writes WebP, PNG, BMP, JPEG and GIF.
 
-Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.md](plan.md). Przed rozpoczęciem pracy przeczytaj go i ustal, w której fazie jesteś.
+Before starting, read [plan.md](plan.md) to identify the current phase and its definition of done (DoD), then read the latest entries in [progres.md](progres.md). Append progress after significant steps and before ending a session: changes, decisions, test and benchmark results, remaining work, and the next step. Preserve earlier entries. `plan.md` tracks scope and phase status; `progres.md` is a local log and must stay out of commits.
 
-Bieżący postęp zapisujemy w [progres.md](progres.md): wykonane zmiany, decyzje, wyniki testów i pomiarów, pozostałe zadania oraz następny krok. Czytamy aktualny stan przed kontynuowaniem pracy i aktualizujemy go po istotnym kroku oraz przed zakończeniem sesji. Zachowujemy wcześniejsze wpisy; `plan.md` opisuje zakres, DoD i status etapów. `progres.md` pozostaje plikiem lokalnym, poza commitami.
+## Required constraints
 
-## Twarde zasady
+- Target `net10.0` with C# 14 (`LangVersion=14.0`); support .NET 10 and later.
+- Keep `src/RasterSharp` dependency-free: BCL only, no `PackageReference`, native libraries or P/Invoke. `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`) is allowed. Tests, benchmarks and samples may use packages.
+- Do not use `System.IO.Compression` in the library: `ZLibStream`/`DeflateStream` call native zlib. Use our deflate/inflate implementation in `Compression/`.
+- Do not use the `unsafe` keyword. Use `Span<T>`, `ref`, `Unsafe.Add` and `MemoryMarshal`; use `GCHandle` for the memory pinning required by `BitmapData.Scan0`.
+- Keep all public API in the `RasterSharp` namespace. Codecs and implementation details are `internal`.
+- Store `Image`/`ImageFrame` pixels as `Rgba32` with straight (unpremultiplied) alpha.
+- Enforce decoder limits, including `DecoderOptions.MaxPixels`. Corrupt or unrecognized input must throw `ImageFormatException`; valid input with unsupported features must throw `NotSupportedException`. Malicious input must never expose unchecked exceptions such as `IndexOutOfRangeException`.
 
-- **Target:** `net10.0`. Biblioteka ma działać na .NET 10 i nowszych.
-- **Zero zależności w `src/RasterSharp`:**
-  - Nie dodajemy żadnych `PackageReference`, natywnych bibliotek ani P/Invoke.
-  - Dozwolony jest tylko BCL, w tym `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`).
-  - **Nie używamy** `System.IO.Compression` (`ZLibStream`/`DeflateStream`), bo wołają natywne zlib. Deflate/inflate mamy własne w `Compression/`.
-  - Projekty testów, benchmarków i sampli mogą mieć zależności (xUnit, BenchmarkDotNet).
-- **Bez słowa kluczowego `unsafe`:**
-  - Używamy `Span<T>`, `ref`, `Unsafe.Add`, `MemoryMarshal`.
-  - Wyjątek: przypięcie pamięci dla `BitmapData.Scan0` przez `GCHandle`.
-- **Publiczne API tylko w namespace `RasterSharp`.** Kodeki i implementacja są `internal`.
-- **Alfa prosta.** Piksele w `Image`/`ImageFrame` to `Rgba32` z alfą niepremultiplikowaną.
-- **Wyjątki:**
-  - Uszkodzone lub nierozpoznane dane rzucają `ImageFormatException`.
-  - Poprawne dane z nieobsługiwaną funkcją rzucają `NotSupportedException`.
-  - Dekodery nigdy nie mogą wypuścić `IndexOutOfRangeException` itp. dla złośliwego wejścia.
-  - Zawsze sprawdzamy limity (`DecoderOptions.MaxPixels`).
+## Code and layout
 
-## Portowanie z libwebp
+Follow `.editorconfig`. Enable nullable annotations, `TreatWarningsAsErrors` and XML documentation for public API (`GenerateDocumentationFile`). Use English for identifiers, comments and XML docs; project documents may use Polish.
 
-- **Referencja dla nowych portów:** libwebp **v1.6.0** w `reference/libwebp-1.6.0/` (tylko do odczytu, poza buildem, w `.gitignore`). Narzędzia wyroczni budujemy oddzielnie:
-  ```bash
-  ./scripts/build-webp-reference.sh
-  ```
-  Skrypt pobiera tag v1.6.0, sprawdza commit i buduje `cwebp`/`dwebp`/`webpmux`/`img2webp` (a z nagłówkami giflib, `libgif-dev`, także `gif2webp`/`anim_dump`/`anim_diff`) w `reference/libwebp-1.6.0-build/`. Testy i skrypty korpusu wybierają tę lokalną wersję; `RASTERSHARP_WEBP_TOOLS` pozwala wskazać inny katalog. Systemowe narzędzia 1.3.2 pozostają bez zmian.
-  Dekodery faz 1–3 portowano pierwotnie z 1.3.2; ich korpus sprawdzono także z 1.6.0. Stary katalog `reference/libwebp/` zachowujemy do porównań historycznych.
-- **Sposób portowania:**
-  - Portujemy funkcja po funkcji.
-  - Nad każdą funkcją piszemy komentarz źródła, np. `// port: src/dec/vp8_dec.c GetCoeffsFast`.
-  - Nazwy w miarę możliwości odpowiadają oryginałom (w PascalCase).
-- **Kolejność:**
-  - Najpierw wersja skalarna z referencyjnych plików `src/dsp/*.c`.
-  - SIMD (`Vector128`/`Vector256`) dodajemy dopiero później.
-  - Wynik SIMD musi być identyczny ze skalarnym i mieć na to test.
-- **Semantyka C, której trzeba pilnować:**
-  - promocja do `int`,
-  - `clip_8b` zamiast rzutowania `(uint8_t)`,
-  - przesunięcia arytmetyczne,
-  - mieszanie `uint`/`int`,
-  - przepełnienia.
-  - Enkoder VP8L używa kosztów stałoprzecinkowych (23 bity ułamkowe) zgodnie z 1.6.0.
-  - Tam, gdzie źródło używa `float`, obliczenia zostają w `float`, z tą samą kolejnością operacji. Od tego zależy bit-exactness enkodera względem `cwebp`.
-- **Tabele stałych** zapisujemy jako `static ReadOnlySpan<T> Name => [ ... ];`.
-- **Licencja:** projekt jest na licencji MIT. Licencje źródeł portowanych (libwebp BSD-3, libjpeg-turbo IJG/BSD, zlib) wymagają zachowania ich not copyright, dlatego utrzymuj `THIRD-PARTY-NOTICES.txt` (jest pakowany do NuGet razem z `LICENSE`).
+- Keep types focused. Use SOLID and Clean Code where they simplify the design: small interfaces at real boundaries and shared configuration. Add interfaces, factories or layers only for a concrete need.
+- Match filenames to the main type. Give public enums separate files; name partial files `Type.Responsibility.cs`. Small, closely related internal port types may share a file.
+- Put format options, enums and extensions in `Formats/<Format>/`, processing contexts and options in `Processing/`, and I/O helpers in `Internal/`. Public types still use the `RasterSharp` namespace.
+- Separate SIMD methods into partial files such as `Type.Simd.cs` or `Type.Responsibility.X86.cs` (and ARM equivalents). Keep core and scalar code readable without intrinsics; short dispatch calls are fine. Keep architecture selection and vector helpers on the SIMD side, without adding indirection in hot loops solely for this separation.
+- Prefer pattern matching, collection expressions, records and `with`, validated properties using `field`, and `extension` blocks when they improve clarity without changing semantics, allocations or port fidelity.
+- Keep hot loops allocation-free. Rent temporary buffers from `ArrayPool<T>.Shared`; allocate image pixels with `GC.AllocateUninitializedArray`. Use `[MethodImpl(MethodImplOptions.AggressiveInlining)]` for short hot-path methods.
+- Write sparse comments that explain why or identify the port source. Declare constant tables as `static ReadOnlySpan<T> Name => [ ... ];`.
 
-## Styl kodu
+| Path | Purpose |
+| --- | --- |
+| `src/RasterSharp/` | Library: `Image`, codecs, compression, processing and internal helpers |
+| `tests/RasterSharp.Tests/` | xUnit tests |
+| `tests/assets/` | Corpus, reference data and generation scripts |
+| `benchmarks/` | BenchmarkDotNet |
+| `docs/` | User guides; examples checked by `DocsExamplesTests` |
+| `samples/RasterSharp.Cli/` | CLI: `convert`, `info`, `resize` |
+| `reference/` | Uncommitted reference sources and tools, outside the build |
 
-- Używamy C# 14 (`LangVersion=14.0`) i .NET 10. Styl edytora określa `.editorconfig`.
-- Stosujemy SOLID i Clean Code tam, gdzie upraszczają kod: jedna odpowiedzialność typu, małe interfejsy dla rzeczywistych granic i wspólne miejsce konfiguracji. Nie dodajemy interfejsów, fabryk ani warstw bez konkretnej potrzeby.
-- Nazwa pliku odpowiada głównemu typowi. Publiczne enumy mają osobne pliki; części typu `partial` nazywamy `Typ.Odpowiedzialność.cs`. Małe, ściśle powiązane typy wewnętrzne portów mogą pozostać razem.
-- Pliki grupujemy według funkcji: opcje, enumy i rozszerzenia formatu w `Formats/<Format>/`, kontekst i opcje przetwarzania w `Processing/`, pomocnicze operacje wejścia/wyjścia w `Internal/`. Publiczne typy nadal należą wyłącznie do namespace `RasterSharp`.
-- Implementacje SIMD wydzielamy do osobnych metod i plików częściowych (`Typ.Simd.cs`, `Typ.Odpowiedzialność.X86.cs`, analogicznie dla ARM). Kod core i wersje skalarne pozostają czytelne bez instrukcji wektorowych; dopuszczalne są krótkie wywołania wybierające ścieżkę SIMD i fallback skalarny. Wybór obsługiwanej architektury, intrinsics i pomocnicze operacje na wektorach grupujemy po stronie SIMD. Nie dodajemy abstrakcji ani wywołań pośrednich w gorących pętlach wyłącznie dla tego podziału.
-- Preferujemy dostępne idiomy C#: pattern matching, wyrażenia kolekcji, rekordy i `with`, `field` w walidowanych właściwościach oraz bloki `extension`. Stosujemy je, gdy poprawiają czytelność i zachowują semantykę, alokacje oraz zgodność portu.
-- Nullable włączone, `TreatWarningsAsErrors`. Publiczne API ma komentarze XML (`GenerateDocumentationFile`).
-- Gorące pętle:
-  - bez alokacji,
-  - bufory tymczasowe z `ArrayPool<T>.Shared`,
-  - piksele obrazu w `GC.AllocateUninitializedArray`.
-- Przy krótkich metodach w gorących ścieżkach stosujemy `[MethodImpl(MethodImplOptions.AggressiveInlining)]`.
-- Komentarze piszemy oszczędnie. Wyjaśniają „dlaczego” albo wskazują źródło portu.
-- Kod piszemy po angielsku (identyfikatory, komentarze, XML docs). Dokumenty projektowe mogą być po polsku.
+Register each format in `Formats/CodecRegistry.cs` with an `IImageFormatDetector`, `IImageDecoder` and `IImageEncoder<TOptions>` plus its options record. `CodecRegistry` selects codecs and lists formats; `ImageCodec` invokes them, normalizes exceptions and applies EXIF orientation. Split large codecs into partial files, for example `PngDecoder.Chunks.cs`.
 
-## Struktura
+## Porting reference code
 
-```
-src/RasterSharp/            biblioteka (Image, konwerter WebP, Formats/, Compression/, Processing/, Internal/)
-tests/RasterSharp.Tests/    xUnit; assets/: generate_corpus.py, make_reference.py, reference.json, corpus/, reference/
-benchmarks/               BenchmarkDotNet
-docs/                     dokumentacja użytkownika (przewodniki; przykłady testuje DocsExamplesTests)
-samples/RasterSharp.Cli/    narzędzie CLI (convert/info/resize)
-reference/libwebp/        źródła referencyjne (niecommitowane)
+Use **libwebp v1.6.0** in `reference/libwebp-1.6.0/` for new ports. Treat the sources as read-only. Build the reference tools separately:
+
+```bash
+./scripts/build-webp-reference.sh
 ```
 
-Nowy format pliku rejestrujemy w jednym miejscu, `Formats/CodecRegistry.cs`:
-- detektor sygnatury (`IImageFormatDetector`),
-- dekoder (`IImageDecoder`),
-- enkoder (`IImageEncoder<TOptions>` z własnym rekordem opcji).
-Duże kodeki dzielimy na pliki `partial class` (np. `PngDecoder.Chunks.cs`).
-`CodecRegistry` wybiera kodeki i udostępnia listę formatów; `ImageCodec` odpowiada za ich wywołanie, normalizację wyjątków i zastosowanie orientacji EXIF.
+The script fetches and verifies the pinned tag/commit, then builds `cwebp`, `dwebp`, `webpmux` and `img2webp` in `reference/libwebp-1.6.0-build/`. With giflib headers (`libgif-dev`), it also builds `gif2webp`, `anim_dump` and `anim_diff`. Tests and corpus scripts prefer these tools; override the directory with `RASTERSHARP_WEBP_TOOLS`. Keep the system 1.3.2 tools and `reference/libwebp/` for historical comparisons. Phase 1–3 decoder ports originated from 1.3.2; their corpus also passes against 1.6.0.
 
-## Build i testy
+- Port function by function. Add a source comment above each port, for example `// port: src/dec/vp8_dec.c GetCoeffsFast`. Preserve source names where practical, using PascalCase.
+- Start with scalar code from `src/dsp/*.c`; add `Vector128`/`Vector256` only afterward. Tests must prove SIMD and scalar results are identical.
+- Preserve C semantics: integer promotions, `clip_8b` rather than a `(uint8_t)` cast, arithmetic shifts, signed/unsigned mixing and overflow behavior.
+- VP8L encoder costs use 23 fractional bits, as in 1.6.0. Keep source `float` calculations in `float` with the same operation order; byte equality with `cwebp` depends on it.
+- Maintain `THIRD-PARTY-NOTICES.txt` for ported sources, including libwebp (BSD-3), libjpeg-turbo (IJG/BSD) and zlib. RasterSharp uses MIT; NuGet must include both `LICENSE` and the notices.
+
+## Build and verification
 
 ```bash
 dotnet build -c Release
 dotnet test -c Release
-dotnet test -c Release --filter Category=Oracle   # porównania z cwebp/dwebp/webpmux, pomijane gdy brak narzędzi
+dotnet test -c Release --filter Category=Oracle
 ```
 
-Zasady testowania:
-- **Korpus testowy:** `tests/assets/corpus/` (syntetyczne źródła + warianty z `cwebp`/`img2webp`/`webpmux`/`convert`/Pillow) jest commitowany. Regeneracja:
+Oracle tests compare with external tools and skip when those tools are missing. Close a phase only when its tests pass and its DoD is met.
+
+- Commit the synthetic corpus in `tests/assets/corpus/`, including variants from `cwebp`, `img2webp`, `webpmux`, ImageMagick and Pillow. Regenerate with:
+
   ```bash
-  python3 -I tests/assets/generate_corpus.py && python3 -I tests/assets/make_reference.py
+  python3 -I tests/assets/generate_corpus.py
+  python3 -I tests/assets/make_reference.py
   ```
-- **Zdjęcia w `samples/*.jpg|webp`** to prywatne pliki użytkownika (EXIF z GPS) – są w `.gitignore`, nie commitujemy ich; służą tylko do lokalnych testów (`Category=Local`) i benchmarków.
-- **Kwantyzacja GIF:** port z Pillow 10.2.0 (źródła C w `reference/pillow-10.2.0/`, tag `10.2.0`); referencje w `gif_quantize_reference.json` regeneruje `python3 -I tests/assets/gif_reference.py`.
-- **Dekodery:** wynik musi być piksel w piksel zgodny z `reference.json`. Hashe SHA-256 RGBA wylicza `make_reference.py` z `dwebp -pam` i Pillow; uruchamiaj go przez `python3 -I`.
-- **Enkoder lossless:** round-trip musi dać identyczne piksele.
-- **Enkoder lossy:** celujemy w bajty identyczne z `cwebp` 1.6.0. Kryterium zastępcze to parytet PSNR i rozmiaru (patrz DoD w [plan.md](plan.md)).
-- **Pobieranie zewnętrznych korpusów** (`fetch-external.sh`: libwebp-test-data, PngSuite, Kodak, BMP Suite) wymaga zgody użytkownika.
-- Fazę zamykamy dopiero, gdy jej testy przechodzą i spełnione jest DoD.
 
-## Git
+- Decoder pixels must match `reference.json` exactly. `make_reference.py` records SHA-256 hashes of RGBA from `dwebp -pam` and Pillow; run it with `python3 -I`.
+- Lossless encoding must round-trip with identical pixels. Lossy encoding targets identical bytes to `cwebp` 1.6.0; fallback PSNR and size criteria are in [plan.md](plan.md).
+- GIF quantization follows Pillow 10.2.0, with C sources in `reference/pillow-10.2.0/` (tag `10.2.0`). Regenerate `gif_quantize_reference.json` with `python3 -I tests/assets/gif_reference.py`.
+- Private photos in `samples/*.jpg` and `samples/*.webp` may contain EXIF GPS data. Keep them ignored and uncommitted; use them only for `Category=Local` tests and local benchmarks.
+- Obtain user approval before downloading external corpora through `fetch-external.sh` (libwebp-test-data, PngSuite, Kodak and BMP Suite).
 
-- Commitujemy i pushujemy tylko na wyraźne polecenie użytkownika.
-- Wersja biblioteki jest w pliku `VERSION` (SemVer). `Directory.Build.props` wczytuje ją do `Version` wszystkich projektów.
-- Nie commitujemy `reference/`, `tests/assets/external/`, `bin/` ani `obj/`.
+## Git and versioning
+
+- Commit and push only when the user explicitly asks.
+- `VERSION` contains the SemVer version; `Directory.Build.props` applies it to all projects.
+- Never commit `progres.md`, `reference/`, `tests/assets/external/`, `bin/` or `obj/`.
