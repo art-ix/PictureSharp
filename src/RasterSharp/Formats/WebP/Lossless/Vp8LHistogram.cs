@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -11,16 +12,70 @@ internal struct Vp8LChannelCosts
     private long _element;
 }
 
+/// <summary>Symbols of single-symbol channels (-1 empty, -2 several symbols).</summary>
+[InlineArray(5)]
+internal struct Vp8LChannelSymbols
+{
+    private int _element;
+}
+
+// Counts of all five channels (literal/length/cache, red, blue, alpha, distance) live in one buffer,
+// either owned or a slice of a pooled Vp8LHistogramSet slab (like libwebp's VP8LHistogramSet).
 internal sealed partial class Vp8LHistogram
 {
     private static readonly uint[] Zeros = new uint[280 + (1 << 11)];
-    public uint[][] Counts { get; }
-    private readonly long[] _channelCosts = new long[5];
-    private readonly int[] _symbols = new int[5];
+    private uint[] _buffer;
+    private int _offset;
+    private int _literalLength;
+    private Vp8LChannelCosts _channelCosts;
+    private Vp8LChannelSymbols _symbols;
     private long _clusterCost;
     private bool _analyzed;
-    public long[] ChannelCosts { get { Analyze(); return _channelCosts; } }
-    public int[] Symbols { get { Analyze(); return _symbols; } }
+
+    public Vp8LHistogram(int cacheBits)
+    {
+        _buffer = new uint[Size(cacheBits)];
+        _literalLength = LiteralLength(cacheBits);
+    }
+
+    private Vp8LHistogram(int cacheBits, uint[] buffer, int offset) => Reset(cacheBits, buffer, offset);
+
+    // A cleared histogram over buffer[offset..]; Vp8LHistogramSet rebinds pooled objects this way.
+    internal static Vp8LHistogram Bind(Vp8LHistogram? reused, int cacheBits, uint[] buffer, int offset)
+    {
+        if (reused is null) return new Vp8LHistogram(cacheBits, buffer, offset);
+        reused.Reset(cacheBits, buffer, offset);
+        return reused;
+    }
+
+    [MemberNotNull(nameof(_buffer))]
+    private void Reset(int cacheBits, uint[] buffer, int offset)
+    {
+        _buffer = buffer;
+        _offset = offset;
+        _literalLength = LiteralLength(cacheBits);
+        _analyzed = false;
+        buffer.AsSpan(offset, Size(cacheBits)).Clear();
+    }
+
+    // Drops the slab reference so that a pooled object does not keep a trimmed slab alive.
+    internal void Release()
+    {
+        _buffer = [];
+        _offset = 0;
+        _literalLength = 0;
+    }
+
+    private static int LiteralLength(int cacheBits) => 280 + (cacheBits == 0 ? 0 : 1 << cacheBits);
+
+    public static int Size(int cacheBits) => LiteralLength(cacheBits) + 3 * 256 + 40;
+
+    public Span<uint> Counts(int channel) => channel == 0
+        ? _buffer.AsSpan(_offset, _literalLength)
+        : _buffer.AsSpan(_offset + _literalLength + (channel - 1) * 256, channel == 4 ? 40 : 256);
+
+    public long ChannelCost(int channel) { Analyze(); return _channelCosts[channel]; }
+    public int Symbol(int channel) { Analyze(); return _symbols[channel]; }
     public long ClusterCost { get { Analyze(); return _clusterCost; } }
 
     private void Analyze()
@@ -30,15 +85,15 @@ internal sealed partial class Vp8LHistogram
         _clusterCost = 0;
         for (int c = 0; c < 5; c++)
         {
-            _channelCosts[c] = PopulationCost(Counts[c]);
+            Span<uint> counts = Counts(c);
+            _channelCosts[c] = PopulationCost(counts);
             _clusterCost += _channelCosts[c];
             int symbol = -1;
-            for (int i = 0; i < Counts[c].Length; i++)
-                if (Counts[c][i] != 0) { if (symbol >= 0) { symbol = -2; break; } symbol = i; }
+            for (int i = 0; i < counts.Length; i++)
+                if (counts[i] != 0) { if (symbol >= 0) { symbol = -2; break; } symbol = i; }
             _symbols[c] = symbol;
         }
     }
-    public Vp8LHistogram(int cacheBits) => Counts = [new uint[280 + (cacheBits == 0 ? 0 : 1 << cacheBits)], new uint[256], new uint[256], new uint[256], new uint[40]];
 
     // port: src/enc/histogram_enc.c HistogramAddSinglePixOrCopy
     // Distances are mapped to plane codes unless the references still hold raw distances for estimation.
@@ -47,22 +102,24 @@ internal sealed partial class Vp8LHistogram
         _analyzed = false;
         if (token.Kind == 0)
         {
-            Counts[0][(token.Value >> 8) & 255]++; Counts[1][(token.Value >> 16) & 255]++;
-            Counts[2][token.Value & 255]++; Counts[3][token.Value >> 24]++;
+            Span<uint> counts = _buffer.AsSpan(_offset);
+            int red = _literalLength, blue = red + 256, alpha = blue + 256;
+            counts[(int)((token.Value >> 8) & 255)]++; counts[red + (int)((token.Value >> 16) & 255)]++;
+            counts[blue + (int)(token.Value & 255)]++; counts[alpha + (int)(token.Value >> 24)]++;
         }
-        else if (token.Kind == 2) Counts[0][280 + token.Value]++;
+        else if (token.Kind == 2) Counts(0)[280 + (int)token.Value]++;
         else
         {
-            Counts[0][256 + Vp8LBackwardRefs.Prefix(token.Length).Code]++;
+            Counts(0)[256 + Vp8LBackwardRefs.Prefix(token.Length).Code]++;
             int distance = planeCodes ? Vp8LBackwardRefs.PlaneCode(width, (int)token.Value) : (int)token.Value;
-            Counts[4][Vp8LBackwardRefs.Prefix(distance).Code]++;
+            Counts(4)[Vp8LBackwardRefs.Prefix(distance).Code]++;
         }
     }
 
     public void Add(Vp8LHistogram other)
     {
         _analyzed = false;
-        for (int c = 0; c < 5; c++) AddCounts(Counts[c], other.Counts[c]);
+        for (int c = 0; c < 5; c++) AddCounts(Counts(c), other.Counts(c));
     }
 
     // port: src/enc/histogram_enc.c HistogramAdd, UpdateHistogramCost
@@ -74,7 +131,7 @@ internal sealed partial class Vp8LHistogram
         _clusterCost = 0;
         for (int c = 0; c < 5; c++)
         {
-            AddCounts(Counts[c], other.Counts[c]);
+            AddCounts(Counts(c), other.Counts(c));
             int a = _symbols[c], b = other._symbols[c];
             _symbols[c] = a == -1 ? b : b == -1 || a == b ? a : -2;
             _channelCosts[c] = costs[c];
@@ -93,12 +150,13 @@ internal sealed partial class Vp8LHistogram
         var result = new long[5][];
         for (int c = 0; c < 5; c++)
         {
-            result[c] = new long[Counts[c].Length];
+            Span<uint> counts = Counts(c);
+            result[c] = new long[counts.Length];
             uint sum = 0; int nonzero = 0;
-            foreach (uint count in Counts[c]) { sum += count; if (count != 0) nonzero++; }
+            foreach (uint count in counts) { sum += count; if (count != 0) nonzero++; }
             if (nonzero <= 1) continue;
             long log = Vp8LEntropy.Log(sum);
-            for (int i = 0; i < Counts[c].Length; i++) result[c][i] = log - Vp8LEntropy.Log(Counts[c][i]);
+            for (int i = 0; i < counts.Length; i++) result[c][i] = log - Vp8LEntropy.Log(counts[i]);
         }
         return result;
     }
@@ -192,15 +250,16 @@ internal sealed partial class Vp8LHistogram
     public long Estimate()
     {
         long bits = 0;
-        foreach (uint[] counts in Counts) bits += PopulationCost(counts);
+        for (int c = 0; c < 5; c++) bits += PopulationCost(Counts(c));
         return bits + ExtraCost();
     }
 
     public long ExtraCost()
     {
         long bits = 0;
-        for (int i = 4; i < 24; i++) bits += Counts[0][256 + i] * ((i - 2) >> 1);
-        for (int i = 4; i < 40; i++) bits += Counts[4][i] * ((i - 2) >> 1);
+        Span<uint> literal = Counts(0), distance = Counts(4);
+        for (int i = 4; i < 24; i++) bits += literal[256 + i] * ((i - 2) >> 1);
+        for (int i = 4; i < 40; i++) bits += distance[i] * ((i - 2) >> 1);
         return bits * Vp8LEntropy.One;
     }
 
@@ -224,7 +283,7 @@ internal sealed partial class Vp8LHistogram
             int a = _symbols[c], b = other._symbols[c];
             long channel = a == -1 ? other._channelCosts[c]
                 : b == -1 || (a >= 0 && a == b) ? _channelCosts[c]
-                : PopulationCost(Counts[c], other.Counts[c]);
+                : PopulationCost(Counts(c), other.Counts(c));
             costs[c] = channel;
             cost += channel;
             if (cost >= threshold) return false;
@@ -232,5 +291,10 @@ internal sealed partial class Vp8LHistogram
         return true;
     }
 
-    public Vp8LHuffmanEncoder[] Codes() => Counts.Select(c => new Vp8LHuffmanEncoder(c)).ToArray();
+    public Vp8LHuffmanEncoder[] Codes()
+    {
+        var codes = new Vp8LHuffmanEncoder[5];
+        for (int c = 0; c < 5; c++) codes[c] = new Vp8LHuffmanEncoder(Counts(c));
+        return codes;
+    }
 }

@@ -37,11 +37,15 @@ internal static class AlphaEncoder
     // port: src/enc/alpha_enc.c EncodeLossless
     private static byte[] EncodeLossless(ReadOnlySpan<byte> alpha, int width, int height, int method, bool fullQuality)
     {
-        using var image = new Image(width, height);
-        Span<Rgba32> pixels = image.GetPixelSpan();
-        for (int i = 0; i < pixels.Length; i++) pixels[i] = new Rgba32(0, alpha[i], 0, 0);
-        byte[] stream = Vp8LEncoder.Encode(image, new WebPEncoderOptions { Lossless = true, Exact = true, Method = method, Quality = fullQuality && method == 6 ? 100 : 8 * method });
-        return stream[5..];
+        // The alpha values go to the green channel of transparent black pixels (exact, so they stay as they are).
+        uint[] argb = ArrayPool<uint>.Shared.Rent(alpha.Length);
+        try
+        {
+            for (int i = 0; i < alpha.Length; i++) argb[i] = (uint)alpha[i] << 8;
+            var options = new WebPEncoderOptions { Lossless = true, Exact = true, Method = method, Quality = fullQuality && method == 6 ? 100 : 8 * method };
+            return Vp8LEncoder.Encode(argb, width, height, alpha: true, options, header: false);
+        }
+        finally { ArrayPool<uint>.Shared.Return(argb); }
     }
 
     // port: src/dsp/filters.c HorizontalFilter_C, VerticalFilter_C, GradientFilter_C

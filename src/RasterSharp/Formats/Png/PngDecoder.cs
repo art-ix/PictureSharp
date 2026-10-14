@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
@@ -38,11 +39,12 @@ internal sealed partial class PngDecoder : IImageDecoder
     {
         ReadOnlySpan<byte> span = data.Span;
         PngFile png = PngFile.Parse(span, options, metadataOnly: false);
-        options.ValidateDimensions(ImageFormat.Png, png.Width, png.Height);
+        bool animated = png.Animation is { Frames.Count: > 0 } && !options.FirstFrameOnly;
+        options.ValidateFrames(ImageFormat.Png, png.Width, png.Height, animated ? png.Animation!.Frames.Count : 1);
 
         List<ImageFrame> frames;
         int loopCount = 0;
-        if (png.Animation is { } anim && anim.Frames.Count > 0 && !options.FirstFrameOnly)
+        if (animated && png.Animation is { } anim)
         {
             frames = DecodeAnimation(span, png, anim, options.MaxDegreeOfParallelism);
             loopCount = anim.NumPlays;
@@ -93,14 +95,6 @@ internal sealed partial class PngDecoder : IImageDecoder
             total += length - skip;
         }
 
-        var compressed = new byte[total];
-        int pos = 0;
-        foreach ((int offset, int length) in parts)
-        {
-            file.Slice(offset + skip, length - skip).CopyTo(compressed.AsSpan(pos));
-            pos += length - skip;
-        }
-
         int bpp = PngConstants.Channels(png.Color) * png.BitDepth;
         long expected = 0;
         if (png.Interlaced)
@@ -125,16 +119,35 @@ internal sealed partial class PngDecoder : IImageDecoder
             throw Error("Image is too large.");
         }
 
-        var rowConverter = new RowConverter(png);
-        if (!png.Interlaced && Parallelism.IsWorthwhile(maxDegreeOfParallelism, expected, PipelineMinimumBytes))
-        {
-            return DecodePipelined(compressed, png, width, height, bpp, (int)expected, rowConverter);
-        }
-
-        byte[] raw;
+        // The compressed bytes live in a pooled buffer until the pixels are converted.
+        byte[] compressed = ArrayPool<byte>.Shared.Rent(total);
         try
         {
-            raw = Inflater.InflateZlib(compressed, 0, compressed.Length, (int)expected, expected + (1 << 20),
+            int pos = 0;
+            foreach ((int offset, int length) in parts)
+            {
+                file.Slice(offset + skip, length - skip).CopyTo(compressed.AsSpan(pos));
+                pos += length - skip;
+            }
+
+            var rowConverter = new RowConverter(png);
+            return !png.Interlaced && Parallelism.IsWorthwhile(maxDegreeOfParallelism, expected, PipelineMinimumBytes)
+                ? DecodePipelined(compressed, total, png, width, height, bpp, (int)expected, rowConverter)
+                : DecodeSequential(compressed, total, png, width, height, bpp, (int)expected, rowConverter);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(compressed);
+        }
+    }
+
+    private static Rgba32[] DecodeSequential(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected,
+        RowConverter rowConverter)
+    {
+        Inflater.PooledOutput inflated;
+        try
+        {
+            inflated = Inflater.InflateZlibPooled(compressed, 0, compressedLength, expected, expected + (1L << 20),
                 verifyChecksum: png.StrictChecksums, stopAtExpectedSize: true);
         }
         catch (InvalidDataStreamException ex)
@@ -142,23 +155,27 @@ internal sealed partial class PngDecoder : IImageDecoder
             throw Error("Corrupt image data: " + ex.Message, ex);
         }
 
-        if (raw.Length < expected)
+        try
         {
-            throw Error("Not enough image data.");
-        }
-
-        var pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
-        if (!png.Interlaced)
-        {
-            Unfilter(raw, 0, width, height, bpp);
-            int rowBytes = (int)PngConstants.RowBytes(width, bpp);
-            for (int y = 0; y < height; y++)
+            if (inflated.Length < expected)
             {
-                rowConverter.Convert(raw.AsSpan((y * (rowBytes + 1)) + 1, rowBytes), pixels.AsSpan(y * width, width));
+                throw Error("Not enough image data.");
             }
-        }
-        else
-        {
+
+            byte[] raw = inflated.Data;
+            var pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
+            if (!png.Interlaced)
+            {
+                Unfilter(raw, 0, width, height, bpp);
+                int rowBytes = (int)PngConstants.RowBytes(width, bpp);
+                for (int y = 0; y < height; y++)
+                {
+                    rowConverter.Convert(raw.AsSpan((y * (rowBytes + 1)) + 1, rowBytes), pixels.AsSpan(y * width, width));
+                }
+
+                return pixels;
+            }
+
             int offset = 0;
             var tmp = new Rgba32[width];
             for (int pass = 0; pass < 7; pass++)
@@ -186,9 +203,13 @@ internal sealed partial class PngDecoder : IImageDecoder
 
                 offset += ph * (rowBytes + 1);
             }
-        }
 
-        return pixels;
+            return pixels;
+        }
+        finally
+        {
+            inflated.Return();
+        }
     }
 
     /// <summary>Reverses the scanline filters in place. Each row is preceded by its filter type byte.</summary>

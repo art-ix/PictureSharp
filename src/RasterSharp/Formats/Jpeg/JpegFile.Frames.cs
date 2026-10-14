@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 
 namespace RasterSharp.Formats.Jpeg;
@@ -83,18 +84,37 @@ internal sealed partial class JpegFile
         JpegFrame frame = Frame!;
         options.ValidateDimensions(ImageFormat.Jpeg, frame.Width, frame.Height);
         JpegColorConverter.Validate(frame);
+        // The planes and coefficients only live until the color conversion (ReturnBuffers).
         foreach (JpegComponent c in frame.Components)
         {
-            long blocks = (long)c.BlocksPerLine * c.BlocksPerColumn;
-            c.Plane = GC.AllocateUninitializedArray<byte>(checked((int)(blocks * 64)));
+            int size = checked((int)((long)c.BlocksPerLine * c.BlocksPerColumn * 64));
+            c.Plane = ArrayPool<byte>.Shared.Rent(size);
+            // Blocks never decoded (truncated data, or a progressive component without scans) come out mid-gray,
+            // as libjpeg's zeroed blocks do.
+            c.Plane.AsSpan(0, size).Fill(128);
             if (frame.Progressive)
             {
-                c.Coefficients = new short[checked((int)(blocks * 64))];
+                c.Coefficients = ArrayPool<short>.Shared.Rent(size);
+                c.Coefficients.AsSpan(0, size).Clear();
             }
-            else
+        }
+    }
+
+    /// <summary>Gives the rented planes and coefficients back once the pixels are converted.</summary>
+    public void ReturnBuffers()
+    {
+        foreach (JpegComponent c in Frame?.Components ?? [])
+        {
+            if (c.Plane is { Length: > 0 } plane)
             {
-                // Blocks never decoded (truncated data) come out mid-gray, as libjpeg's zeroed blocks do.
-                c.Plane.AsSpan().Fill(128);
+                ArrayPool<byte>.Shared.Return(plane);
+                c.Plane = [];
+            }
+
+            if (c.Coefficients is { } coefficients)
+            {
+                ArrayPool<short>.Shared.Return(coefficients);
+                c.Coefficients = null;
             }
         }
     }

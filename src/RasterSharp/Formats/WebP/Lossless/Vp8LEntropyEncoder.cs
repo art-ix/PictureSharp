@@ -51,8 +51,9 @@ internal static class Vp8LEntropyEncoder
         int maxDegreeOfParallelism)
     {
         var writer = new Vp8LBitWriter();
-        var (groups, symbols) = Vp8LHistogramCluster.Build(refs, width, height, histoBits, cacheBits, quality, lowEffort, maxDegreeOfParallelism);
-        Vp8LHuffmanEncoder[][] codes = groups.Select(static h => h.Codes()).ToArray();
+        var (set, groups, symbols) = Vp8LHistogramCluster.Build(refs, width, height, histoBits, cacheBits, quality, lowEffort, maxDegreeOfParallelism);
+        Vp8LHuffmanEncoder[][] codes;
+        using (set) codes = groups.Select(static h => h.Codes()).ToArray();
         if (cacheBits > 0) { writer.Put(1, 1); writer.Put(cacheBits, 4); }
         else writer.Put(0, 1);
         int imageSize = 0;
@@ -252,17 +253,18 @@ internal static class Vp8LEntropyEncoder
             for (int i = 0; i <= cacheBitsMax; i++)
             {
                 var histogram = new Vp8LHistogram(i);
-                uint[][] counts = histogram.Counts;
+                Span<uint> literal = histogram.Counts(0), red = histogram.Counts(1);
+                Span<uint> blue = histogram.Counts(2), alpha = histogram.Counts(3);
                 for (int v = 0; v < 256; v++)
                 {
                     int offset = i * 1024 + v;
-                    counts[0][v] = literals[v] - hitLiterals[offset];
-                    counts[1][v] = literals[256 + v] - hitLiterals[offset + 256];
-                    counts[2][v] = literals[512 + v] - hitLiterals[offset + 512];
-                    counts[3][v] = literals[768 + v] - hitLiterals[offset + 768];
+                    literal[v] = literals[v] - hitLiterals[offset];
+                    red[v] = literals[256 + v] - hitLiterals[offset + 256];
+                    blue[v] = literals[512 + v] - hitLiterals[offset + 512];
+                    alpha[v] = literals[768 + v] - hitLiterals[offset + 768];
                 }
-                lengths.CopyTo(counts[0].AsSpan(256));
-                if (i > 0) hits.Slice(1 << i, 1 << i).CopyTo(counts[0].AsSpan(280));
+                lengths.CopyTo(literal[256..]);
+                if (i > 0) hits.Slice(1 << i, 1 << i).CopyTo(literal[280..]);
                 long entropy = histogram.Estimate();
                 if (i == 0 || entropy < minimum) { minimum = entropy; best = i; }
             }

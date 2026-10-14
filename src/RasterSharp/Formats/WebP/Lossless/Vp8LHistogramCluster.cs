@@ -7,23 +7,26 @@ internal static class Vp8LHistogramCluster
     // port: src/enc/histogram_enc.c VP8LGetHistoImageSymbols (libwebp 1.6.0)
     private const int NumPartitions = 4, BinSize = NumPartitions * NumPartitions * NumPartitions, MaxHistoGreedy = 100;
 
-    public static (Vp8LHistogram[] Groups, int[] Symbols) Build(Vp8LRefs refs, int width, int height, int bits, int cacheBits, int quality, bool lowEffort,
-        int maxDegreeOfParallelism = 1)
+    // The returned groups live in the returned set, which the caller disposes after use.
+    public static (Vp8LHistogramSet Set, Vp8LHistogram[] Groups, int[] Symbols) Build(Vp8LRefs refs, int width, int height, int bits, int cacheBits,
+        int quality, bool lowEffort, int maxDegreeOfParallelism = 1)
     {
         int tw = Vp8LDecoder.SubSampleSize(width, bits), th = Vp8LDecoder.SubSampleSize(height, bits), count = tw * th;
         var originals = new Vp8LHistogram?[count];
+        using var originalSet = new Vp8LHistogramSet(count, cacheBits);
         int pos = 0;
         foreach (Vp8LToken token in refs.Tokens)
         {
             int tile = ((pos / width) >> bits) * tw + ((pos % width) >> bits);
-            (originals[tile] ??= new Vp8LHistogram(cacheBits)).Add(token, width);
+            (originals[tile] ??= originalSet.Create()).Add(token, width);
             pos += token.Length;
         }
+        using var groupSet = new Vp8LHistogramSet(count, cacheBits);
         var groups = new List<Vp8LHistogram>();
         foreach (Vp8LHistogram? h in originals)
         {
             if (h is null) continue;
-            var copy = new Vp8LHistogram(cacheBits); copy.Add(h); groups.Add(copy);
+            Vp8LHistogram copy = groupSet.Create(); copy.Add(h); groups.Add(copy);
         }
         // The bin heuristic is skipped for few histograms (sparse bins) and at q == 100 (to keep the gains).
         bool entropyCombine = groups.Count > (lowEffort ? NumPartitions : BinSize) * 2 && quality < 100;
@@ -44,10 +47,11 @@ internal static class Vp8LHistogramCluster
             for (int i = 0; i < count; i++) Remap(i);
         // Empty tiles take the previous symbol.
         for (int i = 0; i < count; i++) if (originals[i] is null) map[i] = i > 0 ? map[i - 1] : 0;
+        var rebuiltSet = new Vp8LHistogramSet(groups.Count, cacheBits);
         var rebuilt = new Vp8LHistogram[groups.Count];
-        for (int i = 0; i < rebuilt.Length; i++) rebuilt[i] = new Vp8LHistogram(cacheBits);
+        for (int i = 0; i < rebuilt.Length; i++) rebuilt[i] = rebuiltSet.Create();
         for (int i = 0; i < count; i++) if (originals[i] is { } h) rebuilt[map[i]].Add(h);
-        return (rebuilt, map);
+        return (rebuiltSet, rebuilt, map);
 
         void Remap(int i)
         {
@@ -71,14 +75,14 @@ internal static class Vp8LHistogramCluster
     {
         long[] min = [long.MaxValue, long.MaxValue, long.MaxValue], max = new long[3];
         foreach (Vp8LHistogram h in groups)
-            for (int c = 0; c < 3; c++) { min[c] = Math.Min(min[c], h.ChannelCosts[c]); max[c] = Math.Max(max[c], h.ChannelCosts[c]); }
+            for (int c = 0; c < 3; c++) { min[c] = Math.Min(min[c], h.ChannelCost(c)); max[c] = Math.Max(max[c], h.ChannelCost(c)); }
         var bins = new List<int>(groups.Count);
         foreach (Vp8LHistogram h in groups)
         {
             // Literal, red and blue are the dominant costs; low effort bins on the literal cost only.
             int bin = 0;
             for (int c = 0; c < (lowEffort ? 1 : 3); c++)
-                bin = bin * NumPartitions + (max[c] == min[c] ? 0 : (int)((NumPartitions - 1e-6) * (ulong)(h.ChannelCosts[c] - min[c]) / (ulong)(max[c] - min[c])));
+                bin = bin * NumPartitions + (max[c] == min[c] ? 0 : (int)((NumPartitions - 1e-6) * (ulong)(h.ChannelCost(c) - min[c]) / (ulong)(max[c] - min[c])));
             bins.Add(bin);
         }
         if (lowEffort)
@@ -111,9 +115,9 @@ internal static class Vp8LHistogramCluster
             if (groups[a].TryCombinedCost(groups[i], threshold, ref costs, out _))
             {
                 bool trivial = true;
-                for (int c = 1; c <= 3; c++) trivial &= groups[a].Symbols[c] >= 0 && groups[a].Symbols[c] == groups[i].Symbols[c];
+                for (int c = 1; c <= 3; c++) trivial &= groups[a].Symbol(c) >= 0 && groups[a].Symbol(c) == groups[i].Symbol(c);
                 bool nontrivialA = false, nontrivialB = false;
-                for (int c = 1; c <= 3; c++) { nontrivialA |= groups[a].Symbols[c] < 0; nontrivialB |= groups[i].Symbols[c] < 0; }
+                for (int c = 1; c <= 3; c++) { nontrivialA |= groups[a].Symbol(c) < 0; nontrivialB |= groups[i].Symbol(c) < 0; }
                 if (trivial || (nontrivialA && nontrivialB) || failures[bin] >= 32)
                 {
                     Merge(groups, a, i, costs); bins[i] = bins[^1]; bins.RemoveAt(bins.Count - 1); continue;

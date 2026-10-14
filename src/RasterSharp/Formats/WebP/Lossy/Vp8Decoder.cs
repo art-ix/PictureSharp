@@ -1,3 +1,4 @@
+using System.Buffers;
 using RasterSharp.Internal;
 using static RasterSharp.Formats.WebP.Lossy.Vp8Dsp;
 
@@ -13,6 +14,14 @@ internal sealed class Vp8Frame
     public required byte[] V { get; init; }
     public required int YStride { get; init; }
     public required int UvStride { get; init; }
+
+    /// <summary>Gives the planes, rented from the shared pool, back once the frame is converted.</summary>
+    public void Return()
+    {
+        ArrayPool<byte>.Shared.Return(Y);
+        ArrayPool<byte>.Shared.Return(U);
+        ArrayPool<byte>.Shared.Return(V);
+    }
 }
 
 /// <summary>Decoder for VP8 key frames (the WebP lossy bitstream).</summary>
@@ -514,9 +523,14 @@ internal sealed class Vp8Decoder
         _topV = new byte[8 * _mbW];
         _yStride = 16 * _mbW;
         _uvStride = 8 * _mbW;
-        _planeY = new byte[checked(_yStride * 16 * _mbH)];
-        _planeU = new byte[checked(_uvStride * 8 * _mbH)];
-        _planeV = new byte[_planeU.Length];
+        // The planes only live until the conversion to RGBA (Vp8Frame.Return); cleared like fresh arrays.
+        int ySize = checked(_yStride * 16 * _mbH), uvSize = checked(_uvStride * 8 * _mbH);
+        _planeY = ArrayPool<byte>.Shared.Rent(ySize);
+        _planeU = ArrayPool<byte>.Shared.Rent(uvSize);
+        _planeV = ArrayPool<byte>.Shared.Rent(uvSize);
+        _planeY.AsSpan(0, ySize).Clear();
+        _planeU.AsSpan(0, uvSize).Clear();
+        _planeV.AsSpan(0, uvSize).Clear();
         InitScanline();
     }
 

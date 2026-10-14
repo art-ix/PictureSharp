@@ -12,7 +12,7 @@ internal sealed partial class PngDecoder
     /// Inflates on this thread while another one unfilters and converts each row as soon as it is complete.
     /// The rows are processed in order, exactly as in the sequential path.
     /// </summary>
-    private static Rgba32[] DecodePipelined(byte[] compressed, PngFile png, int width, int height, int bpp, int expected, RowConverter rowConverter)
+    private static Rgba32[] DecodePipelined(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected, RowConverter rowConverter)
     {
         int rowBytes = (int)PngConstants.RowBytes(width, bpp);
         int stride = rowBytes + 1;
@@ -48,10 +48,10 @@ internal sealed partial class PngDecoder
             }
         });
 
-        byte[] raw;
+        Inflater.PooledOutput inflated;
         try
         {
-            raw = Inflater.InflateZlib(compressed, 0, compressed.Length, expected, expected + (1L << 20),
+            inflated = Inflater.InflateZlibPooled(compressed, 0, compressedLength, expected, expected + (1L << 20),
                 verifyChecksum: png.StrictChecksums, stopAtExpectedSize: true, progress: (output, produced) =>
                 {
                     Volatile.Write(ref current, output);
@@ -71,17 +71,26 @@ internal sealed partial class PngDecoder
             throw;
         }
 
-        if (raw.Length < expected)
+        // The converter may read the rented output until it finishes, so it is returned only after the wait.
+        try
         {
-            gate.Abort();
-            Wait(converter, rethrow: false);
-            throw Error("Not enough image data.");
-        }
+            if (inflated.Length < expected)
+            {
+                gate.Abort();
+                Wait(converter, rethrow: false);
+                throw Error("Not enough image data.");
+            }
 
-        Volatile.Write(ref current, raw);
-        gate.Publish(height);
-        Wait(converter, rethrow: true);
-        return pixels;
+            Volatile.Write(ref current, inflated.Data);
+            gate.Publish(height);
+            Wait(converter, rethrow: true);
+            return pixels;
+        }
+        finally
+        {
+            Wait(converter, rethrow: false);
+            inflated.Return();
+        }
     }
 
     private static void Wait(Task task, bool rethrow)

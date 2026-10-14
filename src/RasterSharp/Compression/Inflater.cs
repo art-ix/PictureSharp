@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -43,16 +44,21 @@ internal sealed class Inflater
     private int _bitCount;
 
     private byte[] _output;
+    // The logical size of _output; a rented buffer may be longer, which must not change any decision.
+    private int _capacity;
+    private readonly byte[]? _rented;
     private int _outputPos;
     private readonly long _maxOutput;
     private Action<byte[], int>? _progress;
 
-    private Inflater(byte[] input, int offset, int length, int expectedSize, long maxOutput)
+    private Inflater(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool pooled = false)
     {
         _input = input;
         _inputPos = offset;
         _inputEnd = offset + length;
-        _output = GC.AllocateUninitializedArray<byte>(Math.Max(expectedSize, 64));
+        _capacity = Math.Max(expectedSize, 64);
+        _output = pooled ? ArrayPool<byte>.Shared.Rent(_capacity) : GC.AllocateUninitializedArray<byte>(_capacity);
+        _rented = pooled ? _output : null;
         _maxOutput = maxOutput;
     }
 
@@ -71,6 +77,37 @@ internal sealed class Inflater
     public static byte[] InflateZlib(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool verifyChecksum = true,
         bool stopAtExpectedSize = false, Action<byte[], int>? progress = null)
     {
+        Inflater inflater = RunZlib(input, offset, length, expectedSize, maxOutput, verifyChecksum, stopAtExpectedSize, progress, pooled: false);
+        return inflater.TakeOutput();
+    }
+
+    /// <summary>
+    /// Like <see cref="InflateZlib"/>, but the output starts in a buffer rented from the shared pool: read
+    /// <see cref="PooledOutput.Data"/>[..<see cref="PooledOutput.Length"/>], then call <see cref="PooledOutput.Return"/>
+    /// once nothing reads it any more (including <paramref name="progress"/> consumers).
+    /// </summary>
+    public static PooledOutput InflateZlibPooled(byte[] input, int offset, int length, int expectedSize, long maxOutput,
+        bool verifyChecksum = true, bool stopAtExpectedSize = false, Action<byte[], int>? progress = null)
+    {
+        Inflater inflater = RunZlib(input, offset, length, expectedSize, maxOutput, verifyChecksum, stopAtExpectedSize, progress, pooled: true);
+        return new PooledOutput(inflater._output, inflater._outputPos, inflater._rented);
+    }
+
+    /// <summary>Inflated bytes in <see cref="Data"/>[..<see cref="Length"/>]; <see cref="Return"/> gives a rented buffer back.</summary>
+    public readonly record struct PooledOutput(byte[] Data, int Length, byte[]? Rented)
+    {
+        public void Return()
+        {
+            if (Rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(Rented);
+            }
+        }
+    }
+
+    private static Inflater RunZlib(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool verifyChecksum,
+        bool stopAtExpectedSize, Action<byte[], int>? progress, bool pooled)
+    {
         if (length < 2)
         {
             throw new InvalidDataStreamException("zlib stream is too short.");
@@ -88,10 +125,19 @@ internal sealed class Inflater
             throw new InvalidDataStreamException("zlib preset dictionaries are not supported.");
         }
 
-        var inflater = new Inflater(input, offset + 2, length - 2, expectedSize, maxOutput) { _progress = progress };
-        bool complete = inflater.Run(stopAtExpectedSize ? expectedSize : -1);
-        byte[] result = inflater.TakeOutput();
+        var inflater = new Inflater(input, offset + 2, length - 2, expectedSize, maxOutput, pooled) { _progress = progress };
+        bool complete;
+        try
+        {
+            complete = inflater.Run(stopAtExpectedSize ? expectedSize : -1);
+        }
+        catch
+        {
+            inflater.ReturnRented();
+            throw;
+        }
 
+        ReadOnlySpan<byte> result = inflater._output.AsSpan(0, inflater._outputPos);
         if (complete && verifyChecksum)
         {
             inflater.AlignToByte();
@@ -102,12 +148,21 @@ internal sealed class Inflater
                                        (inflater._input[trailer + 2] << 8) | inflater._input[trailer + 3]);
                 if (Adler32.Compute(result) != expected)
                 {
+                    inflater.ReturnRented();
                     throw new InvalidDataStreamException("zlib checksum mismatch.");
                 }
             }
         }
 
-        return result;
+        return inflater;
+    }
+
+    private void ReturnRented()
+    {
+        if (_rented is not null)
+        {
+            ArrayPool<byte>.Shared.Return(_rented);
+        }
     }
 
     /// <summary>Decompresses raw deflate data.</summary>
@@ -278,7 +333,7 @@ internal sealed class Inflater
     private void EnsureCapacity(int extra)
     {
         long needed = (long)_outputPos + extra;
-        if (needed <= _output.Length)
+        if (needed <= _capacity)
         {
             return;
         }
@@ -288,8 +343,12 @@ internal sealed class Inflater
             throw new InvalidDataStreamException("Decompressed data exceeds the allowed size.");
         }
 
-        long newSize = Math.Min(Math.Max(needed, (long)_output.Length * 2), Math.Min(_maxOutput, Array.MaxLength));
-        Array.Resize(ref _output, (int)newSize);
+        long newSize = Math.Min(Math.Max(needed, (long)_capacity * 2), Math.Min(_maxOutput, Array.MaxLength));
+        // A rented buffer is never resized in place: a progress consumer may still read it, so it is returned last.
+        byte[] next = GC.AllocateUninitializedArray<byte>((int)newSize);
+        _output.AsSpan(0, _outputPos).CopyTo(next);
+        _output = next;
+        _capacity = (int)newSize;
     }
 
     // ------------------------------------------------------------------ blocks
@@ -401,7 +460,7 @@ internal sealed class Inflater
         int ip = _inputPos;
         int op = _outputPos;
         int inputLimit = _inputEnd - sizeof(ulong);
-        int outputLimit = output.Length - (258 + sizeof(ulong));
+        int outputLimit = _capacity - (258 + sizeof(ulong));
         if (ip > inputLimit || op > outputLimit)
         {
             return false;

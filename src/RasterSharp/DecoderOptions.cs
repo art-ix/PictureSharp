@@ -8,7 +8,10 @@ public sealed record DecoderOptions
     /// <summary>Default options.</summary>
     public static DecoderOptions Default { get; } = new();
 
-    /// <summary>Maximum number of pixels (width × height) an image may have. Default: 2^28.</summary>
+    /// <summary>
+    /// Maximum number of pixels (width × height) an image may have. For animations the limit covers all decoded frames
+    /// together, because every decoded frame is a full canvas. Default: 2^28.
+    /// </summary>
     public long MaxPixels { get; init => field = Check.AtLeast(value, 1L); } = 1L << 28;
 
     /// <summary>Decode only the first frame of animations.</summary>
@@ -43,6 +46,17 @@ public sealed record DecoderOptions
         {
             throw new ImageFormatException(format,
                 $"Image dimensions {width}x{height} exceed the limit of {MaxPixels} pixels (DecoderOptions.MaxPixels).");
+        }
+    }
+
+    // Every decoded animation frame is a full canvas, however small its encoded region is.
+    internal void ValidateFrames(ImageFormat format, long width, long height, int frameCount)
+    {
+        ValidateDimensions(format, width, height);
+        if (frameCount > 1 && width * height * frameCount > MaxPixels)
+        {
+            throw new ImageFormatException(format,
+                $"{frameCount} frames of {width}x{height} exceed the limit of {MaxPixels} pixels (DecoderOptions.MaxPixels).");
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.Intrinsics.X86;
 using RasterSharp.Formats.WebP.Lossless;
 using RasterSharp.Internal;
@@ -57,6 +58,8 @@ internal static partial class AlphaDecoder
             {
                 alpha[i] = (byte)(argb[i] >> 8);
             }
+
+            ArrayPool<uint>.Shared.Return(argb);
         }
 
         if (filter != AlphaFilterType.None)

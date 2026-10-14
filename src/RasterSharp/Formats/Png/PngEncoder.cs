@@ -118,20 +118,21 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             }
 
             byte[] raw = Serialize(frame, layout, options);
-            byte[] compressed = Deflater.CompressZlib(raw, options.CompressionLevel, options.MaxDegreeOfParallelism);
+            using Deflater deflater = Deflater.CompressZlibPooled(raw, options.CompressionLevel, options.MaxDegreeOfParallelism);
+            ReadOnlySpan<byte> compressed = deflater.Output;
             const int maxChunk = 1 << 20;
             for (int offset = 0; offset < compressed.Length || offset == 0; offset += maxChunk)
             {
                 int len = Math.Min(maxChunk, compressed.Length - offset);
                 if (index == 0)
                 {
-                    writer.Write("IDAT", compressed.AsSpan(offset, len));
+                    writer.Write("IDAT", compressed.Slice(offset, len));
                 }
                 else
                 {
                     var fdat = new byte[len + 4];
                     BinaryPrimitives.WriteUInt32BigEndian(fdat, (uint)sequence++);
-                    compressed.AsSpan(offset, len).CopyTo(fdat.AsSpan(4));
+                    compressed.Slice(offset, len).CopyTo(fdat.AsSpan(4));
                     writer.Write("fdAT", fdat);
                 }
 

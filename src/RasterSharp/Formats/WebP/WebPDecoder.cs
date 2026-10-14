@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
 using RasterSharp.Formats.Metadata;
 using RasterSharp.Formats.WebP.Alpha;
@@ -38,7 +39,8 @@ internal sealed partial class WebPDecoder : IImageDecoder
     public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
         WebPContainer c = WebPContainer.Parse(data.Span);
-        options.ValidateDimensions(ImageFormat.WebP, c.CanvasWidth, c.CanvasHeight);
+        options.ValidateFrames(ImageFormat.WebP, c.CanvasWidth, c.CanvasHeight,
+            c.IsAnimated && !options.FirstFrameOnly ? c.Frames.Count : 1);
 
         Image image;
         if (c.IsAnimated)
@@ -103,16 +105,31 @@ internal sealed partial class WebPDecoder : IImageDecoder
         if (info.IsLossless)
         {
             uint[] argb = Vp8LDecoder.Decode(array, offset + info.Image.Offset, info.Image.Length, out int width, out int height);
-            ImageFrame frame = ImageFrame.CreateUninitialized(width, height);
-            ArgbToRgba(argb, frame.GetPixelSpan());
-            return frame;
+            try
+            {
+                ImageFrame frame = ImageFrame.CreateUninitialized(width, height);
+                ArgbToRgba(argb.AsSpan(0, width * height), frame.GetPixelSpan());
+                return frame;
+            }
+            finally
+            {
+                ArrayPool<uint>.Shared.Return(argb);
+            }
         }
         else
         {
             Vp8Frame yuv = Vp8Decoder.Decode(array, offset + info.Image.Offset, info.Image.Length, options.WebPBypassFiltering, options.MaxDegreeOfParallelism);
             ImageFrame frame = ImageFrame.CreateUninitialized(yuv.Width, yuv.Height);
             Span<Rgba32> pixels = frame.GetPixelSpan();
-            YuvToRgb.Convert(yuv, frame.Pixels, options.WebPFancyUpsampling, options.MaxDegreeOfParallelism);
+            try
+            {
+                YuvToRgb.Convert(yuv, frame.Pixels, options.WebPFancyUpsampling, options.MaxDegreeOfParallelism);
+            }
+            finally
+            {
+                yuv.Return();
+            }
+
             if (!info.Alpha.IsEmpty)
             {
                 byte[] alpha = AlphaDecoder.Decode(array, offset + info.Alpha.Offset, info.Alpha.Length, yuv.Width, yuv.Height);

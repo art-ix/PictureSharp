@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Drawing;
 using RasterSharp.Formats.Metadata;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.Gif;
 
@@ -20,11 +22,11 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         /// <summary>The frame's palette; null for local palettes, which are built when the rectangle is final.</summary>
         public GifFramePalette? Palette { get; set; }
 
-        /// <summary>The canvas after this frame is drawn.</summary>
-        public required Rgba32[] Rendered { get; init; }
+        /// <summary>The canvas after this frame is drawn; null for a still image, which needs no disposal.</summary>
+        public required Rgba32[]? Rendered { get; init; }
 
         /// <summary>The canvas before this frame is drawn (after the previous frame's disposal).</summary>
-        public required Rgba32[] Before { get; init; }
+        public required Rgba32[]? Before { get; init; }
 
         public bool IsFirst { get; init; }
 
@@ -49,29 +51,29 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
 
         // Exact local palettes are tried first; a frame whose drawn pixels need too many colors switches the whole
         // animation to one shared quantized palette.
-        byte[] encoded = TryEncode(image, frames, options, new GifPaletteBuilder(frames, options))
+        using PooledBufferStream encoded = TryEncode(image, frames, options, new GifPaletteBuilder(frames, options))
             ?? TryEncode(image, frames, options, new GifPaletteBuilder(frames, options, forceShared: true))
             ?? throw new InvalidOperationException("GIF palette selection failed.");
-        output.Write(encoded);
+        encoded.WriteTo(output);
     }
 
-    private static byte[]? TryEncode(Image image, IReadOnlyList<ImageFrame> frames, GifEncoderOptions options, GifPaletteBuilder palettes)
+    private static PooledBufferStream? TryEncode(Image image, IReadOnlyList<ImageFrame> frames, GifEncoderOptions options, GifPaletteBuilder palettes)
     {
         int width = image.Width;
         int height = image.Height;
         bool animated = frames.Count > 1;
-        using var stream = new MemoryStream();
+        var stream = new PooledBufferStream();
         var writer = new GifBlockWriter(stream);
 
         GifFramePalette first;
-        Rgba32[] firstRendered;
+        Rgba32[]? firstRendered;
         if (palettes.IsLocal)
         {
             firstRendered = palettes.Binarize(0);
-            GifFramePalette? local = palettes.BuildLocal(firstRendered, new Rgba32[width * height], width, (0, 0, width, height), skipUnchanged: false);
+            GifFramePalette? local = palettes.BuildLocal(firstRendered, null, width, (0, 0, width, height), skipUnchanged: false);
             if (local is null)
             {
-                return null;
+                return Discard(stream);
             }
 
             first = local;
@@ -79,7 +81,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         else
         {
             first = palettes.Build(0);
-            firstRendered = GifPaletteBuilder.Render(first);
+            firstRendered = animated ? GifPaletteBuilder.Render(first) : null;
         }
 
         byte[]? icc = MetadataSelection.Select(image.Metadata.IccProfile, options.Metadata, MetadataKinds.Icc);
@@ -100,7 +102,8 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         {
             Palette = first,
             Rendered = firstRendered,
-            Before = new Rgba32[width * height],
+            // The first frame is drawn on an empty canvas.
+            Before = null,
             IsFirst = true,
             X1 = width,
             Y1 = height,
@@ -133,7 +136,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
 
             if (!WriteFrame(writer, pending, palettes, width, animated, options))
             {
-                return null;
+                return Discard(stream);
             }
 
             pending = new PendingFrame
@@ -151,11 +154,18 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
 
         if (!WriteFrame(writer, pending, palettes, width, animated, options))
         {
-            return null;
+            return Discard(stream);
         }
 
         writer.WriteTrailer();
-        return stream.ToArray();
+        return stream;
+    }
+
+    // A failed attempt gives its segments back to the pool.
+    private static PooledBufferStream? Discard(PooledBufferStream stream)
+    {
+        stream.Dispose();
+        return null;
     }
 
     /// <summary>
@@ -165,7 +175,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
     /// </summary>
     private static Rgba32[] Dispose(PendingFrame pending, Rgba32[] next, int width, int height, bool optimize)
     {
-        Rgba32[] current = pending.Rendered;
+        Rgba32[] current = pending.Rendered!;
         (int x0, int y0, int x1, int y1) = (width, height, 0, 0);
         for (int y = 0; y < height; y++)
         {
@@ -256,7 +266,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
     private static bool WriteFrame(GifBlockWriter writer, PendingFrame frame, GifPaletteBuilder palettes, int canvasWidth, bool animated, GifEncoderOptions options)
     {
         GifFramePalette? palette = frame.Palette
-            ?? palettes.BuildLocal(frame.Rendered, frame.Before, canvasWidth, (frame.X0, frame.Y0, frame.X1, frame.Y1), options.OptimizeFrames);
+            ?? palettes.BuildLocal(frame.Rendered!, frame.Before, canvasWidth, (frame.X0, frame.Y0, frame.X1, frame.Y1), options.OptimizeFrames);
         if (palette is null)
         {
             return false;
@@ -275,23 +285,38 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         bool local = !palette.IsGlobal && !frame.IsFirst;
         writer.WriteImageDescriptor(new Rectangle(frame.X0, frame.Y0, width, height), palette.Colors, local, options.Interlace);
 
-        // Unchanged pixels become transparent, which keeps runs long for LZW.
-        var indices = new byte[width * height];
-        Rgba32[] before = frame.Before;
-        Rgba32[] rendered = frame.Rendered;
-        bool skipUnchanged = transparent >= 0 && options.OptimizeFrames;
-        for (int y = 0; y < height; y++)
+        // On an empty canvas only transparent pixels are unchanged, and those already use the transparent index.
+        Rgba32[]? before = frame.Before;
+        if (before is null && width == canvasWidth && !options.Interlace)
         {
-            int outRow = (options.Interlace ? InterlacedRowAt(height, y) : y) * width;
-            int canvasRow = ((frame.Y0 + y) * canvasWidth) + frame.X0;
-            for (int x = 0; x < width; x++)
-            {
-                int p = canvasRow + x;
-                indices[outRow + x] = skipUnchanged && rendered[p] == before[p] ? (byte)transparent : palette.Indices[p];
-            }
+            writer.WriteImageData(palette.Indices.AsSpan(frame.Y0 * canvasWidth, width * height), palette.Colors.Length);
+            return true;
         }
 
-        writer.WriteImageData(indices, palette.Colors.Length);
+        // Unchanged pixels become transparent, which keeps runs long for LZW.
+        byte[] indices = ArrayPool<byte>.Shared.Rent(width * height);
+        try
+        {
+            Rgba32[]? rendered = frame.Rendered;
+            bool skipUnchanged = before is not null && transparent >= 0 && options.OptimizeFrames;
+            for (int y = 0; y < height; y++)
+            {
+                int outRow = (options.Interlace ? InterlacedRowAt(height, y) : y) * width;
+                int canvasRow = ((frame.Y0 + y) * canvasWidth) + frame.X0;
+                for (int x = 0; x < width; x++)
+                {
+                    int p = canvasRow + x;
+                    indices[outRow + x] = skipUnchanged && rendered![p] == before![p] ? (byte)transparent : palette.Indices[p];
+                }
+            }
+
+            writer.WriteImageData(indices.AsSpan(0, width * height), palette.Colors.Length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(indices);
+        }
+
         return true;
     }
 

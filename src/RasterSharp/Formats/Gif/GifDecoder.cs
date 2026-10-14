@@ -34,17 +34,10 @@ internal sealed class GifDecoder : IImageDecoder
         GifFile gif = GifFile.Parse(span, readMetadata: !options.IgnoreMetadata);
         int width = gif.Width;
         int height = gif.Height;
-        options.ValidateDimensions(ImageFormat.Gif, width, height);
-
         int frameCount = options.FirstFrameOnly ? 1 : gif.Frames.Count;
-        long canvasPixels = (long)width * height;
-        if (canvasPixels * frameCount > options.MaxPixels)
-        {
-            // GIF frames can be tiny while every decoded frame is a full canvas, so the limit covers all frames.
-            throw new ImageFormatException(ImageFormat.Gif,
-                $"{frameCount} frames of {width}x{height} exceed the limit of {options.MaxPixels} pixels (DecoderOptions.MaxPixels).");
-        }
+        options.ValidateFrames(ImageFormat.Gif, width, height, frameCount);
 
+        long canvasPixels = (long)width * height;
         var canvas = new Rgba32[canvasPixels];
         Rgba32[]? beforeFrame = null;
         var frames = new List<ImageFrame>(frameCount);
@@ -58,10 +51,16 @@ internal sealed class GifDecoder : IImageDecoder
             }
 
             DrawFrame(span, gif, frame, canvas);
-            frames.Add(new ImageFrame(width, height, (Rgba32[])canvas.Clone())
+            // The last frame takes the canvas itself; its disposal no longer matters.
+            bool last = index == frameCount - 1;
+            frames.Add(new ImageFrame(width, height, last ? canvas : (Rgba32[])canvas.Clone())
             {
                 Duration = TimeSpan.FromMilliseconds(frame.DelayCentiseconds * 10),
             });
+            if (last)
+            {
+                break;
+            }
 
             // port: examples/gifdec.c GIFDisposeFrame
             if (frame.Disposal != GifDisposal.None && Clip(frame, width, height) is var (x0, y0, x1, y1) && x1 > x0 && y1 > y0)

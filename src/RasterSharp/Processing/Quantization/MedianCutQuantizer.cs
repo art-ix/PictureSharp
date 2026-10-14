@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Numerics;
+
 namespace RasterSharp.Processing.Quantization;
 
 /// <summary>
@@ -453,13 +456,36 @@ internal static class MedianCutQuantizer
             order.CopyTo(sortKey, row);
         }
 
-        var cache = new Dictionary<uint, byte>();
+        // The match depends only on the pixel, so a fixed direct-mapped cache gives the same indices as Pillow's
+        // per-color cache while its memory stays bounded (a collision only recomputes the match).
+        // Sized to the image (2^12–2^20 entries): large photos have millions of colors and recompute misses.
+        int cacheBits = Math.Clamp(BitOperations.Log2((uint)Math.Max(1, pixels.Length)) + 1, 12, 20);
+        int cacheSize = 1 << cacheBits;
+        uint[] cacheKeys = ArrayPool<uint>.Shared.Rent(cacheSize);
+        byte[] cacheValues = ArrayPool<byte>.Shared.Rent(cacheSize);
+        cacheKeys.AsSpan(0, cacheSize).Fill(uint.MaxValue);   // never a 24-bit pixel
+        try
+        {
+            MapPixels(pixels, palette, boxes, indices, distance, sortKey, cacheBits, cacheKeys, cacheValues);
+        }
+        finally
+        {
+            ArrayPool<uint>.Shared.Return(cacheKeys);
+            ArrayPool<byte>.Shared.Return(cacheValues);
+        }
+    }
+
+    private static void MapPixels(ReadOnlySpan<uint> pixels, Rgba32[] palette, QuantHashTable boxes, Span<byte> indices,
+        uint[] distance, int[] sortKey, int cacheBits, uint[] cacheKeys, byte[] cacheValues)
+    {
+        int n = palette.Length;
         for (int i = 0; i < pixels.Length; i++)
         {
             uint pixel = pixels[i] & 0x00FFFFFF;
-            if (cache.TryGetValue(pixel, out byte cached))
+            int slot = (int)((pixel * 2654435761u) >> (32 - cacheBits));
+            if (cacheKeys[slot] == pixel)
             {
-                indices[i] = cached;
+                indices[i] = cacheValues[slot];
                 continue;
             }
 
@@ -491,7 +517,8 @@ internal static class MedianCutQuantizer
             }
 
             indices[i] = (byte)bestMatch;
-            cache[pixel] = (byte)bestMatch;
+            cacheKeys[slot] = pixel;
+            cacheValues[slot] = (byte)bestMatch;
         }
     }
 

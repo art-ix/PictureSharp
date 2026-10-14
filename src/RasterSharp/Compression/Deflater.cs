@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using RasterSharp.Internal;
@@ -10,7 +11,7 @@ namespace RasterSharp.Compression;
 /// block is emitted as stored, fixed-Huffman or dynamic-Huffman, whichever is smallest. Dynamic
 /// code lengths are limited with the Moffat–Katajainen algorithm plus Kraft-sum adjustment.
 /// </remarks>
-internal sealed partial class Deflater
+internal sealed partial class Deflater : IDisposable
 {
     private const int MinMatch = 3;
     private const int MaxMatch = 258;
@@ -82,6 +83,16 @@ internal sealed partial class Deflater
     /// <remarks>The output does not depend on <paramref name="maxDegreeOfParallelism"/>.</remarks>
     public static byte[] CompressZlib(byte[] input, int level, int maxDegreeOfParallelism)
     {
+        using Deflater deflater = CompressZlibPooled(input, level, maxDegreeOfParallelism);
+        return deflater.Output.ToArray();
+    }
+
+    /// <summary>
+    /// Compresses <paramref name="input"/> into a zlib stream kept in a pooled buffer: read <see cref="Output"/>,
+    /// then dispose the returned instance.
+    /// </summary>
+    public static Deflater CompressZlibPooled(byte[] input, int level, int maxDegreeOfParallelism)
+    {
         level = Math.Clamp(level, 0, 9);
         var deflater = new Deflater(input, level, maxDegreeOfParallelism);
 
@@ -100,13 +111,18 @@ internal sealed partial class Deflater
         deflater._out.WriteByte((byte)(adler >> 16));
         deflater._out.WriteByte((byte)(adler >> 8));
         deflater._out.WriteByte((byte)adler);
-        return deflater._out.ToArray();
+        return deflater;
     }
+
+    /// <summary>The compressed bytes of <see cref="CompressZlibPooled"/>.</summary>
+    public ReadOnlySpan<byte> Output => _out.Written;
+
+    public void Dispose() => _out.Dispose();
 
     /// <summary>Compresses <paramref name="data"/> into a raw deflate stream.</summary>
     public static byte[] Compress(ReadOnlySpan<byte> data, int level, int maxDegreeOfParallelism = 1)
     {
-        var deflater = new Deflater(data.ToArray(), Math.Clamp(level, 0, 9), maxDegreeOfParallelism);
+        using var deflater = new Deflater(data.ToArray(), Math.Clamp(level, 0, 9), maxDegreeOfParallelism);
         deflater.Compress();
         return deflater._out.ToArray();
     }
@@ -487,10 +503,10 @@ internal sealed partial class Deflater
         }
     }
 
-    /// <summary>LSB-first bit writer into a growable buffer.</summary>
-    private sealed class BitWriter
+    /// <summary>LSB-first bit writer into a growable pooled buffer.</summary>
+    private sealed class BitWriter : IDisposable
     {
-        private byte[] _buffer = new byte[1 << 16];
+        private byte[] _buffer = ArrayPool<byte>.Shared.Rent(1 << 16);
 
         public int Length;
         public ulong Bits;
@@ -553,10 +569,15 @@ internal sealed partial class Deflater
 
         public void Flush() => AlignToByte();
 
-        public byte[] ToArray()
+        public byte[] ToArray() => Written.ToArray();
+
+        public ReadOnlySpan<byte> Written
         {
-            AlignToByte();
-            return _buffer.AsSpan(0, Length).ToArray();
+            get
+            {
+                AlignToByte();
+                return _buffer.AsSpan(0, Length);
+            }
         }
 
         /// <summary>Ensures room for <paramref name="extra"/> more bytes.</summary>
@@ -564,8 +585,18 @@ internal sealed partial class Deflater
         {
             if (Length + extra > _buffer.Length)
             {
-                Array.Resize(ref _buffer, Math.Max(_buffer.Length * 2, Length + extra));
+                byte[] next = ArrayPool<byte>.Shared.Rent(Math.Max(_buffer.Length * 2, Length + extra));
+                _buffer.AsSpan(0, Length).CopyTo(next);
+                ArrayPool<byte>.Shared.Return(_buffer);
+                _buffer = next;
             }
+        }
+
+        public void Dispose()
+        {
+            if (_buffer.Length == 0) return;
+            ArrayPool<byte>.Shared.Return(_buffer);
+            _buffer = [];
         }
     }
 }

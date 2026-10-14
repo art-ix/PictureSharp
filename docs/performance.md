@@ -28,10 +28,106 @@ JPEG, GIF and PCX, animations, and processing (especially resize), with small an
 Freeze the specific corpus files/options before each corresponding optimization stage. ARM64
 measurements require real hardware. For the final WebP gate, require at most 3× the native SIMD
 time on the frozen matrix using libwebp 1.6.0; disclose process startup, I/O and API timing differences.
-These broader measurements and the final gate remain pending; the VP8L matrix alone does not close phase 10.
+The final matrix and gate were completed in 0.5.0 (next section).
 
 The 0.4.6 matrix (PNG, deflate, resizing, JPEG, WebP lossy, BMP and GIF) and the 0.4.5 lossless encode matrix
-are described in the next sections.
+are described in later sections.
+
+## Phase-10 matrix and memory in 0.5.0
+
+`MatrixBenchmarks` freezes six inputs: the corpus sources `photo` (256×192), `graphic` (200×150) and `photo_alpha`
+(200×160), `graphic` scaled 8× with nearest neighbour (1600×1200), Kodak `kodim23` (768×512, external corpus) and a
+local 4032×3024 camera photo (through `RASTERSHARP_BENCHMARK_MATRIX_FILES`). Each input runs 20 operations with default
+options: WebP lossy and lossless encoding and decoding (default threads and one thread), PNG, JPEG, BMP, GIF and PCX
+encoding and decoding, Lanczos halving and bicubic doubling. `AnimationBenchmarks` encodes and decodes 16-frame pans
+(384×320 opaque and 336×256 with alpha, derived from `photo` and `photo_alpha`) as lossy and lossless WebP, GIF and
+APNG. Decode operations read bytes written once during setup. Measured on the i5-12500H, Linux x64, .NET 10.0.12,
+BenchmarkDotNet 0.15.2 (default JIT, one launch, 3 warmups, 9 iterations).
+
+### WebP against libwebp 1.6.0
+
+The native reference is a small C program linked with `libwebp.a` 1.6.0 that calls `WebPEncode` (quality 75,
+method 4, lossy or lossless, the same bytes as `cwebp -q 75 -m 4`) and `WebPDecode` to RGBA from memory, median of 21
+calls (7 for the 12 MP photo). Both sides exclude file I/O and process startup; RasterSharp's time includes the
+`Image` it returns. Single-threaded times are compared; RasterSharp's default (all cores) is shown for context.
+
+| Input | Operation | RasterSharp 1T (ms) | libwebp 1T (ms) | Ratio | RasterSharp default (ms) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| photo 256×192 | lossy encode | 7.22 | 3.46 | 2.09× | 4.56 |
+| photo 256×192 | lossy decode | 0.720 | 0.383 | 1.88× | 0.720 |
+| photo 256×192 | lossless encode | 23.7 | 29.6 | 0.80× | 23.6 |
+| photo 256×192 | lossless decode | 0.819 | 0.760 | 1.08× | 0.820 |
+| graphic 200×150 | lossy encode | 5.91 | 2.91 | 2.03× | 3.98 |
+| graphic 200×150 | lossy decode | 0.786 | 0.478 | 1.64× | 0.777 |
+| graphic 200×150 | lossless encode | 1.53 | 1.07 | 1.44× | 1.52 |
+| graphic 200×150 | lossless decode | 0.074 | 0.031 | 2.38× | 0.073 |
+| photo_alpha 200×160 | lossy encode | 14.9 | 10.1 | 1.48× | 13.8 |
+| photo_alpha 200×160 | lossy decode | 0.606 | 0.416 | 1.46× | 0.613 |
+| photo_alpha 200×160 | lossless encode | 14.5 | 20.0 | 0.73× | 15.2 |
+| photo_alpha 200×160 | lossless decode | 0.511 | 0.467 | 1.09× | 0.507 |
+| graphic 8× 1600×1200 | lossy encode | 115.8 | 62.7 | 1.85× | 37.6 |
+| graphic 8× 1600×1200 | lossy decode | 7.78¹ | 3.66 | 2.13× | 8.11 |
+| graphic 8× 1600×1200 | lossless encode | 48.8 | 35.8 | 1.36× | 48.0 |
+| graphic 8× 1600×1200 | lossless decode | 2.40¹ | 1.22 | 1.97× | 4.27 |
+| kodim23 768×512 | lossy encode | 46.0 | 23.1 | 1.99× | 22.2 |
+| kodim23 768×512 | lossy decode | 3.91 | 1.99 | 1.96× | 2.93 |
+| kodim23 768×512 | lossless encode | 131.5 | 140.2 | 0.94× | 114.0 |
+| kodim23 768×512 | lossless decode | 6.58 | 6.38 | 1.03× | 6.66 |
+| photo 4032×3024 | lossy encode | 1530 | 741 | 2.07× | 358 |
+| photo 4032×3024 | lossy decode | 135.9 | 90.3 | 1.51× | 83.9 |
+| photo 4032×3024 | lossless encode | 3996 | 4298 | 0.93× | 2880 |
+| photo 4032×3024 | lossless decode | 146.1 | 150.9 | 0.97× | 144.4 |
+
+¹ After the pooled decoder buffers described below (median of 201 single-threaded decodes after 200 warmups); the
+BenchmarkDotNet run before that change measured 9.73 ms and 4.14 ms (3.41×), the time going into a fresh 7.5 MB
+ARGB buffer per decode. The other decode rows predate that change and are not slower after it.
+
+Every operation is within the 3× target; the largest ratio is 2.38× for the 200×150 lossless decode (0.074 ms, where
+fixed per-call costs dominate). The animation encoders have no native counterpart in this harness.
+
+### Allocations
+
+A 12-megapixel image holds 46.5 MiB of `Rgba32` pixels. Before 0.5.0 several encoders and decoders allocated
+temporary buffers of similar size per call, and the WebP animation encoder allocated about 1 GB for a 16-frame
+384×320 animation. In 0.5.0 the temporary buffers come from `ArrayPool<T>.Shared` or are avoided, with identical
+output bytes and pixels:
+
+- VP8L encoder: histograms share one pooled slab per histogram set (as libwebp's `VP8LAllocateHistogramSet`) instead
+  of five arrays each; the animation encoder reuses one subframe for all candidates; the alpha plane is encoded from a
+  pooled ARGB buffer.
+- `Image.Encode` and the `To*` methods write into pooled segments and copy once into the exact-size result; the
+  deflate output buffer is pooled and PNG writes IDAT from it.
+- GIF encoding of a still image skips the rendered and the empty canvas, pools the quantizer input, and the median
+  cut maps colors through a pooled direct-mapped cache sized to the image (2^12–2^20 entries) instead of a dictionary of
+  every distinct color; a 12 MP still image encodes about 11% faster (752 → 666 ms).
+- Decoders keep VP8L ARGB pixels, PNG compressed and inflated data, JPEG planes and coefficients, and VP8 YUV planes
+  in pooled buffers until the RGBA conversion; the last GIF frame takes the canvas instead of a copy.
+
+Allocated bytes per call with default options (BenchmarkDotNet or the runtime's allocation counter), on the
+4032×3024 photo unless noted:
+
+| Operation | 0.4.8 | 0.5.0 |
+| --- | ---: | ---: |
+| WebP lossless decode | 93.7 MB | 47.2 MB |
+| WebP lossy decode | 65.2 MB | 47.7 MB |
+| PNG decode | 96.8 MB | 48.9 MB |
+| JPEG decode | 64.6 MB | 47.1 MB |
+| GIF decode | 93.6 MB | 47.1 MB |
+| PNG encode | 144 MB | 50 MB |
+| BMP encode | 133 MB | 35.5 MB |
+| PCX encode | 119 MB | 28.5 MB |
+| GIF encode | 227 MB | 28.1 MB |
+| GIF encode, 1024×768 photo | 61 MB | 7.4 MB |
+| WebP lossless encode | 41.7 MB | 19.4 MB |
+| WebP lossless encode, photo 256×192 | 8.4 MB | 1.4 MB |
+| WebP lossless animation, 16 × 384×320 | 979 MB | 33 MB |
+| WebP lossy animation, 16 × 384×320 | 41 MB | 14 MB |
+| APNG encode, 16 × 384×320 | 42 MB | 18 MB |
+
+`AllocationTests` keep budgets for these paths. Times stayed within run-to-run variation or improved (BMP encoding
+−31%, PCX −15%, lossless animation −9% at 12 MP and 384×320); the single-threaded 12 MP lossless encode measured +3%
+(3866 → 3996 ms), at the edge of the tolerance and not repeated.
+
 
 ## ARM64 in 0.4.8
 
@@ -367,6 +463,14 @@ The codec benchmark encodes and decodes PNG and JPEG and halves each image with 
 RASTERSHARP_BENCHMARK_CODEC_FILES='/absolute/photo.png' \
 dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
   --filter '*CodecBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 8
+```
+
+The phase-10 matrix and the animation benchmarks (about 50 minutes together on the i5-12500H):
+
+```bash
+RASTERSHARP_BENCHMARK_MATRIX_FILES='/absolute/kodim23.png:/absolute/photo-12mp.png' \
+dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+  --filter '*MatrixBenchmarks*' '*AnimationBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 9
 ```
 
 Keep CPU, runtime, GC settings, input bytes and workload identical when comparing versions. Measure serially, inspect the spread, and repeat any apparent regression. BenchmarkDotNet writes timing and allocation reports to `BenchmarkDotNet.Artifacts/`.

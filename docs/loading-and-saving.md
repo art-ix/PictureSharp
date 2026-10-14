@@ -43,7 +43,7 @@ using var image = Image.Load("upload.jpg", options);
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `MaxPixels` | 2^28 | Maximum width × height; larger images throw `ImageFormatException` before pixels are allocated. For GIF the limit covers all decoded frames together, because tiny GIF frames still decode to full canvases. |
+| `MaxPixels` | 2^28 | Maximum width × height; larger images throw `ImageFormatException` before pixels are allocated. For animations (GIF, APNG, WebP) the limit covers all decoded frames together, because every decoded frame is a full canvas; `FirstFrameOnly` counts one frame. |
 | `FirstFrameOnly` | false | Decode only the first frame of animated WebP/APNG/GIF. |
 | `ApplyExifOrientation` | false | Same as calling `Mutate(x => x.AutoOrient())` after loading. |
 | `IgnoreMetadata` | false | Do not read ICC, EXIF and XMP blocks. |
@@ -132,6 +132,15 @@ app.MapGet("/thumb/{name}", async (string name, int? w, CancellationToken ct) =>
     return Results.File(image.ToWebP(new() { Quality = 80 }), ImageFormat.WebP.MimeType);
 });
 ```
+
+### Memory in a server
+
+A decoded image holds 4 bytes per pixel and frame: a 12-megapixel photo takes 48 MB, and an animation takes that much for every frame. Decoders and encoders rent their temporary buffers (rows, planes, histograms, compressed data) from `ArrayPool<T>.Shared`, so in a steady state a request allocates about the decoded pixels plus the encoded output. The pool keeps a few buffers for reuse and releases them under memory pressure.
+
+- Cap untrusted input with `DecoderOptions.MaxPixels` (for animations it counts all frames) and use `FirstFrameOnly` when a thumbnail of the first frame is enough.
+- `ToWebP()`, `ToPng()` and the other `To*` methods return an exact-size array; `Save(stream, …)` writes directly to the response stream instead.
+- `MaxDegreeOfParallelism` on `DecoderOptions` and on the WebP, PNG and JPEG encoder options limits the threads one request uses (the output does not depend on it).
+- Dispose images as soon as the response is written.
 
 ### Choose the output format from a MIME type
 

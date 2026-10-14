@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static RasterSharp.Formats.WebP.WebPConstants;
@@ -86,7 +87,10 @@ internal sealed class Vp8LDecoder
         return true;
     }
 
-    /// <summary>Decodes a complete VP8L bitstream (with its 5-byte header) to ARGB pixels.</summary>
+    /// <summary>
+    /// Decodes a complete VP8L bitstream (with its 5-byte header) to ARGB pixels in a buffer rented from
+    /// <see cref="ArrayPool{T}.Shared"/>: the first width × height entries are the image; return it after use.
+    /// </summary>
     public static uint[] Decode(byte[] data, int offset, int length, out int width, out int height)
     {
         var dec = new Vp8LDecoder(data, offset, length);
@@ -100,7 +104,7 @@ internal sealed class Vp8LDecoder
 
     /// <summary>
     /// Decodes a headerless VP8L image stream of known size, as used by the ALPH chunk.
-    /// Returns ARGB pixels; the alpha values are in the green channel.
+    /// Returns ARGB pixels in a rented buffer like <see cref="Decode"/>; the alpha values are in the green channel.
     /// </summary>
     public static uint[] DecodeHeaderless(byte[] data, int offset, int length, int width, int height)
     {
@@ -598,14 +602,28 @@ internal sealed class Vp8LDecoder
         hdr.HuffmanXSize = SubSampleSize(transformXSize, hdr.HuffmanSubsampleBits);
         hdr.HuffmanMask = hdr.HuffmanSubsampleBits == 0 ? ~0 : (1 << hdr.HuffmanSubsampleBits) - 1;
 
-        var data = new uint[checked(transformXSize * transformYSize)];
-        DecodeImageData(hdr, data, transformXSize, transformYSize);
-        if (_br.Eos)
+        // The level-0 image is the largest buffer; it is rented and handed to the caller.
+        int size = checked(transformXSize * transformYSize);
+        uint[] data = isLevel0 ? ArrayPool<uint>.Shared.Rent(size) : new uint[size];
+        try
         {
-            throw Error("Truncated data.");
-        }
+            DecodeImageData(hdr, data, transformXSize, transformYSize);
+            if (_br.Eos)
+            {
+                throw Error("Truncated data.");
+            }
 
-        return isLevel0 ? ApplyInverseTransforms(data) : data;
+            return isLevel0 ? ApplyInverseTransforms(data, xsize, ysize) : data;
+        }
+        catch
+        {
+            if (isLevel0)
+            {
+                ArrayPool<uint>.Shared.Return(data);
+            }
+
+            throw;
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -812,7 +830,8 @@ internal sealed class Vp8LDecoder
     }
 
     // port: ApplyInverseTransforms / VP8LInverseTransform, applied to the whole image.
-    private uint[] ApplyInverseTransforms(uint[] pixels)
+    // Takes ownership of the rented pixels and returns the rented result (the color index transform replaces them).
+    private uint[] ApplyInverseTransforms(uint[] pixels, int width, int height)
     {
         for (int n = _nextTransform - 1; n >= 0; n--)
         {
@@ -820,7 +839,7 @@ internal sealed class Vp8LDecoder
             switch (transform.Type)
             {
                 case Vp8LTransformType.SubtractGreen:
-                    LosslessTransforms.AddGreenToBlueAndRed(pixels);
+                    LosslessTransforms.AddGreenToBlueAndRed(pixels.AsSpan(0, transform.XSize * transform.YSize));
                     break;
                 case Vp8LTransformType.Predictor:
                     LosslessTransforms.PredictorInverseTransform(transform, pixels);
@@ -829,7 +848,10 @@ internal sealed class Vp8LDecoder
                     LosslessTransforms.ColorSpaceInverseTransform(transform, pixels);
                     break;
                 case Vp8LTransformType.ColorIndexing:
-                    pixels = LosslessTransforms.ColorIndexInverseTransform(transform, pixels);
+                    uint[] expanded = ArrayPool<uint>.Shared.Rent(transform.XSize * transform.YSize);
+                    LosslessTransforms.ColorIndexInverseTransform(transform, pixels, expanded);
+                    ArrayPool<uint>.Shared.Return(pixels);
+                    pixels = expanded;
                     break;
             }
         }

@@ -11,19 +11,13 @@ public class RobustnessTests
     // Small enough to keep mutated headers from allocating huge canvases, large enough for every corpus file.
     private static readonly DecoderOptions Options = new() { MaxPixels = 1 << 22 };
 
-    public static TheoryData<string> CorpusFiles()
-    {
-        var data = new TheoryData<string>();
-        foreach (string path in Directory.EnumerateFiles(Corpus.CorpusDir, "*", SearchOption.AllDirectories)
-                     .Where(p => Path.GetExtension(p) is not ".bin")
-                     .Select(p => Path.GetRelativePath(Corpus.CorpusDir, p).Replace('\\', '/'))
-                     .Order(StringComparer.Ordinal))
-        {
-            data.Add(path);
-        }
+    public static TheoryData<string> CorpusFiles() => [.. CorpusPaths()];
 
-        return data;
-    }
+    private static IEnumerable<string> CorpusPaths() =>
+        Directory.EnumerateFiles(Corpus.CorpusDir, "*", SearchOption.AllDirectories)
+            .Where(p => Path.GetExtension(p) is not ".bin")
+            .Select(p => Path.GetRelativePath(Corpus.CorpusDir, p).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal);
 
     [Theory]
     [MemberData(nameof(CorpusFiles))]
@@ -72,6 +66,44 @@ public class RobustnessTests
 
         var options = new DecoderOptions { MaxPixels = limit };
         Assert.Throws<ImageFormatException>(() => Image.Load(data, options).Dispose());
+    }
+
+    public static TheoryData<string> AnimatedCorpusFiles()
+    {
+        var data = new TheoryData<string>();
+        foreach (string file in CorpusPaths())
+        {
+            try
+            {
+                if (Image.Identify(Corpus.Read(file)).FrameCount > 1)
+                {
+                    data.Add(file);
+                }
+            }
+            catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
+            {
+            }
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(AnimatedCorpusFiles))]
+    public void MaxPixels_CoversAllAnimationFrames(string file)
+    {
+        byte[] data = Corpus.Read(file);
+        ImageInfo info = Image.Identify(data);
+        long all = (long)info.Width * info.Height * info.FrameCount;
+
+        Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxPixels = all - 1 }).Dispose());
+        using (Image image = Image.Load(data, new DecoderOptions { MaxPixels = all }))
+        {
+            Assert.Equal(info.FrameCount, image.FrameCount);
+        }
+
+        using Image first = Image.Load(data, new DecoderOptions { MaxPixels = (long)info.Width * info.Height, FirstFrameOnly = true });
+        Assert.Equal(1, first.FrameCount);
     }
 
     private static IEnumerable<int> TruncationLengths(int length)

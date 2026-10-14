@@ -1,4 +1,5 @@
 using RasterSharp.Formats;
+using RasterSharp.Internal;
 
 namespace RasterSharp;
 
@@ -70,9 +71,9 @@ public sealed partial class Image
     public byte[] Encode(EncoderOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        using var ms = new MemoryStream();
-        Save(ms, options);
-        return ms.ToArray();
+        using var stream = new PooledBufferStream();
+        Save(stream, options);
+        return stream.ToArray();
     }
 
     private static ImageFormat FormatFromPath(string path)

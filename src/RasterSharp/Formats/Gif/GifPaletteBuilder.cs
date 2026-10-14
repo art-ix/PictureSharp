@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
 using RasterSharp.Processing.Quantization;
 
@@ -105,15 +106,15 @@ internal sealed class GifPaletteBuilder
 
     /// <summary>
     /// An exact palette for the pixels a frame draws inside its rectangle, or null when they need more entries than
-    /// allowed. With <paramref name="skipUnchanged"/> pixels equal to <paramref name="before"/> are left out and a
-    /// transparent entry stands in for them; failing that, they are drawn with their own colors.
+    /// allowed. With <paramref name="skipUnchanged"/> pixels equal to <paramref name="before"/> (null: an empty
+    /// canvas) are left out and a transparent entry stands in for them; failing that, they are drawn with their own colors.
     /// </summary>
-    public GifFramePalette? BuildLocal(Rgba32[] rendered, Rgba32[] before, int width, (int X0, int Y0, int X1, int Y1) rect, bool skipUnchanged)
+    public GifFramePalette? BuildLocal(Rgba32[] rendered, Rgba32[]? before, int width, (int X0, int Y0, int X1, int Y1) rect, bool skipUnchanged)
     {
         int limit = _options.ColorCount;
         for (int attempt = skipUnchanged ? 0 : 1; attempt < 2; attempt++)
         {
-            bool skip = attempt == 0;
+            bool skip = attempt == 0 && before is not null;
             var unique = new Dictionary<uint, byte>();
             var colors = new List<Rgba32>();
             bool skipped = false, fits = true;
@@ -123,7 +124,7 @@ internal sealed class GifPaletteBuilder
                 {
                     int p = (y * width) + x;
                     Rgba32 pixel = rendered[p];
-                    if (pixel.A == 0 || (skip && pixel == before[p]))
+                    if (pixel.A == 0 || (skip && pixel == before![p]))
                     {
                         skipped |= pixel.A != 0;
                         continue;
@@ -187,44 +188,58 @@ internal sealed class GifPaletteBuilder
             return new GifFramePalette { Colors = WithTransparentEntry(_colors!, _transparent), TransparentIndex = _transparent, Indices = indices, IsGlobal = true };
         }
 
-        var mask = new bool[pixels.Length];
-        var opaque = new List<uint>(pixels.Length);
-        for (int i = 0; i < pixels.Length; i++)
+        // Scratch buffers come from the pool: a large still image would otherwise allocate several times its size.
+        bool[] maskBuffer = ArrayPool<bool>.Shared.Rent(pixels.Length);
+        uint[] opaqueBuffer = ArrayPool<uint>.Shared.Rent(pixels.Length);
+        byte[]? opaqueIndexBuffer = null;
+        try
         {
-            if (pixels[i].A < threshold)
+            Span<bool> mask = maskBuffer.AsSpan(0, pixels.Length);
+            int opaqueCount = 0;
+            for (int i = 0; i < pixels.Length; i++)
             {
-                mask[i] = true;
+                mask[i] = pixels[i].A < threshold;
+                if (!mask[i])
+                {
+                    opaqueBuffer[opaqueCount++] = Key(pixels[i]) | 0xFF000000;
+                }
+            }
+
+            bool dither = _options.Dither == GifDither.FloydSteinberg;
+            if (_mapper is not null)
+            {
+                _mapper.Map(pixels, frame.Width, frame.Height, dither, mask, Math.Max(_transparent, 0), indices);
+                return new GifFramePalette { Colors = WithTransparentEntry(_colors!, _transparent), TransparentIndex = _transparent, Indices = indices, IsGlobal = true };
+            }
+
+            // A still image with too many colors, quantized exactly like Pillow (the transparent entry follows the colors).
+            opaqueIndexBuffer = ArrayPool<byte>.Shared.Rent(opaqueCount);
+            Span<byte> opaqueIndices = opaqueIndexBuffer.AsSpan(0, opaqueCount);
+            Rgba32[] palette = Quantize(opaqueBuffer.AsSpan(0, opaqueCount), _options.ColorCount - (HasTransparency ? 1 : 0), opaqueIndices);
+            int transparent = HasTransparency ? palette.Length : -1;
+            if (dither)
+            {
+                new PaletteMapper(palette).Map(pixels, frame.Width, frame.Height, dither: true, mask, Math.Max(transparent, 0), indices);
             }
             else
             {
-                opaque.Add(Key(pixels[i]) | 0xFF000000);
+                for (int i = 0, j = 0; i < pixels.Length; i++)
+                {
+                    indices[i] = mask[i] ? (byte)transparent : opaqueIndices[j++];
+                }
             }
-        }
 
-        bool dither = _options.Dither == GifDither.FloydSteinberg;
-        if (_mapper is not null)
-        {
-            _mapper.Map(pixels, frame.Width, frame.Height, dither, mask, Math.Max(_transparent, 0), indices);
-            return new GifFramePalette { Colors = WithTransparentEntry(_colors!, _transparent), TransparentIndex = _transparent, Indices = indices, IsGlobal = true };
+            return new GifFramePalette { Colors = WithTransparentEntry(palette, transparent), TransparentIndex = transparent, Indices = indices, IsGlobal = false };
         }
-
-        // A still image with too many colors, quantized exactly like Pillow (the transparent entry follows the colors).
-        var opaqueIndices = new byte[opaque.Count];
-        Rgba32[] palette = Quantize(CollectionsMarshal.AsSpan(opaque), _options.ColorCount - (HasTransparency ? 1 : 0), opaqueIndices);
-        int transparent = HasTransparency ? palette.Length : -1;
-        if (dither)
+        finally
         {
-            new PaletteMapper(palette).Map(pixels, frame.Width, frame.Height, dither: true, mask, Math.Max(transparent, 0), indices);
-        }
-        else
-        {
-            for (int i = 0, j = 0; i < pixels.Length; i++)
+            ArrayPool<bool>.Shared.Return(maskBuffer);
+            ArrayPool<uint>.Shared.Return(opaqueBuffer);
+            if (opaqueIndexBuffer is not null)
             {
-                indices[i] = mask[i] ? (byte)transparent : opaqueIndices[j++];
+                ArrayPool<byte>.Shared.Return(opaqueIndexBuffer);
             }
         }
-
-        return new GifFramePalette { Colors = WithTransparentEntry(palette, transparent), TransparentIndex = transparent, Indices = indices, IsGlobal = false };
     }
 
     /// <summary>The canvas as a GIF decoder shows a frame drawn completely with <paramref name="palette"/>.</summary>

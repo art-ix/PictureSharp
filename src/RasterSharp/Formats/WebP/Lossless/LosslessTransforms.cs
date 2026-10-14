@@ -334,13 +334,12 @@ internal static partial class LosslessTransforms
         }
     }
 
-    // port: ColorIndexInverseTransform_C. Returns a new buffer of transform.XSize × YSize pixels.
-    public static uint[] ColorIndexInverseTransform(Vp8LTransform transform, uint[] src)
+    // port: ColorIndexInverseTransform_C. Writes transform.XSize × YSize pixels to dst (which may be longer).
+    public static void ColorIndexInverseTransform(Vp8LTransform transform, uint[] src, uint[] dst)
     {
         int width = transform.XSize;
         int height = transform.YSize;
         uint[] colorMap = transform.Data;
-        var dst = new uint[checked(width * height)];
         int bitsPerPixel = 8 >> transform.Bits;
 
         if (bitsPerPixel < 8)
@@ -367,12 +366,10 @@ internal static partial class LosslessTransforms
         }
         else
         {
-            for (int i = 0; i < dst.Length; i++)
+            for (int i = 0; i < width * height; i++)
             {
                 dst[i] = colorMap[(src[i] >> 8) & 0xff];
             }
         }
-
-        return dst;
     }
 }

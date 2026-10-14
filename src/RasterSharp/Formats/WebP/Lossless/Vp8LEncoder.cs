@@ -33,13 +33,22 @@ internal static class Vp8LEncoder
                 argb[i] = !options.Exact && p.A == 0 ? 0 : value;
                 alpha |= p.A != 255;
             }
-            using var writer = new Vp8LBitWriter();
-            writer.Put(0x2f, 8); writer.Put(width - 1, 14); writer.Put(height - 1, 14);
-            writer.Put(alpha ? 1 : 0, 1); writer.Put(0, 3);
-            using (Vp8LBitWriter stream = EncodeStream(argb, width, height, options)) writer.Append(stream);
-            return writer.ToArray();
+            return Encode(argb, width, height, alpha, options, header: true);
         }
         finally { ArrayPool<uint>.Shared.Return(argb); }
+    }
+
+    // Encodes argb[..width * height] in place; without the 5-byte header for the alpha plane (ALPH chunk).
+    internal static byte[] Encode(uint[] argb, int width, int height, bool alpha, WebPEncoderOptions options, bool header)
+    {
+        using var writer = new Vp8LBitWriter();
+        if (header)
+        {
+            writer.Put(0x2f, 8); writer.Put(width - 1, 14); writer.Put(height - 1, 14);
+            writer.Put(alpha ? 1 : 0, 1); writer.Put(0, 3);
+        }
+        using (Vp8LBitWriter stream = EncodeStream(argb, width, height, options)) writer.Append(stream);
+        return writer.ToArray();
     }
 
     // port: src/enc/vp8l_enc.c VP8LEncodeStream

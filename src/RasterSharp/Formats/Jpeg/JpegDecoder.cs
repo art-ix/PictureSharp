@@ -30,15 +30,24 @@ internal sealed class JpegDecoder : IImageDecoder
     {
         JpegFile file = JpegFile.Read(data.Span, options, headerOnly: false);
         JpegFrame frame = file.Frame!;
-        if (frame.Progressive)
+        Rgba32[] pixels;
+        try
         {
-            foreach (JpegComponent c in frame.Components)
+            if (frame.Progressive)
             {
-                InverseDct(c, options.MaxDegreeOfParallelism);
+                foreach (JpegComponent c in frame.Components)
+                {
+                    InverseDct(c, options.MaxDegreeOfParallelism);
+                }
             }
+
+            pixels = JpegColorConverter.Convert(frame, file.ColorSpace(), options.MaxDegreeOfParallelism);
+        }
+        finally
+        {
+            file.ReturnBuffers();
         }
 
-        Rgba32[] pixels = JpegColorConverter.Convert(frame, file.ColorSpace(), options.MaxDegreeOfParallelism);
         var image = new Image([new ImageFrame(frame.Width, frame.Height, pixels)]) { SourceFormat = ImageFormat.Jpeg };
         (float dpiX, float dpiY) = file.Resolution();
         (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution) = (dpiX, dpiY);
