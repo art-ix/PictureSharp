@@ -1,8 +1,10 @@
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 
 namespace RasterSharp.Formats.WebP.Lossy;
 
-internal static class Vp8EncoderDsp
+internal static partial class Vp8EncoderDsp
 {
     public const int Bps = 32;
     public static ReadOnlySpan<int> Scan => [0, 4, 8, 12, 128, 132, 136, 140, 256, 260, 264, 268, 384, 388, 392, 396, 0, 4, 128, 132, 8, 12, 136, 140];
@@ -11,7 +13,7 @@ internal static class Vp8EncoderDsp
     public static ReadOnlySpan<int> Pred4Offsets => [1536, 1540, 1544, 1548, 1552, 1556, 1560, 1564, 1664, 1668];
 
     // port: src/dsp/enc.c FTransform_C
-    public static void FTransform(ReadOnlySpan<byte> source, ReadOnlySpan<byte> prediction, Span<short> output)
+    internal static void FTransformScalar(ReadOnlySpan<byte> source, ReadOnlySpan<byte> prediction, Span<short> output)
     {
         Span<int> tmp = stackalloc int[16];
         for (int i = 0; i < 4; i++)
@@ -57,10 +59,10 @@ internal static class Vp8EncoderDsp
     }
 
     // port: src/dsp/enc.c ITransformOne
-    public static void ITransform(ReadOnlySpan<byte> prediction, ReadOnlySpan<short> input, byte[] output, int offset)
+    internal static void ITransformScalar(ReadOnlySpan<byte> prediction, ReadOnlySpan<short> input, byte[] output, int offset)
     {
         Copy(prediction, output.AsSpan(offset), 4, 4);
-        Vp8Dsp.TransformOne(input, output, offset);
+        Vp8Dsp.TransformOneScalar(input, output, offset);
     }
 
     // port: src/dsp/enc.c Copy
@@ -70,7 +72,7 @@ internal static class Vp8EncoderDsp
     }
 
     // port: src/dsp/enc.c GetSSE
-    public static int Sse(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, int width, int height)
+    internal static int SseScalar(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, int width, int height)
     {
         int sum = 0;
         for (int y = 0; y < height; y++)
@@ -101,7 +103,7 @@ internal static class Vp8EncoderDsp
     }
 
     // port: src/dsp/enc.c Disto4x4_C, Disto16x16_C
-    public static int Disto(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, ReadOnlySpan<ushort> weights, int size)
+    internal static int DistoScalar(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, ReadOnlySpan<ushort> weights, int size)
     {
         int sum = 0;
         for (int y = 0; y < size; y += 4)
@@ -130,7 +132,7 @@ internal static class Vp8EncoderDsp
     }
 
     // port: src/dsp/enc.c QuantizeBlock_C
-    public static bool QuantizeBlock(Span<short> input, Span<short> output, Vp8Matrix matrix)
+    internal static bool QuantizeBlockScalar(Span<short> input, Span<short> output, Vp8Matrix matrix)
     {
         bool nonzero = false;
         for (int n = 0; n < 16; n++)
@@ -153,26 +155,77 @@ internal static class Vp8EncoderDsp
     // port: src/dsp/enc.c DCMode, VerticalPred, HorizontalPred, TrueMotion
     private static void Predict(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top, int size, int mode)
     {
-        int dc = 128;
-        if (mode == 0 && (!left.IsEmpty || !top.IsEmpty))
+        switch (mode)
         {
-            int sum = 0, count = 0;
-            if (!left.IsEmpty) { for (int i = 1; i <= size; i++) sum += left[i]; count += size; }
-            if (!top.IsEmpty) { for (int i = 0; i < size; i++) sum += top[i]; count += size; }
-            dc = (sum + count / 2) / count;
+            case 0:
+                int dc = 128;
+                if (!left.IsEmpty || !top.IsEmpty)
+                {
+                    int sum = 0, count = 0;
+                    if (!left.IsEmpty) { for (int i = 1; i <= size; i++) sum += left[i]; count += size; }
+                    if (!top.IsEmpty) { for (int i = 0; i < size; i++) sum += top[i]; count += size; }
+                    dc = (sum + count / 2) / count;
+                }
+                Fill(output, size, (byte)dc);
+                break;
+            case 2:
+                VerticalPred(output, top, size);
+                break;
+            case 3:
+                HorizontalPred(output, left, size);
+                break;
+            default:
+                if (left.IsEmpty) VerticalPred(output, top.IsEmpty ? default : top, size, 129);
+                else if (top.IsEmpty) HorizontalPred(output, left, size);
+                else TrueMotion(output, left, top, size);
+                break;
         }
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
+    }
+
+    private static void Fill(Span<byte> output, int size, byte value)
+    {
+        for (int y = 0; y < size; y++) output.Slice(y * Bps, size).Fill(value);
+    }
+
+    private static void VerticalPred(Span<byte> output, ReadOnlySpan<byte> top, int size, byte fallback = 127)
+    {
+        if (top.IsEmpty) { Fill(output, size, fallback); return; }
+        top = top[..size];
+        for (int y = 0; y < size; y++) top.CopyTo(output.Slice(y * Bps, size));
+    }
+
+    private static void HorizontalPred(Span<byte> output, ReadOnlySpan<byte> left, int size)
+    {
+        if (left.IsEmpty) { Fill(output, size, 129); return; }
+        for (int y = 0; y < size; y++) output.Slice(y * Bps, size).Fill(left[y + 1]);
+    }
+
+    private static void TrueMotion(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top, int size)
+    {
+        int y = 0;
+        if (Vector128.IsHardwareAccelerated && top.Length >= size)
         {
-            int value = mode switch
+            // clip(top[x] + left[y] - left[0]) on 16-bit lanes.
+            Vector128<byte> above = size == 16 ? Vector128.Create(top[..16]) : Vector128.CreateScalar(BinaryPrimitives.ReadUInt64LittleEndian(top)).AsByte();
+            Vector128<short> low = Vector128.WidenLower(above).AsInt16(), high = Vector128.WidenUpper(above).AsInt16();
+            Vector128<short> max = Vector128.Create((short)255);
+            for (; y < size; y++)
             {
-                0 => dc,
-                2 => top.IsEmpty ? 127 : top[x],
-                3 => left.IsEmpty ? 129 : left[y + 1],
-                _ => left.IsEmpty ? (top.IsEmpty ? 129 : top[x])
-                    : top.IsEmpty ? left[y + 1] : Math.Clamp(left[y + 1] + top[x] - left[0], 0, 255),
-            };
-            output[y * Bps + x] = (byte)value;
+                Vector128<short> delta = Vector128.Create((short)(left[y + 1] - left[0]));
+                Vector128<short> l = Vector128.Clamp(low + delta, Vector128<short>.Zero, max);
+                Vector128<short> h = Vector128.Clamp(high + delta, Vector128<short>.Zero, max);
+                Span<byte> row = output.Slice(y * Bps, size);
+                if (size == 16) Vector128.Narrow(l.AsUInt16(), h.AsUInt16()).CopyTo(row);
+                else Vector128.Narrow(l.AsUInt16(), l.AsUInt16()).GetLower().CopyTo(row);
+            }
+            return;
+        }
+
+        for (; y < size; y++)
+        {
+            int delta = left[y + 1] - left[0];
+            Span<byte> row = output.Slice(y * Bps, size);
+            for (int x = 0; x < size; x++) row[x] = (byte)Math.Clamp(top[x] + delta, 0, 255);
         }
     }
 

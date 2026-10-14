@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace RasterSharp.Formats.WebP.Lossy;
 
@@ -21,16 +22,25 @@ internal sealed class Vp8TokenBuffer : IDisposable
     public long Emit(Vp8BitWriter? writer, ReadOnlySpan<byte> probabilities)
     {
         long size = 0;
-        for (int i = 0; i < _count; i++)
+        for (int page = 0, remaining = _count; remaining > 0; page++, remaining -= PageSize)
         {
-            ushort token = _pages[i / PageSize][i % PageSize];
-            bool bit = (token & 0x8000) != 0;
-            int probability = (token & 0x4000) != 0 ? token & 255 : probabilities[token & 0x3fff];
-            if (writer is not null) writer.Put(bit, probability);
-            else size += Vp8EncoderProba.BitCost(bit, probability);
+            ReadOnlySpan<ushort> tokens = _pages[page].AsSpan(0, Math.Min(remaining, PageSize));
+            if (writer is null)
+            {
+                foreach (ushort token in tokens) size += Vp8EncoderProba.BitCost((token & 0x8000) != 0, Probability(token, probabilities));
+            }
+            else
+            {
+                foreach (ushort token in tokens) writer.Put((token & 0x8000) != 0, Probability(token, probabilities));
+            }
         }
         return size;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Probability(ushort token, ReadOnlySpan<byte> probabilities) =>
+        (token & 0x4000) != 0 ? token & 255 : probabilities[token & 0x3fff];
+
     public void AddRaw(ushort token)
     {
         int page = _count / PageSize, offset = _count % PageSize;

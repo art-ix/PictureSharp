@@ -95,17 +95,19 @@ internal static class Vp8ModeDecision
         Vp8ModeScore aggregate = default; aggregate.Init(); aggregate.H = 211; aggregate.SetScore(segment.LambdaMode);
         int headerBits = 0;
         Span<short> levels = stackalloc short[16];
+        // Only the score fields of these are used; declaring them once avoids clearing their level arrays per mode.
+        Vp8ModeScore best = default, candidate = default;
         it.StartI4();
         do
         {
-            Vp8ModeScore best = default; best.Init(); int bestMode = -1;
+            best.Init(); int bestMode = -1;
             int offset = Vp8EncoderDsp.Scan[it.I4];
             ReadOnlySpan<byte> source = it.Input.AsSpan(offset);
             ReadOnlySpan<ushort> costs = ModeCosts(it, rd.Modes);
             it.MakeI4Predictions();
             for (int mode = 0; mode < 10; mode++)
             {
-                Vp8ModeScore candidate = default;
+                candidate.ClearScore();
                 candidate.Nz = Vp8Reconstruction.Intra4(it, probabilities, levels, it.Predictions, 1672, mode) ? 1u << it.I4 : 0;
                 ReadOnlySpan<byte> reconstructed = it.Predictions.AsSpan(1672);
                 candidate.D = Vp8EncoderDsp.Sse(source, reconstructed, 4, 4);
@@ -136,10 +138,11 @@ internal static class Vp8ModeDecision
     private static void PickUv(Vp8EncoderIterator it, Vp8EncoderProba probabilities, ref Vp8ModeScore rd)
     {
         Vp8Segment segment = it.Context.Segments[it.Block.Segment];
-        Vp8ModeScore best = default; best.Init();
+        Vp8ModeScore best = default, candidate = default; best.Init();
         for (int mode = 0; mode < 4; mode++)
         {
-            Vp8ModeScore candidate = default;
+            // Uv rewrites all levels (and the errors when diffusing), so only the score needs clearing.
+            candidate.ClearScore();
             candidate.Nz = Vp8Reconstruction.Uv(it, ref candidate, it.Output2, mode);
             candidate.D = Vp8EncoderDsp.Sse(it.Input.AsSpan(16), it.Output2.AsSpan(16), 16, 8);
             candidate.H = Vp8EncoderTables.FixedCostsUv[mode]; candidate.R = CostUv(it, probabilities, candidate);

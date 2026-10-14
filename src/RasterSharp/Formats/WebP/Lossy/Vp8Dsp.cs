@@ -4,7 +4,7 @@ namespace RasterSharp.Formats.WebP.Lossy;
 
 /// <summary>VP8 decoder DSP: inverse transforms, intra predictors and in-loop filters (scalar C versions).</summary>
 // port: src/dsp/dec.c
-internal static class Vp8Dsp
+internal static partial class Vp8Dsp
 {
     /// <summary>Stride of the prediction work buffer.</summary>
     public const int Bps = 32;
@@ -46,7 +46,7 @@ internal static class Vp8Dsp
     }
 
     // port: TransformOne_C
-    public static void TransformOne(ReadOnlySpan<short> input, byte[] dst, int off)
+    internal static void TransformOneScalar(ReadOnlySpan<short> input, byte[] dst, int off)
     {
         Span<int> c = stackalloc int[16];
         int tmp = 0;
@@ -562,7 +562,7 @@ internal static class Vp8Dsp
     }
 
     // Simple in-loop filtering (Paragraph 15.2)
-    public static void SimpleVFilter16(byte[] p, int o, int stride, int thresh)
+    internal static void SimpleVFilter16Scalar(byte[] p, int o, int stride, int thresh)
     {
         int thresh2 = (2 * thresh) + 1;
         for (int i = 0; i < 16; ++i)
@@ -574,7 +574,7 @@ internal static class Vp8Dsp
         }
     }
 
-    public static void SimpleHFilter16(byte[] p, int o, int stride, int thresh)
+    internal static void SimpleHFilter16Scalar(byte[] p, int o, int stride, int thresh)
     {
         int thresh2 = (2 * thresh) + 1;
         for (int i = 0; i < 16; ++i)
@@ -586,21 +586,21 @@ internal static class Vp8Dsp
         }
     }
 
-    public static void SimpleVFilter16i(byte[] p, int o, int stride, int thresh)
+    internal static void SimpleVFilter16iScalar(byte[] p, int o, int stride, int thresh)
     {
         for (int k = 3; k > 0; --k)
         {
             o += 4 * stride;
-            SimpleVFilter16(p, o, stride, thresh);
+            SimpleVFilter16Scalar(p, o, stride, thresh);
         }
     }
 
-    public static void SimpleHFilter16i(byte[] p, int o, int stride, int thresh)
+    internal static void SimpleHFilter16iScalar(byte[] p, int o, int stride, int thresh)
     {
         for (int k = 3; k > 0; --k)
         {
             o += 4;
-            SimpleHFilter16(p, o, stride, thresh);
+            SimpleHFilter16Scalar(p, o, stride, thresh);
         }
     }
 
@@ -648,14 +648,14 @@ internal static class Vp8Dsp
     }
 
     // on macroblock edges
-    public static void VFilter16(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh) =>
+    internal static void VFilter16Scalar(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh) =>
         FilterLoop26(p, o, stride, 1, 16, thresh, ithresh, hevThresh);
 
-    public static void HFilter16(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh) =>
+    internal static void HFilter16Scalar(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh) =>
         FilterLoop26(p, o, 1, stride, 16, thresh, ithresh, hevThresh);
 
     // on three inner edges
-    public static void VFilter16i(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
+    internal static void VFilter16iScalar(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
     {
         for (int k = 3; k > 0; --k)
         {
@@ -664,7 +664,7 @@ internal static class Vp8Dsp
         }
     }
 
-    public static void HFilter16i(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
+    internal static void HFilter16iScalar(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
     {
         for (int k = 3; k > 0; --k)
         {
@@ -674,25 +674,25 @@ internal static class Vp8Dsp
     }
 
     // 8-pixels wide variants, for chroma filtering
-    public static void VFilter8(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
+    internal static void VFilter8Scalar(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
         FilterLoop26(u, uo, stride, 1, 8, thresh, ithresh, hevThresh);
         FilterLoop26(v, vo, stride, 1, 8, thresh, ithresh, hevThresh);
     }
 
-    public static void HFilter8(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
+    internal static void HFilter8Scalar(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
         FilterLoop26(u, uo, 1, stride, 8, thresh, ithresh, hevThresh);
         FilterLoop26(v, vo, 1, stride, 8, thresh, ithresh, hevThresh);
     }
 
-    public static void VFilter8i(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
+    internal static void VFilter8iScalar(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
         FilterLoop24(u, uo + (4 * stride), stride, 1, 8, thresh, ithresh, hevThresh);
         FilterLoop24(v, vo + (4 * stride), stride, 1, 8, thresh, ithresh, hevThresh);
     }
 
-    public static void HFilter8i(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
+    internal static void HFilter8iScalar(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
         FilterLoop24(u, uo + 4, 1, stride, 8, thresh, ithresh, hevThresh);
         FilterLoop24(v, vo + 4, 1, stride, 8, thresh, ithresh, hevThresh);

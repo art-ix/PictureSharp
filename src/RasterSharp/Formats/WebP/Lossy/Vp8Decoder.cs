@@ -505,11 +505,7 @@ internal sealed class Vp8Decoder
     private void AllocateMemory()
     {
         _intraT = new byte[4 * _mbW];   // initialized to B_DC_PRED (0)
-        _mbData = new MacroblockData[_mbW];
-        for (int i = 0; i < _mbW; i++)
-        {
-            _mbData[i] = new MacroblockData();
-        }
+        _mbData = CreateMacroblockData();
 
         _mbInfo = new NzInfo[_mbW + 1];
         _fInfo = new FilterInfo[_mbW * _mbH];
@@ -534,55 +530,93 @@ internal sealed class Vp8Decoder
     }
 
     // port: ParseFrame
-    // Filtering only touches reconstructed rows and reconstruction reads its top context from separate buffers,
-    // so a parallel filter can follow the parser row by row.
+    // Reconstruction reads its top context from separate buffers and filtering only touches reconstructed rows,
+    // so a worker can reconstruct and filter row y - 1 (in raster order) while this thread parses row y into the
+    // other of two macroblock buffers (like libwebp's multi-threaded decoding).
     private void ParseAndFilterFrame(int maxDegreeOfParallelism)
     {
-        if (_filterType == 0 || !Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)_mbW * _mbH, 256) || _mbW <= 2 || _mbH <= 1)
+        if (!Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)_mbW * _mbH, 256) || _mbH <= 2)
         {
-            ParseFrame(null);
+            for (int mbY = 0; mbY < _mbH; ++mbY)
+            {
+                ParseRow(mbY);
+                ReconstructRow(mbY, _mbData);
+            }
+
             FilterFrame();
             return;
         }
 
-        var gate = new Parallelism.RowGate();
-        Task filter = Task.Run(() => Parallelism.Wavefront(_mbW, _mbH, maxDegreeOfParallelism, DoFilter, gate));
+        MacroblockData[][] rows = [_mbData, CreateMacroblockData()];
+        var parsed = new Parallelism.RowGate();
+        var reconstructed = new Parallelism.RowGate();
+        Task worker = Task.Run(() =>
+        {
+            try
+            {
+                for (int mbY = 0; mbY < _mbH && parsed.WaitFor(mbY); ++mbY)
+                {
+                    ReconstructRow(mbY, rows[mbY & 1]);
+                    FilterRow(mbY);
+                    reconstructed.Publish(mbY + 1);
+                }
+            }
+            finally
+            {
+                // Lets the parser stop waiting if this loop ends early.
+                reconstructed.Abort();
+            }
+        });
+
         try
         {
-            ParseFrame(gate);
+            // Buffer y & 1 is free once row y - 2 has been reconstructed.
+            for (int mbY = 0; mbY < _mbH && (mbY < 2 || reconstructed.WaitFor(mbY - 2)); ++mbY)
+            {
+                _mbData = rows[mbY & 1];
+                ParseRow(mbY);
+                parsed.Publish(mbY + 1);
+            }
         }
         catch
         {
-            gate.Abort();
-            try { filter.Wait(); } catch (AggregateException) { }
+            parsed.Abort();
+            try { worker.Wait(); } catch (AggregateException) { }
             throw;
         }
-        filter.GetAwaiter().GetResult();
+
+        worker.GetAwaiter().GetResult();
     }
 
-    private void ParseFrame(Parallelism.RowGate? gate)
+    private MacroblockData[] CreateMacroblockData()
     {
-        for (int mbY = 0; mbY < _mbH; ++mbY)
+        var data = new MacroblockData[_mbW];
+        for (int i = 0; i < _mbW; i++)
         {
-            // Parse bitstream for this row.
-            Vp8BitReader tokenBr = _parts[mbY & _numPartsMinusOne];
-            if (!ParseIntraModeRow())
-            {
-                throw Error("Premature end of partition 0.");
-            }
-
-            for (int mbX = 0; mbX < _mbW; ++mbX)
-            {
-                if (!DecodeMB(mbX, mbY, tokenBr))
-                {
-                    throw Error("Premature end of VP8 data.");
-                }
-            }
-
-            InitScanline();  // prepare for next scanline
-            ReconstructRow(mbY);
-            gate?.Publish(mbY + 1);
+            data[i] = new MacroblockData();
         }
+
+        return data;
+    }
+
+    // Parses the intra modes and residuals of one macroblock row into _mbData.
+    private void ParseRow(int mbY)
+    {
+        Vp8BitReader tokenBr = _parts[mbY & _numPartsMinusOne];
+        if (!ParseIntraModeRow())
+        {
+            throw Error("Premature end of partition 0.");
+        }
+
+        for (int mbX = 0; mbX < _mbW; ++mbX)
+        {
+            if (!DecodeMB(mbX, mbY, tokenBr))
+            {
+                throw Error("Premature end of VP8 data.");
+            }
+        }
+
+        InitScanline();  // prepare for next scanline
     }
 
     // port: VP8ParseIntraModeRow
@@ -964,7 +998,7 @@ internal sealed class Vp8Decoder
     }
 
     // port: ReconstructRow
-    private void ReconstructRow(int mbY)
+    private void ReconstructRow(int mbY, MacroblockData[] row)
     {
         byte[] b = _yuvB;
 
@@ -997,7 +1031,7 @@ internal sealed class Vp8Decoder
         // Reconstruct one row.
         for (int mbX = 0; mbX < _mbW; ++mbX)
         {
-            MacroblockData block = _mbData[mbX];
+            MacroblockData block = row[mbX];
 
             // Rotate in the left samples from previously decoded block. We move four
             // pixels at a time for alignment reason, and because of in-loop filter.
@@ -1109,23 +1143,26 @@ internal sealed class Vp8Decoder
 
     // ------------------------------------------------------------------ filtering
 
-    // port: FilterRow / DoFilter, over the whole frame
-    // A macroblock's filters touch columns 16x-3..16x+15 and rows 16y-3..16y+15 (8x-3..8x+7 for chroma), which
-    // overlap only the left, top and top-right neighbours that precede it in raster order (and the bottom-left
-    // one that follows it): a wavefront keeps the raster order of every conflicting access.
+    // port: FilterRow / DoFilter. Filtering row y after reconstructing it is the raster order of FinishRow; the
+    // filters of row y touch rows 16y-3..16y+15, so they never meet the reconstruction of later rows.
     private void FilterFrame()
+    {
+        for (int mbY = 0; mbY < _mbH; ++mbY)
+        {
+            FilterRow(mbY);
+        }
+    }
+
+    private void FilterRow(int mbY)
     {
         if (_filterType == 0)
         {
             return;
         }
 
-        for (int mbY = 0; mbY < _mbH; ++mbY)
+        for (int mbX = 0; mbX < _mbW; ++mbX)
         {
-            for (int mbX = 0; mbX < _mbW; ++mbX)
-            {
-                DoFilter(mbX, mbY);
-            }
+            DoFilter(mbX, mbY);
         }
     }
 

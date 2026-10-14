@@ -76,12 +76,11 @@ internal sealed class Vp8LBackwardRefs : IDisposable
     private static int Hash(uint first, uint second) => (int)(unchecked(second * 0xc6a4a793u + first * 0x5bd1e996u) >> 14);
     private int Length(int pos) => _matches[pos] & 4095;
     private int Distance(int pos) => (int)((uint)_matches[pos] >> 12);
+    // port: src/dsp/lossless_common.h VP8LFindMatchLength (VP8LVectorMismatch is vectorized by the BCL)
     private int Match(int a, int b, int best, int limit)
     {
         if (_pixels[a + best] != _pixels[b + best]) return 0;
-        int length = 0;
-        while (length < limit && _pixels[a + length] == _pixels[b + length]) length++;
-        return length;
+        return _pixels.AsSpan(a, limit).CommonPrefixLength(_pixels.AsSpan(b, limit));
     }
 
     // port: src/enc/backward_references_enc.c VP8LHashChainFill

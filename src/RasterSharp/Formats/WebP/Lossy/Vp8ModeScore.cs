@@ -22,6 +22,7 @@ internal struct Vp8ModeScore
 
     // port: src/enc/quant_enc.c InitScore, SetRDScore, CopyScore, AddScore
     public void Init() { D = SD = R = H = 0; Nz = 0; Score = MaxCost; }
+    public void ClearScore() { D = SD = R = H = Score = 0; Nz = 0; }
     public void SetScore(int lambda) => Score = (R + H) * lambda + 256 * (D + SD);
     public void CopyScore(in Vp8ModeScore other) { D = other.D; SD = other.SD; R = other.R; H = other.H; Nz = other.Nz; Score = other.Score; }
     public void AddScore(in Vp8ModeScore other) { D += other.D; SD += other.SD; R += other.R; H += other.H; Nz |= other.Nz; Score += other.Score; }

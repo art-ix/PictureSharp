@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.X86;
 using RasterSharp.Formats.WebP.Lossy;
 using RasterSharp.Internal;
 
@@ -6,7 +7,7 @@ namespace RasterSharp.Formats.WebP.ColorConversion;
 
 /// <summary>YUV 4:2:0 to RGBA conversion, bit-exact with libwebp.</summary>
 // port: src/dsp/yuv.h, src/dsp/upsampling.c, src/dec/io_dec.c (EmitFancyRGB / EmitSampledRGB)
-internal static class YuvToRgb
+internal static partial class YuvToRgb
 {
     private const int YuvFix2 = 6;                        // fixed-point precision for YUV->RGB
     private const int YuvMask2 = (256 << YuvFix2) - 1;
@@ -30,7 +31,7 @@ internal static class YuvToRgb
     private static Rgba32 ToRgba(int y, int u, int v) => new(YuvToR(y, v), YuvToG(y, u, v), YuvToB(y, u), 255);
 
     /// <summary>Converts a decoded frame to opaque RGBA pixels (width × height, tightly packed).</summary>
-    public static void Convert(Vp8Frame frame, Rgba32[] dst, bool fancyUpsampling, int maxDegreeOfParallelism = 1)
+    public static void Convert(Vp8Frame frame, Rgba32[] dst, bool fancyUpsampling, int maxDegreeOfParallelism = 1, bool allowSimd = true)
     {
         // Fancy upsampling works on row 0, then row pairs (2k-1, 2k), then a lone last row; sampling on rows.
         // Units only read the frame, so bands of units convert independently.
@@ -39,28 +40,29 @@ internal static class YuvToRgb
             ? Math.Min(Environment.ProcessorCount * 4, Math.Max(1, units / 8)) : 1;
         if (bands == 1)
         {
-            ConvertUnits(frame, dst, fancyUpsampling, 0, units);
+            ConvertUnits(frame, dst, fancyUpsampling, 0, units, allowSimd);
             return;
         }
 
         Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism),
-            band => ConvertUnits(frame, dst, fancyUpsampling, (int)((long)units * band / bands), (int)((long)units * (band + 1) / bands)));
+            band => ConvertUnits(frame, dst, fancyUpsampling, (int)((long)units * band / bands), (int)((long)units * (band + 1) / bands), allowSimd));
     }
 
-    private static void ConvertUnits(Vp8Frame frame, Span<Rgba32> dst, bool fancyUpsampling, int start, int end)
+    private static void ConvertUnits(Vp8Frame frame, Span<Rgba32> dst, bool fancyUpsampling, int start, int end, bool allowSimd)
     {
+        bool simd = allowSimd && Sse2.IsSupported;
         if (fancyUpsampling)
         {
-            ConvertFancy(frame, dst, start, end);
+            ConvertFancy(frame, dst, start, end, simd);
         }
         else
         {
-            ConvertSampled(frame, dst, start, end);
+            ConvertSampled(frame, dst, start, end, simd);
         }
     }
 
     // port: EmitSampledRGB (point-sampled chroma)
-    private static void ConvertSampled(Vp8Frame f, Span<Rgba32> dst, int start, int end)
+    private static void ConvertSampled(Vp8Frame f, Span<Rgba32> dst, int start, int end, bool simd)
     {
         int w = f.Width;
         for (int y = start; y < end; y++)
@@ -68,7 +70,8 @@ internal static class YuvToRgb
             int yRow = y * f.YStride;
             int uvRow = (y >> 1) * f.UvStride;
             Span<Rgba32> row = dst.Slice(y * w, w);
-            for (int x = 0; x < w; x++)
+            int x = simd ? ConvertSampledSse2(f, yRow, uvRow, row) : 0;
+            for (; x < w; x++)
             {
                 row[x] = ToRgba(f.Y[yRow + x], f.U[uvRow + (x >> 1)], f.V[uvRow + (x >> 1)]);
             }
@@ -77,7 +80,7 @@ internal static class YuvToRgb
 
     // port: EmitFancyRGB applied to units [start, end): unit 0 is the first row, unit k the row pair (2k-1, 2k),
     // or the last row of an even-sized picture.
-    private static void ConvertFancy(Vp8Frame f, Span<Rgba32> dst, int start, int end)
+    private static void ConvertFancy(Vp8Frame f, Span<Rgba32> dst, int start, int end, bool simd)
     {
         int h = f.Height;
         for (int k = start; k < end; k++)
@@ -85,7 +88,7 @@ internal static class YuvToRgb
             if (k == 0)
             {
                 // The first line is special cased: the u/v samples are mirrored at the boundary.
-                UpsampleLinePair(f, 0, -1, 0, 0, dst, -1);
+                UpsampleLinePair(f, 0, -1, 0, 0, dst, -1, simd);
                 continue;
             }
 
@@ -93,19 +96,19 @@ internal static class YuvToRgb
             if (y + 1 < h)
             {
                 // Rows (2k-1, 2k) interpolate between chroma rows k-1 and k.
-                UpsampleLinePair(f, y, y + 1, k - 1, k, dst, y + 1);
+                UpsampleLinePair(f, y, y + 1, k - 1, k, dst, y + 1, simd);
             }
             else
             {
                 // The very last row of an even-sized picture.
-                UpsampleLinePair(f, h - 1, -1, k - 1, k - 1, dst, -1);
+                UpsampleLinePair(f, h - 1, -1, k - 1, k - 1, dst, -1, simd);
             }
         }
     }
 
     // port: UPSAMPLE_FUNC. Writes row 'topY' (and 'bottomY' when >= 0) using chroma rows
     // 'topUv' (above) and 'curUv' (below).
-    private static void UpsampleLinePair(Vp8Frame f, int topY, int bottomY, int topUv, int curUv, Span<Rgba32> dst, int bottomDstRow)
+    private static void UpsampleLinePair(Vp8Frame f, int topY, int bottomY, int topUv, int curUv, Span<Rgba32> dst, int bottomDstRow, bool simd)
     {
         int len = f.Width;
         byte[] yp = f.Y;
@@ -133,7 +136,15 @@ internal static class YuvToRgb
             botDst[0] = ToRgba(yp[botYOff], (int)(uv0 & 0xff), (int)(uv0 >> 16));
         }
 
-        for (int x = 1; x <= lastPixelPair; ++x)
+        int x = 1;
+        if (simd && lastPixelPair >= 8)
+        {
+            x = UpsampleSse2(f, topYOff, botYOff, topUvOff, curUvOff, topDst, botDst, lastPixelPair);
+            tlUv = LoadUv(up[topUvOff + x - 1], vp[topUvOff + x - 1]);
+            lUv = LoadUv(up[curUvOff + x - 1], vp[curUvOff + x - 1]);
+        }
+
+        for (; x <= lastPixelPair; ++x)
         {
             uint tUv = LoadUv(up[topUvOff + x], vp[topUvOff + x]);  // top sample
             uint uv = LoadUv(up[curUvOff + x], vp[curUvOff + x]);   // sample

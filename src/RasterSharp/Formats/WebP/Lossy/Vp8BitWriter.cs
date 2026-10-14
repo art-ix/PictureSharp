@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace RasterSharp.Formats.WebP.Lossy;
 
@@ -11,6 +12,7 @@ internal sealed class Vp8BitWriter : IDisposable
     public long Position => 8L * (_size + _run) + 8 + _bits;
 
     // port: src/utils/bit_writer_utils.c VP8PutBit
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Put(bool bit, int probability)
     {
         int split = (_range * probability) >> 8;
@@ -38,6 +40,7 @@ internal sealed class Vp8BitWriter : IDisposable
     }
 
     // port: src/utils/bit_writer_utils.c Flush
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private void Flush()
     {
         int shift = 8 + _bits, bits = _value >> shift;

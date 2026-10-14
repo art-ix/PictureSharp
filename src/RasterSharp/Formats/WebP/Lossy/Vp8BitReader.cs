@@ -35,8 +35,8 @@ internal sealed class Vp8BitReader
 
     public bool Eof => _eof;
 
-    // port: VP8LoadNewBytes
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    // port: VP8LoadNewBytes. Runs once per 56 bits; kept out of line so that GetBit stays small where it is inlined.
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private void LoadNewBytes()
     {
         if (_pos < _max)
