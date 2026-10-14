@@ -2,34 +2,6 @@ using RasterSharp.Internal;
 
 namespace RasterSharp;
 
-/// <summary>Content presets that tune WebP lossy encoding parameters (as in libwebp's WebPPreset).</summary>
-public enum WebPPreset
-{
-    /// <summary>Default preset.</summary>
-    Default = 0,
-    /// <summary>Digital picture, like portrait, inner shot.</summary>
-    Picture,
-    /// <summary>Outdoor photograph, with natural lighting.</summary>
-    Photo,
-    /// <summary>Hand or line drawing, with high-contrast details.</summary>
-    Drawing,
-    /// <summary>Small-sized colorful images.</summary>
-    Icon,
-    /// <summary>Text-like images.</summary>
-    Text,
-}
-
-/// <summary>Predictive filter applied to the alpha plane of lossy images.</summary>
-public enum WebPAlphaFilter
-{
-    /// <summary>No filtering.</summary>
-    None = 0,
-    /// <summary>Pick a filter with a fast heuristic.</summary>
-    Fast = 1,
-    /// <summary>Try all filters and keep the smallest result.</summary>
-    Best = 2,
-}
-
 /// <summary>Options for the WebP encoder. Mirrors libwebp's WebPConfig.</summary>
 public sealed record WebPEncoderOptions : EncoderOptions
 {

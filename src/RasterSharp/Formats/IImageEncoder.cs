@@ -1,26 +1,5 @@
 namespace RasterSharp.Formats;
 
-/// <summary>Recognizes one image format from its leading signature bytes.</summary>
-internal interface IImageFormatDetector
-{
-    ImageFormat Format { get; }
-
-    /// <summary>Number of leading bytes <see cref="IsSupported"/> needs.</summary>
-    int HeaderSize { get; }
-
-    bool IsSupported(ReadOnlySpan<byte> header);
-}
-
-/// <summary>Decodes one image format from an in-memory buffer.</summary>
-internal interface IImageDecoder
-{
-    ImageFormat Format { get; }
-
-    Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options);
-
-    ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options);
-}
-
 /// <summary>Encodes an image into one format.</summary>
 internal interface IImageEncoder
 {

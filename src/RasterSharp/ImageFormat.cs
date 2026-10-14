@@ -28,7 +28,7 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
     public static ImageFormat Gif { get; } = new("GIF", "image/gif", ".gif");
 
     /// <summary>All file formats known to the library.</summary>
-    public static IReadOnlyList<ImageFormat> All { get; } = [WebP, Png, Jpeg, Bmp, Gif];
+    public static IReadOnlyList<ImageFormat> All => CodecRegistry.Formats;
 
     /// <summary>Short name of the format.</summary>
     public string Name { get; }

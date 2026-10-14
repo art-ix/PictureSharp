@@ -36,7 +36,7 @@ public class RgbaAndFormatTests
     [MemberData(nameof(AllFiles))]
     public void FormatDetector_RecognizesCorpus(string file)
     {
-        ImageFormat? format = Image.DetectFormat(Corpus.Read(file).AsSpan(0, FormatDetector.HeaderSize));
+        ImageFormat? format = Image.DetectFormat(Corpus.Read(file).AsSpan(0, CodecRegistry.HeaderSize));
         Assert.NotNull(format);
         Assert.Equal(Corpus.References[file].Format, format.Name);
     }
@@ -44,8 +44,8 @@ public class RgbaAndFormatTests
     [Fact]
     public void FormatDetector_RejectsGarbage()
     {
-        Assert.Null(FormatDetector.Detect("RIFF\0\0\0\0WAVE"u8));
-        Assert.Null(FormatDetector.Detect([]));
+        Assert.Null(Image.DetectFormat("RIFF\0\0\0\0WAVE"u8));
+        Assert.Null(Image.DetectFormat([]));
         Assert.Throws<ImageFormatException>(() => Image.Load("not an image"u8));
     }
 
@@ -58,7 +58,7 @@ public class RgbaAndFormatTests
         ImageFormat format = ImageFormat.All.Single(f => f.Name == name);
         IImageFormatDetector? detector = CodecRegistry.GetDetector(format);
         Assert.NotNull(detector);
-        Assert.True(detector.HeaderSize <= FormatDetector.HeaderSize);
+        Assert.True(detector.HeaderSize <= CodecRegistry.HeaderSize);
         Assert.Equal(format, CodecRegistry.GetDecoder(format)?.Format);
         Assert.Equal(format, CodecRegistry.GetEncoder(format)?.Format);
         Assert.True(format.CanDecode);
@@ -67,7 +67,7 @@ public class RgbaAndFormatTests
     }
 
     [Fact]
-    public void FormatDetector_HeaderSizeCoversWebP() => Assert.Equal(12, FormatDetector.HeaderSize);
+    public void FormatDetector_HeaderSizeCoversWebP() => Assert.Equal(12, CodecRegistry.HeaderSize);
 
     [Fact]
     public void Encoder_RejectsOptionsOfAnotherFormat()

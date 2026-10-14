@@ -20,21 +20,3 @@ public enum PixelFormat
     /// <summary>4 bytes per pixel: B, G, R, A with color channels premultiplied by alpha. Matches Format32bppPArgb and WPF Pbgra32.</summary>
     Bgra32Premultiplied,
 }
-
-/// <summary>Helpers for <see cref="PixelFormat"/>.</summary>
-public static class PixelFormatExtensions
-{
-    /// <summary>Number of bytes occupied by one pixel in the given format.</summary>
-    public static int BytesPerPixel(this PixelFormat format) => format switch
-    {
-        PixelFormat.Rgb24 or PixelFormat.Bgr24 => 3,
-        PixelFormat.Gray8 => 1,
-        PixelFormat.Rgba32 or PixelFormat.Bgra32 or PixelFormat.Argb32
-            or PixelFormat.Rgba32Premultiplied or PixelFormat.Bgra32Premultiplied => 4,
-        _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unknown pixel format."),
-    };
-
-    /// <summary>Whether the format carries an alpha channel.</summary>
-    public static bool HasAlpha(this PixelFormat format) =>
-        format is not (PixelFormat.Rgb24 or PixelFormat.Bgr24 or PixelFormat.Gray8);
-}

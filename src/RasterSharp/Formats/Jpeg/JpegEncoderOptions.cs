@@ -2,19 +2,6 @@ using RasterSharp.Internal;
 
 namespace RasterSharp;
 
-/// <summary>Chroma sampling for color JPEG images. Grayscale images use a single component.</summary>
-public enum JpegSubsampling
-{
-    /// <summary>Full chroma resolution.</summary>
-    Ratio444,
-    /// <summary>Half horizontal chroma resolution.</summary>
-    Ratio422,
-    /// <summary>Half horizontal and vertical chroma resolution (the default).</summary>
-    Ratio420,
-    /// <summary>Half vertical chroma resolution.</summary>
-    Ratio440,
-}
-
 /// <summary>Options for encoding the first frame as an 8-bit JPEG.</summary>
 public sealed record JpegEncoderOptions : EncoderOptions
 {

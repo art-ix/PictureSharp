@@ -23,11 +23,14 @@ internal static class CodecRegistry
         new(GifFormatDetector.Instance, GifDecoder.Instance, GifEncoder.Instance),
     ];
 
+    public static IReadOnlyList<ImageFormat> Formats { get; } =
+        Array.AsReadOnly(Codecs.Select(static codec => codec.Format).ToArray());
+
     private static readonly string UnrecognizedFormatMessage =
-        $"The data is not a recognized image format (expected {string.Join(", ", Codecs.Select(c => c.Format.Name))}).";
+        $"The data is not a recognized image format (expected {string.Join(", ", Formats.Select(static format => format.Name))}).";
 
     /// <summary>Number of bytes needed to recognize every registered format.</summary>
-    public static int HeaderSize { get; } = Codecs.Max(c => c.Detector.HeaderSize);
+    public static int HeaderSize { get; } = Codecs.Max(static codec => codec.Detector.HeaderSize);
 
     public static ImageFormat? Detect(ReadOnlySpan<byte> header)
     {
@@ -48,63 +51,23 @@ internal static class CodecRegistry
 
     public static IImageEncoder? GetEncoder(ImageFormat format) => Find(format)?.Encoder;
 
-    public static Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
+    private static Codec? Find(ImageFormat format)
     {
-        IImageDecoder decoder = GetDecoderFor(data.Span);
-        Image image;
-        try
+        foreach (Codec codec in Codecs)
         {
-            image = decoder.Decode(data, options);
-        }
-        catch (Exception ex) when (IsCorruptDataException(ex))
-        {
-            throw CorruptData(decoder.Format, ex);
+            if (codec.Format == format)
+            {
+                return codec;
+            }
         }
 
-        if (options.ApplyExifOrientation)
-        {
-            image.Mutate(static x => x.AutoOrient());
-        }
-
-        return image;
+        return null;
     }
 
-    public static ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
-    {
-        IImageDecoder decoder = GetDecoderFor(data.Span);
-        try
-        {
-            return decoder.Identify(data, options);
-        }
-        catch (Exception ex) when (IsCorruptDataException(ex))
-        {
-            throw CorruptData(decoder.Format, ex);
-        }
-    }
-
-    public static void Encode(Image image, Stream output, EncoderOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        IImageEncoder encoder = GetEncoder(options.Format)
-            ?? throw new NotSupportedException($"Saving images in {options.Format.Name} format is not supported.");
-        encoder.Encode(image, output, options);
-    }
-
-    private static Codec? Find(ImageFormat format) => Array.Find(Codecs, c => c.Format == format);
-
-    private static IImageDecoder GetDecoderFor(ReadOnlySpan<byte> data)
+    public static IImageDecoder GetDecoderFor(ReadOnlySpan<byte> data)
     {
         ImageFormat format = Detect(data) ?? throw new ImageFormatException(UnrecognizedFormatMessage);
         return GetDecoder(format)
             ?? throw new NotSupportedException($"Decoding {format.Name} images is not supported yet.");
     }
-
-    // Safety net: decoders validate their input explicitly, but any unexpected exception caused by
-    // malformed data is reported as ImageFormatException rather than leaking implementation details.
-    private static bool IsCorruptDataException(Exception ex) =>
-        ex is IndexOutOfRangeException or ArgumentException or InvalidOperationException
-            or OverflowException or ArithmeticException or InvalidCastException;
-
-    private static ImageFormatException CorruptData(ImageFormat format, Exception inner) =>
-        new(format, "The image data is corrupt.", inner);
 }

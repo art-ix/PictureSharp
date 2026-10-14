@@ -28,7 +28,7 @@ Stan środowiska (aktualizacja w fazie 6):
 ```
 RasterSharp/
   RasterSharp.slnx
-  Directory.Build.props          # net10.0, Nullable, LangVersion latest, TreatWarningsAsErrors,
+  Directory.Build.props          # net10.0, Nullable, LangVersion 14.0, TreatWarningsAsErrors,
                                  # IsAotCompatible, IsTrimmable, GenerateDocumentationFile
   THIRD-PARTY-NOTICES.txt        # licencja BSD-3 libwebp (kod portowany = praca pochodna) + inne źródła
   .gitignore                     # reference/, tests/assets/external/, bin/obj
@@ -37,10 +37,11 @@ RasterSharp/
     Image.cs, ImageFrame.cs, ImageFrameCollection.cs, ImageInfo.cs, ImageFormat.cs,
     Rgba32.cs, PixelFormat.cs, ImageMetadata.cs, BitmapData.cs, enums (RotateFlipType,
     ResizeMode, ResamplingFilter, ImageLockMode, ExifOrientation), DecoderOptions.cs,
-    EncoderOptions.cs (+ WebPEncoderOptions, PngEncoderOptions, BmpEncoderOptions, GifEncoderOptions), WebP.cs (fasada),
+    EncoderOptions.cs, WebP.cs (fasada),
     ImageFormatException.cs
     Formats/
-      FormatDetector.cs, IImageDecoder.cs, IImageEncoder.cs, CodecRegistry.cs (internal)
+      IImageFormatDetector.cs, IImageDecoder.cs, IImageEncoder.cs, CodecRegistry.cs, ImageCodec.cs (internal)
+      # Każdy format zawiera też publiczne opcje enkodera, enumy i rozszerzenia Image (namespace RasterSharp).
       WebP/ Container/ (RiffReader, RiffWriter, chunki VP8X/ALPH/ANIM/ANMF/ICCP/EXIF/XMP)
             Lossless/ (Vp8LBitReader/Writer, Huffman*, ColorCache, Transforms, Vp8LDecoder,
                        Vp8LEncoder, BackwardRefs*, Histogram*, Predictor*, NearLossless)
@@ -57,7 +58,8 @@ RasterSharp/
       Gif/  (GifFile, GifDecoder, GifEncoder, GifLzwDecoder/Encoder, GifPaletteBuilder)
       Metadata/ (ExifReader/Patcher: Orientation, rozdzielczość; IccProfile)
     Compression/ (Inflater, Deflater, Adler32, Crc32)
-    Processing/  (Resizer, Kernels, Geometry, ColorOps, Compositor, PixelConverter,
+    Processing/  (ImageProcessingContext.*, ResizeOptions, enumy przetwarzania,
+                  Resizer, Kernels, Geometry, ColorOps, Compositor, PixelConverter,
                   Quantization/: MedianCutQuantizer, OctreeQuantizer, PaletteMapper, QuantHashTable)
     Internal/    (BitHelpers, pooling, SIMD helpers)
   tests/RasterSharp.Tests/         # xUnit (zależności tylko w testach)

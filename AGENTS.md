@@ -52,6 +52,11 @@ Pełny plan implementacji z fazami i kryteriami ukończenia (DoD) jest w [plan.m
 
 ## Styl kodu
 
+- Używamy C# 14 (`LangVersion=14.0`) i .NET 10. Styl edytora określa `.editorconfig`.
+- Stosujemy SOLID i Clean Code tam, gdzie upraszczają kod: jedna odpowiedzialność typu, małe interfejsy dla rzeczywistych granic i wspólne miejsce konfiguracji. Nie dodajemy interfejsów, fabryk ani warstw bez konkretnej potrzeby.
+- Nazwa pliku odpowiada głównemu typowi. Publiczne enumy mają osobne pliki; części typu `partial` nazywamy `Typ.Odpowiedzialność.cs`. Małe, ściśle powiązane typy wewnętrzne portów mogą pozostać razem.
+- Pliki grupujemy według funkcji: opcje, enumy i rozszerzenia formatu w `Formats/<Format>/`, kontekst i opcje przetwarzania w `Processing/`, pomocnicze operacje wejścia/wyjścia w `Internal/`. Publiczne typy nadal należą wyłącznie do namespace `RasterSharp`.
+- Preferujemy dostępne idiomy C#: pattern matching, wyrażenia kolekcji, rekordy i `with`, `field` w walidowanych właściwościach oraz bloki `extension`. Stosujemy je, gdy poprawiają czytelność i zachowują semantykę, alokacje oraz zgodność portu.
 - Nullable włączone, `TreatWarningsAsErrors`. Publiczne API ma komentarze XML (`GenerateDocumentationFile`).
 - Gorące pętle:
   - bez alokacji,
@@ -77,6 +82,7 @@ Nowy format pliku rejestrujemy w jednym miejscu, `Formats/CodecRegistry.cs`:
 - dekoder (`IImageDecoder`),
 - enkoder (`IImageEncoder<TOptions>` z własnym rekordem opcji).
 Duże kodeki dzielimy na pliki `partial class` (np. `PngDecoder.Chunks.cs`).
+`CodecRegistry` wybiera kodeki i udostępnia listę formatów; `ImageCodec` odpowiada za ich wywołanie, normalizację wyjątków i zastosowanie orientacji EXIF.
 
 ## Build i testy
 

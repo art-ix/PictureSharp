@@ -2,26 +2,6 @@ using RasterSharp.Internal;
 
 namespace RasterSharp;
 
-/// <summary>How the GIF encoder reduces images with more colors than fit in a palette.</summary>
-public enum GifQuantizer
-{
-    /// <summary>The default: <see cref="MedianCut"/>.</summary>
-    Auto = 0,
-    /// <summary>Median cut, as Pillow's <c>Image.quantize(method=MEDIANCUT)</c> (best quality).</summary>
-    MedianCut,
-    /// <summary>Fast octree, as Pillow's <c>Image.quantize(method=FASTOCTREE)</c> (faster).</summary>
-    Octree,
-}
-
-/// <summary>Dithering applied when an image is quantized to a palette.</summary>
-public enum GifDither
-{
-    /// <summary>Map every pixel to the nearest palette color.</summary>
-    None = 0,
-    /// <summary>Floyd–Steinberg error diffusion (smoother gradients, larger files).</summary>
-    FloydSteinberg,
-}
-
 /// <summary>
 /// Options for the GIF encoder. GIF stores at most 256 colors per frame and only fully transparent or opaque pixels:
 /// images with more colors are quantized, and alpha is reduced with <see cref="TransparencyThreshold"/>.

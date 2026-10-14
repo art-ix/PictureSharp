@@ -6,7 +6,7 @@ public sealed partial class Image
 {
     /// <summary>
     /// Saves the image in the format given by the file extension, with that format's default options
-    /// (.webp: lossy quality 75; .png; .jpg: quality 75; .bmp).
+    /// (.webp: lossy quality 75; .png; .jpg: quality 75; .bmp; .gif).
     /// </summary>
     public void Save(string path) => Save(path, FormatFromPath(path).CreateDefaultEncoderOptions());
 
@@ -30,7 +30,7 @@ public sealed partial class Image
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(options);
         ThrowIfDisposed();
-        CodecRegistry.Encode(this, stream, options);
+        ImageCodec.Encode(this, stream, options);
     }
 
     /// <summary>Encodes the image in the format given by the file extension and writes it asynchronously.</summary>
