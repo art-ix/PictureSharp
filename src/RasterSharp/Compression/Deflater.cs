@@ -208,12 +208,7 @@ internal sealed class Deflater
         {
             if (data[candidate + bestLen] == data[pos + bestLen] && data[candidate] == data[pos])
             {
-                int len = 0;
-                while (len < maxLen && data[candidate + len] == data[pos + len])
-                {
-                    len++;
-                }
-
+                int len = data.AsSpan(candidate, maxLen).CommonPrefixLength(data.AsSpan(pos, maxLen));
                 if (len > bestLen)
                 {
                     bestLen = len;

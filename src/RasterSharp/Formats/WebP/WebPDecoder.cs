@@ -10,7 +10,7 @@ using RasterSharp.Formats.WebP.Lossy;
 namespace RasterSharp.Formats.WebP;
 
 /// <summary>Decodes WebP files: still lossy/lossless images and animations.</summary>
-internal sealed class WebPDecoder : IImageDecoder
+internal sealed partial class WebPDecoder : IImageDecoder
 {
     public static WebPDecoder Instance { get; } = new();
 
@@ -137,6 +137,12 @@ internal sealed class WebPDecoder : IImageDecoder
     }
 
     internal static void ArgbToRgba(ReadOnlySpan<uint> argb, Span<Rgba32> dst)
+    {
+        int done = ArgbToRgbaSimd(argb, dst);
+        ArgbToRgbaScalar(argb[done..], dst[done..]);
+    }
+
+    internal static void ArgbToRgbaScalar(ReadOnlySpan<uint> argb, Span<Rgba32> dst)
     {
         for (int i = 0; i < dst.Length; i++)
         {

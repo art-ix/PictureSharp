@@ -5,14 +5,7 @@ namespace RasterSharp.Formats.WebP.Lossless;
 internal static partial class Vp8LForwardTransforms
 {
     // port: src/dsp/lossless_enc.c SubtractGreenFromBlueAndRed_C
-    public static void SubtractGreen(Span<uint> pixels)
-    {
-        foreach (ref uint p in pixels)
-        {
-            uint green = (p >> 8) & 255;
-            p = (p & 0xff00ff00u) | (((p & 0x00ff00ffu) + 0x01000100u - ((green << 16) | green)) & 0x00ff00ffu);
-        }
-    }
+    public static void SubtractGreen(Span<uint> pixels) => LosslessTransforms.SubtractGreenFromBlueAndRed(pixels);
 
     // port: src/enc/predictor_enc.c VP8LOptimizeSampling
     // Finds the largest power-of-two squares of uniform value the image is made of and subsamples it in place.

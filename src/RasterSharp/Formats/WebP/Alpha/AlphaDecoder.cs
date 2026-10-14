@@ -1,3 +1,4 @@
+using System.Runtime.Intrinsics.X86;
 using RasterSharp.Formats.WebP.Lossless;
 
 namespace RasterSharp.Formats.WebP.Alpha;
@@ -13,7 +14,7 @@ internal enum AlphaFilterType
 
 /// <summary>Decoder of the ALPH chunk (alpha plane of lossy images).</summary>
 // port: src/dec/alpha_dec.c, src/dsp/filters.c (unfilters)
-internal static class AlphaDecoder
+internal static partial class AlphaDecoder
 {
     /// <summary>Decodes the ALPH payload into a width × height alpha plane.</summary>
     public static byte[] Decode(byte[] data, int offset, int length, int width, int height)
@@ -70,6 +71,19 @@ internal static class AlphaDecoder
     /// <summary>Reverses the prediction filter in place, row by row.</summary>
     public static void Unfilter(AlphaFilterType filter, Span<byte> plane, int width, int height)
     {
+        if (Sse2.IsSupported)
+        {
+            UnfilterX86(filter, plane, width, height);
+        }
+        else
+        {
+            UnfilterScalar(filter, plane, width, height);
+        }
+    }
+
+    /// <summary>Scalar alpha reconstruction. The x86 path is in <c>AlphaDecoder.Simd.cs</c>.</summary>
+    internal static void UnfilterScalar(AlphaFilterType filter, Span<byte> plane, int width, int height)
+    {
         for (int y = 0; y < height; y++)
         {
             Span<byte> row = plane.Slice(y * width, width);
@@ -77,10 +91,10 @@ internal static class AlphaDecoder
             switch (filter)
             {
                 case AlphaFilterType.Horizontal:
-                    HorizontalUnfilter(prev, row);
+                    HorizontalUnfilterScalar(prev, row);
                     break;
                 case AlphaFilterType.Vertical:
-                    VerticalUnfilter(prev, row);
+                    VerticalUnfilterScalar(prev, row);
                     break;
                 case AlphaFilterType.Gradient:
                     GradientUnfilter(prev, row);
@@ -90,7 +104,7 @@ internal static class AlphaDecoder
     }
 
     // port: HorizontalUnfilter_C (in place: 'row' holds the residuals and receives the values)
-    private static void HorizontalUnfilter(ReadOnlySpan<byte> prev, Span<byte> row)
+    private static void HorizontalUnfilterScalar(ReadOnlySpan<byte> prev, Span<byte> row)
     {
         byte pred = prev.IsEmpty ? (byte)0 : prev[0];
         for (int i = 0; i < row.Length; ++i)
@@ -101,11 +115,11 @@ internal static class AlphaDecoder
     }
 
     // port: VerticalUnfilter_C
-    private static void VerticalUnfilter(ReadOnlySpan<byte> prev, Span<byte> row)
+    private static void VerticalUnfilterScalar(ReadOnlySpan<byte> prev, Span<byte> row)
     {
         if (prev.IsEmpty)
         {
-            HorizontalUnfilter(prev, row);
+            HorizontalUnfilterScalar(prev, row);
             return;
         }
 
@@ -120,7 +134,7 @@ internal static class AlphaDecoder
     {
         if (prev.IsEmpty)
         {
-            HorizontalUnfilter(prev, row);
+            HorizontalUnfilterScalar(prev, row);
             return;
         }
 

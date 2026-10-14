@@ -24,17 +24,12 @@ internal static partial class Vp8LForwardTransforms
             var (greenToBlue, redToBlue) = GetBestGreenRedToBlue(argb, width, startX, startY, endX, endY, previousX, previousY, quality, accumulatedBlue);
             previousX = 0xff000000u | ((uint)(redToBlue & 0xff) << 16) | ((uint)(greenToBlue & 0xff) << 8) | (uint)(greenToRed & 0xff);
             image[offset] = previousX;
+            // port: src/dsp/lossless_enc.c VP8LTransformColor_C
             for (int y = startY; y < endY; y++)
-            for (int x = startX; x < endX; x++)
             {
-                // port: src/dsp/lossless_enc.c VP8LTransformColor_C
-                int i = y * width + x;
-                uint p = argb[i];
-                sbyte green = (sbyte)(p >> 8), red = (sbyte)(p >> 16);
-                int newRed = (red & 0xff) - LosslessTransforms.ColorTransformDelta((sbyte)greenToRed, green);
-                int newBlue = (int)(p & 0xff) - LosslessTransforms.ColorTransformDelta((sbyte)greenToBlue, green)
-                    - LosslessTransforms.ColorTransformDelta((sbyte)redToBlue, red);
-                argb[i] = (p & 0xff00ff00u) | ((uint)(newRed & 0xff) << 16) | (uint)(newBlue & 0xff);
+                LosslessTransforms.TransformColor(
+                    (sbyte)greenToRed, (sbyte)greenToBlue, (sbyte)redToBlue,
+                    argb.AsSpan(y * width + startX, endX - startX));
             }
             // Gather accumulated histogram data; repeated pixels are handled by backward references.
             for (int y = startY; y < endY; y++)

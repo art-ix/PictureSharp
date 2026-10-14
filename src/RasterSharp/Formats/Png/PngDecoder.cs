@@ -1,3 +1,4 @@
+using System.Runtime.Intrinsics.X86;
 using RasterSharp.Compression;
 using RasterSharp.Formats.Metadata;
 
@@ -182,7 +183,85 @@ internal sealed partial class PngDecoder : IImageDecoder
     }
 
     /// <summary>Reverses the scanline filters in place. Each row is preceded by its filter type byte.</summary>
-    private static void Unfilter(byte[] data, int offset, int width, int height, int bitsPerPixel)
+    internal static void Unfilter(byte[] data, int offset, int width, int height, int bitsPerPixel)
+    {
+        if (Sse2.IsSupported)
+        {
+            UnfilterX86(data, offset, width, height, bitsPerPixel);
+        }
+        else
+        {
+            UnfilterScalar(data, offset, width, height, bitsPerPixel);
+        }
+    }
+
+    /// <summary>Scalar scanline reconstruction. The x86 path is in <c>PngDecoder.Simd.cs</c>.</summary>
+    internal static void UnfilterScalar(byte[] data, int offset, int width, int height, int bitsPerPixel)
+    {
+        WalkRows(data, offset, width, height, bitsPerPixel, static (row, prev, bpp, filter) =>
+        {
+            switch (filter)
+            {
+                case 1:
+                    UnfilterSubScalar(row, bpp);
+                    break;
+                case 2:
+                    if (!prev.IsEmpty)
+                    {
+                        UnfilterUpScalar(row, prev);
+                    }
+
+                    break;
+                case 3:
+                    UnfilterAverageScalar(row, prev, bpp);
+                    break;
+                case 4:
+                    UnfilterPaethScalar(row, prev, bpp);
+                    break;
+                case not 0:
+                    throw Error($"Invalid scanline filter type {filter}.");
+            }
+        });
+    }
+
+    private static void UnfilterSubScalar(Span<byte> row, int bpp)
+    {
+        for (int i = bpp; i < row.Length; i++)
+        {
+            row[i] += row[i - bpp];
+        }
+    }
+
+    private static void UnfilterUpScalar(Span<byte> row, ReadOnlySpan<byte> previous)
+    {
+        for (int i = 0; i < row.Length; i++)
+        {
+            row[i] += previous[i];
+        }
+    }
+
+    private static void UnfilterAverageScalar(Span<byte> row, ReadOnlySpan<byte> previous, int bpp)
+    {
+        for (int i = 0; i < row.Length; i++)
+        {
+            int left = i >= bpp ? row[i - bpp] : 0;
+            int up = previous.IsEmpty ? 0 : previous[i];
+            row[i] += (byte)((left + up) >> 1);
+        }
+    }
+
+    private static void UnfilterPaethScalar(Span<byte> row, ReadOnlySpan<byte> previous, int bpp)
+    {
+        for (int i = 0; i < row.Length; i++)
+        {
+            int left = i >= bpp ? row[i - bpp] : 0;
+            int up = previous.IsEmpty ? 0 : previous[i];
+            int upLeft = i >= bpp && !previous.IsEmpty ? previous[i - bpp] : 0;
+            row[i] += PngConstants.Paeth(left, up, upLeft);
+        }
+    }
+
+    private static void WalkRows(byte[] data, int offset, int width, int height, int bitsPerPixel, RowFilter filter)
     {
         int rowBytes = (int)PngConstants.RowBytes(width, bitsPerPixel);
         int bpp = Math.Max(1, bitsPerPixel / 8);
@@ -190,52 +269,11 @@ internal sealed partial class PngDecoder : IImageDecoder
         for (int y = 0; y < height; y++)
         {
             int rowStart = offset + (y * stride);
-            int filter = data[rowStart];
             Span<byte> row = data.AsSpan(rowStart + 1, rowBytes);
             ReadOnlySpan<byte> prev = y == 0 ? default : data.AsSpan(rowStart - stride + 1, rowBytes);
-            switch (filter)
-            {
-                case 0:
-                    break;
-                case 1: // Sub
-                    for (int i = bpp; i < row.Length; i++)
-                    {
-                        row[i] += row[i - bpp];
-                    }
-
-                    break;
-                case 2: // Up
-                    if (!prev.IsEmpty)
-                    {
-                        for (int i = 0; i < row.Length; i++)
-                        {
-                            row[i] += prev[i];
-                        }
-                    }
-
-                    break;
-                case 3: // Average
-                    for (int i = 0; i < row.Length; i++)
-                    {
-                        int left = i >= bpp ? row[i - bpp] : 0;
-                        int up = prev.IsEmpty ? 0 : prev[i];
-                        row[i] += (byte)((left + up) >> 1);
-                    }
-
-                    break;
-                case 4: // Paeth
-                    for (int i = 0; i < row.Length; i++)
-                    {
-                        int left = i >= bpp ? row[i - bpp] : 0;
-                        int up = prev.IsEmpty ? 0 : prev[i];
-                        int upLeft = i >= bpp && !prev.IsEmpty ? prev[i - bpp] : 0;
-                        row[i] += PngConstants.Paeth(left, up, upLeft);
-                    }
-
-                    break;
-                default:
-                    throw Error($"Invalid scanline filter type {filter}.");
-            }
+            filter(row, prev, bpp, data[rowStart]);
         }
     }
+
+    private delegate void RowFilter(Span<byte> row, ReadOnlySpan<byte> previous, int bpp, int filter);
 }

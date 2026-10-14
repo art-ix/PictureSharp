@@ -511,7 +511,7 @@ Specyfikacje: GIF89a (i GIF87a), rozszerzenia aplikacji NETSCAPE2.0/ANIMEXTS1.0 
     - round-trip GIF→WebP lossless→GIF zachowuje piksele, czasy i pętlę.
 
 ### Faza 10: wydajność, odporność, wydanie
-**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD) jako 0.4.1 (2026-10-14); dalsze optymalizacje w 0.4.2.**
+**Status: w toku. Etap 1 wydany jako 0.4.0, etap 2 (SIMD lossy) jako 0.4.1, etap 3 (SIMD lossless i filtry wierszowe) jako 0.4.2 (2026-10-14). Dalsze optymalizacje w 0.4.3.**
 Etap 1 (0.4.0), pomiary na i5-12500H (16 wątków logicznych) względem narzędzi libwebp 1.6.0:
 - Enkoder lossless: wierny port warstwy wysokiego poziomu z 1.6.0 (`EncoderAnalyze`/`AnalyzeEntropy`, konfiguracje crunch, `EncodeImageInternal`, `GetBackwardReferences`, `CalculateBestCacheSize`, predyktor z wyborem sampling, `OptimizeSampling`, `CostManager` w `TraceBackwards`, klastrowanie low-effort, `WebPReplaceTransparentPixels`). Wynik bajtowo identyczny z `cwebp` (72 konfiguracje korpusu, zdjęcia do 2,8 MP). 1920×1440: 44,7 s → 1,7 s (cwebp 1,28 s); konfiguracje m5/m6 liczone równolegle.
 - Enkoder lossy: przebieg tokenów jako deterministyczny wavefront (bariery przy odświeżaniu kosztów, odtwarzanie tokenów/statystyk/statystyk filtra w kolejności rastrowej), analiza równolegle. 12 MP q75: 3,6 s → 0,84 s (cwebp 0,75 s).
@@ -521,7 +521,11 @@ Etap 1 (0.4.0), pomiary na i5-12500H (16 wątków logicznych) względem narzędz
 Etap 2 (0.4.1), SIMD (x86 SSE4.1/AVX2, ścieżka skalarna na innych CPU; arytmetyka jak w C, więc wynik identyczny ze skalarem dla każdego wejścia, z testami):
 - Enkoder lossy: FTransform, ITransform, SSE, Disto (TTransform), QuantizeBlock; predyktory 16x16/8x8 wierszami, tańsza emisja tokenów. 12 MP q75: 0,84 → 0,51 s (cwebp 0,75 s); 1920×1440 jednowątkowo 955 → 482 ms (cwebp 181 ms).
 - Dekoder lossy: TransformOne, filtr pętli (16 pozycji krawędzi naraz, transpozycja 16x8), YUV→RGB z fancy upsamplingiem; potok parser → rekonstrukcja+filtr (dwa bufory makrobloków) zamiast wavefrontu filtra. 12 MP: 136 → 83 ms (dwebp 89 ms).
-Pozostaje (0.4.2+): SIMD transformacji lossless, resize i PNG (unfilter, inflate/deflate), dekoder i enkoder lossless, BenchmarkDotNet dla kodeków, dokumentacja wydajności, ARM (AdvSimd).
+Etap 3 (0.4.2), SIMD x86 (SSE2/AVX2, skalar i ogon na innych CPU; każda ścieżka ma test identyczności ze skalarem). Strumień enkodera lossless bez zmian (testy Oracle).
+- Dekoder lossless: PredictorAdd dla trybów 0–4 i 8–9 (AVX2 po 8 pikseli, SSE2 po 4), dodanie zieleni, odwrotna transformacja koloru, ARGB→RGBA. 1920×1440: 65 → 52 ms (dwebp 45 ms). 12 MP: 254 → 233 ms (dwebp 163 ms).
+- Enkoder lossless: odjęcie zieleni i transformacja koloru. 1920×1440 m4: 1,80 → 1,65 s (cwebp 1,28 s). 12 MP m4: 7,6 s (cwebp 5,3 s).
+- PNG: odfiltrowanie wiersza Up oraz Sub dla 8 bitów i RGBA. Alfa WebP: filtr poziomy i pionowy. Dekod PNG 1920×1440: 55 → 52 ms. Zapis PNG: dopasowanie LZ77 przez `CommonPrefixLength` (ta sama długość co skan skalarny, plik bez zmian). 1920×1440: 846 → 760 ms; 12 MP: 3,19 → 2,89 s.
+Pozostaje (0.4.3+): pętla Huffmana dekodera lossless, predyktory 5–7 i 10–13, wyszukiwanie predyktora i klastrowanie enkodera, inflate, resize, BenchmarkDotNet, dokumentacja wydajności, ARM (AdvSimd).
 - BenchmarkDotNet: dekodowanie i kodowanie w porównaniu z czasami `cwebp`/`dwebp`. Cel: ≤3× wolniej od natywnego C z SIMD.
 - Ścieżki `Vector128`/`Vector256` (cross-platform intrinsics) dla:
   - IDCT/FDCT,

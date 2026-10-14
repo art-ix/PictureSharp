@@ -7,6 +7,22 @@ namespace RasterSharp.Internal;
 /// <summary>Shuffles and loads shared by the SIMD paths of the codecs (x86 only; callers keep a scalar path).</summary>
 internal static class Simd
 {
+    /// <summary><c>(a + b) &gt;&gt; 1</c> per byte, rounding down. port: src/dsp/lossless_sse2.c Average2_m128i.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<byte> Average2(Vector128<byte> a, Vector128<byte> b)
+    {
+        Vector128<byte> ones = Vector128.Create((byte)1);
+        return Sse2.Subtract(Sse2.Average(a, b), Sse2.And(Sse2.Xor(a, b), ones));
+    }
+
+    /// <summary><c>(a + b) &gt;&gt; 1</c> per byte, rounding down. port: src/dsp/lossless_avx2.c Average2_m256i.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector256<byte> Average2(Vector256<byte> a, Vector256<byte> b)
+    {
+        Vector256<byte> ones = Vector256.Create((byte)1);
+        return Avx2.Subtract(Avx2.Average(a, b), Avx2.And(Avx2.Xor(a, b), ones));
+    }
+
     /// <summary>Transposes the 4x4 matrix whose rows are <paramref name="r0"/>..<paramref name="r3"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Transpose(ref Vector128<int> r0, ref Vector128<int> r1, ref Vector128<int> r2, ref Vector128<int> r3)

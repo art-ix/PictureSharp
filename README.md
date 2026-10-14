@@ -57,7 +57,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.4.1); performance work continues in phase 10.
+Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.4.2); performance work continues in phase 10.
 
 ## License
 

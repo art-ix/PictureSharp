@@ -4,7 +4,7 @@ namespace RasterSharp.Formats.WebP.Lossless;
 
 /// <summary>Inverse VP8L image transforms and pixel arithmetic, operating on whole ARGB images.</summary>
 // port: src/dsp/lossless.c, src/dsp/lossless_common.h
-internal static class LosslessTransforms
+internal static partial class LosslessTransforms
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint AddPixels(uint a, uint b)
@@ -109,16 +109,23 @@ internal static class LosslessTransforms
     }
 
     // port: PredictorInverseTransform_C (in place: residuals are replaced by predicted values)
-    public static void PredictorInverseTransform(Vp8LTransform transform, uint[] pixels)
+    public static void PredictorInverseTransform(Vp8LTransform transform, uint[] pixels) =>
+        PredictorRows(transform, pixels, useSimd: true);
+
+    /// <summary>Same reconstruction as <see cref="PredictorInverseTransform"/>, using only the scalar predictors.</summary>
+    internal static void PredictorInverseTransformScalar(Vp8LTransform transform, uint[] pixels) =>
+        PredictorRows(transform, pixels, useSimd: false);
+
+    private static void PredictorRows(Vp8LTransform transform, uint[] pixels, bool useSimd)
     {
         int width = transform.XSize;
         int height = transform.YSize;
 
         // First row follows the L (mode=1) mode; its first pixel is predicted from black.
         pixels[0] = AddPixels(pixels[0], WebPConstants.ArgbBlack);
-        for (int x = 1; x < width; x++)
+        if (width > 1)
         {
-            pixels[x] = AddPixels(pixels[x], pixels[x - 1]);
+            Add(1, 1, width);
         }
 
         int tileWidth = 1 << transform.Bits;
@@ -139,13 +146,34 @@ internal static class LosslessTransforms
             {
                 int mode = (int)((modes[modeBase + (x >> transform.Bits)] >> 8) & 0xf);
                 int xEnd = Math.Min((x & ~mask) + tileWidth, width);
-                PredictorAdd(mode, pixels, row + x, row + xEnd, width);
+                Add(mode, row + x, row + xEnd);
                 x = xEnd;
+            }
+        }
+
+        void Add(int mode, int start, int end)
+        {
+            if (useSimd)
+            {
+                PredictorAdd(mode, pixels, start, end, width);
+            }
+            else
+            {
+                PredictorAddScalar(mode, pixels, start, end, width);
             }
         }
     }
 
     private static void PredictorAdd(int mode, uint[] pixels, int start, int end, int width)
+    {
+        int done = end - start >= 4 ? PredictorRunSimd(mode, pixels, start, end, width) : 0;
+        if (start + done < end)
+        {
+            PredictorAddScalar(mode, pixels, start + done, end, width);
+        }
+    }
+
+    private static void PredictorAddScalar(int mode, uint[] pixels, int start, int end, int width)
     {
         switch (mode)
         {
@@ -189,6 +217,15 @@ internal static class LosslessTransforms
     // port: VP8LAddGreenToBlueAndRed_C
     public static void AddGreenToBlueAndRed(Span<uint> pixels)
     {
+        int done = pixels.Length >= 4 ? ApplyGreenSimd(pixels, add: true) : 0;
+        if (done < pixels.Length)
+        {
+            AddGreenToBlueAndRedScalar(pixels[done..]);
+        }
+    }
+
+    internal static void AddGreenToBlueAndRedScalar(Span<uint> pixels)
+    {
         for (int i = 0; i < pixels.Length; i++)
         {
             uint argb = pixels[i];
@@ -200,11 +237,39 @@ internal static class LosslessTransforms
         }
     }
 
+    // port: src/dsp/lossless_enc.c SubtractGreenFromBlueAndRed_C
+    internal static void SubtractGreenFromBlueAndRed(Span<uint> pixels)
+    {
+        int done = pixels.Length >= 4 ? ApplyGreenSimd(pixels, add: false) : 0;
+        if (done < pixels.Length)
+        {
+            SubtractGreenFromBlueAndRedScalar(pixels[done..]);
+        }
+    }
+
+    internal static void SubtractGreenFromBlueAndRedScalar(Span<uint> pixels)
+    {
+        foreach (ref uint p in pixels)
+        {
+            uint green = (p >> 8) & 255;
+            p = (p & 0xff00ff00u) | (((p & 0x00ff00ffu) + 0x01000100u - ((green << 16) | green)) & 0x00ff00ffu);
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int ColorTransformDelta(sbyte colorPred, sbyte color) => (colorPred * color) >> 5;
 
     // port: VP8LTransformColorInverse_C
     public static void TransformColorInverse(sbyte greenToRed, sbyte greenToBlue, sbyte redToBlue, Span<uint> pixels)
+    {
+        int done = pixels.Length >= 4 ? TransformColorInverseSimd(greenToRed, greenToBlue, redToBlue, pixels) : 0;
+        if (done < pixels.Length)
+        {
+            TransformColorInverseScalar(greenToRed, greenToBlue, redToBlue, pixels[done..]);
+        }
+    }
+
+    internal static void TransformColorInverseScalar(sbyte greenToRed, sbyte greenToBlue, sbyte redToBlue, Span<uint> pixels)
     {
         for (int i = 0; i < pixels.Length; i++)
         {
@@ -219,6 +284,28 @@ internal static class LosslessTransforms
             newBlue += ColorTransformDelta(redToBlue, (sbyte)newRed);
             newBlue &= 0xff;
             pixels[i] = (argb & 0xff00ff00u) | (uint)(newRed << 16) | (uint)newBlue;
+        }
+    }
+
+    // port: src/dsp/lossless_enc.c VP8LTransformColor_C
+    internal static void TransformColor(sbyte greenToRed, sbyte greenToBlue, sbyte redToBlue, Span<uint> pixels)
+    {
+        int done = pixels.Length >= 4 ? TransformColorSimd(greenToRed, greenToBlue, redToBlue, pixels) : 0;
+        if (done < pixels.Length)
+        {
+            TransformColorScalar(greenToRed, greenToBlue, redToBlue, pixels[done..]);
+        }
+    }
+
+    internal static void TransformColorScalar(sbyte greenToRed, sbyte greenToBlue, sbyte redToBlue, Span<uint> pixels)
+    {
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            uint p = pixels[i];
+            sbyte green = (sbyte)(p >> 8), red = (sbyte)(p >> 16);
+            int newRed = (red & 0xff) - ColorTransformDelta(greenToRed, green);
+            int newBlue = (int)(p & 0xff) - ColorTransformDelta(greenToBlue, green) - ColorTransformDelta(redToBlue, red);
+            pixels[i] = (p & 0xff00ff00u) | ((uint)(newRed & 0xff) << 16) | (uint)(newBlue & 0xff);
         }
     }
 
