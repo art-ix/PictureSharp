@@ -51,7 +51,7 @@ Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder 
 
 ## What the tests verify
 
-In release 0.4.2, all 3773 tests pass, including the Oracle tests against libwebp 1.6.0.
+In version 0.4.3, all 3789 tests pass, including the Oracle tests against libwebp 1.6.0.
 
 - **Decoders:** pixels match `dwebp` and Pillow exactly (SHA-256 of RGBA in `tests/assets/reference.json`). The WebP decoder ports originated from libwebp 1.3.2; recomputing the 248 corpus references with 1.6.0 changed none.
 - **Lossless WebP:** the nine encoder source images round-trip exactly through both decoders, and the VP8L bitstream is byte-identical to `cwebp` 1.6.0 in 72 configurations (methods 0–6, qualities 50–100, near-lossless, `-exact`).
@@ -61,6 +61,7 @@ In release 0.4.2, all 3773 tests pass, including the Oracle tests against libweb
 - **GIF:** decoded frames of the 30 corpus files match `anim_dump` 1.6.0 (or `gif2webp` where `anim_util.c` restores the wrong canvas, Pillow for files libwebp rejects); 147 quantization results are identical to Pillow 10.2.0 (median cut, octree, Floyd–Steinberg); RasterSharp's GIF files decode identically in `anim_dump` and Pillow; `WebPConverter.Convert` matches `gif2webp` frame for frame, and GIF → lossless WebP → GIF round-trips exactly.
 - **SIMD:** every vector path is compared with its scalar version on random and extreme inputs and must give identical results; other CPUs keep the scalar code. Release 0.4.1 covers the VP8 codec (SSE4.1/AVX2 transforms, quantization, distortion, loop filters, YUV to RGB with fancy upsampling). Release 0.4.2 covers VP8L predictors 0–4 and 8–9, the green and color transforms, ARGB to RGBA, PNG Sub/Up unfiltering and the WebP alpha horizontal and vertical filters (SSE2/AVX2).
 - **Threads:** lossy and lossless encoding and lossy decoding give the same bytes and pixels for any `MaxDegreeOfParallelism`.
+- **VP8L predictors in 0.4.3:** modes 10–12 add SSE2/AVX2 paths. Tests cover tile bits 2–9, vector and tile boundaries, nested rounding, selection ties, clamping and residual wraparound. The predictor and decoder tests also run with AVX2 disabled and with all hardware intrinsics disabled. See [Performance](performance.md) for timings and benchmark commands.
 - **Robustness:** every corpus file is truncated at over a hundred lengths and mutated 120 times (bit flips, extreme length fields, inserted and removed blocks); decoding and identification may only throw `ImageFormatException` or `NotSupportedException`, and `MaxPixels` is enforced for every file.
 - **Image processing:** 140 tests. The Pillow 10.2.0 oracle (`tests/assets/processing_reference.py`) checks 569 results for exact pixel equality: resizing with all filters, modes and anchors, compositing, background flattening, grayscale, enhancement, blur and sharpening, rotation, sepia and EXIF orientation.
 

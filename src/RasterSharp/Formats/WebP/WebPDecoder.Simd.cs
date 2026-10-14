@@ -26,7 +26,7 @@ internal sealed partial class WebPDecoder
         ref byte source = ref Unsafe.As<uint, byte>(ref MemoryMarshal.GetReference(argb));
         ref byte target = ref Unsafe.As<Rgba32, byte>(ref MemoryMarshal.GetReference(dst));
         int i = 0;
-        if (Avx2.IsSupported && Ssse3.IsSupported)
+        if (Avx2.IsSupported)
         {
             for (; i + 8 <= n; i += 8)
             {
@@ -35,13 +35,10 @@ internal sealed partial class WebPDecoder
             }
         }
 
-        if (Ssse3.IsSupported)
+        for (; i + 4 <= n; i += 4)
         {
-            for (; i + 4 <= n; i += 4)
-            {
-                Ssse3.Shuffle(Vector128.LoadUnsafe(ref source, (nuint)(i * 4)), ArgbToRgbaShuffle4)
-                    .StoreUnsafe(ref target, (nuint)(i * 4));
-            }
+            Ssse3.Shuffle(Vector128.LoadUnsafe(ref source, (nuint)(i * 4)), ArgbToRgbaShuffle4)
+                .StoreUnsafe(ref target, (nuint)(i * 4));
         }
 
         return i;

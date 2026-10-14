@@ -11,5 +11,6 @@
 | [Metadata](metadata.md) | Resolution, ICC/EXIF/XMP, EXIF orientation |
 | [Command-line sample](cli.md) | The `samples/RasterSharp.Cli` tool |
 | [Development](development.md) | Building, tests, oracles, corpus regeneration and the public API snapshot |
+| [Performance](performance.md) | VP8L measurements, benchmark commands, allocation costs and comparison limits |
 
 All code samples in these guides use the public API listed in [tests/assets/PublicApi.approved.txt](../tests/assets/PublicApi.approved.txt). The key samples are compiled and run by `DocsExamplesTests`.

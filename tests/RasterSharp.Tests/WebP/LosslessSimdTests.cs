@@ -61,11 +61,11 @@ public class LosslessSimdTests
     public void PredictorInverse_MatchesScalar()
     {
         var rng = new Random(5);
-        int[] widths = [1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33];
+        int[] widths = [1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 511, 512, 513];
         int[] heights = [1, 2, 3, 8];
         foreach (int width in widths)
         foreach (int height in heights)
-        foreach (int bits in new[] { 0, 1, 2, 3 })
+        foreach (int bits in Enumerable.Range(0, 10))
         {
             for (int mode = 0; mode < 16; mode++)
             {
@@ -76,6 +76,56 @@ public class LosslessSimdTests
         }
 
         AssertPredictor(rng, 320, 6, 3, mode: -1);
+        foreach (int bits in Enumerable.Range(2, 8))
+        {
+            AssertPredictor(rng, 67, (1 << bits) + 1, bits, mode: -1);
+        }
+    }
+
+    [Theory]
+    [InlineData(10, 3, 0, 1, 2, 255, 0)] // Nested odd averages round down, then residual wraps.
+    [InlineData(11, 255, 128, 1, 0, 0, 1)] // Equal distances choose top, although top differs from left.
+    [InlineData(11, 200, 0, 10, 0, 0, 200)]
+    [InlineData(11, 10, 0, 200, 0, 0, 200)]
+    [InlineData(12, 250, 0, 20, 0, 1, 0)] // Clamp to 255 before adding the residual modulo 256.
+    [InlineData(12, 0, 255, 0, 0, 255, 255)]
+    [InlineData(12, 100, 50, 80, 0, 200, 74)]
+    public void PredictorInverse_DirectedArithmetic(int mode, byte left, byte topLeft, byte top, byte topRight, byte residual, byte expected)
+    {
+        const int width = 33;
+        foreach (int bits in new[] { 2, 3, 5 })
+        foreach (int x in new[] { 1, 4, 5, 8, 9, 16, 17, 31, 32 })
+        {
+            uint[] desired = new uint[width * 2];
+            Array.Fill(desired, 0x12345678u);
+            desired[x - 1] = Repeat(topLeft);
+            desired[x] = Repeat(top);
+            // At the right edge top-right wraps to the reconstructed first pixel of this row.
+            desired[x == width - 1 ? width : x + 1] = Repeat(topRight);
+            desired[width + x - 1] = Repeat(left);
+            desired[width + x] = Repeat(expected);
+            uint[] encoded = new uint[desired.Length];
+            encoded[0] = LosslessTransforms.SubPixels(desired[0], WebPConstants.ArgbBlack);
+            for (int i = 1; i < width; i++)
+            {
+                encoded[i] = LosslessTransforms.SubPixels(desired[i], desired[i - 1]);
+            }
+
+            encoded[width] = LosslessTransforms.SubPixels(desired[width], desired[0]);
+            for (int i = width + 1; i < desired.Length; i++)
+            {
+                encoded[i] = LosslessTransforms.SubPixels(desired[i], LosslessTransforms.Predict(mode, desired, i, width));
+            }
+
+            Assert.Equal(Repeat(residual), encoded[width + x]);
+            uint[] modes = new uint[Vp8LDecoder.SubSampleSize(width, bits) * Vp8LDecoder.SubSampleSize(2, bits)];
+            Array.Fill(modes, WebPConstants.ArgbBlack | (uint)(mode << 8));
+            var transform = new Vp8LTransform { XSize = width, YSize = 2, Bits = bits, Data = modes };
+            LosslessTransforms.PredictorInverseTransform(transform, encoded);
+            Assert.Equal(desired, encoded);
+        }
+
+        static uint Repeat(byte value) => value * 0x01010101u;
     }
 
     [Fact]

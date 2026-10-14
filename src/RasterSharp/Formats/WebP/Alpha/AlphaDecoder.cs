@@ -69,20 +69,14 @@ internal static partial class AlphaDecoder
     private static ImageFormatException Error(string message) => new(ImageFormat.WebP, message);
 
     /// <summary>Reverses the prediction filter in place, row by row.</summary>
-    public static void Unfilter(AlphaFilterType filter, Span<byte> plane, int width, int height)
-    {
-        if (Sse2.IsSupported)
-        {
-            UnfilterX86(filter, plane, width, height);
-        }
-        else
-        {
-            UnfilterScalar(filter, plane, width, height);
-        }
-    }
+    public static void Unfilter(AlphaFilterType filter, Span<byte> plane, int width, int height) =>
+        UnfilterRows(filter, plane, width, height, useSimd: Sse2.IsSupported);
 
-    /// <summary>Scalar alpha reconstruction. The x86 path is in <c>AlphaDecoder.Simd.cs</c>.</summary>
-    internal static void UnfilterScalar(AlphaFilterType filter, Span<byte> plane, int width, int height)
+    /// <summary>Same reconstruction as <see cref="Unfilter"/>, using only scalar rows. The x86 rows are in <c>AlphaDecoder.Simd.cs</c>.</summary>
+    internal static void UnfilterScalar(AlphaFilterType filter, Span<byte> plane, int width, int height) =>
+        UnfilterRows(filter, plane, width, height, useSimd: false);
+
+    private static void UnfilterRows(AlphaFilterType filter, Span<byte> plane, int width, int height, bool useSimd)
     {
         for (int y = 0; y < height; y++)
         {
@@ -90,8 +84,14 @@ internal static partial class AlphaDecoder
             ReadOnlySpan<byte> prev = y == 0 ? default : plane.Slice((y - 1) * width, width);
             switch (filter)
             {
+                case AlphaFilterType.Horizontal when useSimd:
+                    HorizontalUnfilterX86(prev, row);
+                    break;
                 case AlphaFilterType.Horizontal:
                     HorizontalUnfilterScalar(prev, row);
+                    break;
+                case AlphaFilterType.Vertical when useSimd:
+                    VerticalUnfilterX86(prev, row);
                     break;
                 case AlphaFilterType.Vertical:
                     VerticalUnfilterScalar(prev, row);

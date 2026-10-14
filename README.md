@@ -49,6 +49,7 @@ thumbnail.SaveAsPng("thumbnail.png");
 - [Metadata](docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
 - [Command-line sample](docs/cli.md): `info`, `convert`, `resize` and `decode`
 - [Development](docs/development.md): building, tests, reference tools and oracles
+- [Performance](docs/performance.md): VP8L predictor and decoder measurements, benchmark commands and limitations
 
 ## Building from source
 
@@ -57,7 +58,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.4.2); performance work continues in phase 10.
+Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.4.3); performance work continues in phase 10.
 
 ## License
 

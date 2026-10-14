@@ -86,6 +86,7 @@ internal static partial class LosslessTransforms
         if (Avx2.IsSupported)
         {
             Vector256<short> multsRb = Vector256.Create(PackMultiplier(toRed, toBlue)).AsInt16();
+            // Red is shuffled into word 0 here (RedHigh), so its multiplier sits in word 0. SSE2 keeps red in word 1.
             Vector256<short> multsB2 = Vector256.Create((int)toBlue2).AsInt16();
             Vector256<byte> maskAg = Vector256.Create(0xff00ff00u).AsByte();
             for (; i + 8 <= pixels.Length; i += 8)
@@ -198,7 +199,7 @@ internal static partial class LosslessTransforms
             return count;
         }
 
-        if (mode is not (0 or 2 or 3 or 4 or 8 or 9))
+        if (mode is not (0 or 2 or 3 or 4 or 8 or 9 or 10 or 11 or 12))
         {
             return 0;
         }
@@ -230,6 +231,15 @@ internal static partial class LosslessTransforms
     {
         switch (mode)
         {
+            case 10:
+                PredictorAdd10Avx2(ref row, start, width, count);
+                break;
+            case 11:
+                PredictorAdd11Avx2(ref row, start, width, count);
+                break;
+            case 12:
+                PredictorAdd12Avx2(ref row, start, width, count);
+                break;
             case 0:
                 Vector256<byte> black = Vector256.Create(WebPConstants.ArgbBlack).AsByte();
                 for (int i = 0; i < count; i += 8)
@@ -282,6 +292,15 @@ internal static partial class LosslessTransforms
     {
         switch (mode)
         {
+            case 10:
+                PredictorAdd10Sse2(ref row, start, width, count);
+                break;
+            case 11:
+                PredictorAdd11Sse2(ref row, start, width, count);
+                break;
+            case 12:
+                PredictorAdd12Sse2(ref row, start, width, count);
+                break;
             case 0:
                 Vector128<byte> black = Vector128.Create(WebPConstants.ArgbBlack).AsByte();
                 for (int i = 0; i < count; i += 4)
