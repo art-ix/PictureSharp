@@ -41,15 +41,8 @@ public readonly ref partial struct ImageProcessingContext
         return this;
     }
 
-    private ImageProcessingContext ForEachPixelSpan(SpanAction operation)
-    {
-        foreach (ImageFrame frame in _state.WritableFrames)
-        {
-            operation(frame.GetPixelSpan());
-        }
-
-        return this;
-    }
+    private ImageProcessingContext ForEachPixelSpan(SpanAction operation) =>
+        ForEachPixelSpan(operation, static (pixels, action) => action(pixels));
 
     private ImageProcessingContext ForEachPixelSpan<TState>(TState state, SpanAction<TState> operation)
     {

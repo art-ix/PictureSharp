@@ -66,7 +66,7 @@ internal readonly struct GifBlockWriter(Stream stream)
             (byte)delay, (byte)(delay >> 8), (byte)Math.Max(transparentIndex, 0), 0]);
     }
 
-    public int WriteImageDescriptor(Rectangle rectangle, Rgba32[] colors, bool local, bool interlace)
+    public void WriteImageDescriptor(Rectangle rectangle, Rgba32[] colors, bool local, bool interlace)
     {
         int bits = TableBits(colors.Length);
         Span<byte> descriptor = stackalloc byte[10];
@@ -81,11 +81,11 @@ internal readonly struct GifBlockWriter(Stream stream)
         {
             WriteColorTable(colors, bits);
         }
-
-        return Math.Max(2, bits);
     }
 
-    public void WriteImageData(ReadOnlySpan<byte> indices, int minCodeSize) => GifLzwEncoder.Encode(indices, minCodeSize, stream);
+    /// <summary>Writes LZW-compressed indices into a palette of <paramref name="colorCount"/> entries.</summary>
+    public void WriteImageData(ReadOnlySpan<byte> indices, int colorCount) =>
+        GifLzwEncoder.Encode(indices, Math.Max(2, TableBits(colorCount)), stream);
 
     public void WriteTrailer() => stream.WriteByte(GifConstants.Trailer);
 

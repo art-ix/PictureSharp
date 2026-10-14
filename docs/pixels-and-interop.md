@@ -74,7 +74,7 @@ using Image fromStructs = Image.LoadPixelData(rgbaPixels, width, height);   // R
 
 `CopyPixelDataFrom(ReadOnlySpan<Rgba32>)` copies exactly one frame of pixels and ignores extra input; `CopyPixelDataTo(Span<Rgba32>)` leaves extra destination pixels untouched. Both reject buffers too small for a complete frame.
 
-`Image.HasAlpha` is a read-only hint maintained by decoding and processing. Direct writes through pixel views do not update it; use `IsOpaque()` to inspect actual transparency. Views remain attached to the old buffer after replacement (for example, by a blur or resize).
+`Image.HasAlpha` is a read-only hint maintained by decoding, processing, frame insertion and `Image.CopyPixelDataFrom` (set when the source format has alpha). Writes through pixel views and `ImageFrame` copy methods do not update it; use `IsOpaque()` to inspect actual transparency. Views remain attached to the old buffer after replacement (for example, by a blur or resize).
 
 `stride` is the number of bytes per row; 0 means tightly packed. `PixelFormat.BytesPerPixel()` and `HasAlpha()` help size buffers. `LoadPixelData` with a format without alpha sets `HasAlpha = false`.
 

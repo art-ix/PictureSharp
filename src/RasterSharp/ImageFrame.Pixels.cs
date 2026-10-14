@@ -13,16 +13,16 @@ public sealed partial class ImageFrame
     /// <summary>Overwrites the frame with RGBA pixels. Extra source pixels are ignored.</summary>
     public void CopyPixelDataFrom(ReadOnlySpan<Rgba32> source)
     {
-        if (source.Length < _pixels.Length)
-        {
-            throw new ArgumentException($"The buffer is too small: {_pixels.Length} pixels required, {source.Length} provided.", nameof(source));
-        }
-
+        CheckPixelCount(source.Length, nameof(source));
         source[.._pixels.Length].CopyTo(_pixels);
     }
 
-    /// <summary>Copies the pixels of the frame into <paramref name="destination"/>.</summary>
-    public void CopyPixelDataTo(Span<Rgba32> destination) => GetPixelSpan().CopyTo(destination);
+    /// <summary>Copies the pixels of the frame into <paramref name="destination"/>. Extra destination pixels are left untouched.</summary>
+    public void CopyPixelDataTo(Span<Rgba32> destination)
+    {
+        CheckPixelCount(destination.Length, nameof(destination));
+        _pixels.CopyTo(destination);
+    }
 
     /// <summary>Copies the frame into <paramref name="destination"/> in the given format.</summary>
     /// <param name="destination">Target buffer.</param>
@@ -75,6 +75,14 @@ public sealed partial class ImageFrame
         }
 
         return true;
+    }
+
+    private void CheckPixelCount(int length, string paramName)
+    {
+        if (length < _pixels.Length)
+        {
+            throw new ArgumentException($"The buffer is too small: {_pixels.Length} pixels required, {length} provided.", paramName);
+        }
     }
 
     private static int CheckBuffer(int length, int rowBytes, int height, int stride, string paramName)

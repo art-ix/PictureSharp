@@ -25,7 +25,7 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
 
     internal List<ImageFrame> List => _frames;
 
-    /// <summary>Appends a frame. Its size must match the image size.</summary>
+    /// <summary>Appends a frame. Its size must match the image size; transparent pixels set <see cref="Image.HasAlpha"/>.</summary>
     public void Add(ImageFrame frame) => Insert(_frames.Count, frame);
 
     /// <summary>Appends a copy of the root frame of <paramref name="image"/> with the given duration.</summary>
@@ -34,14 +34,22 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
         ArgumentNullException.ThrowIfNull(image);
         ImageFrame frame = image.Frames.RootFrame.Clone();
         frame.Duration = duration;
-        Add(frame);
+        Insert(_frames.Count, frame, image.HasAlpha);
         return frame;
     }
 
-    /// <summary>Inserts a frame at <paramref name="index"/>. Its size must match the image size.</summary>
+    /// <summary>
+    /// Inserts a frame at <paramref name="index"/>. Its size must match the image size.
+    /// A frame with transparent pixels sets <see cref="Image.HasAlpha"/>.
+    /// </summary>
     public void Insert(int index, ImageFrame frame)
     {
         ArgumentNullException.ThrowIfNull(frame);
+        Insert(index, frame, !_owner.HasAlpha && !frame.IsOpaque());
+    }
+
+    private void Insert(int index, ImageFrame frame, bool hasAlpha)
+    {
         if (_frames.Count > 0 && (frame.Width != _frames[0].Width || frame.Height != _frames[0].Height))
         {
             throw new ArgumentException(
@@ -55,6 +63,7 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
         }
 
         _frames.Insert(index, frame);
+        _owner.HasAlpha |= hasAlpha;
     }
 
     /// <summary>Removes the frame at <paramref name="index"/>. The last remaining frame cannot be removed.</summary>

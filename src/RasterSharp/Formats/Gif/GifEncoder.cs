@@ -273,8 +273,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         int height = frame.Y1 - frame.Y0;
         // The first frame's palette is the global color table in the header.
         bool local = !palette.IsGlobal && !frame.IsFirst;
-        int minCodeSize = writer.WriteImageDescriptor(new Rectangle(frame.X0, frame.Y0, width, height),
-            palette.Colors, local, options.Interlace);
+        writer.WriteImageDescriptor(new Rectangle(frame.X0, frame.Y0, width, height), palette.Colors, local, options.Interlace);
 
         // Unchanged pixels become transparent, which keeps runs long for LZW.
         var indices = new byte[width * height];
@@ -292,7 +291,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
             }
         }
 
-        writer.WriteImageData(indices, minCodeSize);
+        writer.WriteImageData(indices, palette.Colors.Length);
         return true;
     }
 

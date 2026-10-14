@@ -70,10 +70,13 @@ public readonly ref partial struct ImageProcessingContext
     }
 
     /// <summary>Sharpens with Pillow's 3×3 <c>ImageFilter.SHARPEN</c> kernel; the outermost pixels are kept.</summary>
-    public ImageProcessingContext Sharpen() => Spatial(0f, static (src, w, h, offset) => Blur.Filter3x3(src, w, h, SharpenKernel, offset));
+    public ImageProcessingContext Sharpen() => Spatial(static (src, w, h) => Blur.Filter3x3(src, w, h, SharpenKernel, 0f));
 
     // port: Pillow src/PIL/ImageFilter.py SHARPEN (divided by its scale, 16)
     private static ReadOnlySpan<float> SharpenKernel => [-2f / 16, -2f / 16, -2f / 16, -2f / 16, 32f / 16, -2f / 16, -2f / 16, -2f / 16, -2f / 16];
+
+    private ImageProcessingContext Spatial(SpatialFilter filter) =>
+        Spatial(filter, static (src, w, h, f) => f(src, w, h));
 
     /// <summary>Runs <paramref name="filter"/> on premultiplied copies of the frames, like Pillow filtering an "RGBa" image.</summary>
     private ImageProcessingContext Spatial<TState>(TState state, SpatialFilter<TState> filter)
@@ -94,6 +97,8 @@ public readonly ref partial struct ImageProcessingContext
     }
 
     private delegate Rgba32[] SpatialFilter<TState>(ReadOnlySpan<Rgba32> src, int width, int height, TState state);
+
+    private delegate Rgba32[] SpatialFilter(ReadOnlySpan<Rgba32> src, int width, int height);
 
     private static void CheckFinite(float value, string paramName)
     {

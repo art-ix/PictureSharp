@@ -37,15 +37,23 @@ public sealed partial class Image
     public void CopyPixelDataTo(Span<byte> destination, PixelFormat format, int stride = 0) =>
         RootFrame.CopyPixelDataTo(destination, format, stride);
 
-    /// <summary>Overwrites the first frame with RGBA pixels. Extra source pixels are ignored.</summary>
-    public void CopyPixelDataFrom(ReadOnlySpan<Rgba32> source) => RootFrame.CopyPixelDataFrom(source);
+    /// <summary>Overwrites the first frame with RGBA pixels and sets <see cref="HasAlpha"/>. Extra source pixels are ignored.</summary>
+    public void CopyPixelDataFrom(ReadOnlySpan<Rgba32> source)
+    {
+        RootFrame.CopyPixelDataFrom(source);
+        HasAlpha = true;
+    }
 
     /// <summary>Overwrites the first frame with pixels from <paramref name="source"/>.</summary>
     /// <param name="source">Source buffer.</param>
     /// <param name="format">Layout of <paramref name="source"/>.</param>
     /// <param name="stride">Bytes per row; 0 means tightly packed.</param>
-    public void CopyPixelDataFrom(ReadOnlySpan<byte> source, PixelFormat format, int stride = 0) =>
+    /// <remarks>A format with alpha sets <see cref="HasAlpha"/>, as <see cref="LoadPixelData(ReadOnlySpan{byte}, int, int, PixelFormat, int)"/> does.</remarks>
+    public void CopyPixelDataFrom(ReadOnlySpan<byte> source, PixelFormat format, int stride = 0)
+    {
         RootFrame.CopyPixelDataFrom(source, format, stride);
+        HasAlpha |= format.HasAlpha();
+    }
 
     /// <summary>
     /// Returns the first frame as a tightly packed array in the given format, e.g. <see cref="PixelFormat.Bgra32"/>

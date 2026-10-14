@@ -119,4 +119,46 @@ public class PixelDataApiTests
         Assert.Throws<ObjectDisposedException>(() => image.CopyPixelDataFrom(new Rgba32[1]));
         Assert.Throws<ObjectDisposedException>(() => image.ToPixelData());
     }
+
+    [Fact]
+    public void CopyPixelDataFrom_AndFrameInsertion_UpdateHasAlpha()
+    {
+        Rgba32 white = new(255, 255, 255);
+        using (var image = new Image(2, 1, white))
+        {
+            image.CopyPixelDataFrom([10, 20, 30, 40, 50, 60], PixelFormat.Rgb24);
+            Assert.False(image.HasAlpha);
+            image.CopyPixelDataFrom([1, 2, 3, 4, 5, 6, 7, 8], PixelFormat.Rgba32);
+            Assert.True(image.HasAlpha);
+        }
+
+        using (var image = new Image(2, 1, white))
+        {
+            image.CopyPixelDataFrom([white, white]);
+            Assert.True(image.HasAlpha);
+        }
+
+        using var opaque = new Image(2, 1, white);
+        opaque.Frames.Add(new ImageFrame(2, 1) { [0, 0] = white, [1, 0] = white });
+        Assert.False(opaque.HasAlpha);
+        using (var transparent = new Image(2, 1, white))
+        {
+            transparent.CopyPixelDataFrom([white, white]);
+            opaque.Frames.Add(transparent, TimeSpan.FromMilliseconds(100));
+        }
+
+        Assert.True(opaque.HasAlpha);
+        using var other = new Image(2, 1, white);
+        other.Frames.Insert(0, new ImageFrame(2, 1));
+        Assert.True(other.HasAlpha);
+    }
+
+    [Fact]
+    public void CopyPixelDataTo_TypedDestinationTooSmall_ReportsRequiredSize()
+    {
+        using var image = new Image(3, 2);
+        var error = Assert.Throws<ArgumentException>(() => image.CopyPixelDataTo(new Rgba32[5]));
+        Assert.Equal("destination", error.ParamName);
+        Assert.Contains("6 pixels required", error.Message);
+    }
 }
