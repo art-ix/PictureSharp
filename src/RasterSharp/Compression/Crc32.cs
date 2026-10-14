@@ -43,7 +43,7 @@ internal static partial class Crc32
         return UpdateScalar(crc, data[done..]);
     }
 
-    /// <summary>Slicing-by-8 <see cref="Update"/>; the vector path is in <c>Crc32.X86.cs</c>.</summary>
+    /// <summary>Slicing-by-8 <see cref="Update"/>; the vector path is in <c>Crc32.Simd.cs</c>.</summary>
     internal static uint UpdateScalar(uint crc, ReadOnlySpan<byte> data)
     {
         uint[] t = Table;

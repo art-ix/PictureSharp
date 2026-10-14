@@ -7,21 +7,12 @@ namespace RasterSharp.Formats.Jpeg;
 
 internal static partial class JpegIdct
 {
-    // Each pass multiplies its largest input by at most 178219 (the sum of the constant magnitudes along the longest
-    // path), so with inputs below this limit every 32-bit intermediate equals the scalar 64-bit one.
-    private const int SimdInputLimit = 12000;
-
     /// <summary>
     /// <see cref="TransformScalar"/> with AVX2 on eight columns (then eight rows) at once. Returns false, leaving
-    /// the work to the scalar code, without AVX2 or when a block's values could overflow 32-bit lanes.
+    /// the work to the scalar code, when a block's values could overflow 32-bit lanes.
     /// </summary>
-    private static bool TransformSimd(ReadOnlySpan<short> block, ReadOnlySpan<short> quant, Span<byte> output, int stride)
+    private static bool TransformAvx2(ReadOnlySpan<short> block, ReadOnlySpan<short> quant, Span<byte> output, int stride)
     {
-        if (!Avx2.IsSupported)
-        {
-            return false;
-        }
-
         ref short b = ref MemoryMarshal.GetReference(block[..64]);
         ref short q = ref MemoryMarshal.GetReference(quant[..64]);
         Vector256<int> r0 = Dequantize(ref b, ref q, 0), r1 = Dequantize(ref b, ref q, 8);

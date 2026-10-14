@@ -34,7 +34,7 @@ public class JpegSamplesTests
     public static TheoryData<string> Files()
     {
         var data = new TheoryData<string>();
-        foreach (string name in Reference.Value?.Keys ?? (IEnumerable<string>)[""])
+        foreach (string name in Reference.Value is { Count: > 0 } reference ? reference.Keys : (IEnumerable<string>)[""])
         {
             data.Add(name);
         }

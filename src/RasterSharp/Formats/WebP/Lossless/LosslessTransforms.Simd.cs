@@ -7,11 +7,10 @@ using RasterSharp.Internal;
 namespace RasterSharp.Formats.WebP.Lossless;
 
 // port: src/dsp/lossless_sse2.c, src/dsp/lossless_avx2.c, src/dsp/lossless_enc_sse2.c, src/dsp/lossless_enc_avx2.c
-// x86 only. Each routine returns how many pixels it consumed; the caller finishes the tail in scalar code.
+// AVX2 on x86; 128-bit code on SSE2 or ARM64 through the Simd helpers. Each routine returns how many pixels it consumed; the caller finishes the tail in scalar code.
 internal static partial class LosslessTransforms
 {
     // _MM_SHUFFLE(2, 2, 0, 0): duplicate words 0 and 2 inside a 64-bit half.
-    private const byte ShuffleDuplicatePairs = (2 << 6) | (2 << 4);
 
     // pshufb is lane-local, so both 128-bit halves use the same indices. 0xFF writes a zero.
     // Green byte (index 1, 5, 9, 13) lands on the blue and red bytes.
@@ -31,7 +30,7 @@ internal static partial class LosslessTransforms
 
     private static int ApplyGreenSimd(Span<uint> pixels, bool add)
     {
-        if (!Sse2.IsSupported)
+        if (!Simd.IsSupported128)
         {
             return 0;
         }
@@ -61,9 +60,9 @@ internal static partial class LosslessTransforms
     {
         ref byte at = ref Unsafe.As<uint, byte>(ref pixels);
         Vector128<byte> input = Vector128.LoadUnsafe(ref at);
-        Vector128<short> shifted = Sse2.ShiftRightLogical(input.AsInt16(), 8);
-        Vector128<byte> green = Sse2.ShuffleHigh(Sse2.ShuffleLow(shifted, ShuffleDuplicatePairs), ShuffleDuplicatePairs).AsByte();
-        (add ? Sse2.Add(input, green) : Sse2.Subtract(input, green)).StoreUnsafe(ref at);
+        Vector128<short> shifted = input.AsInt16() >>> 8;
+        Vector128<byte> green = Simd.DuplicateEvenWords(shifted).AsByte();
+        (add ? (input + green) : (input - green)).StoreUnsafe(ref at);
     }
 
     // ((int16_t)(component << 8)) >> 5, the multiplier libwebp feeds to mulhi.
@@ -75,7 +74,7 @@ internal static partial class LosslessTransforms
 
     private static int TransformColorInverseSimd(sbyte greenToRed, sbyte greenToBlue, sbyte redToBlue, Span<uint> pixels)
     {
-        if (!Sse2.IsSupported)
+        if (!Simd.IsSupported128)
         {
             return 0;
         }
@@ -116,18 +115,18 @@ internal static partial class LosslessTransforms
     {
         ref byte at = ref Unsafe.As<uint, byte>(ref pixels);
         Vector128<byte> input = Vector128.LoadUnsafe(ref at);
-        Vector128<short> ag = Sse2.And(input, maskAg).AsInt16();
-        Vector128<short> greens = Sse2.ShuffleHigh(Sse2.ShuffleLow(ag, ShuffleDuplicatePairs), ShuffleDuplicatePairs);
-        Vector128<byte> withGreen = Sse2.Add(input, Sse2.MultiplyHigh(greens, multsRb).AsByte());
-        Vector128<short> shifted = Sse2.ShiftLeftLogical(withGreen.AsInt16(), 8);
-        Vector128<byte> placed = Sse2.ShiftRightLogical(Sse2.MultiplyHigh(shifted, multsB2).AsInt32(), 8).AsByte();
-        Vector128<short> summed = Sse2.Add(placed, shifted.AsByte()).AsInt16();
-        Sse2.Or(Sse2.ShiftRightLogical(summed, 8).AsByte(), ag.AsByte()).StoreUnsafe(ref at);
+        Vector128<short> ag = (input & maskAg).AsInt16();
+        Vector128<short> greens = Simd.DuplicateEvenWords(ag);
+        Vector128<byte> withGreen = input + Simd.MultiplyHigh(greens, multsRb).AsByte();
+        Vector128<short> shifted = withGreen.AsInt16() << 8;
+        Vector128<byte> placed = (Simd.MultiplyHigh(shifted, multsB2).AsInt32() >>> 8).AsByte();
+        Vector128<short> summed = (placed + shifted.AsByte()).AsInt16();
+        ((summed >>> 8).AsByte() | ag.AsByte()).StoreUnsafe(ref at);
     }
 
     private static int TransformColorSimd(sbyte greenToRed, sbyte greenToBlue, sbyte redToBlue, Span<uint> pixels)
     {
-        if (!Sse2.IsSupported)
+        if (!Simd.IsSupported128)
         {
             return 0;
         }
@@ -168,12 +167,12 @@ internal static partial class LosslessTransforms
     {
         ref byte at = ref Unsafe.As<uint, byte>(ref pixels);
         Vector128<byte> input = Vector128.LoadUnsafe(ref at);
-        Vector128<short> ag = Sse2.And(input, Vector128.Create(0xff00ff00u).AsByte()).AsInt16();
-        Vector128<short> greens = Sse2.ShuffleHigh(Sse2.ShuffleLow(ag, ShuffleDuplicatePairs), ShuffleDuplicatePairs);
-        Vector128<short> shifted = Sse2.ShiftLeftLogical(input.AsInt16(), 8);
-        Vector128<byte> fromRed = Sse2.ShiftRightLogical(Sse2.MultiplyHigh(shifted, multsB2).AsInt32(), 16).AsByte();
-        Vector128<byte> delta = Sse2.And(Sse2.Add(fromRed, Sse2.MultiplyHigh(greens, multsRb).AsByte()), maskRb);
-        Sse2.Subtract(input, delta).StoreUnsafe(ref at);
+        Vector128<short> ag = (input & Vector128.Create(0xff00ff00u).AsByte()).AsInt16();
+        Vector128<short> greens = Simd.DuplicateEvenWords(ag);
+        Vector128<short> shifted = input.AsInt16() << 8;
+        Vector128<byte> fromRed = (Simd.MultiplyHigh(shifted, multsB2).AsInt32() >>> 16).AsByte();
+        Vector128<byte> delta = (fromRed + Simd.MultiplyHigh(greens, multsRb).AsByte()) & maskRb;
+        (input - delta).StoreUnsafe(ref at);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

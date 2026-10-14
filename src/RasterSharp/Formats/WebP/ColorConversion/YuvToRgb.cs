@@ -50,7 +50,7 @@ internal static partial class YuvToRgb
 
     private static void ConvertUnits(Vp8Frame frame, Span<Rgba32> dst, bool fancyUpsampling, int start, int end, bool allowSimd)
     {
-        bool simd = allowSimd && Sse2.IsSupported;
+        bool simd = allowSimd && Simd.IsSupported128;
         if (fancyUpsampling)
         {
             ConvertFancy(frame, dst, start, end, simd);

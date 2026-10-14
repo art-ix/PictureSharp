@@ -184,8 +184,8 @@ Chromium zlib (https://chromium.googlesource.com/chromium/src/third_party/zlib)
 Used for: vector checksums, crc32_simd.c crc32_sse42_simd_ (CRC-32 folding with
 PCLMULQDQ, after "Fast CRC Computation for Generic Polynomials Using PCLMULQDQ
 Instruction", V. Gopal, E. Ozturk et al., Intel, 2009) and adler32_simd.c
-adler32_simd_ (SSSE3 Adler-32). The code was translated to C#; it is not the
-original source.
+adler32_simd_ (SSSE3 and NEON Adler-32), and armv8_crc32_little (ARMv8 CRC32
+instructions). The code was translated to C#; it is not the original source.
 -------------------------------------------------------------------------------
 Copyright 2017 The Chromium Authors
 

@@ -2,11 +2,12 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.WebP.Lossless;
 
 // port: src/dsp/lossless_enc_sse2.c, src/dsp/lossless_enc_avx2.c CollectColorRedTransforms, CollectColorBlueTransforms
-// x86 only. Each routine returns how many pixels it consumed; the caller finishes the tail in scalar code.
+// AVX2 on x86; 128-bit code on SSE2 or ARM64 through the Simd helpers. Each routine returns how many pixels it consumed; the caller finishes the tail in scalar code.
 internal static partial class Vp8LForwardTransforms
 {
     // Green and red bytes in the high byte of the low and high words (perm of CollectColorBlueTransforms_AVX2).
@@ -24,7 +25,7 @@ internal static partial class Vp8LForwardTransforms
 
     private static int CollectColorRedTransformsSimd(ReadOnlySpan<uint> argb, int greenToRed, Span<uint> histo)
     {
-        if (!Sse2.IsSupported) return 0;
+        if (!Simd.IsSupported128) return 0;
         ref uint src = ref MemoryMarshal.GetReference(argb);
         ref uint counts = ref MemoryMarshal.GetReference(histo[..256]);
         int x = 0;
@@ -46,8 +47,8 @@ internal static partial class Vp8LForwardTransforms
         for (; x + 4 <= argb.Length; x += 4)
         {
             Vector128<uint> input = Vector128.LoadUnsafe(ref src, (nuint)x);
-            Vector128<short> c = Sse2.MultiplyHigh((input & maskG).AsInt16(), multGreen);
-            Vector128<uint> e = Sse2.Subtract(Sse2.ShiftRightLogical(input, 16).AsByte(), c.AsByte()).AsUInt32() & mask;
+            Vector128<short> c = Simd.MultiplyHigh((input & maskG).AsInt16(), multGreen);
+            Vector128<uint> e = ((input >>> 16).AsByte() - c.AsByte()).AsUInt32() & mask;
             Count4(ref counts, e);
         }
         return x;
@@ -55,7 +56,7 @@ internal static partial class Vp8LForwardTransforms
 
     private static int CollectColorBlueTransformsSimd(ReadOnlySpan<uint> argb, int greenToBlue, int redToBlue, Span<uint> histo)
     {
-        if (!Sse2.IsSupported) return 0;
+        if (!Simd.IsSupported128) return 0;
         ref uint src = ref MemoryMarshal.GetReference(argb);
         ref uint counts = ref MemoryMarshal.GetReference(histo[..256]);
         int x = 0;
@@ -79,10 +80,10 @@ internal static partial class Vp8LForwardTransforms
         for (; x + 4 <= argb.Length; x += 4)
         {
             Vector128<uint> input = Vector128.LoadUnsafe(ref src, (nuint)x);
-            Vector128<short> c = Sse2.MultiplyHigh(Sse2.ShiftLeftLogical(input.AsInt16(), 8), multRed);
-            Vector128<short> d = Sse2.MultiplyHigh((input & maskG).AsInt16(), multGreen);
-            Vector128<byte> e = Sse2.Subtract(input.AsByte(), d.AsByte());
-            Vector128<uint> g = Sse2.Subtract(e, Sse2.ShiftRightLogical(c.AsUInt32(), 16).AsByte()).AsUInt32() & maskB;
+            Vector128<short> c = Simd.MultiplyHigh((input.AsInt16() << 8), multRed);
+            Vector128<short> d = Simd.MultiplyHigh((input & maskG).AsInt16(), multGreen);
+            Vector128<byte> e = input.AsByte() - d.AsByte();
+            Vector128<uint> g = (e - (c.AsUInt32() >>> 16).AsByte()).AsUInt32() & maskB;
             Count4(ref counts, g);
         }
         return x;

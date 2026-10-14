@@ -1,26 +1,29 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.WebP.Lossy;
 
 // SIMD in-loop filters: the 16 positions along an edge (one luma edge, or 8 U and 8 V positions) are filtered
 // at once in 16-bit lanes, using the clamps of the C code, so the result equals the scalar filters for every
-// input. Positions along an edge are independent; edges are still filtered in the scalar order.
+// input. Positions along an edge are independent; edges are still filtered in the scalar order. ARM64 uses
+// Vp8Dsp.Filter.Arm.cs.
 internal static partial class Vp8Dsp
 {
     private enum EdgeFilter { Simple, Inner, MacroblockEdge }
 
     public static void SimpleVFilter16(byte[] p, int o, int stride, int thresh)
     {
-        if (Avx2.IsSupported) FilterAcrossRows(p, o, p, o + 8, stride, EdgeFilter.Simple, thresh, 0, 0);
+        if (FilterSimdSupported) FilterAcrossRows(p, o, p, o + 8, stride, EdgeFilter.Simple, thresh, 0, 0);
         else SimpleVFilter16Scalar(p, o, stride, thresh);
     }
 
     public static void SimpleHFilter16(byte[] p, int o, int stride, int thresh)
     {
-        if (Avx2.IsSupported) FilterAcrossColumns(p, o, p, o + (8 * stride), stride, EdgeFilter.Simple, thresh, 0, 0);
+        if (FilterSimdSupported) FilterAcrossColumns(p, o, p, o + (8 * stride), stride, EdgeFilter.Simple, thresh, 0, 0);
         else SimpleHFilter16Scalar(p, o, stride, thresh);
     }
 
@@ -44,19 +47,19 @@ internal static partial class Vp8Dsp
 
     public static void VFilter16(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (Avx2.IsSupported) FilterAcrossRows(p, o, p, o + 8, stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
+        if (FilterSimdSupported) FilterAcrossRows(p, o, p, o + 8, stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
         else VFilter16Scalar(p, o, stride, thresh, ithresh, hevThresh);
     }
 
     public static void HFilter16(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (Avx2.IsSupported) FilterAcrossColumns(p, o, p, o + (8 * stride), stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
+        if (FilterSimdSupported) FilterAcrossColumns(p, o, p, o + (8 * stride), stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
         else HFilter16Scalar(p, o, stride, thresh, ithresh, hevThresh);
     }
 
     public static void VFilter16i(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (!Avx2.IsSupported)
+        if (!FilterSimdSupported)
         {
             VFilter16iScalar(p, o, stride, thresh, ithresh, hevThresh);
             return;
@@ -71,7 +74,7 @@ internal static partial class Vp8Dsp
 
     public static void HFilter16i(byte[] p, int o, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (!Avx2.IsSupported)
+        if (!FilterSimdSupported)
         {
             HFilter16iScalar(p, o, stride, thresh, ithresh, hevThresh);
             return;
@@ -86,26 +89,32 @@ internal static partial class Vp8Dsp
 
     public static void VFilter8(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (Avx2.IsSupported) FilterAcrossRows(u, uo, v, vo, stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
+        if (FilterSimdSupported) FilterAcrossRows(u, uo, v, vo, stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
         else VFilter8Scalar(u, uo, v, vo, stride, thresh, ithresh, hevThresh);
     }
 
     public static void HFilter8(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (Avx2.IsSupported) FilterAcrossColumns(u, uo, v, vo, stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
+        if (FilterSimdSupported) FilterAcrossColumns(u, uo, v, vo, stride, EdgeFilter.MacroblockEdge, thresh, ithresh, hevThresh);
         else HFilter8Scalar(u, uo, v, vo, stride, thresh, ithresh, hevThresh);
     }
 
     public static void VFilter8i(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (Avx2.IsSupported) FilterAcrossRows(u, uo + (4 * stride), v, vo + (4 * stride), stride, EdgeFilter.Inner, thresh, ithresh, hevThresh);
+        if (FilterSimdSupported) FilterAcrossRows(u, uo + (4 * stride), v, vo + (4 * stride), stride, EdgeFilter.Inner, thresh, ithresh, hevThresh);
         else VFilter8iScalar(u, uo, v, vo, stride, thresh, ithresh, hevThresh);
     }
 
     public static void HFilter8i(byte[] u, int uo, byte[] v, int vo, int stride, int thresh, int ithresh, int hevThresh)
     {
-        if (Avx2.IsSupported) FilterAcrossColumns(u, uo + 4, v, vo + 4, stride, EdgeFilter.Inner, thresh, ithresh, hevThresh);
+        if (FilterSimdSupported) FilterAcrossColumns(u, uo + 4, v, vo + 4, stride, EdgeFilter.Inner, thresh, ithresh, hevThresh);
         else HFilter8iScalar(u, uo, v, vo, stride, thresh, ithresh, hevThresh);
+    }
+
+    private static bool FilterSimdSupported
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Avx2.IsSupported || AdvSimd.Arm64.IsSupported;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -118,11 +127,17 @@ internal static partial class Vp8Dsp
     private static Vector256<short> Widen(Vector128<byte> v) => Avx2.ConvertToVector256Int16(v);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<byte> Narrow(Vector256<short> v) => Sse2.PackUnsignedSaturate(v.GetLower(), v.GetUpper());
+    private static Vector128<byte> Narrow(Vector256<short> v) => Simd.PackUnsignedSaturate(v.GetLower(), v.GetUpper());
 
     // Horizontal edge at row offset 'ao' (lanes 0-7, 8 bytes) and 'bo' (lanes 8-15): rows are loaded directly.
     private static void FilterAcrossRows(byte[] a, int ao, byte[] b, int bo, int stride, EdgeFilter filter, int thresh, int ithresh, int hevThresh)
     {
+        if (!Avx2.IsSupported)
+        {
+            FilterAcrossRowsArm(a, ao, b, bo, stride, filter, thresh, ithresh, hevThresh);
+            return;
+        }
+
         Vector256<short> Row(int k) => Widen(Vector128.Create(Load8(a, ao + (k * stride)), Load8(b, bo + (k * stride))).AsByte());
         void Store(int k, Vector256<short> value)
         {
@@ -159,6 +174,12 @@ internal static partial class Vp8Dsp
     // around the edge are transposed into vectors, filtered, and transposed back.
     private static void FilterAcrossColumns(byte[] a, int ao, byte[] b, int bo, int stride, EdgeFilter filter, int thresh, int ithresh, int hevThresh)
     {
+        if (!Avx2.IsSupported)
+        {
+            FilterAcrossColumnsArm(a, ao, b, bo, stride, filter, thresh, ithresh, hevThresh);
+            return;
+        }
+
         Load16x8(a, ao - 4, b, bo - 4, stride, out Vector128<byte> c0, out Vector128<byte> c1, out Vector128<byte> c2, out Vector128<byte> c3,
             out Vector128<byte> c4, out Vector128<byte> c5, out Vector128<byte> c6, out Vector128<byte> c7);
         Vector256<short> p3 = Widen(c0), p2 = Widen(c1), p1 = Widen(c2), p0 = Widen(c3);
@@ -258,7 +279,7 @@ internal static partial class Vp8Dsp
         out Vector128<byte> c0, out Vector128<byte> c1, out Vector128<byte> c2, out Vector128<byte> c3,
         out Vector128<byte> c4, out Vector128<byte> c5, out Vector128<byte> c6, out Vector128<byte> c7)
     {
-        Vector128<byte> Pair(byte[] p, int o) => Sse2.UnpackLow(Vector128.CreateScalar(Load8(p, o)).AsByte(), Vector128.CreateScalar(Load8(p, o + stride)).AsByte());
+        Vector128<byte> Pair(byte[] p, int o) => Simd.UnpackLow(Vector128.CreateScalar(Load8(p, o)).AsByte(), Vector128.CreateScalar(Load8(p, o + stride)).AsByte());
 
         // Byte pairs of rows (0,1), (2,3), ...
         Vector128<ushort> r01 = Pair(a, ao).AsUInt16(), r23 = Pair(a, ao + (2 * stride)).AsUInt16();
@@ -266,23 +287,23 @@ internal static partial class Vp8Dsp
         Vector128<ushort> r89 = Pair(b, bo).AsUInt16(), rAB = Pair(b, bo + (2 * stride)).AsUInt16();
         Vector128<ushort> rCD = Pair(b, bo + (4 * stride)).AsUInt16(), rEF = Pair(b, bo + (6 * stride)).AsUInt16();
         // Columns 0-3 and 4-7 of row quads.
-        Vector128<uint> q0Low = Sse2.UnpackLow(r01, r23).AsUInt32(), q0High = Sse2.UnpackHigh(r01, r23).AsUInt32();
-        Vector128<uint> q1Low = Sse2.UnpackLow(r45, r67).AsUInt32(), q1High = Sse2.UnpackHigh(r45, r67).AsUInt32();
-        Vector128<uint> q2Low = Sse2.UnpackLow(r89, rAB).AsUInt32(), q2High = Sse2.UnpackHigh(r89, rAB).AsUInt32();
-        Vector128<uint> q3Low = Sse2.UnpackLow(rCD, rEF).AsUInt32(), q3High = Sse2.UnpackHigh(rCD, rEF).AsUInt32();
+        Vector128<uint> q0Low = Simd.UnpackLow(r01, r23).AsUInt32(), q0High = Simd.UnpackHigh(r01, r23).AsUInt32();
+        Vector128<uint> q1Low = Simd.UnpackLow(r45, r67).AsUInt32(), q1High = Simd.UnpackHigh(r45, r67).AsUInt32();
+        Vector128<uint> q2Low = Simd.UnpackLow(r89, rAB).AsUInt32(), q2High = Simd.UnpackHigh(r89, rAB).AsUInt32();
+        Vector128<uint> q3Low = Simd.UnpackLow(rCD, rEF).AsUInt32(), q3High = Simd.UnpackHigh(rCD, rEF).AsUInt32();
         // Pairs of columns over 8 rows.
-        Vector128<ulong> c01Top = Sse2.UnpackLow(q0Low, q1Low).AsUInt64(), c23Top = Sse2.UnpackHigh(q0Low, q1Low).AsUInt64();
-        Vector128<ulong> c45Top = Sse2.UnpackLow(q0High, q1High).AsUInt64(), c67Top = Sse2.UnpackHigh(q0High, q1High).AsUInt64();
-        Vector128<ulong> c01Bottom = Sse2.UnpackLow(q2Low, q3Low).AsUInt64(), c23Bottom = Sse2.UnpackHigh(q2Low, q3Low).AsUInt64();
-        Vector128<ulong> c45Bottom = Sse2.UnpackLow(q2High, q3High).AsUInt64(), c67Bottom = Sse2.UnpackHigh(q2High, q3High).AsUInt64();
-        c0 = Sse2.UnpackLow(c01Top, c01Bottom).AsByte();
-        c1 = Sse2.UnpackHigh(c01Top, c01Bottom).AsByte();
-        c2 = Sse2.UnpackLow(c23Top, c23Bottom).AsByte();
-        c3 = Sse2.UnpackHigh(c23Top, c23Bottom).AsByte();
-        c4 = Sse2.UnpackLow(c45Top, c45Bottom).AsByte();
-        c5 = Sse2.UnpackHigh(c45Top, c45Bottom).AsByte();
-        c6 = Sse2.UnpackLow(c67Top, c67Bottom).AsByte();
-        c7 = Sse2.UnpackHigh(c67Top, c67Bottom).AsByte();
+        Vector128<ulong> c01Top = Simd.UnpackLow(q0Low, q1Low).AsUInt64(), c23Top = Simd.UnpackHigh(q0Low, q1Low).AsUInt64();
+        Vector128<ulong> c45Top = Simd.UnpackLow(q0High, q1High).AsUInt64(), c67Top = Simd.UnpackHigh(q0High, q1High).AsUInt64();
+        Vector128<ulong> c01Bottom = Simd.UnpackLow(q2Low, q3Low).AsUInt64(), c23Bottom = Simd.UnpackHigh(q2Low, q3Low).AsUInt64();
+        Vector128<ulong> c45Bottom = Simd.UnpackLow(q2High, q3High).AsUInt64(), c67Bottom = Simd.UnpackHigh(q2High, q3High).AsUInt64();
+        c0 = Simd.UnpackLow(c01Top, c01Bottom).AsByte();
+        c1 = Simd.UnpackHigh(c01Top, c01Bottom).AsByte();
+        c2 = Simd.UnpackLow(c23Top, c23Bottom).AsByte();
+        c3 = Simd.UnpackHigh(c23Top, c23Bottom).AsByte();
+        c4 = Simd.UnpackLow(c45Top, c45Bottom).AsByte();
+        c5 = Simd.UnpackHigh(c45Top, c45Bottom).AsByte();
+        c6 = Simd.UnpackLow(c67Top, c67Bottom).AsByte();
+        c7 = Simd.UnpackHigh(c67Top, c67Bottom).AsByte();
     }
 
     // Inverse of Load16x8.
@@ -291,20 +312,20 @@ internal static partial class Vp8Dsp
         Vector128<byte> c4, Vector128<byte> c5, Vector128<byte> c6, Vector128<byte> c7)
     {
         // Byte pairs of columns (0,1), ... for rows 0-7 (low) and 8-15 (high).
-        Vector128<ushort> c01Low = Sse2.UnpackLow(c0, c1).AsUInt16(), c01High = Sse2.UnpackHigh(c0, c1).AsUInt16();
-        Vector128<ushort> c23Low = Sse2.UnpackLow(c2, c3).AsUInt16(), c23High = Sse2.UnpackHigh(c2, c3).AsUInt16();
-        Vector128<ushort> c45Low = Sse2.UnpackLow(c4, c5).AsUInt16(), c45High = Sse2.UnpackHigh(c4, c5).AsUInt16();
-        Vector128<ushort> c67Low = Sse2.UnpackLow(c6, c7).AsUInt16(), c67High = Sse2.UnpackHigh(c6, c7).AsUInt16();
+        Vector128<ushort> c01Low = Simd.UnpackLow(c0, c1).AsUInt16(), c01High = Simd.UnpackHigh(c0, c1).AsUInt16();
+        Vector128<ushort> c23Low = Simd.UnpackLow(c2, c3).AsUInt16(), c23High = Simd.UnpackHigh(c2, c3).AsUInt16();
+        Vector128<ushort> c45Low = Simd.UnpackLow(c4, c5).AsUInt16(), c45High = Simd.UnpackHigh(c4, c5).AsUInt16();
+        Vector128<ushort> c67Low = Simd.UnpackLow(c6, c7).AsUInt16(), c67High = Simd.UnpackHigh(c6, c7).AsUInt16();
         StoreRows(a, ao, stride, c01Low, c23Low, c45Low, c67Low);
         StoreRows(b, bo, stride, c01High, c23High, c45High, c67High);
 
         static void StoreRows(byte[] p, int o, int stride, Vector128<ushort> c01, Vector128<ushort> c23, Vector128<ushort> c45, Vector128<ushort> c67)
         {
             // Columns 0-3 and 4-7 of rows 0-3 and 4-7.
-            Vector128<uint> left03 = Sse2.UnpackLow(c01, c23).AsUInt32(), left47 = Sse2.UnpackHigh(c01, c23).AsUInt32();
-            Vector128<uint> right03 = Sse2.UnpackLow(c45, c67).AsUInt32(), right47 = Sse2.UnpackHigh(c45, c67).AsUInt32();
-            Vector128<ulong> rows01 = Sse2.UnpackLow(left03, right03).AsUInt64(), rows23 = Sse2.UnpackHigh(left03, right03).AsUInt64();
-            Vector128<ulong> rows45 = Sse2.UnpackLow(left47, right47).AsUInt64(), rows67 = Sse2.UnpackHigh(left47, right47).AsUInt64();
+            Vector128<uint> left03 = Simd.UnpackLow(c01, c23).AsUInt32(), left47 = Simd.UnpackHigh(c01, c23).AsUInt32();
+            Vector128<uint> right03 = Simd.UnpackLow(c45, c67).AsUInt32(), right47 = Simd.UnpackHigh(c45, c67).AsUInt32();
+            Vector128<ulong> rows01 = Simd.UnpackLow(left03, right03).AsUInt64(), rows23 = Simd.UnpackHigh(left03, right03).AsUInt64();
+            Vector128<ulong> rows45 = Simd.UnpackLow(left47, right47).AsUInt64(), rows67 = Simd.UnpackHigh(left47, right47).AsUInt64();
             Store8(p, o, rows01.GetElement(0));
             Store8(p, o + stride, rows01.GetElement(1));
             Store8(p, o + (2 * stride), rows23.GetElement(0));

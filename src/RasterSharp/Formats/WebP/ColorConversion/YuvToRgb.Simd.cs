@@ -4,10 +4,11 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using RasterSharp.Formats.WebP.Lossy;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.WebP.ColorConversion;
 
-// SSE2 versions of the conversion; for byte inputs they give exactly the scalar results.
+// SSE2/ARM64 versions of the conversion (through the Simd helpers); for byte inputs they give exactly the scalar results.
 internal static partial class YuvToRgb
 {
     // port: src/dsp/yuv_sse2.c ConvertYUV444ToRGB_SSE2. Inputs are shifted left by 8, so the high half of the
@@ -16,14 +17,14 @@ internal static partial class YuvToRgb
     private static void ConvertYuv(Vector128<ushort> y, Vector128<ushort> u, Vector128<ushort> v,
         out Vector128<short> r, out Vector128<short> g, out Vector128<short> b)
     {
-        Vector128<ushort> y1 = Sse2.MultiplyHigh(y, Vector128.Create((ushort)19077));
-        Vector128<ushort> r0 = Sse2.MultiplyHigh(v, Vector128.Create((ushort)26149));
+        Vector128<ushort> y1 = Simd.MultiplyHigh(y, Vector128.Create((ushort)19077));
+        Vector128<ushort> r0 = Simd.MultiplyHigh(v, Vector128.Create((ushort)26149));
         r = (y1 - Vector128.Create((ushort)14234) + r0).AsInt16() >> 6;
-        Vector128<ushort> g0 = Sse2.MultiplyHigh(u, Vector128.Create((ushort)6419));
-        Vector128<ushort> g1 = Sse2.MultiplyHigh(v, Vector128.Create((ushort)13320));
+        Vector128<ushort> g0 = Simd.MultiplyHigh(u, Vector128.Create((ushort)6419));
+        Vector128<ushort> g1 = Simd.MultiplyHigh(v, Vector128.Create((ushort)13320));
         g = (y1 + Vector128.Create((ushort)8708) - (g0 + g1)).AsInt16() >> 6;
         // B can exceed 32767: saturating unsigned arithmetic and a logical shift (negative results clip to 0 anyway).
-        Vector128<ushort> b0 = Sse2.MultiplyHigh(u, Vector128.Create((ushort)33050));
+        Vector128<ushort> b0 = Simd.MultiplyHigh(u, Vector128.Create((ushort)33050));
         b = Vector128.SubtractSaturate(Vector128.AddSaturate(b0, y1), Vector128.Create((ushort)17685)).AsInt16();
         b = (b.AsUInt16() >> 6).AsInt16();
     }
@@ -32,19 +33,19 @@ internal static partial class YuvToRgb
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Store16(Vector128<byte> y, Vector128<short> uLow, Vector128<short> uHigh, Vector128<short> vLow, Vector128<short> vHigh, Span<Rgba32> dst)
     {
-        ConvertYuv(Sse2.UnpackLow(Vector128<byte>.Zero, y).AsUInt16(), (uLow << 8).AsUInt16(), (vLow << 8).AsUInt16(),
+        ConvertYuv(Simd.UnpackLow(Vector128<byte>.Zero, y).AsUInt16(), (uLow << 8).AsUInt16(), (vLow << 8).AsUInt16(),
             out Vector128<short> r0, out Vector128<short> g0, out Vector128<short> b0);
-        ConvertYuv(Sse2.UnpackHigh(Vector128<byte>.Zero, y).AsUInt16(), (uHigh << 8).AsUInt16(), (vHigh << 8).AsUInt16(),
+        ConvertYuv(Simd.UnpackHigh(Vector128<byte>.Zero, y).AsUInt16(), (uHigh << 8).AsUInt16(), (vHigh << 8).AsUInt16(),
             out Vector128<short> r1, out Vector128<short> g1, out Vector128<short> b1);
-        Vector128<byte> r = Sse2.PackUnsignedSaturate(r0, r1), g = Sse2.PackUnsignedSaturate(g0, g1), b = Sse2.PackUnsignedSaturate(b0, b1);
-        Vector128<ushort> rgLow = Sse2.UnpackLow(r, g).AsUInt16(), rgHigh = Sse2.UnpackHigh(r, g).AsUInt16();
-        Vector128<ushort> baLow = Sse2.UnpackLow(b, Vector128<byte>.AllBitsSet).AsUInt16();
-        Vector128<ushort> baHigh = Sse2.UnpackHigh(b, Vector128<byte>.AllBitsSet).AsUInt16();
+        Vector128<byte> r = Simd.PackUnsignedSaturate(r0, r1), g = Simd.PackUnsignedSaturate(g0, g1), b = Simd.PackUnsignedSaturate(b0, b1);
+        Vector128<ushort> rgLow = Simd.UnpackLow(r, g).AsUInt16(), rgHigh = Simd.UnpackHigh(r, g).AsUInt16();
+        Vector128<ushort> baLow = Simd.UnpackLow(b, Vector128<byte>.AllBitsSet).AsUInt16();
+        Vector128<ushort> baHigh = Simd.UnpackHigh(b, Vector128<byte>.AllBitsSet).AsUInt16();
         Span<byte> bytes = MemoryMarshal.AsBytes(dst[..16]);
-        Sse2.UnpackLow(rgLow, baLow).AsByte().CopyTo(bytes);
-        Sse2.UnpackHigh(rgLow, baLow).AsByte().CopyTo(bytes[16..]);
-        Sse2.UnpackLow(rgHigh, baHigh).AsByte().CopyTo(bytes[32..]);
-        Sse2.UnpackHigh(rgHigh, baHigh).AsByte().CopyTo(bytes[48..]);
+        Simd.UnpackLow(rgLow, baLow).AsByte().CopyTo(bytes);
+        Simd.UnpackHigh(rgLow, baLow).AsByte().CopyTo(bytes[16..]);
+        Simd.UnpackLow(rgHigh, baHigh).AsByte().CopyTo(bytes[32..]);
+        Simd.UnpackHigh(rgHigh, baHigh).AsByte().CopyTo(bytes[48..]);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -79,13 +80,13 @@ internal static partial class YuvToRgb
                 out Vector128<short> vTopOdd, out Vector128<short> vTopEven, out Vector128<short> vBottomOdd, out Vector128<short> vBottomEven);
             int pixel = (2 * x) - 1;
             Store16(Vector128.Create(f.Y.AsSpan(topYOff + pixel, 16)),
-                Sse2.UnpackLow(uTopOdd, uTopEven), Sse2.UnpackHigh(uTopOdd, uTopEven),
-                Sse2.UnpackLow(vTopOdd, vTopEven), Sse2.UnpackHigh(vTopOdd, vTopEven), topDst[pixel..]);
+                Simd.UnpackLow(uTopOdd, uTopEven), Simd.UnpackHigh(uTopOdd, uTopEven),
+                Simd.UnpackLow(vTopOdd, vTopEven), Simd.UnpackHigh(vTopOdd, vTopEven), topDst[pixel..]);
             if (hasBottom)
             {
                 Store16(Vector128.Create(f.Y.AsSpan(botYOff + pixel, 16)),
-                    Sse2.UnpackLow(uBottomOdd, uBottomEven), Sse2.UnpackHigh(uBottomOdd, uBottomEven),
-                    Sse2.UnpackLow(vBottomOdd, vBottomEven), Sse2.UnpackHigh(vBottomOdd, vBottomEven), botDst[pixel..]);
+                    Simd.UnpackLow(uBottomOdd, uBottomEven), Simd.UnpackHigh(uBottomOdd, uBottomEven),
+                    Simd.UnpackLow(vBottomOdd, vBottomEven), Simd.UnpackHigh(vBottomOdd, vBottomEven), botDst[pixel..]);
             }
         }
 
@@ -99,7 +100,7 @@ internal static partial class YuvToRgb
         for (; x + 16 <= row.Length; x += 16)
         {
             Vector128<short> u = LoadBytes8(f.U, uvRow + (x >> 1)), v = LoadBytes8(f.V, uvRow + (x >> 1));
-            Store16(Vector128.Create(f.Y.AsSpan(yRow + x, 16)), Sse2.UnpackLow(u, u), Sse2.UnpackHigh(u, u), Sse2.UnpackLow(v, v), Sse2.UnpackHigh(v, v), row[x..]);
+            Store16(Vector128.Create(f.Y.AsSpan(yRow + x, 16)), Simd.UnpackLow(u, u), Simd.UnpackHigh(u, u), Simd.UnpackLow(v, v), Simd.UnpackHigh(v, v), row[x..]);
         }
 
         return x;

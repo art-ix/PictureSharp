@@ -15,7 +15,7 @@ internal static partial class Vp8Dsp
 
     public static void TransformOne(ReadOnlySpan<short> input, byte[] dst, int off)
     {
-        if (Sse41.IsSupported)
+        if (Simd.IsSupportedSse41)
         {
             CheckBlock(input, dst.Length, off);
             ref byte block = ref dst[off];
@@ -68,7 +68,7 @@ internal static partial class Vp8Dsp
         o2 += Simd.LoadBytes4(ref Unsafe.Add(ref reference, 2 * Bps));
         o3 += Simd.LoadBytes4(ref Unsafe.Add(ref reference, 3 * Bps));
         // Saturating int -> short -> byte equals clip_8b.
-        Vector128<uint> pixels = Sse2.PackUnsignedSaturate(Sse2.PackSignedSaturate(o0, o1), Sse2.PackSignedSaturate(o2, o3)).AsUInt32();
+        Vector128<uint> pixels = Simd.PackUnsignedSaturate(Simd.PackSignedSaturate(o0, o1), Simd.PackSignedSaturate(o2, o3)).AsUInt32();
         Unsafe.WriteUnaligned(ref dst, pixels.GetElement(0));
         Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, Bps), pixels.GetElement(1));
         Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, 2 * Bps), pixels.GetElement(2));

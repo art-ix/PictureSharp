@@ -6,17 +6,10 @@ namespace RasterSharp.Compression;
 
 internal static partial class Adler32
 {
-    private const int BlockSize = 32;
-
     /// <summary>Adds whole 32-byte blocks to <paramref name="adler"/> and returns the number of bytes consumed.</summary>
     // port: Chromium zlib adler32_simd.c adler32_simd_ (SSSE3)
-    private static int UpdateSimd(ref uint adler, ReadOnlySpan<byte> data)
+    private static int UpdateX86(ref uint adler, ReadOnlySpan<byte> data)
     {
-        if (!Ssse3.IsSupported || data.Length < BlockSize)
-        {
-            return 0;
-        }
-
         uint s1 = adler & 0xffff;
         uint s2 = adler >> 16;
         int blocks = data.Length / BlockSize;

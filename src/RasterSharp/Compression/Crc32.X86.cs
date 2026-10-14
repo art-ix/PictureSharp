@@ -6,8 +6,6 @@ namespace RasterSharp.Compression;
 
 internal static partial class Crc32
 {
-    private const int SimdMinimumLength = 64;
-
     // Folding constants for the reflected polynomial 0x04C11DB7 (Intel, "Fast CRC Computation for Generic
     // Polynomials Using PCLMULQDQ"): x^(4*128+32), x^(4*128-32), x^(128+32), x^(128-32), x^64 mod P, P and mu.
     private const ulong K1 = 0x0154442bd4, K2 = 0x01c6e41596;
@@ -17,13 +15,8 @@ internal static partial class Crc32
 
     /// <summary>Folds whole 16-byte blocks into <paramref name="crc"/> and returns the number of bytes consumed.</summary>
     // port: Chromium zlib crc32_simd.c crc32_sse42_simd_
-    private static int UpdateSimd(ref uint crc, ReadOnlySpan<byte> data)
+    private static int UpdateX86(ref uint crc, ReadOnlySpan<byte> data)
     {
-        if (!Pclmulqdq.IsSupported || !Sse41.IsSupported || data.Length < SimdMinimumLength)
-        {
-            return 0;
-        }
-
         int length = data.Length & ~15;
         ref byte buffer = ref MemoryMarshal.GetReference(data);
         Vector128<ulong> x1 = Vector128.LoadUnsafe(ref buffer).AsUInt64();

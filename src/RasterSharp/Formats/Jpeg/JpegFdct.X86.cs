@@ -9,15 +9,10 @@ internal static partial class JpegFdct
 {
     /// <summary>
     /// <see cref="TransformScalar"/> with AVX2: the block is transposed so that each pass works on eight rows (or
-    /// columns) at once, with the same 32-bit operations as the scalar code. Returns false without AVX2.
+    /// columns) at once, with the same 32-bit operations as the scalar code.
     /// </summary>
-    private static bool TransformSimd(Span<int> data)
+    private static void TransformAvx2(Span<int> data)
     {
-        if (!Avx2.IsSupported)
-        {
-            return false;
-        }
-
         ref int d = ref MemoryMarshal.GetReference(data[..64]);
         Vector256<int> r0 = Vector256.LoadUnsafe(ref d), r1 = Vector256.LoadUnsafe(ref d, 8);
         Vector256<int> r2 = Vector256.LoadUnsafe(ref d, 16), r3 = Vector256.LoadUnsafe(ref d, 24);
@@ -40,7 +35,6 @@ internal static partial class JpegFdct
         r5.StoreUnsafe(ref d, 40);
         r6.StoreUnsafe(ref d, 48);
         r7.StoreUnsafe(ref d, 56);
-        return true;
     }
 
     // port: libjpeg-turbo jfdctint.c jpeg_fdct_islow, one pass on eight lanes (d0..d7 are the eight inputs)

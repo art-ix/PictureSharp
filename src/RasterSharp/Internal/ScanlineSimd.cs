@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace RasterSharp.Internal;
 
-/// <summary>Byte-wise scanline recurrences. The vector code is in <c>ScanlineSimd.X86.cs</c>; these methods are scalar.</summary>
+/// <summary>Byte-wise scanline recurrences. The vector code is in <c>ScanlineSimd.Vector.cs</c>; these methods are scalar.</summary>
 internal static partial class ScanlineSimd
 {
     /// <summary>

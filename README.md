@@ -11,6 +11,7 @@ RasterSharp reads and writes WebP, PNG, JPEG, BMP, GIF and PCX and processes ima
 - Resize, crop, pad, rotate, flip, EXIF auto-orientation
 - Brightness, contrast, saturation, blur, sharpen, compositing and watermarks
 - Raw pixel access and conversion to BGRA/RGB/gray buffers for interop
+- SIMD on x64 (SSE2–AVX2) and ARM64 (AdvSimd/NEON), bit-identical to the scalar code
 - ICC, EXIF and XMP metadata preserved where the output format supports them
 
 | Format | Read | Write |
@@ -61,7 +62,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.4.7); performance work continues in phase 10.
+Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.4.8); performance work continues in phase 10.
 
 ## License
 

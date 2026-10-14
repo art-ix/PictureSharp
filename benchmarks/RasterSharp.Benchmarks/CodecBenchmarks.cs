@@ -4,7 +4,7 @@ using static RasterSharp.Benchmarks.LosslessDecodeBenchmarks;
 namespace RasterSharp.Benchmarks;
 
 /// <summary>
-/// Complete PNG and JPEG encoding/decoding and Lanczos resizing of committed corpus sources and optional local images.
+/// Complete PNG, JPEG and lossy WebP encoding/decoding and Lanczos resizing of committed corpus sources and optional local images.
 /// The decode benchmarks read bytes encoded once during setup with default options.
 /// </summary>
 [MemoryDiagnoser]
@@ -13,6 +13,7 @@ public class CodecBenchmarks
     private Image _image = null!;
     private byte[] _png = null!;
     private byte[] _jpeg = null!;
+    private byte[] _webp = null!;
 
     public IEnumerable<InputFile> Files()
     {
@@ -41,6 +42,7 @@ public class CodecBenchmarks
         _image = Image.Load(File.Path);
         _png = _image.ToPng();
         _jpeg = _image.ToJpeg();
+        _webp = _image.ToWebP();
     }
 
     [GlobalCleanup]
@@ -63,6 +65,16 @@ public class CodecBenchmarks
     public int JpegDecode()
     {
         using Image image = Image.Load(_jpeg);
+        return image.Width;
+    }
+
+    [Benchmark]
+    public int WebPLossyEncode() => _image.ToWebP().Length;
+
+    [Benchmark]
+    public int WebPLossyDecode()
+    {
+        using Image image = Image.Load(_webp);
         return image.Width;
     }
 

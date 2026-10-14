@@ -7,14 +7,14 @@ using RasterSharp.Internal;
 namespace RasterSharp.Formats.WebP.Lossless;
 
 // port: src/dsp/lossless_enc_sse2.c, src/dsp/lossless_enc_avx2.c PredictorSub0..13
-// x86 only. The encoder knows the left pixel in advance, so every residual of a run is independent.
+// AVX2 on x86; 128-bit code on SSE2 or ARM64 through the Simd helpers. The encoder knows the left pixel in advance, so every residual of a run is independent.
 // Each routine returns how many pixels it consumed; the caller finishes the tail in scalar code.
 internal static partial class Vp8LForwardTransforms
 {
     // Residuals current[i] - predict(mode, i) for 'count' pixels with current[-1], upper[-1] and upper[count] readable.
     private static int PredictorSubSimd(int mode, ref uint current, ref uint upper, int count, ref uint output)
     {
-        if (!Sse2.IsSupported) return 0;
+        if (!Simd.IsSupported128) return 0;
         int i = 0;
         if (Avx2.IsSupported)
         {
@@ -63,7 +63,7 @@ internal static partial class Vp8LForwardTransforms
                 12 => ClampedAddSubtractFullVector(Load4(ref current, i - 1), Load4(ref upper, i), Load4(ref upper, i - 1)),
                 _ => ClampedAddSubtractHalfVector(Load4(ref current, i - 1), Load4(ref upper, i), Load4(ref upper, i - 1)),
             };
-            Sse2.Subtract(source, prediction).AsUInt32().StoreUnsafe(ref output, (nuint)i);
+            (source - prediction).AsUInt32().StoreUnsafe(ref output, (nuint)i);
         }
         return i;
     }
@@ -74,7 +74,7 @@ internal static partial class Vp8LForwardTransforms
         ref uint p = ref MemoryMarshal.GetReference(pixels);
         Vector128<uint> alpha = Vector128.Create(0xff000000u);
         int i = 0;
-        if (Sse2.IsSupported)
+        if (Simd.IsSupported128)
         {
             for (; i + 4 <= pixels.Length; i += 4)
             {
@@ -100,8 +100,8 @@ internal static partial class Vp8LForwardTransforms
     private static Vector128<byte> SelectVector(Vector128<byte> left, Vector128<byte> top, Vector128<byte> topLeft)
     {
         Vector128<int> pa = SumAbsDiff32(top, topLeft), pb = SumAbsDiff32(left, topLeft);
-        Vector128<byte> mask = Sse2.CompareGreaterThan(pb, pa).AsByte();
-        return Sse2.Or(Sse2.And(mask, left), Sse2.AndNot(mask, top));
+        Vector128<byte> mask = Vector128.GreaterThan(pb, pa).AsByte();
+        return (mask & left) | Vector128.AndNot(top, mask);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -118,9 +118,9 @@ internal static partial class Vp8LForwardTransforms
     private static Vector128<int> SumAbsDiff32(Vector128<byte> a, Vector128<byte> b)
     {
         Vector128<uint> a32 = a.AsUInt32(), b32 = b.AsUInt32();
-        Vector128<ushort> low = Sse2.SumAbsoluteDifferences(Sse2.UnpackLow(a32, a32).AsByte(), Sse2.UnpackLow(b32, a32).AsByte());
-        Vector128<ushort> high = Sse2.SumAbsoluteDifferences(Sse2.UnpackHigh(a32, a32).AsByte(), Sse2.UnpackHigh(b32, a32).AsByte());
-        return Sse2.PackSignedSaturate(low.AsInt32(), high.AsInt32()).AsInt32();
+        Vector128<ushort> low = Simd.SumAbsoluteDifferences(Simd.UnpackLow(a32, a32).AsByte(), Simd.UnpackLow(b32, a32).AsByte());
+        Vector128<ushort> high = Simd.SumAbsoluteDifferences(Simd.UnpackHigh(a32, a32).AsByte(), Simd.UnpackHigh(b32, a32).AsByte());
+        return Simd.PackSignedSaturate(low.AsInt32(), high.AsInt32()).AsInt32();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -137,11 +137,9 @@ internal static partial class Vp8LForwardTransforms
     private static Vector128<byte> ClampedAddSubtractFullVector(Vector128<byte> left, Vector128<byte> top, Vector128<byte> topLeft)
     {
         Vector128<byte> zero = Vector128<byte>.Zero;
-        Vector128<short> low = Sse2.Add(Sse2.UnpackLow(left, zero).AsInt16(),
-            Sse2.Subtract(Sse2.UnpackLow(top, zero).AsInt16(), Sse2.UnpackLow(topLeft, zero).AsInt16()));
-        Vector128<short> high = Sse2.Add(Sse2.UnpackHigh(left, zero).AsInt16(),
-            Sse2.Subtract(Sse2.UnpackHigh(top, zero).AsInt16(), Sse2.UnpackHigh(topLeft, zero).AsInt16()));
-        return Sse2.PackUnsignedSaturate(low, high);
+        Vector128<short> low = Simd.UnpackLow(left, zero).AsInt16() + (Simd.UnpackLow(top, zero).AsInt16() - Simd.UnpackLow(topLeft, zero).AsInt16());
+        Vector128<short> high = Simd.UnpackHigh(left, zero).AsInt16() + (Simd.UnpackHigh(top, zero).AsInt16() - Simd.UnpackHigh(topLeft, zero).AsInt16());
+        return Simd.PackUnsignedSaturate(low, high);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -160,9 +158,7 @@ internal static partial class Vp8LForwardTransforms
     private static Vector128<byte> ClampedAddSubtractHalfVector(Vector128<byte> left, Vector128<byte> top, Vector128<byte> topLeft)
     {
         Vector128<byte> zero = Vector128<byte>.Zero;
-        return Sse2.PackUnsignedSaturate(
-            AddSubtractHalf(Sse2.UnpackLow(left, zero).AsInt16(), Sse2.UnpackLow(top, zero).AsInt16(), Sse2.UnpackLow(topLeft, zero).AsInt16()),
-            AddSubtractHalf(Sse2.UnpackHigh(left, zero).AsInt16(), Sse2.UnpackHigh(top, zero).AsInt16(), Sse2.UnpackHigh(topLeft, zero).AsInt16()));
+        return Simd.PackUnsignedSaturate(AddSubtractHalf(Simd.UnpackLow(left, zero).AsInt16(), Simd.UnpackLow(top, zero).AsInt16(), Simd.UnpackLow(topLeft, zero).AsInt16()), AddSubtractHalf(Simd.UnpackHigh(left, zero).AsInt16(), Simd.UnpackHigh(top, zero).AsInt16(), Simd.UnpackHigh(topLeft, zero).AsInt16()));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -178,9 +174,9 @@ internal static partial class Vp8LForwardTransforms
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<short> AddSubtractHalf(Vector128<short> left, Vector128<short> top, Vector128<short> topLeft)
     {
-        Vector128<short> average = Sse2.ShiftRightLogical(Sse2.Add(top, left), 1);
-        Vector128<short> difference = Sse2.Subtract(Sse2.Subtract(average, topLeft), Sse2.CompareGreaterThan(topLeft, average));
-        return Sse2.Add(average, Sse2.ShiftRightArithmetic(difference, 1));
+        Vector128<short> average = (top + left) >>> 1;
+        Vector128<short> difference = (average - topLeft) - Vector128.GreaterThan(topLeft, average);
+        return average + (difference >> 1);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

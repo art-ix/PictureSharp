@@ -33,6 +33,40 @@ These broader measurements and the final gate remain pending; the VP8L matrix al
 The 0.4.6 matrix (PNG, deflate, resizing, JPEG, WebP lossy, BMP and GIF) and the 0.4.5 lossless encode matrix
 are described in the next sections.
 
+## ARM64 in 0.4.8
+
+Before 0.4.8 every hand-written vector path was x86-only, so ARM64 ran the scalar code except for the routines
+written with portable `Vector128` operations (PNG filters, resizing, premultiplication, VP8L histograms and entropy,
+JPEG coefficient masks). 0.4.8 runs the 128-bit SSE bodies on AdvSimd through the `Internal/Simd` helpers and adds
+ARM64 versions of the AVX2-only routines (VP8 loop filters, distortion and quantization, JPEG DCTs) plus CRC-32 and
+Adler-32. Every output is identical to the scalar code and to x64.
+
+Measured on 2026-10-14: Orange Pi 5 (RK3588, Cortex-A76 cores 4–7 via `taskset -c 4-7`, `performance` governor),
+Ubuntu 24.04, .NET SDK 10.0.112, `DOTNET_TieredCompilation=0`. Each value is the median of seven calls after two
+warmups, through the public API from memory (encode from a decoded `Image`, decode from bytes written with default
+options); "before" is the 0.4.7 commit built the same way. Inputs: a local 4032×3024 photo and a 1200×900 photo.
+
+| Operation | 4032×3024 before | after | change | 1200×900 before | after | change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| WebP lossy encode (q75, m4) | 3597 ms | 2103 ms | −42% | 360.5 ms | 212.8 ms | −41% |
+| WebP lossy decode | 392.4 ms | 197.8 ms | −50% | 35.3 ms | 23.1 ms | −35% |
+| WebP lossless encode (m4) | 11323 ms | 9264 ms | −18% | 1042 ms | 818 ms | −21% |
+| WebP lossless decode | 532.5 ms | 436.2 ms | −18% | 53.0 ms | 40.9 ms | −23% |
+| JPEG encode (q75) | 173.6 ms | 160.3 ms | −8% | 19.1 ms | 17.8 ms | −7% |
+| JPEG decode | 223.2 ms | 161.5 ms | −28% | 22.9 ms | 15.7 ms | −31% |
+| PNG encode | 1100 ms | 1052 ms | −4% | 120.0 ms | 117.8 ms | −2% |
+| PNG decode | 245.6 ms | 245.2 ms | 0% | 20.1 ms | 20.1 ms | 0% |
+| Lanczos ½ resize | 118.0 ms | 121.4 ms | +3% | 11.6 ms | 11.7 ms | +1% |
+
+PNG and resizing already used portable vectors on ARM64; their code did not change in 0.4.8, so the small
+differences are run-to-run variation. PNG encoding time is dominated by the scalar deflate match finder.
+
+On the same board and cores, libwebp 1.6.0 (NEON, single thread) reported 2.01 s for `cwebp -q 75 -m 4` of the
+4032×3024 photo and 205 ms for `dwebp` of the resulting file (internal timers, three runs each; they exclude file
+I/O and process startup). RasterSharp's API times above are 1.05× and 0.96× of those, well within the 3× phase-10
+target for these inputs; the frozen phase-10 matrix still has to confirm it. On x64 (i5-12500H) the same probe
+showed no change beyond run-to-run variation (within ±1.5%) for WebP, JPEG and lossless decoding.
+
 ## Hot paths in 0.4.6
 
 The 0.4.6 matrix freezes 40 operations on fixed bytes: PNG decoding of the corpus `photo` and `photo_alpha`
@@ -117,7 +151,7 @@ and stayed equal for resizing and JPEG decoding. JPEG encoding allocates about 0
 The remaining gaps to libjpeg-turbo are the sequential Huffman coding (JPEG decode and encode) and, on one thread,
 the color conversion and downsampling of the JPEG encoder; the single-threaded PNG encoder is now at Pillow's speed.
 
-`CodecBenchmarks` (BenchmarkDotNet) covers PNG and JPEG encoding and decoding and Lanczos halving of three corpus
+`CodecBenchmarks` (BenchmarkDotNet) covers PNG, JPEG and lossy WebP (default options) encoding and decoding and Lanczos halving of three corpus
 sources; add local images through `RASTERSHARP_BENCHMARK_CODEC_FILES`.
 
 ## VP8L encoding in 0.4.5

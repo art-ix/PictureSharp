@@ -14,7 +14,7 @@ internal static partial class Adler32
         return UpdateScalar(adler, data[done..]);
     }
 
-    /// <summary>Scalar <see cref="Update"/>; the vector path is in <c>Adler32.X86.cs</c>.</summary>
+    /// <summary>Scalar <see cref="Update"/>; the vector path is in <c>Adler32.Simd.cs</c>.</summary>
     internal static uint UpdateScalar(uint adler, ReadOnlySpan<byte> data)
     {
         uint a = adler & 0xffff;

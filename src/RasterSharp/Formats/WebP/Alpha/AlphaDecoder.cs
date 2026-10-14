@@ -1,5 +1,6 @@
 using System.Runtime.Intrinsics.X86;
 using RasterSharp.Formats.WebP.Lossless;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.WebP.Alpha;
 
@@ -70,7 +71,7 @@ internal static partial class AlphaDecoder
 
     /// <summary>Reverses the prediction filter in place, row by row.</summary>
     public static void Unfilter(AlphaFilterType filter, Span<byte> plane, int width, int height) =>
-        UnfilterRows(filter, plane, width, height, useSimd: Sse2.IsSupported);
+        UnfilterRows(filter, plane, width, height, useSimd: Simd.IsSupported128);
 
     /// <summary>Same reconstruction as <see cref="Unfilter"/>, using only scalar rows. The x86 rows are in <c>AlphaDecoder.Simd.cs</c>.</summary>
     internal static void UnfilterScalar(AlphaFilterType filter, Span<byte> plane, int width, int height) =>

@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using RasterSharp.Internal;
 
 namespace RasterSharp.Formats.WebP;
 
@@ -17,7 +18,7 @@ internal sealed partial class WebPDecoder
 
     private static int ArgbToRgbaSimd(ReadOnlySpan<uint> argb, Span<Rgba32> dst)
     {
-        if (!Ssse3.IsSupported || argb.IsEmpty || dst.IsEmpty)
+        if (!Simd.IsSupportedSsse3 || argb.IsEmpty || dst.IsEmpty)
         {
             return 0;
         }
@@ -37,7 +38,7 @@ internal sealed partial class WebPDecoder
 
         for (; i + 4 <= n; i += 4)
         {
-            Ssse3.Shuffle(Vector128.LoadUnsafe(ref source, (nuint)(i * 4)), ArgbToRgbaShuffle4)
+            Simd.ShuffleBytes(Vector128.LoadUnsafe(ref source, (nuint)(i * 4)), ArgbToRgbaShuffle4)
                 .StoreUnsafe(ref target, (nuint)(i * 4));
         }
 
