@@ -5,7 +5,7 @@ Sources are synthetic (no third-party photos), variants are produced with the re
 tools: cwebp / img2webp / webpmux (libwebp 1.6.0), ImageMagick `convert` and Pillow, plus a
 small GIF writer below for block layouts no tool produces.
 
-Run with:  python3 -I tests/assets/generate_corpus.py [webp|png|jpeg|bmp|gif ...]
+Run with:  python3 -I tests/assets/generate_corpus.py [webp|png|jpeg|bmp|gif|pcx ...]
 Then:      python3 -I tests/assets/make_reference.py
 """
 import io
@@ -830,11 +830,30 @@ def make_exif(orientation=None, resolution=None):
     return out.getvalue()
 
 
+def generate_pcx():
+    """Modes Pillow writes: 1-bit, grayscale, palette and RGB. Pillow always stores 100 dpi."""
+    graphic = Image.open(os.path.join(SRC, "graphic.png"))
+    photo = Image.open(os.path.join(SRC, "photo.png"))
+    odd = Image.open(os.path.join(SRC, "photo_odd.png"))
+    thin = Image.open(os.path.join(SRC, "thin.png"))
+    wide = Image.open(os.path.join(SRC, "wide.png"))
+    samples = [
+        ("mono", graphic.convert("1")),
+        ("gray", photo.convert("L")),
+        ("palette", graphic.quantize(16)),
+        ("rgb", odd.convert("RGB")),
+        ("thin", thin.convert("1")),
+        ("wide", wide.convert("RGB")),
+    ]
+    for name, image in samples:
+        image.save(path("pcx", f"pil_{name}.pcx"))
+
+
 def main():
     for tool in ("cwebp", "img2webp", "webpmux", "convert"):
         if shutil.which(tool) is None:
             sys.exit(f"missing tool: {tool}")
-    parts = sys.argv[1:] or ["webp", "png", "jpeg", "bmp", "gif"]
+    parts = sys.argv[1:] or ["webp", "png", "jpeg", "bmp", "gif", "pcx"]
     for sub in parts:
         shutil.rmtree(os.path.join(CORPUS, sub), ignore_errors=True)
     sources = generate_sources()
@@ -849,6 +868,8 @@ def main():
         generate_bmp()
     if "gif" in parts:
         generate_gif()
+    if "pcx" in parts:
+        generate_pcx()
     count = sum(len(files) for _, _, files in os.walk(CORPUS))
     print(f"corpus: {count} files in {CORPUS}")
 

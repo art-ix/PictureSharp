@@ -146,6 +146,7 @@ sealed class ImageFormat : System.IEquatable<ImageFormat>
     property static ImageFormat Bmp { get; }
     property static ImageFormat Gif { get; }
     property static ImageFormat Jpeg { get; }
+    property static ImageFormat Pcx { get; }
     property static ImageFormat Png { get; }
     property static ImageFormat WebP { get; }
     property static System.Collections.Generic.IReadOnlyList<ImageFormat> All { get; }
@@ -273,6 +274,16 @@ enum JpegSubsampling
     Exif = 2
     Xmp = 4
     All = 7
+sealed record PcxEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PcxEncoderOptions>
+    ctor()
+    property ImageFormat Format { get; }
+    property System.Int32 BitsPerPixel { get; init; }
+static class PcxImageExtensions
+    method static System.Byte[] ToPcx(Image image, PcxEncoderOptions? options = null)
+    method static System.Threading.Tasks.Task SaveAsPcxAsync(Image image, System.IO.Stream stream, PcxEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsPcxAsync(Image image, System.String path, PcxEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Void SaveAsPcx(Image image, System.IO.Stream stream, PcxEncoderOptions? options = null)
+    method static System.Void SaveAsPcx(Image image, System.String path, PcxEncoderOptions? options = null)
 enum PixelFormat
     Rgba32 = 0
     Bgra32 = 1

@@ -1,6 +1,7 @@
 using RasterSharp.Formats.Bmp;
 using RasterSharp.Formats.Gif;
 using RasterSharp.Formats.Jpeg;
+using RasterSharp.Formats.Pcx;
 using RasterSharp.Formats.Png;
 using RasterSharp.Formats.WebP;
 
@@ -21,6 +22,7 @@ internal static class CodecRegistry
         new(JpegFormatDetector.Instance, JpegDecoder.Instance, JpegEncoder.Instance),
         new(BmpFormatDetector.Instance, BmpDecoder.Instance, BmpEncoder.Instance),
         new(GifFormatDetector.Instance, GifDecoder.Instance, GifEncoder.Instance),
+        new(PcxFormatDetector.Instance, PcxDecoder.Instance, PcxEncoder.Instance),
     ];
 
     public static IReadOnlyList<ImageFormat> Formats { get; } =

@@ -11,6 +11,7 @@ public class EncodingAndIdentificationApiTests
         { ImageFormat.Jpeg, new JpegEncoderOptions() },
         { ImageFormat.Bmp, new BmpEncoderOptions() },
         { ImageFormat.Gif, new GifEncoderOptions() },
+        { ImageFormat.Pcx, new PcxEncoderOptions() },
     };
 
     [Theory]

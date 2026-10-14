@@ -8,6 +8,7 @@ Ustalenia z użytkownikiem:
 - **WebP w pełnym zakresie** (odczyt i zapis): lossy VP8, lossless VP8L, alfa ALPH, animacja ANIM/ANMF, metadane ICCP/EXIF/XMP.
 - **PNG:** odczyt i zapis. **BMP:** odczyt i zapis. **JPEG:** odczyt i zapis (enkoder w fazie 5.5).
 - **GIF:** odczyt i zapis (w tym animacje) oraz konwersja animowany GIF ↔ animowany WebP (faza 9.9).
+- **PCX:** odczyt i zapis (wydanie 0.4.7). DCX (kontener wielu PCX) nie wchodzi.
 - **Deflate/zlib piszemy sami.** Nie używamy `ZLibStream`, bo pod spodem woła natywne zlib.
 - **`Image` obejmuje:** skalowanie, geometrię (crop/rotate/flip/EXIF), dostęp do pikseli, operacje na kolorach i filtry (od fazy 9.5).
 
@@ -56,6 +57,7 @@ RasterSharp/
       Jpeg/ (JpegDecoder, JpegHuffman, JpegIdct (islow), Progressive, Upsampler, ColorConverter,
             JpegEncoder, JpegFdct, JpegQuantizer, JpegHuffmanEncoder, JpegMarkerWriter)
       Gif/  (GifFile, GifDecoder, GifEncoder, GifLzwDecoder/Encoder, GifPaletteBuilder)
+      Pcx/  (PcxHeader, PcxRle, PcxDecoder, PcxEncoder)
       Metadata/ (ExifReader/Patcher: Orientation, rozdzielczość; IccProfile)
     Compression/ (Inflater, Deflater, Adler32, Crc32)
     Processing/  (ImageProcessingContext.*, ResizeOptions, enumy przetwarzania,
@@ -81,7 +83,7 @@ Zasady kodu:
 ### Typy podstawowe
 - `Rgba32`: struktura `{byte R,G,B,A}` w układzie sekwencyjnym, z konwersjami do i z `System.Drawing.Color` oraz `uint`. Przechowuje **alfę prostą** (niepremultiplikowaną), tak samo jak WebP i PNG.
 - `PixelFormat` (do eksportu i importu): `Rgba32, Bgra32, Argb32, Rgb24, Bgr24, Gray8, Rgba32Premultiplied, Bgra32Premultiplied`.
-- `ImageFormat`: klasa z instancjami statycznymi `WebP`, `Png`, `Bmp`, `Jpeg`, `Gif` (od fazy 9.9), `MemoryBmp`. Właściwości: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`.
+- `ImageFormat`: klasa z instancjami statycznymi `WebP`, `Png`, `Bmp`, `Jpeg`, `Gif` (od fazy 9.9), `Pcx` (od 0.4.7), `MemoryBmp`. Właściwości: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`.
 - `ImageInfo` (wynik `Identify`, bez dekodowania pikseli): `Format`, `Width`, `Height`, `HasAlpha`, `FrameCount`, `IsAnimated`, `WebPCompression` (Lossy/Lossless/Mixed), `Orientation`, `HorizontalResolution`/`VerticalResolution`.
 - `ImageMetadata`: `byte[]? IccProfile`, `Exif`, `Xmp`, `ExifOrientation Orientation`, `Clear()`.
 - `ImageFormatException : FormatException`, rzucany dla uszkodzonych lub nierozpoznanych danych. Poprawne pliki z nieobsługiwanymi funkcjami (np. arytmetyczny JPEG) dają `NotSupportedException`.
@@ -117,8 +119,8 @@ void Mutate(Action<ImageProcessingContext> op);  Image Clone(Action<ImageProcess
 // Zapis
 void Save(string path);  void Save(string path, EncoderOptions o);  void Save(Stream s, ImageFormat f);  void Save(Stream s, EncoderOptions o);
 Task SaveAsync(...);   // te same warianty + CancellationToken
-// Per format (bloki extension(Image) w C# 14): SaveAsWebP/SaveAsPng/SaveAsJpeg/SaveAsBmp(path | Stream, options? = null),
-// SaveAsXAsync(...), ToWebP/ToPng/ToJpeg/ToBmp(options? = null) -> byte[]
+// Per format (bloki extension(Image) w C# 14): SaveAsWebP/SaveAsPng/SaveAsJpeg/SaveAsBmp/SaveAsGif/SaveAsPcx(path | Stream, options? = null),
+// SaveAsXAsync(...), ToWebP/ToPng/ToJpeg/ToBmp/ToGif/ToPcx(options? = null) -> byte[]
 ```
 
 - **`ImageProcessingContext`** (`readonly ref struct`, nie może wyjść poza lambdę; `Size`, `FrameCount`). Operacje działają na wszystkich klatkach i zwracają kontekst:
@@ -160,6 +162,9 @@ Opcje są rekordami (`with`), a wartości sprawdzamy przy ustawianiu (`init` ze 
   - `BitsPerPixel` (Auto: 1/4/8 z paletą przy ≤256 kolorach, 24 dla obrazów nieprzezroczystych, 32 z kanałem alfa)
   - `Metadata` (profil ICC w nagłówku BITMAPV5HEADER)
 - **`JpegEncoderOptions`:** `Quality` (1–100), `Subsampling`, `Progressive`, `OptimizeCoding`, `RestartInterval`, `BackgroundColor` (`Rgba32`, nieprzezroczysty), `Metadata`.
+- **`PcxEncoderOptions`** (0.4.7):
+  - `BitsPerPixel` (0 = auto, albo 1, 4, 8, 24, 32). Auto: 32, gdy jest częściowa alfa; inaczej 1 bit (≤2 kolory), 2 płaszczyzny 1-bitowe (≤4), 4 płaszczyzny 1-bitowe (≤16), 8 bitów z paletą VGA (≤256) albo 24 bity. Wymuszone 1/4/8 wymagają dokładnych kolorów RGB; wymuszone głębie poza 32 odrzucają alfę.
+  - DPI z `ImageMetadata` (poza zakresem 1..65535 zostaje 96). Brak ICC, EXIF i XMP.
 - **`GifEncoderOptions`** (faza 9.9):
   - `ColorCount` (2–256, domyślnie 256), `Quantizer` (Auto/MedianCut/Octree), `Dither` (None/FloydSteinberg)
   - `TransparencyThreshold` (0–255, domyślnie 128), `Interlace`, `SaveAnimation`, `OptimizeFrames`, `Metadata` (XMP/ICC)
@@ -183,6 +188,7 @@ img.SaveAsWebP("photo.webp", new() { Quality = 82 });
 - PNG 16-bit jest konwertowane do 8 bitów.
 - BMP zapisujemy zawsze bez kompresji (RLE tylko przy odczycie). Animacje zapisujemy jako pierwszą klatkę (także JPEG).
 - GIF: alfa binarna (próg `TransparencyThreshold`), maksymalnie 256 kolorów na klatkę (kwantyzacja), czasy klatek w krokach 10 ms, EXIF nie jest zapisywany.
+- PCX: jeden obraz (brak DCX). Alfa tylko w 32 bitach (8 bitów × 4 płaszczyzny, jak ImageMagick); Pillow tego wariantu nie czyta. 24 bity odrzucają alfę. Głębia 1/4/8 tylko gdy kolory mieszczą się dokładnie. Zapisujemy pierwszą klatkę. Nie celujemy w identyczne bajty z Pillow ani ImageMagick.
 - Strumień wejściowy jest wczytywany w całości do pamięci.
 
 ---
@@ -558,11 +564,11 @@ Etap 7 (0.4.6), pozostałe gorące ścieżki:
 
 #### Etapy od 0.4.4 i proponowane wydania (ustalenia 2026-10-14)
 
-0.4.4, 0.4.5 i 0.4.6 są ukończone; pozostałe numery są planowanym podziałem prac i nie oznaczają ukończenia ani wydania. Faza 10 obejmuje wydajność całej biblioteki, odporność i przygotowanie wydania; sama optymalizacja VP8L w 0.4.4 jej nie zamyka.
+0.4.4, 0.4.5 i 0.4.6 są ukończone. **0.4.7 to odczyt i zapis PCX** (osobna funkcja, nie etap wydajności). **0.4.8** przejmuje dotychczasowe 0.4.7: ARM/AdvSimd. 0.5.0 zostaje zamknięciem fazy 10. Numery po 0.4.6 poza 0.4.7 nie oznaczają ukończenia. Faza 10 obejmuje wydajność całej biblioteki, odporność i przygotowanie wydania; sama optymalizacja VP8L w 0.4.4 jej nie zamyka.
 
 **Pierwszy krok, przed dalszymi optymalizacjami:** ustalić i zapisać w `docs/performance.md` konkretną macierz benchmarków oraz kryteria zaliczenia:
 - reprezentatywne zdjęcia, grafikę, obrazy z alfą i animacje; małe i duże obrazy oraz istotne opcje kodeków;
-- kodowanie i dekodowanie WebP, PNG, BMP, JPEG i GIF oraz przetwarzanie (w tym resize); czas pełnej operacji, alokacje i pomocnicze pomiary gorących ścieżek;
+- kodowanie i dekodowanie WebP, PNG, BMP, JPEG, GIF i PCX oraz przetwarzanie (w tym resize); czas pełnej operacji, alokacje i pomocnicze pomiary gorących ścieżek;
 - stałe wejścia i konfiguracje, wersje narzędzi, sprzęt, runtime, GC/JIT, rozgrzewkę, liczbę prób i sposób raportowania rozrzutu;
 - bazę porównawczą przed zmianami, tolerancję regresji i minimalny powtarzalny zysk pozwalający przyjąć optymalizację;
 - dla WebP porównanie z `cwebp`/`dwebp` 1.6.0 przy tych samych parametrach i jasno opisanych granicach pomiaru. Cel: czas ≤3× czasu natywnego C z SIMD na ustalonej macierzy. Czas procesu, I/O i wewnętrzny czas kodeka raportujemy oddzielnie, jeśli nie da się ich porównać bezpośrednio.
@@ -572,7 +578,8 @@ Etap 7 (0.4.6), pozostałe gorące ścieżki:
 | **0.4.4 — ukończona** | Dekoder VP8L: profilowanie odczytu bitów, pętli Huffmana i kopiowania powtórzeń; optymalizacja dominujących kosztów; pozostałe predyktory 5–7 i 13. Pomiary całego dekodera względem 0.4.3. |
 | **0.4.5 — ukończona** | Enkoder VP8L: wyszukiwanie predyktora i klastrowanie histogramów, z zachowaniem zgodności bajtowej z `cwebp` 1.6.0 i deterministyczności; dodatkowo cross color, równoległy hash chain, wybór cache i zapis bitów (wg profilu). |
 | **0.4.6 — ukończona** | Pozostałe gorące ścieżki: inflate/deflate (równoległy deflate, potok dekodu PNG), CRC/Adler, filtry PNG i resize; JPEG FDCT/IDCT AVX2 i równoległe przygotowanie/konwersja. Przegląd pokrycia SIMD VP8/VP8L bez dalszych braków uzasadnionych pomiarem. |
-| **0.4.7** | ARM/AdvSimd: optymalizacje i weryfikacja na rzeczywistym ARM64, w tym testy identyczności ze skalarem i benchmarki pełnych operacji. |
+| **0.4.7 — ukończona** | PCX: odczyt i zapis (ZSoft, RLE). Warianty 1×1, 1×2, 1×3, 1×4, 2×1, 4×1, 8×1, 8×3 i 8×4. Zapis: 1×1, 1×2, 1×4, 8×1, 8×3, 8×4. Bez DCX i bez SIMD. Szczegóły poniżej. Wydanie [v0.4.7](https://github.com/art-ix/RasterSharp/releases/tag/v0.4.7). |
+| **0.4.8** | ARM/AdvSimd: optymalizacje i weryfikacja na rzeczywistym ARM64, w tym testy identyczności ze skalarem i benchmarki pełnych operacji. Wcześniej planowane jako 0.4.7. |
 | **0.5.0** | Pełna macierz benchmarków, końcowe testy odporności, dokumentacja i weryfikacja pakietu NuGet; zamknięcie fazy 10 po spełnieniu DoD. |
 
 Optymalizacje wynikają z profilowania. Duży zysk mikrobenchmarku nie zastępuje powtarzalnego przyspieszenia pełnej operacji. SIMD dodajemy tam, gdzie daje mierzalną korzyść; pozostawienie ścieżki skalarnej wymaga zapisania wyników i jawnego zaktualizowania zakresu planu. Brak korzyści nie jest powodem do dodawania SIMD wyłącznie dla pokrycia listy.
@@ -584,6 +591,18 @@ Optymalizacje wynikają z profilowania. Duży zysk mikrobenchmarku nie zastępuj
 - **Odporność:** obcięcia i losowe mutacje korpusu wszystkich formatów, limity `MaxPixels`, także dla animacji; dla uszkodzonych lub nieobsługiwanych danych wyłącznie `ImageFormatException`/`NotSupportedException`, bez niekontrolowanych wyjątków.
 - **Weryfikacja:** pełny build i testy Release oraz testy Oracle z dostępnymi wymaganymi narzędziami. Pominięty test nie stanowi potwierdzenia spełnienia kryterium; brakujące weryfikacje muszą zostać wykonane przed zamknięciem fazy.
 - **Gotowość wydania:** zweryfikowane XML docs, README, przewodniki i przykłady testowane przez `DocsExamplesTests`, CLI oraz dokumentacja wydajności. Pakiet NuGet dla `net10.0`, bez zależności biblioteki, zawiera `LICENSE` i aktualny `THIRD-PARTY-NOTICES.txt`; sprawdzone pakowanie i użycie pakietu w przykładowym projekcie. Numer wersji aktualizujemy przy przygotowaniu wydania; publikacja, commit i push pozostają osobnymi czynnościami na polecenie użytkownika.
+
+### 0.4.7: PCX
+
+Specyfikacja ZSoft PCX (nagłówek 128 B, RLE). Nie portujemy kodu Pillow ani FFmpeg. Kryterium to piksele, nie identyczne bajty.
+
+Odczyt: 1×1 (mono; paleta nagłówka, a gdy wpisy 0 i 1 są czarne — czerń i biel), 1×2, 1×3, 1×4 (planarnie, płaszczyzna 0 = LSB), 2×1 i 4×1 (spakowane, MSB first), 8×1 (paleta VGA `0x0C` + 768 B na końcu, z markerem za końcem rastera; brak palety = rampa szarości), 8×3 (RGB), 8×4 (RGBA, alfa prosta). Inna kombinacja bitów i płaszczyzn: `NotSupportedException`. Encoding `0` (surowe) tylko przy odczycie. Seria RLE może przechodzić między płaszczyznami jednego wiersza (`Planes * BytesPerLine` bajtów); nie może wyjść poza wiersz. `BytesPerLine` co najmniej `ceil(width * bits / 8)`, z dopełnieniem zgodnym z wartością pola (maks. 65535). `MaxPixels` i minimalna długość danych rastera przed alokacją. Wersje nagłówka 0/2/3/4/5; 1 jest niepoprawna. Wersje 0/3 nie mają palety nagłówka: mono czytamy jako czerń/biel, starsze tryby kolorowe <8 bitów bez palety są nieobsługiwane (`NotSupportedException`).
+
+Zapis (zawsze RLE, encoding 1): version 2 dla 1×1, version 5 dla reszty. `BitsPerPixel` 0/1/4/8/24/32. Auto jak w opcjach powyżej. Wymuszone 4 to zawsze cztery płaszczyzny. Za dużo kolorów przy 1/4/8: `InvalidOperationException`. Szerokość i wysokość oraz `BytesPerLine` muszą zmieścić się w `ushort` (maks. 65536 pikseli w osi, a przy 8 bitach na płaszczyznę parzysty stride ≤ 65535). 1×1 oraz płaszczyzny 8-bitowe mają parzysty stride. 1×2 i 1×4 zapisują `BytesPerLine = ceil(width / 8)` bez bajtu wyrównania: specyfikacja chce parzystości, ale Pillow 10.2 (`unpackP2L` / `unpackP4L`) rozstawia płaszczyzny co `(width + 7) / 8` i przy tym bajcie czyta zły indeks. ImageMagick czyta obie formy. Pillow 10.2 błędnie pomija usuwanie paddingu w RGB przy szerokości 1 i 3; te poprawne pliki z parzystym stride sprawdzamy ImageMagickiem. DPI z metadanych. Pierwsza klatka. Szarość liniowa 8×1 dostaje paletę identyczności i `PaletteInfo = 2`.
+
+DoD: round-trip piksel w piksel; korpus Pillow (`tests/assets/corpus/pcx/`) zgodny z Pillow, z hashami RGBA w `reference.json` i testami bez zewnętrznych narzędzi; nasze pliki 1×1 (czerń/biel), 1×2, 1×4, 8×1 i 8×3 otwierane przez Pillow z tymi samymi pikselami (RGB o szerokości 1/3 przez ImageMagick z powodu błędu Pillow); 8×4 sprawdzane ImageMagickiem, gdy jest `convert`; uszkodzone wejście tylko `ImageFormatException` albo `NotSupportedException`.
+
+Weryfikacja 2026-10-14: build Release bez ostrzeżeń, 4018/4018 testów, 0 pominiętych (Oracle Pillow i ImageMagick uruchomione; dodatkowy przegląd PCX: regresje palet, stride, alokacji i granic RLE; wszystkie uwagi review poprawione, referencje PCX sprawdzane bez narzędzi). Wydanie: [v0.4.7](https://github.com/art-ix/RasterSharp/releases/tag/v0.4.7).
 
 ## Wytyczne portowania z C
 - Portujemy funkcja po funkcji, z komentarzem źródła, np. `// port: src/dec/vp8_dec.c GetCoeffsFast`.

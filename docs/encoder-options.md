@@ -118,6 +118,19 @@ image.SaveAsGif("soft-edges.gif", new() { TransparencyThreshold = 32 });     // 
 
 Images whose colors fit keep them exactly: one global palette when all frames together fit, otherwise exact local palettes per animation frame. Otherwise a still image is quantized exactly as Pillow's `Image.quantize(colors)` (same palette and indices), and an animation gets one quantized palette shared by all frames. Durations are stored in hundredths of a second (rounded; at most 655.35 s). ICC and XMP are written as application extensions; GIF has no EXIF.
 
+## PCX
+
+```csharp
+image.SaveAsPcx("out.pcx");                                                  // automatic bit depth
+image.SaveAsPcx("rgb.pcx", new() { BitsPerPixel = 24 });
+```
+
+| Property | Default | Meaning |
+| --- | --- | --- |
+| `BitsPerPixel` | 0 | `0` chooses. `1` is two exact colors, `4` is up to 16 colors on four 1-bit planes, `8` is up to 256 colors with a VGA palette, `24` is RGB and `32` is RGBA. |
+
+Automatic mode writes 32 bits when any pixel is transparent. Otherwise it uses one 1-bit plane for two colors, two planes for up to four, four planes for up to sixteen, an 8-bit palette up to 256 colors, and 24-bit RGB after that. Forced 1, 4 and 8 keep exact RGB colors and throw if the image does not fit. All forced depths except 32 drop alpha. 32-bit PCX is the four-plane form ImageMagick writes; Pillow does not read it. Two- and four-plane files store each plane in `ceil(width / 8)` bytes, with no even padding, so Pillow reads the planes in the right place. Resolution is stored from `Image.Metadata` (values outside 1–65535 dpi are written as 96). PCX has no ICC, EXIF or XMP, and only the first frame is written. Pillow 10.2 misreads padded 24-bit RGB at widths 1 and 3; RasterSharp and ImageMagick read those files correctly.
+
 ## Recipes
 
 ```csharp

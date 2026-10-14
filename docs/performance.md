@@ -24,7 +24,7 @@ and default-JIT results separately. BenchmarkDotNet remains the reproducible ben
 Validate scalar and SSE2 fallbacks separately from the default AVX2 path.
 
 The final phase-10 matrix must additionally cover encoding/decoding of WebP lossy, PNG, BMP,
-JPEG and GIF, animations, and processing (especially resize), with small and large images.
+JPEG, GIF and PCX, animations, and processing (especially resize), with small and large images.
 Freeze the specific corpus files/options before each corresponding optimization stage. ARM64
 measurements require real hardware. For the final WebP gate, require at most 3× the native SIMD
 time on the frozen matrix using libwebp 1.6.0; disclose process startup, I/O and API timing differences.

@@ -6,6 +6,7 @@
 * PNG           -> Pillow (8-bit) / ImageMagick (16-bit, scaled with round(v/257)); APNG via Pillow
 * BMP           -> Pillow (ImageMagick scales 4/5-bit channels differently, so it is no oracle for BMP;
                    variants Pillow cannot read are covered by unit tests)
+* PCX           -> Pillow; RGBA hashes and header DPI
 * JPEG          -> Pillow (libjpeg-turbo, islow IDCT, fancy upsampling); RGBA also saved as
                    PNG under reference/jpeg/ for tolerance comparisons
 * GIF           -> anim_dump (libwebp 1.6.0 anim_util.c: browser-style composition, transparent pixels as
@@ -203,6 +204,17 @@ def ref_bmp(path, rel):
     return entry
 
 
+def ref_pcx(path, rel):
+    with Image.open(path) as im:
+        rgba = im.convert("RGBA").tobytes()
+        entry = {"format": "PCX", "width": im.width, "height": im.height, "hasAlpha": False,
+                 "animated": False, "frames": [{"sha256": sha(rgba), "duration": 0}], "decoder": "pillow"}
+        dpi = im.info.get("dpi")
+        if dpi and dpi[0] > 0 and dpi[1] > 0:
+            entry["dpi"] = [float(dpi[0]), float(dpi[1])]
+        return entry
+
+
 def gif_structure(data):
     """Block structure as RasterSharp's GifFile parses it (for the metadata fields of the reference)."""
     width, height = struct.unpack_from("<HH", data, 6)
@@ -340,6 +352,8 @@ def main():
                 refs[rel] = ref_bmp(path, rel)
             elif name.endswith(".jpg"):
                 refs[rel] = ref_jpeg(path, rel)
+            elif name.endswith(".pcx"):
+                refs[rel] = ref_pcx(path, rel)
             elif name.endswith(".gif"):
                 refs[rel] = ref_gif(path, rel)
     with open(os.path.join(ROOT, "reference.json"), "w") as f:

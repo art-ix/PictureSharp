@@ -54,5 +54,6 @@ photo.SaveAsJpeg("clean.jpg", new() { Metadata = MetadataKinds.None });
 | JPEG | ✔ (APP2, split across segments) | ✔ (APP1) | ✔ (APP1) | ✔ (JFIF) |
 | BMP | ✔ (`BITMAPV5HEADER`) | — | — | ✔ |
 | GIF | ✔ (`ICCRGBG1012` extension) | — | ✔ (`XMP DataXMP` extension) | — |
+| PCX | — | — | — | ✔ (header DPI) |
 
-JPEG EXIF and XMP must each fit in one APP1 segment (about 64 KB); larger blocks throw `ArgumentException`. To skip reading metadata altogether, load with `new DecoderOptions { IgnoreMetadata = true }`.
+JPEG EXIF and XMP must each fit in one APP1 segment (about 64 KB); larger blocks throw `ArgumentException`. To skip reading ICC, EXIF and XMP blocks, load with `new DecoderOptions { IgnoreMetadata = true }`.

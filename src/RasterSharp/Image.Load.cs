@@ -6,7 +6,7 @@ namespace RasterSharp;
 
 public sealed partial class Image
 {
-    /// <summary>Decodes an image file (WebP, PNG, JPEG, BMP or GIF; the format is detected from content).</summary>
+    /// <summary>Decodes an image file (WebP, PNG, JPEG, BMP, GIF or PCX; the format is detected from content).</summary>
     public static Image Load(string path, DecoderOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(path);

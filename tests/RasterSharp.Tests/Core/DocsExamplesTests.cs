@@ -46,10 +46,13 @@ public sealed class DocsExamplesTests : IDisposable
 
         using Image thumbnail = image.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
         thumbnail.SaveAsPng(P("thumbnail.png"));
+        thumbnail.SaveAsPcx(P("thumbnail.pcx"));
 
         Assert.Equal(1600, Image.Identify(P("photo.webp")).Width);
         ImageInfo thumb = Image.Identify(P("thumbnail.png"));
         Assert.Equal((256, 256), (thumb.Width, thumb.Height));
+        using Image pcx = Image.Load(P("thumbnail.pcx"));
+        Assert.Equal(thumbnail.GetPixelSpan().ToArray(), pcx.GetPixelSpan().ToArray());
     }
 
     // ------------------------------------------------------------ getting-started.md
@@ -179,11 +182,14 @@ public sealed class DocsExamplesTests : IDisposable
         image.SaveAsJpeg(P("on-black.jpg"), new() { BackgroundColor = Color.Black });
         image.SaveAsBmp(P("out.bmp"));
         image.SaveAsBmp(P("rgb.bmp"), new() { BitsPerPixel = 24 });
+        image.SaveAsPcx(P("out.pcx"));
+        image.SaveAsPcx(P("rgb.pcx"), new() { BitsPerPixel = 24 });
         image.SaveAsGif(P("out.gif"));
         image.SaveAsGif(P("small.gif"), new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
         image.SaveAsGif(P("fast.gif"), new() { Quantizer = GifQuantizer.Octree });
         image.SaveAsGif(P("soft-edges.gif"), new() { TransparencyThreshold = 32 });
         Assert.Equal(ImageFormat.Gif, Image.DetectFormat(P("small.gif")));
+        Assert.Equal(ImageFormat.Pcx, Image.DetectFormat(P("rgb.pcx")));
 
         using Image exactBack = Image.Load(P("exact.webp"));
         Assert.Equal(image.GetPixelSpan().ToArray(), exactBack.GetPixelSpan().ToArray());

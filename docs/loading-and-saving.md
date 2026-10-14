@@ -24,6 +24,10 @@ using var fromAsync = await Image.LoadAsync("input.png", cancellationToken);
 
 The format is always detected from the content: a PNG named `photo.jpg` loads fine. `image.SourceFormat` tells which format was decoded (`null` for images created in memory).
 
+### PCX support
+
+PCX loads through the same `Image.Load` methods. It supports monochrome, packed and planar palette images, grayscale, RGB and RGBA. DCX (multiple PCX images) and legacy color images below 8 bits per plane without palette information (versions 0 and 3) are not supported. See [PCX encoder options](encoder-options.md#pcx) for output formats and compatibility notes.
+
 ### Decoder options
 
 ```csharp
@@ -96,8 +100,9 @@ byte[] custom = image.Encode(new PngEncoderOptions { CompressionLevel = 9 });
 | JPEG | `SaveAsJpeg` | `SaveAsJpegAsync` | `ToJpeg` |
 | BMP | `SaveAsBmp` | `SaveAsBmpAsync` | `ToBmp` |
 | GIF | `SaveAsGif` | `SaveAsGifAsync` | `ToGif` |
+| PCX | `SaveAsPcx` | `SaveAsPcxAsync` | `ToPcx` |
 
-Streams are left open and do not need to be seekable. Defaults: WebP lossy quality 75, method 4; PNG compression 6 with automatic color type; JPEG quality 75, 4:2:0; BMP automatic bit depth; GIF up to 256 colors per frame, alpha threshold 128. WebP, PNG and GIF keep all animation frames; JPEG and BMP write the first frame. All option settings are in [Encoder options](encoder-options.md).
+Streams are left open and do not need to be seekable. Defaults: WebP lossy quality 75, method 4; PNG compression 6 with automatic color type; JPEG quality 75, 4:2:0; BMP automatic bit depth; GIF up to 256 colors per frame, alpha threshold 128; PCX automatic bit depth. WebP, PNG and GIF keep all animation frames; JPEG, BMP and PCX write the first frame. All option settings are in [Encoder options](encoder-options.md).
 
 ## Recipes
 

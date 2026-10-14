@@ -2142,6 +2142,114 @@
   "referencePng": "reference/jpeg/xmp.png",
   "xmpSha256": "744c1ed785771961e8cd904c797170b63927118622f0c69f77d7bb4b05900a63"
  },
+ "pcx/pil_gray.pcx": {
+  "format": "PCX",
+  "width": 256,
+  "height": 192,
+  "hasAlpha": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "295e1c4bf5a20ffd63eea870b23e72d9214c0eb7b387506525297d3af7d21b7f",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "dpi": [
+   100.0,
+   100.0
+  ]
+ },
+ "pcx/pil_mono.pcx": {
+  "format": "PCX",
+  "width": 200,
+  "height": 150,
+  "hasAlpha": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "378c1f48b45a121c464f6d5460b2edfb176920eaec362dc5534b5ee72aeb4c96",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "dpi": [
+   100.0,
+   100.0
+  ]
+ },
+ "pcx/pil_palette.pcx": {
+  "format": "PCX",
+  "width": 200,
+  "height": 150,
+  "hasAlpha": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "4a849096c6598148eac34177d3dd870b56491a4260e6e516563592ff58ba5f7c",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "dpi": [
+   100.0,
+   100.0
+  ]
+ },
+ "pcx/pil_rgb.pcx": {
+  "format": "PCX",
+  "width": 171,
+  "height": 93,
+  "hasAlpha": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "0472a4741ce827c32443ce5cf55b99dcf85521c7511741994605d8d225f987b8",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "dpi": [
+   100.0,
+   100.0
+  ]
+ },
+ "pcx/pil_thin.pcx": {
+  "format": "PCX",
+  "width": 3,
+  "height": 37,
+  "hasAlpha": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "038495095223352567b8ba03487dfb1845c4c341f9dbb356635dd6555da65326",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "dpi": [
+   100.0,
+   100.0
+  ]
+ },
+ "pcx/pil_wide.pcx": {
+  "format": "PCX",
+  "width": 301,
+  "height": 5,
+  "hasAlpha": false,
+  "animated": false,
+  "frames": [
+   {
+    "sha256": "41533c15e1353c10e1e46d071a9974187924e00f6c29116ce1c2a4d538f15181",
+    "duration": 0
+   }
+  ],
+  "decoder": "pillow",
+  "dpi": [
+   100.0,
+   100.0
+  ]
+ },
  "png/apng_alpha.png": {
   "format": "PNG",
   "width": 64,

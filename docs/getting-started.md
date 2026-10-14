@@ -26,7 +26,7 @@ Three steps cover almost every task:
 
 1. **Load** an image with `Image.Load` (or `LoadAsync`). The format is detected from the content, not the file name.
 2. **Process** it with `Mutate` or `Clone`. The lambda receives an `ImageProcessingContext`; its operations chain and run in order.
-3. **Save** it with `Save(path)` or one of the `SaveAsWebP`/`SaveAsPng`/`SaveAsJpeg`/`SaveAsBmp` methods.
+3. **Save** it with `Save(path)` or one of the `SaveAsWebP`/`SaveAsPng`/`SaveAsJpeg`/`SaveAsBmp`/`SaveAsGif`/`SaveAsPcx` methods.
 
 ## `Mutate` or `Clone`
 

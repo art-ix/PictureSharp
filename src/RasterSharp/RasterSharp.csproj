@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>RasterSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageTags>webp;image;png;jpeg;bmp;gif;codec;encoder;decoder;resize;thumbnail</PackageTags>
+    <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 

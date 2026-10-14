@@ -27,6 +27,9 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
     /// <summary>Graphics Interchange Format (GIF87a/GIF89a), including animations.</summary>
     public static ImageFormat Gif { get; } = new("GIF", "image/gif", ".gif");
 
+    /// <summary>ZSoft Paintbrush (PCX).</summary>
+    public static ImageFormat Pcx { get; } = new("PCX", "image/x-pcx", ".pcx");
+
     /// <summary>All file formats known to the library.</summary>
     public static IReadOnlyList<ImageFormat> All => CodecRegistry.Formats;
 

@@ -6,7 +6,7 @@ public sealed partial class Image
 {
     /// <summary>
     /// Saves the image in the format given by the file extension, with that format's default options
-    /// (.webp: lossy quality 75; .png; .jpg: quality 75; .bmp; .gif).
+    /// (.webp: lossy quality 75; .png; .jpg: quality 75; .bmp; .gif; .pcx).
     /// </summary>
     public void Save(string path) => Save(path, FormatFromPath(path).CreateDefaultEncoderOptions());
 

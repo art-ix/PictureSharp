@@ -7,7 +7,7 @@ public class MetadataSelectionTests
         get
         {
             var data = new TheoryData<EncoderOptions, MetadataKinds, int>();
-            EncoderOptions[] formats = [new BmpEncoderOptions(), new GifEncoderOptions(), new PngEncoderOptions(), new JpegEncoderOptions(), new WebPEncoderOptions { Lossless = true }];
+            EncoderOptions[] formats = [new BmpEncoderOptions(), new GifEncoderOptions(), new PcxEncoderOptions(), new PngEncoderOptions(), new JpegEncoderOptions(), new WebPEncoderOptions { Lossless = true }];
             foreach (EncoderOptions options in formats)
             {
                 foreach (MetadataKinds selection in new[] { MetadataKinds.None, MetadataKinds.Icc, MetadataKinds.Exif, MetadataKinds.Xmp, MetadataKinds.All })
@@ -33,7 +33,8 @@ public class MetadataSelectionTests
         image.Metadata.Xmp = state switch { 0 => null, 1 => [], _ => "<xmp>test</xmp>"u8.ToArray() };
         using Image decoded = Image.Load(image.Encode(options));
         MetadataKinds supported = options.Format == ImageFormat.Bmp ? MetadataKinds.Icc
-            : options.Format == ImageFormat.Gif ? MetadataKinds.Icc | MetadataKinds.Xmp : MetadataKinds.All;
+            : options.Format == ImageFormat.Gif ? MetadataKinds.Icc | MetadataKinds.Xmp
+            : options.Format == ImageFormat.Pcx ? MetadataKinds.None : MetadataKinds.All;
         MetadataKinds expected = state == 2 ? selection & supported : MetadataKinds.None;
         Assert.Equal((expected & MetadataKinds.Icc) != 0 ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
         Assert.Equal((expected & MetadataKinds.Exif) != 0 ? image.Metadata.Exif : null, decoded.Metadata.Exif);

@@ -45,13 +45,13 @@ python3 -I tests/assets/make_jpeg_encoder_reference.py
 python3 -I tests/assets/gif_reference.py
 ```
 
-`generate_corpus.py` accepts format names (`webp`, `png`, `jpeg`, `bmp`, `gif`) to regenerate only those directories. `gif_reference.py` stores Pillow's quantization results; the GIF quantizer port follows the Pillow 10.2.0 C sources (`reference/pillow-10.2.0/`, fetched separately).
+`generate_corpus.py` accepts format names (`webp`, `png`, `jpeg`, `bmp`, `gif`, `pcx`) to regenerate only those directories; without arguments it regenerates all formats, including PCX. `gif_reference.py` stores Pillow's quantization results; the GIF quantizer port follows the Pillow 10.2.0 C sources (`reference/pillow-10.2.0/`, fetched separately).
 
 Use Pillow 10.2.0 / libjpeg-turbo 2.1.5 to reproduce the committed JPEG encoder references. Additional JPEG oracle tests use a C compiler and libjpeg development headers, with Pillow and ImageMagick for independent decoding. External corpora are optional; their download procedure is described in [plan.md](../plan.md).
 
 ## What the tests verify
 
-In version 0.4.6, all 3880 tests pass, including the Oracle tests against libwebp 1.6.0.
+In version 0.4.7, all 4018 tests pass, including the Oracle tests against libwebp 1.6.0, Pillow and ImageMagick.
 
 - **Decoders:** pixels match `dwebp` and Pillow exactly (SHA-256 of RGBA in `tests/assets/reference.json`). The WebP decoder ports originated from libwebp 1.3.2; recomputing the 248 corpus references with 1.6.0 changed none.
 - **Lossless WebP:** the nine encoder source images round-trip exactly through both decoders, and the VP8L bitstream is byte-identical to `cwebp` 1.6.0 in 72 configurations (methods 0–6, qualities 50–100, near-lossless, `-exact`).
@@ -59,6 +59,7 @@ In version 0.4.6, all 3880 tests pass, including the Oracle tests against libweb
 - **Animated WebP:** 46 encoder tests, including 38 external checks through Pillow and webpmux 1.6.0 comparing decoded canvases, durations, loop counts, background color and EXIF extraction across lossy, lossless, mixed, blend/dispose and keyframe cases.
 - **JPEG encoder:** reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
 - **GIF:** decoded frames of the 30 corpus files match `anim_dump` 1.6.0 (or `gif2webp` where `anim_util.c` restores the wrong canvas, Pillow for files libwebp rejects); 147 quantization results are identical to Pillow 10.2.0 (median cut, octree, Floyd–Steinberg); RasterSharp's GIF files decode identically in `anim_dump` and Pillow; `WebPConverter.Convert` matches `gif2webp` frame for frame, and GIF → lossless WebP → GIF round-trips exactly.
+- **PCX:** the Pillow corpus (`tests/assets/corpus/pcx/`) matches Pillow. Stored RGBA hashes in `reference.json` verify decoding without external tools; corpus coverage and identification are also checked. Encoded black-and-white 1-bit, two-plane, four-plane, 256-color and 24-bit files match Pillow; 32-bit files, padded planes and RGB widths 1/3 match ImageMagick (Pillow 10.2 misreads the padding at those RGB widths). RLE tests cover all byte values, the 63-byte run boundary and bounded input spans. A potential VGA palette marker must follow the complete raster; a grayscale sample with the same value is not a palette marker. RasterSharp keeps a colored 1-bit palette; Pillow's mode `1` does not.
 - **SIMD:** every vector path is compared with its scalar version on random and extreme inputs and must give identical results; other CPUs keep the scalar code. Release 0.4.1 covers the VP8 codec (SSE4.1/AVX2 transforms, quantization, distortion, loop filters, YUV to RGB with fancy upsampling). Release 0.4.2 covers VP8L predictors 0–4 and 8–9, the green and color transforms, ARGB to RGBA, PNG Sub/Up unfiltering and the WebP alpha horizontal and vertical filters (SSE2/AVX2).
 - **Threads:** WebP, PNG and JPEG encoding and decoding give the same bytes and pixels for any `MaxDegreeOfParallelism`.
 - **VP8L predictors in 0.4.3:** modes 10–12 add SSE2/AVX2 paths. Tests cover tile bits 2–9, vector and tile boundaries, nested rounding, selection ties, clamping and residual wraparound. The predictor and decoder tests also run with AVX2 disabled and with all hardware intrinsics disabled. See [Performance](performance.md) for timings and benchmark commands.
