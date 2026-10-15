@@ -10,6 +10,7 @@ PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and process
 - ICO with PNG/DIB variants, alpha masks and multiple independent sizes
 - PCX with palette and grayscale images, RGB and RGBA, and automatic output bit depth
 - Resize, crop, pad, rotate, flip, EXIF auto-orientation
+- Fast JPEG thumbnails: decoding at 1/2, 1/4 or 1/8 scale (bit-exact with libjpeg-turbo) without full-size buffers
 - Brightness, contrast, saturation, blur, sharpen, compositing and watermarks
 - Raw pixel access and conversion to BGRA/RGB/gray buffers for interop
 - SIMD on x64 (SSE2–AVX2) and ARM64 (AdvSimd/NEON), bit-identical to the scalar code
@@ -48,7 +49,7 @@ thumbnail.SaveAsPcx("thumbnail.pcx");
 ## Documentation
 
 - [Getting started](https://github.com/art-ix/PictureSharp/blob/main/docs/getting-started.md): installation, the `Load` → `Mutate`/`Clone` → `Save` model, disposal and errors
-- [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md): files, streams, memory, async, format detection, web responses
+- [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md): files, streams, memory, async, format detection, thumbnails while loading, web responses
 - [Resource limits and cancellation](https://github.com/art-ix/PictureSharp/blob/main/docs/limits-and-cancellation.md): `MaxInputBytes`, `MaxPixels`, `MaxFrames`, `MaxMetadataBytes` and cancellation tokens
 - [ICO icons](https://github.com/art-ix/PictureSharp/blob/main/docs/ico.md): selecting variants and creating favicons or multi-size icons
 - [Encoder options](https://github.com/art-ix/PictureSharp/blob/main/docs/encoder-options.md): WebP, PNG, JPEG, BMP, GIF and PCX settings with recipes
@@ -56,7 +57,7 @@ thumbnail.SaveAsPcx("thumbnail.pcx");
 - [Pixels and interop](https://github.com/art-ix/PictureSharp/blob/main/docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, frame pixel access and conversion
 - [Animation](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md): frames, durations, animated WebP, APNG and GIF, GIF ↔ WebP conversion
 - [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
-- [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md): `info`, `convert`, `resize`, `decode` and `icon`
+- [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md): `info`, `convert`, `resize`, `thumbnail`, `decode` and `icon`
 - [Development](https://github.com/art-ix/PictureSharp/blob/main/docs/development.md): building, tests, reference tools and oracles
 - [Performance](https://github.com/art-ix/PictureSharp/blob/main/docs/performance.md): benchmark matrix, comparison with libwebp, memory use, benchmark commands and limitations
 
@@ -67,7 +68,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release 0.5.3, which adds the `MaxInputBytes`, `MaxMetadataBytes` and `MaxFrames` decoder limits and cancellation tokens that also stop the decoding, encoding and processing work; metadata above 64 MiB and animations above 65536 frames now need raised limits).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release 0.5.4, which adds `DecoderOptions.TargetSize` for thumbnails while loading: JPEG is decoded at reduced scale, e.g. a 12 MP photo shrunk to 256 px peaks at about 7 MiB instead of 68 MiB; other formats are decoded in full and resized).
 
 ## License
 

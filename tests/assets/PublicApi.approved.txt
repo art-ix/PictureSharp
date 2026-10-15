@@ -20,13 +20,16 @@ static class BmpImageExtensions
     method static System.Void SaveAsBmp(Image image, System.String path, BmpEncoderOptions? options = null)
 sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     ctor()
+    property ResamplingFilter TargetResampling { get; init; }
     property System.Boolean ApplyExifOrientation { get; init; }
     property System.Boolean FirstFrameOnly { get; init; }
     property System.Boolean IgnoreMetadata { get; init; }
     property System.Boolean StrictChecksums { get; init; }
     property System.Boolean WebPBypassFiltering { get; init; }
     property System.Boolean WebPFancyUpsampling { get; init; }
+    property System.Double TargetReducingGap { get; init; }
     property System.Drawing.Size? IcoPreferredSize { get; init; }
+    property System.Drawing.Size? TargetSize { get; init; }
     property System.Int32 MaxDegreeOfParallelism { get; init; }
     property System.Int32 MaxFrames { get; init; }
     property System.Int32? IcoIndex { get; init; }

@@ -40,6 +40,38 @@ public sealed record DecoderOptions
     /// <summary>Rotate/flip the image according to its EXIF orientation after decoding (like <c>AutoOrient()</c>). Default: false.</summary>
     public bool ApplyExifOrientation { get; init; }
 
+    /// <summary>
+    /// Shrinks the decoded image to fit inside this size, keeping the aspect ratio, like
+    /// <see cref="ImageProcessingContext.Thumbnail(int, int, ResamplingFilter)"/>: 0 for one side means no limit on it,
+    /// and images that already fit keep their size. The box applies to the returned image, i.e. after
+    /// <see cref="ApplyExifOrientation"/> when that is set; the resize itself runs before the orientation is applied.
+    /// JPEG decodes at 1/2, 1/4 or 1/8 scale in the inverse DCT when the reduced image still has
+    /// <see cref="TargetReducingGap"/> times the final size, which avoids the full-size buffers; other formats are
+    /// decoded in full and then resized. Limits such as <see cref="MaxPixels"/> still apply to the stored size.
+    /// Default: null (no resize).
+    /// </summary>
+    public System.Drawing.Size? TargetSize
+    {
+        get;
+        init => field = value is null || (value.Value.Width >= 0 && value.Value.Height >= 0 && (value.Value.Width | value.Value.Height) != 0)
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(TargetSize), value, "Width and height must not be negative, and at least one must be positive.");
+    }
+
+    /// <summary>Interpolation kernel of the resize to <see cref="TargetSize"/>. Default: <see cref="ResamplingFilter.Lanczos3"/>.</summary>
+    public ResamplingFilter TargetResampling { get; init => field = Check.Defined(value); } = ResamplingFilter.Lanczos3;
+
+    /// <summary>
+    /// How much larger than the final size, per side, a reduced JPEG decode must stay for <see cref="TargetSize"/>, like
+    /// Pillow's <c>reducing_gap</c>. 1 saves the most time and memory; larger values leave more work to the resampling
+    /// filter and look smoother. Default: 2.
+    /// </summary>
+    public double TargetReducingGap
+    {
+        get;
+        init => field = double.IsFinite(value) && value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(TargetReducingGap), value, "The gap must be at least 1.");
+    } = 2;
+
     /// <summary>Do not read ICC/EXIF/XMP metadata.</summary>
     public bool IgnoreMetadata { get; init; }
 

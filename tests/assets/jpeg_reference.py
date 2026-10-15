@@ -3,7 +3,8 @@
 (used for local sample photos and for files built by the tests).
 
 With a second argument, the raw RGBA of each decode is also written there as <relative path>.rgba so that
-differences can be measured. Run with:  python3 -I tests/assets/jpeg_reference.py <dir> [<dump dir>]
+differences can be measured. --scale N decodes at 1/N (2, 4 or 8) like jpeg_scaled_reference.py does.
+Run with:  python3 -I tests/assets/jpeg_reference.py [--scale N] <dir> [<dump dir>]
 """
 import hashlib
 import json
@@ -16,9 +17,23 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
+def force_scale(im, scale):
+    """JpegImagePlugin.draft of Pillow 10.2.0 with the scale fixed instead of derived from a size."""
+    d, e, o, a = im.tile[0]
+    e = (e[0], e[1], (e[2] - e[0] + scale - 1) // scale + e[0], (e[3] - e[1] + scale - 1) // scale + e[1])
+    im._size = ((im.size[0] + scale - 1) // scale, (im.size[1] + scale - 1) // scale)
+    im.tile = [(d, e, o, a)]
+    im.decoderconfig = (scale, 0)
+
+
 def main():
-    folder = sys.argv[1]
-    dump = sys.argv[2] if len(sys.argv) > 2 else None
+    args = sys.argv[1:]
+    scale = 1
+    if args[:1] == ["--scale"]:
+        scale = int(args[1])
+        args = args[2:]
+    folder = args[0]
+    dump = args[1] if len(args) > 1 else None
     result = {}
     for dirpath, _, files in os.walk(folder):
         for name in sorted(files):
@@ -28,6 +43,8 @@ def main():
             rel = os.path.relpath(path, folder).replace(os.sep, "/")
             try:
                 with Image.open(path) as im:
+                    if scale > 1:
+                        force_scale(im, scale)
                     rgba = im.convert("RGBA").tobytes()
             except Exception:  # noqa: BLE001 - any failure means "rejected"
                 result[rel] = "error"

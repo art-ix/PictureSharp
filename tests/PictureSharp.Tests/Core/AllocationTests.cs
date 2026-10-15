@@ -96,6 +96,26 @@ public class AllocationTests
         Assert.InRange(allocated, 3L << 20, (3L << 20) + (1L << 20));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void JpegTargetSize_DoesNotAllocateTheFullImage(bool progressive)
+    {
+        using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
+        using Image large = image.Clone(x => x.Resize(1024, 768));
+        byte[] data = large.Encode(new JpegEncoderOptions { Progressive = progressive });
+        var options = new DecoderOptions { MaxDegreeOfParallelism = 1, TargetSize = new(128, 128) };
+
+        // A 1/4 decode is 256x192 (192 KiB of pixels) resized to 128x96; the full decode alone would be 3 MiB.
+        long allocated = Measure(() =>
+        {
+            using Image decoded = Image.Load(data, options);
+            Assert.Equal((128, 96), (decoded.Width, decoded.Height));
+            return decoded;
+        });
+        Assert.InRange(allocated, 0, 512L << 10);
+    }
+
     [Fact]
     public void PooledBufferStream_JoinsSegments()
     {

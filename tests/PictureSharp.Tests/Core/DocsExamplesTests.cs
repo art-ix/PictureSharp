@@ -221,6 +221,21 @@ public sealed class DocsExamplesTests : IDisposable
 
         Assert.True(File.Exists(Path.Combine(folder, "a.webp")));
 
+        // Thumbnails while loading; the ASP.NET Core recipe uses the same options.
+        var thumbnailOptions = new DecoderOptions { TargetSize = new(256, 256), ApplyExifOrientation = true };
+        using (var thumbnail = Image.Load(P("photo.jpg"), thumbnailOptions))
+        {
+            Assert.True(thumbnail.Width <= 256 && thumbnail.Height <= 256);
+        }
+
+        int? w = 40;
+        var serveOptions = new DecoderOptions { TargetSize = new(w ?? 400, 0), ApplyExifOrientation = true };
+        using (var served = await Image.LoadAsync(P("photo.jpg"), serveOptions, cancellationToken))
+        {
+            Assert.Equal(40, served.Width);
+            Assert.Equal(ImageFormat.WebP, Image.DetectFormat(served.ToWebP(new() { Quality = 80 })));
+        }
+
         // Choose the output format from a MIME type.
         string accept = "image/webp";
         ImageFormat target = ImageFormat.FromMimeType(accept) ?? ImageFormat.Png;

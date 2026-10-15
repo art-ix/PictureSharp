@@ -545,3 +545,61 @@ doubled pooled buffer while growing, up to about three times the bytes read so f
 
 `CancellationInFlightTests` cancel decoding, encoding, animations and processing of 1–9 MP images after a quarter of
 their uncanceled duration and require the call to end within 250 ms plus half that duration; all formats meet it.
+
+## JPEG thumbnails in 0.5.4
+
+`DecoderOptions.TargetSize` decodes JPEG at 1/2, 1/4 or 1/8 scale with libjpeg-turbo's reduced inverse DCTs
+(`jidctred.c`), bit-exact with libjpeg-turbo 2.1.5 (through Pillow 10.2.0 `draft`) on the corpus, on damaged
+streams and on the local 12 MP and 27 MP photos; the tolerance is therefore 0. `ThumbnailBenchmarks` compares
+`Load` + `Thumbnail(size, size)` with `TargetSize` at the default reducing gap 2 and at gap 1. Inputs: two local
+4032×3024 camera photos (baseline 4:2:0 and 4:4:4), the 4:2:0 photo re-encoded progressive by Pillow (quality 90),
+and the same photo scaled to 6048×4536 (27 MP) as baseline and progressive. i5-12500H, Linux x64, .NET 10.0.12,
+BenchmarkDotNet 0.15.2 (one launch, 3 warmups, 9 iterations), default parallelism, 2026-10-15.
+
+```bash
+PICTURESHARP_BENCHMARK_THUMBNAIL_FILES='/absolute/12mp.jpg:/absolute/27mp_progressive.jpg' \
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- --filter '*ThumbnailBenchmarks*' \
+  --launchCount 1 --warmupCount 3 --iterationCount 9
+dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll peak /absolute/12mp.jpg TargetSize 256
+```
+
+Mean time in ms (managed allocations per operation in MB):
+
+| Input | Size | Load + Thumbnail | TargetSize | TargetSize, gap 1 |
+| --- | ---: | ---: | ---: | ---: |
+| 12 MP baseline 4:2:0 | 256 | 86.2 (48.0) | 69.2 (3.2) | 59.3 (1.0) |
+| | 512 | 88.4 (48.6) | 78.4 (12.8) | 69.5 (3.8) |
+| | 1920 | 92.7 (58.7) | 93.4 (58.7) | 81.0 (22.9) |
+| 12 MP baseline 4:4:4 | 256 | 75.2 (48.0) | 46.9 (3.2) | 35.0 (1.0) |
+| | 512 | 78.0 (48.6) | 60.2 (12.8) | 47.2 (3.8) |
+| | 1920 | 78.7 (58.7) | 80.5 (58.7) | 63.4 (22.9) |
+| 12 MP progressive 4:2:0 | 256 | 157.8 (48.0) | 141.7 (3.3) | 133.2 (1.0) |
+| | 512 | 159.0 (48.6) | 144.8 (12.8) | 141.0 (3.8) |
+| | 1920 | 164.0 (58.7) | 164.4 (58.7) | 149.6 (22.9) |
+| 27 MP baseline 4:2:0 | 256 | 144.0 (107.6) | 84.9 (1.9) | 84.9 (1.9) |
+| | 512 | 144.0 (108.2) | 99.6 (7.6) | 84.0 (2.5) |
+| | 1920 | 150.6 (118.3) | 150.9 (118.3) | 123.6 (37.8) |
+| 27 MP progressive 4:2:0 | 256 | 308.6 (107.7) | 243.2 (2.0) | 245.0 (2.0) |
+| | 512 | 285.5 (108.3) | 245.1 (7.6) | 238.6 (2.5) |
+| | 1920 | 293.9 (118.3) | 299.3 (118.3) | 261.7 (37.8) |
+
+Steady-state allocations exclude the planes and coefficients, which are rented from the pool. Peak memory therefore
+comes from a separate probe (`peak` mode of the benchmark program): one operation in a fresh process, rise of the
+Linux peak resident set (`VmHWM`) after reading the input and warming up on a small image.
+
+| Input | Size | Load + Thumbnail | TargetSize | TargetSize, gap 1 |
+| --- | ---: | ---: | ---: | ---: |
+| 12 MP baseline 4:2:0 | 256 / 512 / 1920 | 68 / 72 / 98 MiB | 7 / 25 / 98 MiB | 2 / 8 / 43 MiB |
+| 12 MP baseline 4:4:4 | 256 / 512 / 1920 | 85 / 89 / 115 MiB | 6 / 25 / 115 MiB | 2 / 8 / 43 MiB |
+| 12 MP progressive 4:2:0 | 256 / 512 / 1920 | 103 / 107 / 133 MiB | 42 / 60 / 133 MiB | 37 / 43 / 78 MiB |
+| 27 MP baseline 4:2:0 | 256 / 512 / 1920 | 149 / 154 / 189 MiB | 4 / 15 / 189 MiB | 4 / 6 / 74 MiB |
+| 27 MP progressive 4:2:0 | 256 / 512 / 1920 | 228 / 233 / 268 MiB | 83 / 94 / 268 MiB | 83 / 84 / 153 MiB |
+
+- **Baseline:** for 256 and 512 px the peak falls by 72–97%; a baseline decode at reduced scale never holds a
+  full-size buffer. The time falls less (by 10–54%) because Huffman decoding of every coefficient is unchanged.
+- **Progressive:** the coefficient buffer (2 bytes per sample: 36 MB for 12 MP 4:2:0, 82 MB for 27 MP) is needed at
+  full size until the last scan, so the peak falls only by the planes and RGBA (40–64% at 256 px).
+- **1920 px with gap 2** has no room for a 1/2 decode of these photos (4032 < 2 × 2 × 1920) and costs the same as
+  `Load` + `Thumbnail`; gap 1 decodes at 1/2 and saves 45–60% of the peak.
+- No SIMD path was added: the reduced IDCTs are short scalar loops that do not appear in the profile next to entropy
+  decoding. The full-size path is unchanged (bit-exact references, same timings).

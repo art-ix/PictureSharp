@@ -8,6 +8,19 @@
     <Deterministic>true</Deterministic>
     <Authors>Artur Pelzak</Authors>
     <RepositoryUrl>https://github.com/art-ix/PictureSharp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <!-- Source Link (built into the SDK) plus a portable PDB shipped as .snupkg to nuget.org. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>portable</DebugType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <!-- Normalizes source paths so CI builds are reproducible. -->
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  <PropertyGroup>
     <!-- Single source of the version: the VERSION file in the repository root. -->
     <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</Version>
   </PropertyGroup>

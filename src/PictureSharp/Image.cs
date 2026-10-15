@@ -60,6 +60,9 @@ public sealed partial class Image : IDisposable
     /// <summary>The format the image was decoded from, or null for images created in memory.</summary>
     public ImageFormat? SourceFormat { get; internal set; }
 
+    /// <summary>Stored size and scale denominator when the decoder produced a reduced image for <see cref="DecoderOptions.TargetSize"/>.</summary>
+    internal (System.Drawing.Size Size, int Scale)? ReducedDecode { get; set; }
+
     /// <summary>
     /// Alpha-channel hint maintained by decoding, processing, frame insertion and <c>CopyPixelDataFrom</c>.
     /// Writes through pixel views and <see cref="ImageFrame"/> copy methods do not update it.

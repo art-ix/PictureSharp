@@ -79,19 +79,19 @@ internal sealed partial class JpegFile
         Frame.ComputeLayout();
     }
 
-    private void Allocate(DecoderOptions options)
+    private void Allocate()
     {
         JpegFrame frame = Frame!;
-        options.ValidateDimensions(ImageFormat.Jpeg, frame.Width, frame.Height);
-        JpegColorConverter.Validate(frame);
-        // The planes and coefficients only live until the color conversion (ReturnBuffers).
+        // The planes and coefficients only live until the color conversion (ReturnBuffers). Progressive images keep
+        // the coefficients of every block at full size whatever the scale; the planes shrink with it.
         foreach (JpegComponent c in frame.Components)
         {
             int size = checked((int)((long)c.BlocksPerLine * c.BlocksPerColumn * 64));
-            c.Plane = ArrayPool<byte>.Shared.Rent(size);
+            int planeLength = c.PlaneLength;
+            c.Plane = ArrayPool<byte>.Shared.Rent(planeLength);
             // Blocks never decoded (truncated data, or a progressive component without scans) come out mid-gray,
             // as libjpeg's zeroed blocks do.
-            c.Plane.AsSpan(0, size).Fill(128);
+            c.Plane.AsSpan(0, planeLength).Fill(128);
             if (frame.Progressive)
             {
                 c.Coefficients = ArrayPool<short>.Shared.Rent(size);

@@ -65,8 +65,8 @@ internal static class JpegColorConverter
     public static Rgba32[] Convert(JpegFrame frame, JpegColorSpace colorSpace, int maxDegreeOfParallelism = 1,
         CancellationToken cancellationToken = default)
     {
-        int width = frame.Width;
-        int height = frame.Height;
+        int width = frame.OutputWidth;
+        int height = frame.OutputHeight;
         Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
         const int band = 16;
         int bands = (height + band - 1) / band;
@@ -89,7 +89,7 @@ internal static class JpegColorConverter
 
     private static void ConvertRows(JpegFrame frame, JpegColorSpace colorSpace, Rgba32[] pixels, int firstRow, int endRow)
     {
-        int width = frame.Width;
+        int width = frame.OutputWidth;
         JpegComponent[] comps = frame.Components;
         int n = colorSpace == JpegColorSpace.Gray ? 1 : comps.Length;
         var modes = new Upsampling[n];
@@ -97,7 +97,7 @@ internal static class JpegColorConverter
         for (int i = 0; i < n; i++)
         {
             modes[i] = ModeOf(frame, comps[i]);
-            bufferLength = Math.Max(bufferLength, (comps[i].DownsampledWidth * frame.MaxH / comps[i].H) + 16);
+            bufferLength = Math.Max(bufferLength, (comps[i].DownsampledWidth * comps[i].UpsampleH) + 16);
         }
 
         byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferLength * n);
@@ -108,7 +108,7 @@ internal static class JpegColorConverter
             for (int y = firstRow; y < endRow; y++)
             {
                 Span<Rgba32> dst = pixels.AsSpan(y * width, width);
-                ReadOnlySpan<byte> c0 = Row(frame, comps[0], modes[0], y, buffer.AsSpan(0, bufferLength), ref cachedRow[0])[..width];
+                ReadOnlySpan<byte> c0 = Row(comps[0], modes[0], y, buffer.AsSpan(0, bufferLength), ref cachedRow[0])[..width];
                 if (n == 1)
                 {
                     for (int x = 0; x < width; x++)
@@ -120,8 +120,8 @@ internal static class JpegColorConverter
                     continue;
                 }
 
-                ReadOnlySpan<byte> c1 = Row(frame, comps[1], modes[1], y, buffer.AsSpan(bufferLength, bufferLength), ref cachedRow[1])[..width];
-                ReadOnlySpan<byte> c2 = Row(frame, comps[2], modes[2], y, buffer.AsSpan(2 * bufferLength, bufferLength), ref cachedRow[2])[..width];
+                ReadOnlySpan<byte> c1 = Row(comps[1], modes[1], y, buffer.AsSpan(bufferLength, bufferLength), ref cachedRow[1])[..width];
+                ReadOnlySpan<byte> c2 = Row(comps[2], modes[2], y, buffer.AsSpan(2 * bufferLength, bufferLength), ref cachedRow[2])[..width];
                 switch (colorSpace)
                 {
                     case JpegColorSpace.YCbCr:
@@ -135,7 +135,7 @@ internal static class JpegColorConverter
 
                         break;
                     default:
-                        ReadOnlySpan<byte> c3 = Row(frame, comps[3], modes[3], y, buffer.AsSpan(3 * bufferLength, bufferLength), ref cachedRow[3])[..width];
+                        ReadOnlySpan<byte> c3 = Row(comps[3], modes[3], y, buffer.AsSpan(3 * bufferLength, bufferLength), ref cachedRow[3])[..width];
                         CmykToRgb(c0, c1, c2, c3, colorSpace == JpegColorSpace.Ycck, dst);
                         break;
                 }
@@ -150,14 +150,14 @@ internal static class JpegColorConverter
     // port: libjpeg-turbo jdsample.c jinit_upsampler (method selection with do_fancy_upsampling)
     private static Upsampling ModeOf(JpegFrame frame, JpegComponent c)
     {
-        int hf = frame.MaxH / c.H;
-        int vf = frame.MaxV / c.V;
-        return (hf, vf) switch
+        // libjpeg has no context rows at 1/8 scale, so it upsamples by replication there.
+        bool fancy = frame.MinBlockSize > 1;
+        return (c.UpsampleH, c.UpsampleV) switch
         {
             (1, 1) => Upsampling.None,
-            (2, 1) when c.DownsampledWidth > 2 => Upsampling.H2V1Fancy,
-            (1, 2) => Upsampling.H1V2Fancy,
-            (2, 2) when c.DownsampledWidth > 2 => Upsampling.H2V2Fancy,
+            (2, 1) when fancy && c.DownsampledWidth > 2 => Upsampling.H2V1Fancy,
+            (1, 2) when fancy => Upsampling.H1V2Fancy,
+            (2, 2) when fancy && c.DownsampledWidth > 2 => Upsampling.H2V2Fancy,
             _ => Upsampling.Replicate,
         };
     }
@@ -166,7 +166,7 @@ internal static class JpegColorConverter
     /// Returns output row <paramref name="y"/> of a component at full resolution. Rows above the image and
     /// below its last real sample row replicate the edge row, as libjpeg's context rows do.
     /// </summary>
-    private static ReadOnlySpan<byte> Row(JpegFrame frame, JpegComponent c, Upsampling mode, int y, Span<byte> buffer, ref int cachedRow)
+    private static ReadOnlySpan<byte> Row(JpegComponent c, Upsampling mode, int y, Span<byte> buffer, ref int cachedRow)
     {
         byte[] plane = c.Plane;
         int stride = c.PlaneStride;
@@ -205,8 +205,8 @@ internal static class JpegColorConverter
             default:
             {
                 // port: libjpeg-turbo jdsample.c int_upsample (also h2v1_upsample/h2v2_upsample)
-                int hf = frame.MaxH / c.H;
-                int row = y / (frame.MaxV / c.V);
+                int hf = c.UpsampleH;
+                int row = y / c.UpsampleV;
                 if (cachedRow != row)
                 {
                     ReadOnlySpan<byte> src = plane.AsSpan(row * stride, dw);

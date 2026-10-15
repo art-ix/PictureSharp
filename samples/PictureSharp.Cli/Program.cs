@@ -6,6 +6,7 @@ using PictureSharp;
 //   info <file>...
 //   convert <input> <output> [-q quality] [-m method] [-lossless] [-colors n] [-octree] [-dither]
 //   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
+//   thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality]
 
 if (args.Length == 0)
 {
@@ -180,6 +181,35 @@ try
             return 0;
         }
 
+        case "thumbnail" when args.Length >= 5:
+        {
+            var options = new DecoderOptions
+            {
+                ApplyExifOrientation = true,
+                TargetSize = new(int.Parse(args[3], CultureInfo.InvariantCulture), int.Parse(args[4], CultureInfo.InvariantCulture)),
+            };
+            float quality = 75;
+            for (int i = 5; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "-gap": options = options with { TargetReducingGap = double.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                    case "-filter": options = options with { TargetResampling = Enum.Parse<ResamplingFilter>(args[++i], ignoreCase: true) }; break;
+                    case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                    default: throw new ArgumentException($"Unknown option {args[i]}");
+                }
+            }
+
+            ImageInfo info = Image.Identify(args[1]);
+            var sw = Stopwatch.StartNew();
+            using Image image = Image.Load(args[1], options);
+            long loadMs = sw.ElapsedMilliseconds;
+            Save(image, args[2], quality, 4, lossless: false);
+            Console.WriteLine($"{args[1]} -> {args[2]}: {info.Width}x{info.Height} -> {image.Width}x{image.Height}, " +
+                              $"load {loadMs} ms, {new FileInfo(args[2]).Length} bytes");
+            return 0;
+        }
+
         default:
             PrintUsage();
             return 1;
@@ -220,4 +250,5 @@ static void PrintUsage() => Console.Error.WriteLine(
                               [-colors n] [-octree] [-dither]          (GIF output)
       picturesharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]
                              [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
+      picturesharp-cli thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality]
     """);

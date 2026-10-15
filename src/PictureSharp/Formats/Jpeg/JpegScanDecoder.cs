@@ -100,7 +100,8 @@ internal static class JpegScanDecoder
                         DecodeBlockSequential(ref r, c, block);
                         int blockX = (mx * h) + bx;
                         int blockY = (my * v) + by;
-                        JpegIdct.Transform(block, c.Quant!, c.Plane.AsSpan((blockY * 8 * c.PlaneStride) + (blockX * 8)), c.PlaneStride);
+                        int size = c.BlockSize;
+                        JpegIdct.Transform(block, c.Quant!, c.Plane.AsSpan((blockY * size * c.PlaneStride) + (blockX * size)), c.PlaneStride, size);
                     }
                 }
             }

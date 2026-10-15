@@ -41,6 +41,9 @@ budget, so a small file cannot expand into gigabytes of metadata. With `IgnoreMe
 without being read or decompressed, and do not count. `Identify` does not decompress PNG profiles or XMP. Like
 libpng, PNG keeps the first `iCCP` and `eXIf` chunk and ignores duplicates.
 
+**Target size.** `DecoderOptions.TargetSize` does not relax any limit: `MaxPixels` and the other limits check the stored
+image, before the reduced JPEG buffers or the full decode of other formats are allocated.
+
 **Frames.** `MaxFrames` bounds the number of frame records an animation may hold. `MaxPixels` already limits the
 decoded canvases, but an animation of many tiny frames could otherwise create millions of frame objects.
 

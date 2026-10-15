@@ -350,15 +350,18 @@ public class JpegDecoderTests
                 File.WriteAllBytes(Path.Combine(dir, name), data);
             }
 
-            if (JpegSamplesTests.PillowReference(dir, null) is not { } reference)
+            foreach (int scale in (int[])[1, 2, 4, 8])
             {
-                return;   // Pillow not available
-            }
+                if (JpegSamplesTests.PillowReference(dir, null, scale) is not { } reference)
+                {
+                    return;   // Pillow not available
+                }
 
-            foreach ((string name, byte[] data) in files)
-            {
-                using Image image = Image.Load(data);
-                Assert.True(reference[name] == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} differs from Pillow");
+                foreach ((string name, byte[] data) in files)
+                {
+                    using Image image = Formats.Jpeg.JpegDecoder.Decode(data, DecoderOptions.Default, scale);
+                    Assert.True(reference[name] == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} at 1/{scale} differs from Pillow");
+                }
             }
         }
         finally

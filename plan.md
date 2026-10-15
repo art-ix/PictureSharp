@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.5.3. Fazy 0–10, obsługa ICO oraz kontrola zasobów i anulowanie ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.5.4. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `SaveAs*`.
 
@@ -37,9 +37,9 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | --- | --- | --- |
 | 0.5.1 | Odczyt i zapis ICO (jako RasterSharp) | Ukończona — opublikowana |
 | 0.5.2 | Zmiana nazwy RasterSharp → PictureSharp | Ukończona — opublikowana |
-| 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Ukończona — przygotowana lokalnie (commit i tag) |
-| 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Planowana — następny etap |
-| 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana |
+| 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Ukończona — opublikowana |
+| 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Ukończona — opublikowana |
+| 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana — następny etap |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
 | 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Planowana |
@@ -114,6 +114,17 @@ DoD:
 - Porównanie pomniejszonego dekodu z libjpeg-turbo przy zgodnych ustawieniach; ustalona i zapisana tolerancja pikseli. Nie wymagać identyczności z pełnym dekodem + resize, bo to inny algorytm.
 - Testy nieparzystych rozmiarów, skali, subsamplingu, szarości, CMYK, progressive i orientacji EXIF 1–8.
 - Benchmarki zdjęć 12 MP i większych do miniatur 256/512/1920 px: czas, alokacje i szczytowa pamięć wobec `Load` + `Thumbnail`. Wykazana redukcja pamięci baseline; ograniczenia progressive opisane.
+
+Weryfikacja 2026-10-15: `DecoderOptions.TargetSize`/`TargetResampling`/`TargetReducingGap` (domyślnie 2, jak Pillow
+`thumbnail` i libvips); resize przed orientacją, ramka liczona dla zwracanej orientacji, rozmiar zawsze jak `Thumbnail`.
+Pomniejszone IDCT 4×4/2×2/1×1 z `jidctred.c`, skalowanie chromy w IDCT i wybór upsamplingu jak libjpeg-turbo
+(`jdmaster.c`, `jdsample.c`). Tolerancja 0: bit-exact z libjpeg-turbo 2.1.5 (Pillow 10.2.0 `draft`) dla 46 plików
+korpusu × 1/2, 1/4, 1/8 (`jpeg_scaled_reference.json`), uszkodzonych strumieni i lokalnych zdjęć 12/27 MP, baseline
+i progressive. Testy EXIF 1–8, subsamplingu, szarości, CMYK/YCCK, nieparzystych rozmiarów, limitów i alokacji. Pozostałe
+formaty: pełny dekod + `Thumbnail`, identycznie z ręcznym wywołaniem. Pomiary w `docs/performance.md`: szczyt pamięci
+baseline 12 MP→256 px 68→7 MiB, 27 MP 149→4 MiB; progressive ograniczony przez współczynniki (2 B/próbkę). Build Release
+bez ostrzeżeń, 5076/5076 testów, 150/150 Oracle; migawka API (3 dodane właściwości). Bez nowych ścieżek SIMD.
+VERSION 0.5.4; paczka z symbolami `.snupkg` i Source Link. README zaktualizowane do wydania.
 
 ## 0.6.0 — sekwencyjne animacje
 

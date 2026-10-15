@@ -75,7 +75,8 @@ libjpeg-turbo (https://libjpeg-turbo.org), version 2.1.5, based on the
 Independent JPEG Group's libjpeg
 Used for: JPEG decoder (marker parsing and restart resynchronization from
 jdmarker.c, Huffman decoding from jdhuff.c/jdphuff.c, accurate integer inverse
-DCT from jidctint.c, fancy upsampling from jdsample.c, color conversion from
+DCT from jidctint.c, reduced-size inverse DCTs from jidctred.c, output scaling
+from jdmaster.c, fancy upsampling from jdsample.c, color conversion from
 jdcolor.c), and JPEG encoder (quality tables and progressive scan script from
 jcparam.c, RGB conversion from jccolor.c, downsampling from jcsample.c,
 accurate integer forward DCT from jfdctint.c, quantization from jcdctmgr.c,

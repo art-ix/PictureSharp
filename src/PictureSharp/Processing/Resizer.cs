@@ -42,6 +42,25 @@ internal static partial class Resizer
         return dst;
     }
 
+    /// <summary>
+    /// The size <see cref="ImageProcessingContext.Thumbnail(int, int, ResamplingFilter)"/> gives an image (0 for one side
+    /// of the box means no limit on it); null when the image keeps its size.
+    /// </summary>
+    public static (int Width, int Height)? ThumbnailSize(int srcWidth, int srcHeight, int maxWidth, int maxHeight)
+    {
+        if (maxWidth == 0)
+        {
+            maxWidth = Math.Max(1, (int)Math.Round((double)srcWidth / srcHeight * maxHeight));
+        }
+        else if (maxHeight == 0)
+        {
+            maxHeight = Math.Max(1, (int)Math.Round((double)srcHeight / srcWidth * maxWidth));
+        }
+
+        (int w, int h) = FitSize(srcWidth, srcHeight, maxWidth, maxHeight);
+        return w > srcWidth || h > srcHeight || (w == srcWidth && h == srcHeight) ? null : (w, h);
+    }
+
     /// <summary>The size that fits inside <paramref name="maxWidth"/>×<paramref name="maxHeight"/> keeping the aspect ratio.</summary>
     // port: Pillow src/PIL/ImageOps.py contain (Python round() rounds half to even, as Math.Round does)
     public static (int Width, int Height) FitSize(int srcWidth, int srcHeight, int maxWidth, int maxHeight)

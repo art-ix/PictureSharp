@@ -31,13 +31,18 @@ internal sealed partial class JpegFile
     private static ImageFormatException Error(string message) => new(ImageFormat.Jpeg, message);
 
     // port: libjpeg-turbo jdmarker.c read_markers (with the scan input of jdinput.c)
+    /// <param name="data">The whole file.</param>
+    /// <param name="options">Decoder options.</param>
+    /// <param name="headerOnly">Stop at the first scan without allocating or decoding anything.</param>
+    /// <param name="cancellationToken">Checked between rows of MCUs.</param>
+    /// <param name="scale">Scale denominator (1, 2, 4 or 8); 0 chooses it from <see cref="DecoderOptions.TargetSize"/>.</param>
     public static JpegFile Read(ReadOnlySpan<byte> data, DecoderOptions options, bool headerOnly,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, int scale = 0)
     {
         var file = new JpegFile { _options = options };
         try
         {
-            file.ReadMarkers(data, options, headerOnly, cancellationToken);
+            file.ReadMarkers(data, options, headerOnly, cancellationToken, scale);
             return file;
         }
         catch
@@ -47,7 +52,8 @@ internal sealed partial class JpegFile
         }
     }
 
-    private void ReadMarkers(ReadOnlySpan<byte> data, DecoderOptions options, bool headerOnly, CancellationToken cancellationToken)
+    private void ReadMarkers(ReadOnlySpan<byte> data, DecoderOptions options, bool headerOnly, CancellationToken cancellationToken,
+        int scale)
     {
         JpegFile file = this;
         bool ignoreMetadata = options.IgnoreMetadata && !headerOnly;
@@ -100,7 +106,8 @@ internal sealed partial class JpegFile
                     file.ReadFrame(segment, marker == JpegMarkers.Sof2);
                     if (!headerOnly)
                     {
-                        file.Allocate(options);
+                        options.ValidateDimensions(ImageFormat.Jpeg, file.Frame!.Width, file.Frame.Height);
+                        JpegColorConverter.Validate(file.Frame);
                     }
 
                     break;
@@ -133,6 +140,13 @@ internal sealed partial class JpegFile
                     if (headerOnly)
                     {
                         return;
+                    }
+
+                    if (file._scans == 0)
+                    {
+                        // Allocated at the first scan, once the EXIF orientation that the scale depends on is known.
+                        file.Frame.SetScale(scale > 0 ? scale : JpegDecoder.SelectScale(file.Frame, file.Exif, options));
+                        file.Allocate();
                     }
 
                     JpegScan scan = file.ReadScan(segment);
