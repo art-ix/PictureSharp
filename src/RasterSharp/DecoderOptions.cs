@@ -35,6 +35,21 @@ public sealed record DecoderOptions
     /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
     public int MaxDegreeOfParallelism { get; init => field = Check.Parallelism(value); } = -1;
 
+    /// <summary>ICO variant index, or null to choose by size. Takes precedence over IcoPreferredSize.</summary>
+    public int? IcoIndex
+    {
+        get;
+        init => field = value is null or >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(IcoIndex));
+    }
+
+    /// <summary>Preferred ICO dimensions (1–256 per axis). Chooses the nearest supported size, preferring a larger variant on ties; null chooses the largest.</summary>
+    public System.Drawing.Size? IcoPreferredSize
+    {
+        get;
+        init => field = value is null || (value.Value.Width is >= 1 and <= 256 && value.Value.Height is >= 1 and <= 256)
+            ? value : throw new ArgumentOutOfRangeException(nameof(IcoPreferredSize));
+    }
+
     internal void ValidateDimensions(ImageFormat format, long width, long height)
     {
         if (width <= 0 || height <= 0)

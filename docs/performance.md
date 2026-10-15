@@ -474,3 +474,33 @@ dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
 ```
 
 Keep CPU, runtime, GC settings, input bytes and workload identical when comparing versions. Measure serially, inspect the spread, and repeat any apparent regression. BenchmarkDotNet writes timing and allocation reports to `BenchmarkDotNet.Artifacts/`.
+
+
+## ICO implementation for 0.5.1
+
+ICO adds a small container around the existing PNG codec or an uncompressed DIB.
+`IcoBenchmarks` measures complete encode/decode operations for 16, 32 and 256 px
+synthetic RGBA icons with both encodings:
+
+```bash
+dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- --filter '*IcoBenchmarks*'
+```
+
+Quick local measurements (2026-10-15, i5-12500H, x64, .NET 10.0.12, default JIT/GC):
+50 warm-up calls, median of seven batches of 50 calls, in-memory inputs/outputs,
+no process startup or disk I/O. Allocations use `GC.GetTotalAllocatedBytes(true)`
+and include all threads. This is a short baseline for the new codec, not a full
+BenchmarkDotNet run or a claim of improvement over an earlier ICO implementation.
+The image uses `(13*x, 17*y, x+y)` modulo 256 and alpha `((x+y)%3)*127`.
+
+| Size | Encoding | Encode (µs) | Decode (µs) | Encode bytes/op | Decode bytes/op |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 16×16 | PNG | 172.84 | 13.69 | 414048 | 3168 |
+| 16×16 | DIB | 6.43 | 6.74 | 1552 | 1424 |
+| 256×256 | PNG | 1430.15 | 408.17 | 685133 | 270030 |
+| 256×256 | DIB | 168.53 | 152.38 | 271024 | 262582 |
+
+PNG includes the existing encoder's compression workspace costs. DIB writes rows
+through a pooled buffer. Container output uses pooled segments before emitting
+the directory and payloads, including on non-seekable streams. No new SIMD path
+was added; the PNG payload reuses existing optimized code.

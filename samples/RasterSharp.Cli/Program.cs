@@ -24,9 +24,53 @@ try
                 Console.WriteLine($"{file}: {info.Format.Name} {info.Width}x{info.Height}, alpha: {info.HasAlpha}, " +
                                   $"frames: {info.FrameCount}{(info.WebPCompression != WebPCompression.None ? ", " + info.WebPCompression : "")}, " +
                                   $"orientation: {info.Orientation}");
+                if (info.Format == ImageFormat.Ico)
+                {
+                    foreach (IcoEntryInfo entry in IcoFile.Identify(file))
+                    {
+                        Console.WriteLine($"  variant {entry.Index}: {entry.Width}x{entry.Height}, {entry.BitsPerPixel} bpp, {entry.Encoding}, supported: {entry.IsSupported}");
+                    }
+                }
             }
 
             return 0;
+
+        case "icon" when args.Length is 4 or 5:
+        {
+            if (args.Length == 5 && args[4] != "-dib")
+            {
+                throw new ArgumentException($"Unknown option {args[4]}");
+            }
+
+            int[] sizes = [.. args[3].Split(',').Select(s => int.Parse(s, CultureInfo.InvariantCulture))];
+            if (sizes.Any(s => s is < 1 or > 256))
+            {
+                throw new ArgumentException("Icon sizes must be 1–256.");
+            }
+
+            using Image source = Image.Load(args[1], new() { ApplyExifOrientation = true });
+            var variants = new List<Image>();
+            try
+            {
+                foreach (int size in sizes)
+                {
+                    variants.Add(source.Clone(x => x.Resize(size, size, ResizeMode.Pad, ResamplingFilter.Lanczos3)));
+                }
+
+                IcoFile.Save(variants, args[2], new() { Encoding = args.Length == 5 ? IcoEncoding.Dib : IcoEncoding.Png });
+            }
+            finally
+            {
+                foreach (Image variant in variants)
+                {
+                    variant.Dispose();
+                }
+            }
+
+            Console.WriteLine($"{args[1]} -> {args[2]}: {sizes.Length} icon variants");
+            return 0;
+        }
+
 
         case "decode" when args.Length >= 2:
         {
@@ -171,6 +215,7 @@ static void PrintUsage() => Console.Error.WriteLine(
     usage:
       rastersharp-cli info <file>...
       rastersharp-cli decode <file> [iterations]
+      rastersharp-cli icon <input> <output.ico> <sizes: 16,32,48,256> [-dib]
       rastersharp-cli convert <input> <output> [-q quality] [-m method] [-lossless]
                               [-colors n] [-octree] [-dither]          (GIF output)
       rastersharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]

@@ -2,11 +2,12 @@
 
 **A pure managed image processing library for .NET. No native dependencies.**
 
-RasterSharp reads and writes WebP, PNG, JPEG, BMP, GIF and PCX and processes images in 100% C# for **.NET 10 and later**: no NuGet dependencies, native libraries or P/Invoke. The API follows ImageSharp (`Image.Load`, `Mutate`, `Clone`, `SaveAs*`), and its results are verified pixel for pixel against libwebp, libjpeg-turbo and Pillow.
+RasterSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and processes images in 100% C# for **.NET 10 and later**: no NuGet dependencies, native libraries or P/Invoke. The API follows ImageSharp (`Image.Load`, `Mutate`, `Clone`, `SaveAs*`), and its results are verified pixel for pixel against libwebp, libjpeg-turbo and Pillow.
 
 - WebP lossy, lossless, alpha and animation (encoder byte-compatible with `cwebp` 1.6.0 where possible)
 - PNG (including APNG and Adam7), JPEG (baseline and progressive), BMP
 - GIF with animation, and GIF ↔ WebP conversion compatible with `gif2webp` 1.6.0
+- ICO with PNG/DIB variants, alpha masks and multiple independent sizes
 - PCX with palette and grayscale images, RGB and RGBA, and automatic output bit depth
 - Resize, crop, pad, rotate, flip, EXIF auto-orientation
 - Brightness, contrast, saturation, blur, sharpen, compositing and watermarks
@@ -21,6 +22,7 @@ RasterSharp reads and writes WebP, PNG, JPEG, BMP, GIF and PCX and processes ima
 | JPEG | ✔ baseline, progressive, CMYK/YCCK | ✔ baseline, progressive, 4:4:4–4:2:0 |
 | BMP | ✔ palette, RLE, bit fields, alpha, embedded PNG/JPEG | ✔ 1/4/8/24/32-bit |
 | GIF | ✔ GIF87a/89a, interlace, transparency, animation | ✔ exact or quantized palettes (Pillow median cut/octree), dithering, animation |
+| ICO | ✔ PNG, DIB 1/4/8/24/32-bit | ✔ PNG or 32-bit DIB, multiple sizes |
 | PCX | ✔ 1–8 bit planar and packed, 256-color, 24-bit RGB, 32-bit RGBA | ✔ 1/4/8/24/32-bit, RLE |
 
 ## Quick start
@@ -46,12 +48,13 @@ thumbnail.SaveAsPcx("thumbnail.pcx");
 
 - [Getting started](docs/getting-started.md): installation, the `Load` → `Mutate`/`Clone` → `Save` model, disposal and errors
 - [Loading and saving](docs/loading-and-saving.md): files, streams, memory, async, format detection, web responses
+- [ICO icons](docs/ico.md): selecting variants and creating favicons or multi-size icons
 - [Encoder options](docs/encoder-options.md): WebP, PNG, JPEG, BMP, GIF and PCX settings with recipes
 - [Image processing](docs/image-processing.md): resize modes, geometry, color, filters, compositing, custom operations
 - [Pixels and interop](docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, frame pixel access and conversion
 - [Animation](docs/animation.md): frames, durations, animated WebP, APNG and GIF, GIF ↔ WebP conversion
 - [Metadata](docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
-- [Command-line sample](docs/cli.md): `info`, `convert`, `resize` and `decode`
+- [Command-line sample](docs/cli.md): `info`, `convert`, `resize`, `decode` and `icon`
 - [Development](docs/development.md): building, tests, reference tools and oracles
 - [Performance](docs/performance.md): benchmark matrix, comparison with libwebp, memory use, benchmark commands and limitations
 
@@ -62,7 +65,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.5.0, which completes phase 10: performance, robustness and release readiness).
+Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.5.1, which adds ICO reading and writing, variant selection, multi-size icon collections and the `icon` CLI command).
 
 ## License
 

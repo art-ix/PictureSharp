@@ -7,6 +7,7 @@
 * BMP           -> Pillow (ImageMagick scales 4/5-bit channels differently, so it is no oracle for BMP;
                    variants Pillow cannot read are covered by unit tests)
 * PCX           -> Pillow; RGBA hashes and header DPI
+* ICO           -> Pillow; selected variant here and all variants in ico_reference.json
 * JPEG          -> Pillow (libjpeg-turbo, islow IDCT, fancy upsampling); RGBA also saved as
                    PNG under reference/jpeg/ for tolerance comparisons
 * GIF           -> anim_dump (libwebp 1.6.0 anim_util.c: browser-style composition, transparent pixels as
@@ -352,12 +353,30 @@ def main():
                 refs[rel] = ref_bmp(path, rel)
             elif name.endswith(".jpg"):
                 refs[rel] = ref_jpeg(path, rel)
+            elif name.endswith(".ico"):
+                import io
+                with Image.open(path) as im:
+                    entry = im.ico.entry[0]
+                    with open(path, "rb") as source:
+                        source.seek(entry["offset"])
+                        payload = source.read(entry["size"])
+                    # Pillow's ICO wrapper drops palette PNG transparency; use its PNG decoder.
+                    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+                        with Image.open(io.BytesIO(payload)) as png:
+                            pixels = png.convert("RGBA").tobytes()
+                    else:
+                        pixels = im.convert("RGBA").tobytes()
+                    refs[rel] = {"format": "ICO", "width": im.width, "height": im.height,
+                                 "hasAlpha": True, "animated": False, "decoder": "Pillow (embedded PNG for PNG entries)",
+                                 "frames": [{"sha256": sha(pixels), "duration": 0}]}
             elif name.endswith(".pcx"):
                 refs[rel] = ref_pcx(path, rel)
             elif name.endswith(".gif"):
                 refs[rel] = ref_gif(path, rel)
     with open(os.path.join(ROOT, "reference.json"), "w") as f:
         json.dump(dict(sorted(refs.items())), f, indent=1)
+    import runpy
+    runpy.run_path(os.path.join(ROOT, "ico_corpus.py"))["references"]()
     print(f"reference.json: {len(refs)} entries")
 
 

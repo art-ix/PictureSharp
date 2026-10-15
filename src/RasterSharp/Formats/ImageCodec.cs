@@ -47,10 +47,10 @@ internal static class ImageCodec
 
     // Safety net: decoders validate their input explicitly, but any unexpected exception caused by
     // malformed data is reported as ImageFormatException rather than leaking implementation details.
-    private static bool IsCorruptDataException(Exception ex) =>
+    internal static bool IsCorruptDataException(Exception ex) =>
         ex is IndexOutOfRangeException or ArgumentException or InvalidOperationException
             or OverflowException or ArithmeticException or InvalidCastException;
 
-    private static ImageFormatException CorruptData(ImageFormat format, Exception inner) =>
+    internal static ImageFormatException CorruptData(ImageFormat format, Exception inner) =>
         new(format, "The image data is corrupt.", inner);
 }

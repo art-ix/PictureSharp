@@ -5,7 +5,7 @@ Sources are synthetic (no third-party photos), variants are produced with the re
 tools: cwebp / img2webp / webpmux (libwebp 1.6.0), ImageMagick `convert` and Pillow, plus a
 small GIF writer below for block layouts no tool produces.
 
-Run with:  python3 -I tests/assets/generate_corpus.py [webp|png|jpeg|bmp|gif|pcx ...]
+Run with:  python3 -I tests/assets/generate_corpus.py [webp|png|jpeg|bmp|gif|pcx|ico ...]
 Then:      python3 -I tests/assets/make_reference.py
 """
 import io
@@ -853,7 +853,7 @@ def main():
     for tool in ("cwebp", "img2webp", "webpmux", "convert"):
         if shutil.which(tool) is None:
             sys.exit(f"missing tool: {tool}")
-    parts = sys.argv[1:] or ["webp", "png", "jpeg", "bmp", "gif", "pcx"]
+    parts = sys.argv[1:] or ["webp", "png", "jpeg", "bmp", "gif", "pcx", "ico"]
     for sub in parts:
         shutil.rmtree(os.path.join(CORPUS, sub), ignore_errors=True)
     sources = generate_sources()
@@ -868,6 +868,9 @@ def main():
         generate_bmp()
     if "gif" in parts:
         generate_gif()
+    if "ico" in parts:
+        import runpy
+        runpy.run_path(os.path.join(ROOT, "ico_corpus.py"))["generate"]()
     if "pcx" in parts:
         generate_pcx()
     count = sum(len(files) for _, _, files in os.walk(CORPUS))

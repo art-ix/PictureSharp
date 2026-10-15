@@ -12,6 +12,7 @@ public class EncodingAndIdentificationApiTests
         { ImageFormat.Bmp, new BmpEncoderOptions() },
         { ImageFormat.Gif, new GifEncoderOptions() },
         { ImageFormat.Pcx, new PcxEncoderOptions() },
+        { ImageFormat.Ico, new IcoEncoderOptions() },
     };
 
     [Theory]

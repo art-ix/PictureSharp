@@ -1342,6 +1342,202 @@
   ],
   "decoder": "anim_dump"
  },
+ "ico/dib1.ico": {
+  "format": "ICO",
+  "width": 17,
+  "height": 5,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "5396e590368526820d5cbaddd1dadb1af338ff79320628b005ac225e1c45bef4",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/dib24.ico": {
+  "format": "ICO",
+  "width": 17,
+  "height": 5,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "2c0d07d76bace24b8b066a5c0cac09f418a3a3c555c1f6192e5436ba0709b76e",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/dib32.ico": {
+  "format": "ICO",
+  "width": 17,
+  "height": 5,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "c828eeab0ed157247e314beaf452e5b2451275c6bbfcf6c7ecec65ef2db6f207",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/dib4.ico": {
+  "format": "ICO",
+  "width": 17,
+  "height": 5,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "581299460e5b657561a11c3686f8225739a1cd0d7a6254914dfcf411f7f7c78c",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/dib8.ico": {
+  "format": "ICO",
+  "width": 17,
+  "height": 5,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "53778e43a7cae0884dc981b78d6cc8d722421c4b985adeaf5af49a890fc9948f",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/mixed.ico": {
+  "format": "ICO",
+  "width": 256,
+  "height": 256,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "792b4ea1db50717cca460305e7f27781f1fec82ce057b8245cb0811580e0e5cf",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/pillow.ico": {
+  "format": "ICO",
+  "width": 256,
+  "height": 256,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "792b4ea1db50717cca460305e7f27781f1fec82ce057b8245cb0811580e0e5cf",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/pillow_1.ico": {
+  "format": "ICO",
+  "width": 16,
+  "height": 16,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "b109f30d1d3a43088541a623b27e1dfb69d2c688d9007c8e8df370137dcd3f0a",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/pillow_L.ico": {
+  "format": "ICO",
+  "width": 16,
+  "height": 16,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "dc0541876febc08f24e0758f321d8f406ea907794d935f83ad2a4d1086385909",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/pillow_P.ico": {
+  "format": "ICO",
+  "width": 16,
+  "height": 16,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "dbddbec3899e9aaf13b8ebd30b5fae6aa8d75972fedd371a57aebfacf96d8e3a",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/pillow_RGB.ico": {
+  "format": "ICO",
+  "width": 16,
+  "height": 16,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "18d18f61386e7fe96fa8a461698c883c46c81f1a64e5553882fde644025d968b",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/png16.ico": {
+  "format": "ICO",
+  "width": 16,
+  "height": 16,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "2c0a93d86d9995eb3b3406986dedac688bbe38c7fa561d01c653ded06fc7c0ab",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/png256.ico": {
+  "format": "ICO",
+  "width": 256,
+  "height": 256,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "792b4ea1db50717cca460305e7f27781f1fec82ce057b8245cb0811580e0e5cf",
+    "duration": 0
+   }
+  ]
+ },
+ "ico/png32.ico": {
+  "format": "ICO",
+  "width": 32,
+  "height": 32,
+  "hasAlpha": true,
+  "animated": false,
+  "decoder": "Pillow (embedded PNG for PNG entries)",
+  "frames": [
+   {
+    "sha256": "643829a55ac1aaae0329311595f8073dfc6614abd584e9a1955454db1a70d0f5",
+    "duration": 0
+   }
+  ]
+ },
  "jpeg/cmyk.jpg": {
   "format": "JPEG",
   "width": 256,

@@ -26,7 +26,9 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     property System.Boolean StrictChecksums { get; init; }
     property System.Boolean WebPBypassFiltering { get; init; }
     property System.Boolean WebPFancyUpsampling { get; init; }
+    property System.Drawing.Size? IcoPreferredSize { get; init; }
     property System.Int32 MaxDegreeOfParallelism { get; init; }
+    property System.Int32? IcoIndex { get; init; }
     property System.Int64 MaxPixels { get; init; }
     property static DecoderOptions Default { get; }
 abstract record EncoderOptions : System.IEquatable<EncoderOptions>
@@ -69,6 +71,43 @@ enum GifQuantizer
     Auto = 0
     MedianCut = 1
     Octree = 2
+sealed record IcoEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<IcoEncoderOptions>
+    ctor()
+    property IcoEncoding Encoding { get; init; }
+    property ImageFormat Format { get; }
+enum IcoEncoding
+    Png = 0
+    Dib = 1
+sealed record IcoEntryInfo : System.IEquatable<IcoEntryInfo>
+    property IcoEncoding Encoding { get; }
+    property System.Boolean IsSupported { get; }
+    property System.Int32 BitsPerPixel { get; }
+    property System.Int32 Height { get; }
+    property System.Int32 Index { get; }
+    property System.Int32 Width { get; }
+static class IcoFile
+    method static IcoImageCollection LoadAll(System.IO.Stream stream, DecoderOptions? options = null)
+    method static IcoImageCollection LoadAll(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
+    method static IcoImageCollection LoadAll(System.String path, DecoderOptions? options = null)
+    method static ImageInfo IdentifySelected(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
+    method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.IO.Stream stream, DecoderOptions? options = null)
+    method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
+    method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.String path, DecoderOptions? options = null)
+    method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options = null)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options = null)
+sealed class IcoImageCollection : System.Collections.Generic.IEnumerable<Image>, System.Collections.Generic.IReadOnlyCollection<Image>, System.Collections.Generic.IReadOnlyList<Image>, System.Collections.IEnumerable, System.IDisposable
+    method System.Collections.Generic.IEnumerator<Image> GetEnumerator()
+    method System.Void Dispose()
+    property Image this[System.Int32 index] { get; }
+    property System.Int32 Count { get; }
+static class IcoImageExtensions
+    method static System.Byte[] ToIco(Image image, IcoEncoderOptions? options = null)
+    method static System.Threading.Tasks.Task SaveAsIcoAsync(Image image, System.IO.Stream stream, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsIcoAsync(Image image, System.String path, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Void SaveAsIco(Image image, System.IO.Stream stream, IcoEncoderOptions? options = null)
+    method static System.Void SaveAsIco(Image image, System.String path, IcoEncoderOptions? options = null)
 sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height)
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
@@ -145,6 +184,7 @@ sealed class ImageFormat : System.IEquatable<ImageFormat>
     property System.String Name { get; }
     property static ImageFormat Bmp { get; }
     property static ImageFormat Gif { get; }
+    property static ImageFormat Ico { get; }
     property static ImageFormat Jpeg { get; }
     property static ImageFormat Pcx { get; }
     property static ImageFormat Png { get; }

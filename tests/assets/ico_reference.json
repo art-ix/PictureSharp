@@ -1,0 +1,150 @@
+{
+  "dib1.ico": [
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "5396e590368526820d5cbaddd1dadb1af338ff79320628b005ac225e1c45bef4"
+    }
+  ],
+  "dib24.ico": [
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "2c0d07d76bace24b8b066a5c0cac09f418a3a3c555c1f6192e5436ba0709b76e"
+    }
+  ],
+  "dib32.ico": [
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "c828eeab0ed157247e314beaf452e5b2451275c6bbfcf6c7ecec65ef2db6f207"
+    }
+  ],
+  "dib4.ico": [
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "581299460e5b657561a11c3686f8225739a1cd0d7a6254914dfcf411f7f7c78c"
+    }
+  ],
+  "dib8.ico": [
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "53778e43a7cae0884dc981b78d6cc8d722421c4b985adeaf5af49a890fc9948f"
+    }
+  ],
+  "mixed.ico": [
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "5396e590368526820d5cbaddd1dadb1af338ff79320628b005ac225e1c45bef4"
+    },
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "581299460e5b657561a11c3686f8225739a1cd0d7a6254914dfcf411f7f7c78c"
+    },
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "53778e43a7cae0884dc981b78d6cc8d722421c4b985adeaf5af49a890fc9948f"
+    },
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "2c0d07d76bace24b8b066a5c0cac09f418a3a3c555c1f6192e5436ba0709b76e"
+    },
+    {
+      "width": 17,
+      "height": 5,
+      "sha256": "c828eeab0ed157247e314beaf452e5b2451275c6bbfcf6c7ecec65ef2db6f207"
+    },
+    {
+      "width": 16,
+      "height": 16,
+      "sha256": "2c0a93d86d9995eb3b3406986dedac688bbe38c7fa561d01c653ded06fc7c0ab"
+    },
+    {
+      "width": 32,
+      "height": 32,
+      "sha256": "643829a55ac1aaae0329311595f8073dfc6614abd584e9a1955454db1a70d0f5"
+    },
+    {
+      "width": 256,
+      "height": 256,
+      "sha256": "792b4ea1db50717cca460305e7f27781f1fec82ce057b8245cb0811580e0e5cf"
+    }
+  ],
+  "pillow.ico": [
+    {
+      "width": 16,
+      "height": 16,
+      "sha256": "ae48c3250057a0ada6f651cfcb308e218313d49616e771d5c4b9e70bb59b5ca5"
+    },
+    {
+      "width": 32,
+      "height": 32,
+      "sha256": "89e5e1999175474a898a11e55e1e10257829d9ae8ef49945ae6ef72a18123198"
+    },
+    {
+      "width": 64,
+      "height": 64,
+      "sha256": "199932bbf6121ce1345526fe6e6fa7750fdac358e1748189b2eb79cc278180b1"
+    },
+    {
+      "width": 256,
+      "height": 256,
+      "sha256": "792b4ea1db50717cca460305e7f27781f1fec82ce057b8245cb0811580e0e5cf"
+    }
+  ],
+  "pillow_1.ico": [
+    {
+      "width": 16,
+      "height": 16,
+      "sha256": "b109f30d1d3a43088541a623b27e1dfb69d2c688d9007c8e8df370137dcd3f0a"
+    }
+  ],
+  "pillow_L.ico": [
+    {
+      "width": 16,
+      "height": 16,
+      "sha256": "dc0541876febc08f24e0758f321d8f406ea907794d935f83ad2a4d1086385909"
+    }
+  ],
+  "pillow_P.ico": [
+    {
+      "width": 16,
+      "height": 16,
+      "sha256": "dbddbec3899e9aaf13b8ebd30b5fae6aa8d75972fedd371a57aebfacf96d8e3a"
+    }
+  ],
+  "pillow_RGB.ico": [
+    {
+      "width": 16,
+      "height": 16,
+      "sha256": "18d18f61386e7fe96fa8a461698c883c46c81f1a64e5553882fde644025d968b"
+    }
+  ],
+  "png16.ico": [
+    {
+      "width": 16,
+      "height": 16,
+      "sha256": "2c0a93d86d9995eb3b3406986dedac688bbe38c7fa561d01c653ded06fc7c0ab"
+    }
+  ],
+  "png256.ico": [
+    {
+      "width": 256,
+      "height": 256,
+      "sha256": "792b4ea1db50717cca460305e7f27781f1fec82ce057b8245cb0811580e0e5cf"
+    }
+  ],
+  "png32.ico": [
+    {
+      "width": 32,
+      "height": 32,
+      "sha256": "643829a55ac1aaae0329311595f8073dfc6614abd584e9a1955454db1a70d0f5"
+    }
+  ]
+}

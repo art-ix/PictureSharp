@@ -32,6 +32,25 @@ public sealed class DocsExamplesTests : IDisposable
 
     private string P(string name) => Path.Combine(_dir, name);
 
+    [Fact]
+    public async Task Ico_IconsAndVariantOwnership()
+    {
+        using Image source = Image.Load(P("logo.png"));
+        using Image small = source.Clone(x => x.Resize(16, 16, ResizeMode.Pad));
+        using Image large = source.Clone(x => x.Resize(256, 256, ResizeMode.Pad));
+        small.SaveAsIco(P("favicon.ico"));
+        IcoFile.Save([small, large], P("app.ico"));
+        using Image preferred = Image.Load(P("app.ico"), new() { IcoPreferredSize = new(32, 32) });
+        using Image indexed = Image.Load(P("app.ico"), new() { IcoIndex = 0 });
+        Assert.Equal(16, preferred.Width);
+        Assert.Equal(16, indexed.Width);
+        Assert.Equal(2, IcoFile.Identify(P("app.ico")).Count);
+        using IcoImageCollection variants = IcoFile.LoadAll(P("app.ico"));
+        await IcoFile.SaveAsync(variants, P("legacy.ico"), new() { Encoding = IcoEncoding.Dib });
+        using IcoImageCollection legacy = IcoFile.LoadAll(P("legacy.ico"));
+        Assert.Equal(large.ToPixelData(), legacy[1].ToPixelData());
+    }
+
     // ------------------------------------------------------------ README.md
 
     [Fact]

@@ -30,6 +30,9 @@ public sealed class ImageFormat : IEquatable<ImageFormat>
     /// <summary>ZSoft Paintbrush (PCX).</summary>
     public static ImageFormat Pcx { get; } = new("PCX", "image/x-pcx", ".pcx");
 
+    /// <summary>Windows icon container (PNG and DIB variants).</summary>
+    public static ImageFormat Ico { get; } = new("ICO", "image/vnd.microsoft.icon", ".ico");
+
     /// <summary>All file formats known to the library.</summary>
     public static IReadOnlyList<ImageFormat> All => CodecRegistry.Formats;
 
