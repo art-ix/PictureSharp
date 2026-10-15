@@ -6,15 +6,18 @@ using PictureSharp.Formats.WebP;
 using PictureSharp.Primitives.Memory;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
+using TUnit.Core.Enums;
 
 namespace PictureSharp.Tests.Core;
 
 /// <summary>
 /// Allocation budgets for encoders that once allocated many times their output (per-tile histograms,
 /// a copied subframe per animation candidate, a growing MemoryStream). Single-threaded, so the
-/// current-thread counter sees every allocation.
+/// current-thread counter sees every allocation. The counter is per thread, so these run one at a time but
+/// alongside other tests, and first because the animation case is the longest serial step of the run.
 /// </summary>
-[NotInParallel]
+[NotInParallel("Allocations")]
+[ExecutionPriority(Priority.High)]
 public class AllocationTests
 {
     [Test]
