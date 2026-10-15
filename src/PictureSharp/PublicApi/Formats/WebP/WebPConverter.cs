@@ -1,4 +1,3 @@
-using PictureSharp.IO;
 
 namespace PictureSharp.Formats.WebP;
 
@@ -12,7 +11,7 @@ public static class WebPConverter
     /// </summary>
     public static void Convert(string inputPath, string outputPath, WebPEncoderOptions? options = null)
     {
-        using Image image = ImageReader.Load(inputPath);
+        using Image image = Image.Load(inputPath);
         if (image.SourceFormat == ImageFormat.Gif)
         {
             options ??= new WebPEncoderOptions { Lossless = true };

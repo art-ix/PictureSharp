@@ -3,7 +3,6 @@ using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Processing;
 using PictureSharp.Formats.Ico;
 using PictureSharp.Infrastructure.Codecs.Ico;
-using PictureSharp.IO;
 using PictureSharp.Primitives.Memory;
 
 namespace PictureSharp.Application.Icons;
@@ -74,7 +73,7 @@ internal sealed class IconService(IIcoCodec codec, IImageInput input, IImageOutp
         return LoadAll(input.ReadAll(stream, (options ?? DecoderOptions.Default).MaxInputBytes, cancellationToken), options, cancellationToken);
     }
 
-    /// <summary>Identifies the same selected variant as ImageReader.Load, without decoding pixels.</summary>
+    /// <summary>Identifies the same selected variant as Image.Load, without decoding pixels.</summary>
     public ImageInfo IdentifySelected(ReadOnlyMemory<byte> data, DecoderOptions? options = null)
     {
         options ??= DecoderOptions.Default;

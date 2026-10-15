@@ -2,7 +2,6 @@ using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Formats.Ico;
 using PictureSharp.Infrastructure.Codecs.Png;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.Codecs.Ico;
 

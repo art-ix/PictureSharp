@@ -1,5 +1,4 @@
 using PictureSharp.Application.Abstractions;
-using PictureSharp.IO;
 
 namespace PictureSharp.Application.Encoding;
 

@@ -1,6 +1,6 @@
 using PictureSharp.Formats.WebP;
 
-namespace PictureSharp.IO;
+namespace PictureSharp;
 
 /// <summary>Basic facts about an encoded image, obtained without decoding its pixels.</summary>
 public sealed record ImageInfo

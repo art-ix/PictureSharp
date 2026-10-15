@@ -1,4 +1,3 @@
-using PictureSharp.IO;
 
 namespace PictureSharp.Application.Decoding;
 

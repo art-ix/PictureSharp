@@ -4,23 +4,22 @@
 
 ```csharp
 using PictureSharp;
-using PictureSharp.IO;
 
-using var fromFile = ImageReader.Load("input.webp");
-using var fromStream = ImageReader.Load(stream);               // read to the end; seeking is not needed
-using var fromBytes = ImageReader.Load(bytes);                 // byte[]: used without copying
-using var fromSpan = ImageReader.Load(bytes.AsSpan(16));       // span: copied
-using var fromAsync = await ImageReader.LoadAsync("input.png", cancellationToken);
+using var fromFile = Image.Load("input.webp");
+using var fromStream = Image.Load(stream);               // read to the end; seeking is not needed
+using var fromBytes = Image.Load(bytes);                 // byte[]: used without copying
+using var fromSpan = Image.Load(bytes.AsSpan(16));       // span: copied
+using var fromAsync = await Image.LoadAsync("input.png", cancellationToken);
 ```
 
 | Method | Notes |
 | --- | --- |
-| `ImageReader.Load(string path, DecoderOptions? options = null)` | Reads the whole file. |
-| `ImageReader.Load(Stream stream, DecoderOptions? options = null)` | Reads from the current position to the end; the stream is left open. |
-| `ImageReader.Load(ReadOnlyMemory<byte> data, ...)` | A `byte[]` binds here and is not copied. Keep it unchanged while the image is decoded. |
-| `ImageReader.Load(ReadOnlySpan<byte> data, ...)` | The data is copied first. |
-| `ImageReader.LoadAsync(string path \| Stream stream [, DecoderOptions? options], CancellationToken ct = default)` | Asynchronous I/O, then decoding; the token also stops the decoding. |
-| `ImageReader.Load(..., DecoderOptions? options, CancellationToken ct)` | Every source also has an overload whose token stops the reading and decoding; see [Resource limits and cancellation](limits-and-cancellation.md). |
+| `Image.Load(string path, DecoderOptions? options = null)` | Reads the whole file. |
+| `Image.Load(Stream stream, DecoderOptions? options = null)` | Reads from the current position to the end; the stream is left open. |
+| `Image.Load(ReadOnlyMemory<byte> data, ...)` | A `byte[]` binds here and is not copied. Keep it unchanged while the image is decoded. |
+| `Image.Load(ReadOnlySpan<byte> data, ...)` | The data is copied first. |
+| `Image.LoadAsync(string path \| Stream stream [, DecoderOptions? options], CancellationToken ct = default)` | Asynchronous I/O, then decoding; the token also stops the decoding. |
+| `Image.Load(..., DecoderOptions? options, CancellationToken ct)` | Every source also has an overload whose token stops the reading and decoding; see [Resource limits and cancellation](limits-and-cancellation.md). |
 | `Image.LoadPixelData(...)` | Creates an image from raw pixels; see [Pixels and interop](pixels-and-interop.md). |
 | `new Image(width, height [, background])` | A blank image, transparent unless a background is given. |
 
@@ -28,12 +27,11 @@ The format is always detected from the content: a PNG named `photo.jpg` loads fi
 
 ### PCX support
 
-PCX loads through the same `ImageReader.Load` methods. It supports monochrome, packed and planar palette images, grayscale, RGB and RGBA. DCX (multiple PCX images) and legacy color images below 8 bits per plane without palette information (versions 0 and 3) are not supported. See [PCX encoder options](encoder-options.md#pcx) for output formats and compatibility notes.
+PCX loads through the same `Image.Load` methods. It supports monochrome, packed and planar palette images, grayscale, RGB and RGBA. DCX (multiple PCX images) and legacy color images below 8 bits per plane without palette information (versions 0 and 3) are not supported. See [PCX encoder options](encoder-options.md#pcx) for output formats and compatibility notes.
 
 ### Decoder options
 
 ```csharp
-using PictureSharp.IO;
 
 var options = new DecoderOptions
 {
@@ -42,7 +40,7 @@ var options = new DecoderOptions
     IgnoreMetadata = true,           // do not keep ICC/EXIF/XMP
     MaxPixels = 40_000_000,          // reject larger images
 };
-using var image = ImageReader.Load("upload.jpg", options);
+using var image = Image.Load("upload.jpg", options);
 ```
 
 | Property | Default | Meaning |
@@ -71,10 +69,9 @@ using var image = ImageReader.Load("upload.jpg", options);
 size (it is never enlarged).
 
 ```csharp
-using PictureSharp.IO;
 
 var options = new DecoderOptions { TargetSize = new(256, 256), ApplyExifOrientation = true };
-using var thumbnail = ImageReader.Load("photo.jpg", options);   // at most 256×256, upright
+using var thumbnail = Image.Load("photo.jpg", options);   // at most 256×256, upright
 ```
 
 - **JPEG** is decoded at 1/2, 1/4 or 1/8 scale by a reduced inverse DCT (the same as libjpeg-turbo's
@@ -103,12 +100,11 @@ using var thumbnail = ImageReader.Load("photo.jpg", options);   // at most 256×
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.Png;
-using PictureSharp.IO;
 
-ImageInfo info = ImageReader.Identify("photo.webp");                 // also Stream, ReadOnlyMemory<byte>, ReadOnlySpan<byte>; IdentifyAsync
+ImageInfo info = Image.Identify("photo.webp");                 // also Stream, ReadOnlyMemory<byte>, ReadOnlySpan<byte>; IdentifyAsync
 Console.WriteLine($"{info.Format.Name} {info.Width}x{info.Height}, alpha: {info.HasAlpha}, frames: {info.FrameCount}");
 
-ImageFormat? format = ImageFormats.DetectFormat("unknown.bin");       // first 12 bytes; also Stream and ReadOnlySpan<byte>
+ImageFormat? format = Image.DetectFormat("unknown.bin");       // reads only the header; also Stream and ReadOnlySpan<byte>
 if (format == ImageFormat.Png) { /* ... */ }
 ```
 
@@ -116,7 +112,7 @@ if (format == ImageFormat.Png) { /* ... */ }
 
 `ImageInfo` also reports `IsAnimated`, `BitsPerChannel`, `Orientation`, the resolution and, for WebP, `WebPCompression` (lossy, lossless or mixed). `DetectFormat(Stream)` rewinds seekable streams to where they were.
 
-`ImageFormat` describes a format: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`. Look formats up with `ImageFormats.FromExtension("photo.JPG")` or `ImageFormats.FromMimeType("image/webp")`; `ImageFormats.All` lists them.
+`ImageFormat` describes a format: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`. Look formats up with `ImageFormat.FromExtension("photo.JPG")` or `ImageFormat.FromMimeType("image/webp")`; `ImageFormat.All` lists them. These lookups, `CanDecode`/`CanEncode` and `DetectFormat` use `ImageConfiguration.Default`; see below.
 
 ## Saving
 
@@ -125,13 +121,12 @@ using PictureSharp;
 using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 
-ImageWriter.Save(image, "out.webp");                                        // format from the extension, default options
-ImageWriter.Save(image, "out.bin", new PngEncoderOptions());                // the options decide the format
-ImageWriter.Save(image, stream, ImageFormat.Jpeg);                          // default JPEG options
-ImageWriter.Save(image, stream, new WebPEncoderOptions { Lossless = true });
-await ImageWriter.SaveAsync(image, "out.png", cancellationToken);
+image.Save("out.webp");                                        // format from the extension, default options
+image.Save("out.bin", new PngEncoderOptions());                // the options decide the format
+image.Save(stream, ImageFormat.Jpeg);                          // default JPEG options
+image.Save(stream, new WebPEncoderOptions { Lossless = true });
+await image.SaveAsync("out.png", cancellationToken);
 ```
 
 Each format also has dedicated methods, which accept a path or a stream and optional options (`null` means the defaults):
@@ -142,7 +137,6 @@ using PictureSharp.Formats.Bmp;
 using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 
 image.SaveAsWebP("photo.webp", new() { Quality = 82 });
 image.SaveAsPng(stream);
@@ -150,8 +144,8 @@ await image.SaveAsJpegAsync("photo.jpg", new() { Quality = 90, Progressive = tru
 await image.SaveAsBmpAsync(stream, cancellationToken: ct);
 byte[] webp = image.ToWebP();
 byte[] png = image.ToPng(new() { CompressionLevel = 9 });
-byte[] encoded = ImageWriter.Encode(image, ImageFormat.Png);                // runtime format, default options
-byte[] custom = ImageWriter.Encode(image, new PngEncoderOptions { CompressionLevel = 9 });
+byte[] encoded = image.Encode(ImageFormat.Png);                // runtime format, default options
+byte[] custom = image.Encode(new PngEncoderOptions { CompressionLevel = 9 });
 ```
 
 | Format | Path / stream | Async | To bytes |
@@ -165,23 +159,49 @@ byte[] custom = ImageWriter.Encode(image, new PngEncoderOptions { CompressionLev
 
 Streams are left open and do not need to be seekable. Defaults: WebP lossy quality 75, method 4; PNG compression 6 with automatic color type; JPEG quality 75, 4:2:0; BMP automatic bit depth; GIF up to 256 colors per frame, alpha threshold 128; PCX automatic bit depth. WebP, PNG and GIF keep all animation frames; JPEG, BMP and PCX write the first frame. All option settings are in [Encoder options](encoder-options.md).
 
+## Choosing the formats: `ImageConfiguration`
+
+An `ImageConfiguration` is the list of formats that loading, identification and saving may use. It cannot change once built, so one instance can be shared by any number of threads; derive another with `ToBuilder()`.
+
+```csharp
+using PictureSharp;
+
+// Accept only PNG and JPEG from untrusted uploads; other formats fail as unrecognized.
+ImageConfiguration uploads = ImageConfiguration.Default.ToBuilder()
+    .KeepOnly(ImageFormat.Png, ImageFormat.Jpeg)
+    .Build();
+using var upload = Image.Load(stream, new DecoderOptions { Configuration = uploads, MaxPixels = 50_000_000 });
+
+// Or change what the whole application accepts, once at startup.
+ImageConfiguration.Default = ImageConfiguration.Default.ToBuilder()
+    .RemoveFormat(ImageFormat.Pcx)
+    .Build();
+```
+
+| Member | Notes |
+| --- | --- |
+| `ImageConfiguration.Default` | Used when no configuration is given: by `Load`/`Identify` without `DecoderOptions.Configuration`, by `Save`/`Encode`, `DetectFormat` and `ImageFormat.All`/`FromExtension`/`FromMimeType`/`CanDecode`/`CanEncode`. Initially the built-in formats. Replacing it publishes a complete snapshot; loads already running keep the one they started with. |
+| `DecoderOptions.Configuration` | The configuration of one load or identification; `null` means `Default` at the time of the call. |
+| `Formats`, `CanDecode`, `CanEncode`, `FromExtension`, `FromMimeType` | The same lookups as on `ImageFormat`, for this configuration. |
+| `ToBuilder()` → `KeepOnly`, `RemoveFormat`, `AddFormat`, `ReplaceFormat`, `Build` | `KeepOnly` keeps the detection order. `AddFormat` and `ReplaceFormat` take format plugins; see [Extending PictureSharp](extending-picturesharp.md). |
+
+A BMP that embeds PNG or JPEG data needs that format in the configuration; without it the load throws `NotSupportedException`. `IcoFile` always uses the built-in ICO codecs.
+
 ## Recipes
 
 ### Convert a folder to WebP
 
 ```csharp
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
-using PictureSharp.Processing;
 
 foreach (string path in Directory.EnumerateFiles("photos"))
 {
-    if (ImageFormats.FromExtension(path) is not { } format || !ImageFormats.CanDecode(format))
+    if (ImageFormat.FromExtension(path) is not { } format || !format.CanDecode)
     {
         continue;
     }
 
-    using var image = ImageReader.Load(path, new DecoderOptions { ApplyExifOrientation = true });
+    using var image = Image.Load(path, new DecoderOptions { ApplyExifOrientation = true });
     image.Mutate(x => x.Thumbnail(2048, 2048));
     image.SaveAsWebP(Path.ChangeExtension(path, ".webp"), new() { Quality = 80 });
 }
@@ -192,12 +212,11 @@ foreach (string path in Directory.EnumerateFiles("photos"))
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 
 app.MapGet("/thumb/{name}", async (string name, int? w, CancellationToken ct) =>
 {
     var options = new DecoderOptions { TargetSize = new(w ?? 400, 0), ApplyExifOrientation = true };
-    using var image = await ImageReader.LoadAsync(Path.Combine("images", Path.GetFileName(name)), options, ct);
+    using var image = await Image.LoadAsync(Path.Combine("images", Path.GetFileName(name)), options, ct);
     return Results.File(image.ToWebP(new() { Quality = 80 }), ImageFormat.WebP.MimeType);
 });
 ```
@@ -218,12 +237,11 @@ A decoded image holds 4 bytes per pixel and frame: a 12-megapixel photo takes 48
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.Png;
-using PictureSharp.IO;
 
-ImageFormat target = ImageFormats.FromMimeType(request.Accept) ?? ImageFormat.Png;
-ImageWriter.Save(image, response.Body, target);
+ImageFormat target = ImageFormat.FromMimeType(request.Accept) ?? ImageFormat.Png;
+image.Save(response.Body, target);
 ```
 
 ### WebP conversion
 
-`WebPConverter.Convert(inputPath, outputPath, options)` preserves the `gif2webp` conversion conventions: GIF defaults to lossless and delays of 10 ms or less become 100 ms. Ordinary `ImageReader.Load(...).SaveAsWebP(...)` preserves the original frame durations. See [Animation](animation.md).
+`WebPConverter.Convert(inputPath, outputPath, options)` preserves the `gif2webp` conversion conventions: GIF defaults to lossless and delays of 10 ms or less become 100 ms. Ordinary `Image.Load(...).SaveAsWebP(...)` preserves the original frame durations. See [Animation](animation.md).

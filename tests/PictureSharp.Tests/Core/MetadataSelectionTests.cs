@@ -4,7 +4,6 @@ using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Pcx;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 
 namespace PictureSharp.Tests.Core;
 
@@ -39,7 +38,7 @@ public class MetadataSelectionTests
         image.Metadata.IccProfile = state switch { 0 => null, 1 => [], _ => [1, 2, 3, 4, 5] };
         image.Metadata.Exif = state switch { 0 => null, 1 => [], _ => [.. "II*\0"u8, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
         image.Metadata.Xmp = state switch { 0 => null, 1 => [], _ => "<xmp>test</xmp>"u8.ToArray() };
-        using Image decoded = ImageReader.Load(ImageWriter.Encode(image, options));
+        using Image decoded = Image.Load(image.Encode(options));
         MetadataKinds supported = options.Format == ImageFormat.Bmp ? MetadataKinds.Icc
             : options.Format == ImageFormat.Gif ? MetadataKinds.Icc | MetadataKinds.Xmp
             : options.Format == ImageFormat.Pcx ? MetadataKinds.None : MetadataKinds.All;

@@ -1,4 +1,3 @@
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
@@ -18,7 +17,7 @@ public class LossyDecoderTests
     [MemberData(nameof(LossyFiles))]
     public void Lossy_IsBitExactWithDwebp(string file)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image image = Image.Load(Corpus.PathOf(file));
         Assert.Equal(Corpus.References[file].HasAlpha, image.HasAlpha);
         Assert.Equal(!image.HasAlpha || image.IsOpaque(), image.IsOpaque());
         LosslessDecoderTests.AssertMatchesReference(file, image);
@@ -28,7 +27,7 @@ public class LossyDecoderTests
     [MemberData(nameof(AlphaFiles))]
     public void LossyWithAlpha_IsBitExactWithDwebp(string file)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image image = Image.Load(Corpus.PathOf(file));
         Assert.True(image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
     }
@@ -37,7 +36,7 @@ public class LossyDecoderTests
     [MemberData(nameof(MetadataFiles))]
     public void WithMetadata_IsBitExactWithDwebp(string file)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image image = Image.Load(Corpus.PathOf(file));
         LosslessDecoderTests.AssertMatchesReference(file, image);
         Assert.False(image.Metadata.IsEmpty);
     }
@@ -45,7 +44,7 @@ public class LossyDecoderTests
     [Fact]
     public void Metadata_IccAndXmp()
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("webp/meta/alpha_icc_xmp.webp"));
+        using Image image = Image.Load(Corpus.PathOf("webp/meta/alpha_icc_xmp.webp"));
         Assert.Equal(File.ReadAllBytes(Corpus.PathOf("webp/meta/icc.bin")), image.Metadata.IccProfile);
         Assert.Equal(File.ReadAllBytes(Corpus.PathOf("webp/meta/xmp.bin")), image.Metadata.Xmp);
         Assert.Null(image.Metadata.Exif);
@@ -56,7 +55,7 @@ public class LossyDecoderTests
     public void Animation_FramesMatchWebPAnimDecoder(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image image = Image.Load(Corpus.PathOf(file));
         Assert.True(image.IsAnimated);
         Assert.Equal(r.Loop, image.LoopCount);
         LosslessDecoderTests.AssertMatchesReference(file, image);
@@ -75,7 +74,7 @@ public class LossyDecoderTests
     [Fact]
     public void Animation_FirstFrameOnly()
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("webp/anim/alpha_lossy.webp"), new DecoderOptions { FirstFrameOnly = true });
+        using Image image = Image.Load(Corpus.PathOf("webp/anim/alpha_lossy.webp"), new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(1, image.FrameCount);
         Assert.Equal(Corpus.References["webp/anim/alpha_lossy.webp"].Frames[0].Sha256,
             Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan())));
@@ -85,9 +84,9 @@ public class LossyDecoderTests
     public void Options_NoFancyUpsampling_AndBypassFiltering_StillDecode()
     {
         string file = Corpus.PathOf("webp/lossy/photo_q75.webp");
-        using Image fancy = ImageReader.Load(file);
-        using Image simple = ImageReader.Load(file, new DecoderOptions { WebP = new() { FancyUpsampling = false }});
-        using Image unfiltered = ImageReader.Load(file, new DecoderOptions { WebP = new() { BypassFiltering = true }});
+        using Image fancy = Image.Load(file);
+        using Image simple = Image.Load(file, new DecoderOptions { WebP = new() { FancyUpsampling = false }});
+        using Image unfiltered = Image.Load(file, new DecoderOptions { WebP = new() { BypassFiltering = true }});
         Assert.NotEqual(fancy.ToPixelData(), simple.ToPixelData());
         Assert.NotEqual(fancy.ToPixelData(), unfiltered.ToPixelData());
         // Point-sampled and fancy upsampling only differ in chroma: luma-heavy differences stay small.
@@ -116,7 +115,7 @@ public class LossyDecoderTests
 
                 try
                 {
-                    using Image img = ImageReader.Load(data);
+                    using Image img = Image.Load(data);
                 }
                 catch (ImageFormatException)
                 {
@@ -138,7 +137,7 @@ public class LossyDecoderTests
         for (int cut = 1; cut < data.Length - 30; cut += Math.Max(1, data.Length / 40))
         {
             byte[] truncated = data[..^cut];
-            Assert.Throws<ImageFormatException>(() => ImageReader.Load(truncated));
+            Assert.Throws<ImageFormatException>(() => Image.Load(truncated));
         }
     }
 }

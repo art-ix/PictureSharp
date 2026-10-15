@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Identification;
-using PictureSharp.IO;
 
 namespace PictureSharp.Application.Decoding;
 

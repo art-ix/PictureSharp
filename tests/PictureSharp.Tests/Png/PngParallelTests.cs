@@ -1,6 +1,5 @@
 using PictureSharp.Algorithms.Compression;
 using PictureSharp.Formats.Png;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Png;
@@ -90,8 +89,8 @@ public class PngParallelTests
             Assert.Equal(sequential, image.ToPng(options with { MaxDegreeOfParallelism = 3 }));
             Assert.Equal(sequential, image.ToPng(options with { MaxDegreeOfParallelism = -1 }));
 
-            using Image piped = ImageReader.Load(sequential);
-            using Image serial = ImageReader.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
+            using Image piped = Image.Load(sequential);
+            using Image serial = Image.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
             Assert.True(piped.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan()));
             Assert.True(serial.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan()));
         }
@@ -121,14 +120,14 @@ public class PngParallelTests
 
             try
             {
-                using Image piped = ImageReader.Load(damaged);
-                using Image serial = ImageReader.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 });
+                using Image piped = Image.Load(damaged);
+                using Image serial = Image.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 });
                 Assert.True(piped.Frames[0].GetPixelSpan().SequenceEqual(serial.Frames[0].GetPixelSpan()));
                 outcomes.Add("ok");
             }
             catch (ImageFormatException)
             {
-                Assert.Throws<ImageFormatException>(() => ImageReader.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 }));
+                Assert.Throws<ImageFormatException>(() => Image.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 }));
                 outcomes.Add("error");
             }
         }

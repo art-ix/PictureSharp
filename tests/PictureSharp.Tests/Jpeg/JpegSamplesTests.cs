@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using PictureSharp.Infrastructure.Codecs.Jpeg;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Jpeg;
@@ -57,7 +56,7 @@ public class JpegSamplesTests
 
         string expected = Reference.Value![name];
         Assert.NotEqual("error", expected);
-        using Image image = ImageReader.Load(Path.Combine(Corpus.SamplesDir, name));
+        using Image image = Image.Load(Path.Combine(Corpus.SamplesDir, name));
         Assert.True(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} differs from Pillow");
     }
 

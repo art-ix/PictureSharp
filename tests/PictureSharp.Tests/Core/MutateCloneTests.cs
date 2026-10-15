@@ -2,7 +2,6 @@ using System.Drawing;
 using PictureSharp.Formats.Bmp;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Core;
@@ -284,20 +283,20 @@ public class MutateCloneTests
     {
         using Image img = ImageTests.Pattern(5, 4);
         byte[] png = img.ToPng();
-        using Image fromArray = ImageReader.Load(png);
-        using Image fromSpan = ImageReader.Load(png.AsSpan());
-        using Image fromStream = ImageReader.Load(new MemoryStream(png));
+        using Image fromArray = Image.Load(png);
+        using Image fromSpan = Image.Load(png.AsSpan());
+        using Image fromStream = Image.Load(new MemoryStream(png));
         Assert.Equal(ImageFormat.Png, fromArray.SourceFormat);
         Assert.Equal(Pixels(fromArray), Pixels(fromSpan));
         Assert.Equal(Pixels(fromArray), Pixels(fromStream));
-        Assert.Equal(ImageFormat.Png, ImageFormats.DetectFormat(png));
+        Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
 
         using var stream = new MemoryStream();
         img.SaveAsWebP(stream, new() { Lossless = true, Exact = true });
         stream.Position = 0;
-        Assert.Equal(ImageFormat.WebP, ImageFormats.DetectFormat(stream));
+        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(stream));
         Assert.Equal(0, stream.Position);
-        using Image webp = ImageReader.Load(stream);
+        using Image webp = Image.Load(stream);
         Assert.Equal(Pixels(img), Pixels(webp));
     }
 
@@ -311,14 +310,14 @@ public class MutateCloneTests
             using Image img = ImageTests.Pattern(6, 3);
             string png = Path.Combine(dir, "a.png");
             string webp = Path.Combine(dir, "a.webp");
-            await ImageWriter.SaveAsync(img, png);
+            await img.SaveAsync(png);
             await img.SaveAsWebPAsync(webp, new() { Lossless = true, Exact = true });
-            Assert.Equal(ImageFormat.Png, ImageFormats.DetectFormat(png));
-            ImageInfo info = await ImageReader.IdentifyAsync(webp);
+            Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
+            ImageInfo info = await Image.IdentifyAsync(webp);
             Assert.Equal((6, 3), (info.Width, info.Height));
-            using Image back = await ImageReader.LoadAsync(webp);
+            using Image back = await Image.LoadAsync(webp);
             Assert.Equal(Pixels(img), Pixels(back));
-            using Image limited = await ImageReader.LoadAsync(png, new DecoderOptions { FirstFrameOnly = true });
+            using Image limited = await Image.LoadAsync(png, new DecoderOptions { FirstFrameOnly = true });
             Assert.Equal(Pixels(img), Pixels(limited));
         }
         finally

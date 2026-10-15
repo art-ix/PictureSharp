@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 using PictureSharp.Tests.WebP;
@@ -19,7 +18,7 @@ public class GifDecoderTests
     public void Decode_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image image = Image.Load(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Gif, image.SourceFormat);
         Assert.Equal(r.HasAlpha, image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
@@ -40,7 +39,7 @@ public class GifDecoderTests
     public void Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        ImageInfo info = ImageReader.Identify(Corpus.PathOf(file));
+        ImageInfo info = Image.Identify(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Gif, info.Format);
         Assert.Equal((r.Width, r.Height), (info.Width, info.Height));
         Assert.Equal(r.HasAlpha, info.HasAlpha);
@@ -52,7 +51,7 @@ public class GifDecoderTests
     public void Decode_FirstFrameOnly_And_IgnoreMetadata()
     {
         const string file = "gif/hand_extensions.gif";
-        using Image image = ImageReader.Load(Corpus.PathOf(file), new DecoderOptions { FirstFrameOnly = true, IgnoreMetadata = true });
+        using Image image = Image.Load(Corpus.PathOf(file), new DecoderOptions { FirstFrameOnly = true, IgnoreMetadata = true });
         Assert.Equal(1, image.FrameCount);
         Assert.Equal(0, image.LoopCount);
         Assert.Null(image.Metadata.Xmp);
@@ -63,12 +62,12 @@ public class GifDecoderTests
     [Fact]
     public void DetectFormat_And_Extension()
     {
-        Assert.Equal(ImageFormat.Gif, ImageFormats.DetectFormat(Corpus.Read("gif/im_87a.gif")));
-        Assert.Equal(ImageFormat.Gif, ImageFormats.FromExtension("anim.GIF"));
-        Assert.Equal(ImageFormat.Gif, ImageFormats.FromMimeType("image/gif"));
-        Assert.True(ImageFormats.CanDecode(ImageFormat.Gif));
-        Assert.True(ImageFormats.CanEncode(ImageFormat.Gif));
-        Assert.Null(ImageFormats.DetectFormat("GIF88a\0\0\0\0\0\0\0"u8));
+        Assert.Equal(ImageFormat.Gif, Image.DetectFormat(Corpus.Read("gif/im_87a.gif")));
+        Assert.Equal(ImageFormat.Gif, ImageFormat.FromExtension("anim.GIF"));
+        Assert.Equal(ImageFormat.Gif, ImageFormat.FromMimeType("image/gif"));
+        Assert.True(ImageFormat.Gif.CanDecode);
+        Assert.True(ImageFormat.Gif.CanEncode);
+        Assert.Null(Image.DetectFormat("GIF88a\0\0\0\0\0\0\0"u8));
     }
 
     [Fact]
@@ -78,7 +77,7 @@ public class GifDecoderTests
             .Image(0, 0, 4, 4, new byte[16])
             .Image(2, 3, 4, 2, [1, 1, 1, 1, 2, 2, 2, 2])
             .ToArray();
-        using Image image = ImageReader.Load(gif);
+        using Image image = Image.Load(gif);
         ImageFrame last = image.Frames[1];
         Assert.Equal(Red, last[1, 3]);
         Assert.Equal(Green, last[2, 3]);
@@ -93,7 +92,7 @@ public class GifDecoderTests
             .Image(0, 0, 4, 4, new byte[16])
             .Image(10, 10, 2, 2, [1, 1, 1, 1])
             .ToArray();
-        using Image image = ImageReader.Load(gif);
+        using Image image = Image.Load(gif);
         Assert.True(image.Frames[1].GetPixelSpan().ToArray().All(p => p == Red));
     }
 
@@ -101,10 +100,10 @@ public class GifDecoderTests
     public void Decode_TruncatedImageData_KeepsDecodedPixels()
     {
         byte[] full = new GifBuilder(64, 64, GifBuilder.Palette4).Image(0, 0, 64, 64, Enumerable.Range(0, 4096).Select(i => (byte)(i * 7 % 4)).ToArray()).ToArray();
-        using Image complete = ImageReader.Load(full);
+        using Image complete = Image.Load(full);
         for (int cut = full.Length - 2; cut > 800; cut -= 97)
         {
-            using Image partial = ImageReader.Load(full.AsMemory(0, cut));
+            using Image partial = Image.Load(full.AsMemory(0, cut));
             ReadOnlySpan<Rgba32> a = complete.GetPixelSpan();
             ReadOnlySpan<Rgba32> b = partial.GetPixelSpan();
             int decoded = a.CommonPrefixLength(b);
@@ -120,7 +119,7 @@ public class GifDecoderTests
         int codes = 4 | (1 << 3) | (7 << 6);
         byte[] lzw = [2, (byte)codes, (byte)(codes >> 8), 0];
         byte[] gif = new GifBuilder(4, 1, GifBuilder.Palette4).Image(0, 0, 4, 1, [], lzw: lzw, minCodeSize: 2).ToArray();
-        using Image image = ImageReader.Load(gif);
+        using Image image = Image.Load(gif);
         Assert.Equal(Green, image[0, 0]);
         Assert.Equal(default, image[1, 0]);
     }
@@ -131,7 +130,7 @@ public class GifDecoderTests
         // A long run exercises the code-equals-next case; the encoder resets the table at 4096 codes.
         byte[] indices = Enumerable.Repeat((byte)3, 30000).Concat(Enumerable.Range(0, 20000).Select(i => (byte)(i * 31 % 4))).ToArray();
         byte[] gif = new GifBuilder(500, 100, GifBuilder.Palette4).Image(0, 0, 500, 100, indices).ToArray();
-        using Image image = ImageReader.Load(gif);
+        using Image image = Image.Load(gif);
         for (int i = 0; i < indices.Length; i++)
         {
             Assert.Equal(GifBuilder.Palette4[indices[i]], image.GetPixelSpan()[i]);
@@ -147,7 +146,7 @@ public class GifDecoderTests
             .Control(5, disposal: 2).Image(1, 0, 1, 1, [3])                               // cleared afterwards
             .Control(5, transparent: 1).Image(0, 0, 3, 1, [1, 1, 2])
             .ToArray();
-        using Image image = ImageReader.Load(gif);
+        using Image image = Image.Load(gif);
         Assert.Equal(4, image.FrameCount);
         Assert.Equal(new[] { Red, Green, Blue }, image.Frames[1].GetPixelSpan().ToArray());
         Assert.Equal(new[] { Red, new Rgba32(255, 255, 0), Red }, image.Frames[2].GetPixelSpan().ToArray());
@@ -171,7 +170,7 @@ public class GifDecoderTests
             builder.Loop(r);
         }
 
-        using Image image = ImageReader.Load(builder.Image(0, 0, 1, 1, [0]).Image(0, 0, 1, 1, [1]).ToArray());
+        using Image image = Image.Load(builder.Image(0, 0, 1, 1, [0]).Image(0, 0, 1, 1, [1]).ToArray());
         Assert.Equal(plays, image.LoopCount);
     }
 
@@ -185,10 +184,10 @@ public class GifDecoderTests
         }
 
         byte[] gif = builder.ToArray();
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(gif, new DecoderOptions { MaxPixels = 99_999 }));
-        using Image first = ImageReader.Load(gif, new DecoderOptions { MaxPixels = 10_000, FirstFrameOnly = true });
+        Assert.Throws<ImageFormatException>(() => Image.Load(gif, new DecoderOptions { MaxPixels = 99_999 }));
+        using Image first = Image.Load(gif, new DecoderOptions { MaxPixels = 10_000, FirstFrameOnly = true });
         Assert.Equal(1, first.FrameCount);
-        using Image all = ImageReader.Load(gif, new DecoderOptions { MaxPixels = 100_000 });
+        using Image all = Image.Load(gif, new DecoderOptions { MaxPixels = 100_000 });
         Assert.Equal(10, all.FrameCount);
     }
 
@@ -206,7 +205,7 @@ public class GifDecoderTests
     [MemberData(nameof(CorruptFiles))]
     public void Decode_CorruptData_ThrowsImageFormatException(byte[] data)
     {
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(data));
+        Assert.Throws<ImageFormatException>(() => Image.Load(data));
     }
 
     [Fact]
@@ -228,7 +227,7 @@ public class GifDecoderTests
                 int length = random.Next(4) == 0 ? random.Next(6, data.Length) : data.Length;
                 try
                 {
-                    using Image image = ImageReader.Load(data.AsMemory(0, length));
+                    using Image image = Image.Load(data.AsMemory(0, length));
                 }
                 catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
                 {

@@ -354,7 +354,7 @@ The graphic z6 result is effectively unchanged: the small slowdown was not repea
 For the large inputs, batch-2 10th–90th percentile intervals were 51.78–57.71 → 46.69–53.36 ms
 and 202.62–208.37 → 188.65–198.58 ms. Corpus allocations were exactly unchanged; large-input
 allocations stayed approximately 21.6 / 92.7 MiB, with less than 256 bytes of per-call measurement noise.
-These are full `ImageReader.Load` API measurements from memory, not a comparison against native process time.
+These are full `Image.Load` API measurements from memory, not a comparison against native process time.
 
 A separate default-JIT batch measured 49.19 → 45.34 ms (7.8%) and 187.63 → 169.17 ms (9.8%)
 for the two large inputs. On the seven corpus inputs, changes ranged from a 0.4% slowdown to a
@@ -406,7 +406,7 @@ These are transform timings, not complete image decoding timings. In particular,
 
 ### Complete decoding
 
-The before/after comparison used a saved copy of the initial 0.4.2 working-tree library, including its pre-existing changes, and the same encoded bytes after adding the new predictors. The large inputs are lossless WebP files generated once from a local photograph, with `Exact=true`, method 4 and quality 75. They are not committed. Each batch used eight warmups and 21 measured calls to `ImageReader.Load` from a byte array, with default tiered compilation. The table shows medians from two independent batches:
+The before/after comparison used a saved copy of the initial 0.4.2 working-tree library, including its pre-existing changes, and the same encoded bytes after adding the new predictors. The large inputs are lossless WebP files generated once from a local photograph, with `Exact=true`, method 4 and quality 75. They are not committed. Each batch used eight warmups and 21 measured calls to `Image.Load` from a byte array, with default tiered compilation. The table shows medians from two independent batches:
 
 | Image | Before, batches 1 / 2 | After, batches 1 / 2 | Reduction |
 | --- | ---: | ---: | ---: |

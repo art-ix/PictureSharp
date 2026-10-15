@@ -1,5 +1,4 @@
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -21,7 +20,7 @@ public class LossyEncoderTests
                 foreach (int quality in new[] { 0, 35, 75, 100 })
                     foreach (int method in Enumerable.Range(0, 7))
                     {
-                        using var image = ImageReader.Load(source);
+                        using var image = Image.Load(source);
                         var options = new WebPEncoderOptions { Quality = quality, Method = method, Metadata = MetadataKinds.None };
                         byte[] actual = image.ToWebP(options);
                         Assert.True(ReferenceTools.Run("cwebp", $"-quiet -q {quality} -m {method} \"{source}\" -o \"{expectedPath}\"", out string output) == 0, output);

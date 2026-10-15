@@ -1,4 +1,4 @@
-namespace PictureSharp.IO;
+namespace PictureSharp;
 
 /// <summary>
 /// Base record for format-specific encoder options. Values are checked when they are set, and a modified copy can be
@@ -6,7 +6,8 @@ namespace PictureSharp.IO;
 /// </summary>
 public abstract record EncoderOptions
 {
-    private protected EncoderOptions()
+    /// <summary>Initializes options; derive a record per format, overriding <see cref="Format"/>.</summary>
+    protected EncoderOptions()
     {
     }
 

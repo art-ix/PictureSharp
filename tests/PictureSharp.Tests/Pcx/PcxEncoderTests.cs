@@ -1,5 +1,4 @@
 using PictureSharp.Formats.Pcx;
-using PictureSharp.IO;
 
 namespace PictureSharp.Tests.Pcx;
 
@@ -7,7 +6,7 @@ public class PcxEncoderTests
 {
     private static Image Load(byte[] pcx)
     {
-        return ImageReader.Load(pcx);
+        return Image.Load(pcx);
     }
 
     private static Rgba32[] RoundTrip(Image image, PcxEncoderOptions? options = null)
@@ -195,8 +194,8 @@ public class PcxEncoderTests
         string path = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.pcx");
         try
         {
-            ImageWriter.Save(image, path);
-            using Image loaded = ImageReader.Load(path);
+            image.Save(path);
+            using Image loaded = Image.Load(path);
             Assert.Equal(ImageFormat.Pcx, loaded.SourceFormat);
             Assert.Equal(image.GetPixelSpan().ToArray(), loaded.GetPixelSpan().ToArray());
         }

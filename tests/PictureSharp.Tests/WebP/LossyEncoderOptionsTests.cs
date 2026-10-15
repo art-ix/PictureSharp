@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -21,7 +20,7 @@ public class LossyEncoderOptionsTests
                 foreach (string name in new[] { "photo.png", "odd_alpha.png" })
                 {
                     string source = Corpus.PathOf($"src/{name}");
-                    using var image = ImageReader.Load(source);
+                    using var image = Image.Load(source);
                     byte[] actual = image.ToWebP(options);
                     Assert.True(ReferenceTools.Run("cwebp", $"-quiet {flags} \"{source}\" -o \"{expectedPath}\"", out string output) == 0, output);
                     byte[] expected = File.ReadAllBytes(expectedPath);
@@ -40,7 +39,7 @@ public class LossyEncoderOptionsTests
                         }
                         Assert.True(samePixels && actual.Length <= 1.01 * expected.Length, $"{name}: {flags}, expected={expected.Length}, actual={actual.Length}, samePixels={samePixels}");
                     }
-                    using var decoded = ImageReader.Load(actual.AsMemory());
+                    using var decoded = Image.Load(actual.AsMemory());
                     Assert.Equal(actualPixels, decoded.ToPixelData(PixelFormat.Rgba32));
                 }
         }
@@ -82,10 +81,10 @@ public class LossyEncoderOptionsTests
         using var image = new Image(17, 19, System.Drawing.Color.CornflowerBlue);
         byte[] encoded = image.ToWebP();
         Assert.True(encoded.AsSpan(12, 4).SequenceEqual("VP8 "u8));
-        Assert.Equal(encoded, ImageWriter.Encode(image, ImageFormat.WebP));
-        using var output = new MemoryStream(); ImageWriter.Save(image, output, ImageFormat.WebP);
+        Assert.Equal(encoded, image.Encode(ImageFormat.WebP));
+        using var output = new MemoryStream(); image.Save(output, ImageFormat.WebP);
         Assert.True(output.CanWrite); Assert.Equal(encoded, output.ToArray());
-        using var decoded = ImageReader.Load(encoded.AsMemory());
+        using var decoded = Image.Load(encoded.AsMemory());
         Assert.Equal(image.Width, decoded.Width); Assert.Equal(image.Height, decoded.Height); Assert.True(decoded.IsOpaque());
     }
 
@@ -100,7 +99,7 @@ public class LossyEncoderOptionsTests
             foreach (bool exact in new[] { false, true })
             {
                 byte[] encoded = image.ToWebP(new WebPEncoderOptions { Method = method, Exact = exact });
-                using var decoded = ImageReader.Load(encoded.AsMemory());
+                using var decoded = Image.Load(encoded.AsMemory());
                 Assert.Equal(before, image.GetPixelSpan().ToArray());
                 Assert.Equal(before.Select(p => p.A), decoded.GetPixelSpan().ToArray().Select(p => p.A));
             }
@@ -119,9 +118,9 @@ public class LossyEncoderOptionsTests
             () => new WebPEncoderOptions { Preset = (WebPPreset)6 },
             () => new WebPEncoderOptions { AlphaFilter = (WebPAlphaFilter)3 },
             () => new WebPEncoderOptions { MaxDegreeOfParallelism = 0 },
-        }) Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, create()));
+        }) Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, create()));
         using var wide = new Image(16384, 1);
-        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(wide, output, new WebPEncoderOptions()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => wide.Save(output, new WebPEncoderOptions()));
         Assert.Equal(0, output.Length);
     }
 
@@ -163,7 +162,7 @@ public class LossyEncoderOptionsTests
         image.Metadata.IccProfile = [1, 2, 3]; image.Metadata.Exif = [4, 5, 6, 7, 8]; image.Metadata.Xmp = [9, 10, 11];
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Metadata = selection });
         Assert.Equal(encoded.Length - 8, (int)BinaryPrimitives.ReadUInt32LittleEndian(encoded.AsSpan(4)));
-        using var decoded = ImageReader.Load(encoded.AsMemory());
+        using var decoded = Image.Load(encoded.AsMemory());
         Assert.Equal(selection.HasFlag(MetadataKinds.Icc) ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
         Assert.Equal(selection.HasFlag(MetadataKinds.Exif) ? image.Metadata.Exif : null, decoded.Metadata.Exif);
         Assert.Equal(selection.HasFlag(MetadataKinds.Xmp) ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);

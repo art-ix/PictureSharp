@@ -1,5 +1,4 @@
 using PictureSharp.Composition;
-using PictureSharp.IO;
 
 namespace PictureSharp.Formats.Ico;
 
@@ -42,7 +41,7 @@ public static class IcoFile
     public static IcoImageCollection LoadAll(Stream stream, DecoderOptions? options, CancellationToken cancellationToken) =>
         LibraryServices.Icons.LoadAll(stream, options, cancellationToken);
 
-    /// <summary>Identifies the same selected variant as ImageReader.Load, without decoding pixels.</summary>
+    /// <summary>Identifies the same selected variant as Image.Load, without decoding pixels.</summary>
     public static ImageInfo IdentifySelected(ReadOnlyMemory<byte> data, DecoderOptions? options = null) =>
         LibraryServices.Icons.IdentifySelected(data, options);
 

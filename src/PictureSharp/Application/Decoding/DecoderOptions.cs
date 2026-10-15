@@ -5,7 +5,7 @@ using PictureSharp.Primitives.Numerics;
 using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
 
-namespace PictureSharp.IO;
+namespace PictureSharp;
 
 /// <summary>Options controlling image decoding. Values are checked when they are set.</summary>
 public sealed record DecoderOptions
@@ -82,6 +82,12 @@ public sealed record DecoderOptions
 
     /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
     public int MaxDegreeOfParallelism { get; init => field = Check.Parallelism(value); } = -1;
+
+    /// <summary>
+    /// The formats a load or identification may detect and decode. Default: null, which uses
+    /// <c>ImageConfiguration.Default</c> at the time of the call.
+    /// </summary>
+    public ImageConfiguration? Configuration { get; init; }
 
     /// <summary>WebP decoding settings.</summary>
     public WebPDecoderOptions WebP { get; init => field = value ?? throw new ArgumentNullException(nameof(WebP)); } = new();

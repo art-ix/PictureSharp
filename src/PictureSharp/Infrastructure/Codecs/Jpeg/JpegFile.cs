@@ -1,6 +1,5 @@
 using PictureSharp.Application.Decoding;
 using System.Buffers.Binary;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.Codecs.Jpeg;
 

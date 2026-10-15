@@ -1,6 +1,5 @@
 using PictureSharp.Infrastructure.Codecs.WebP;
 using PictureSharp.Infrastructure.Codecs.WebP.Container;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.Codecs.WebP.Animation;
 

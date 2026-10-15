@@ -6,8 +6,6 @@ read and allocate, and every load, save and processing call accepts a `Cancellat
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
-using PictureSharp.Processing;
 
 var untrusted = new DecoderOptions
 {
@@ -18,9 +16,9 @@ var untrusted = new DecoderOptions
 };
 
 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-using Image image = ImageReader.Load(upload, untrusted, timeout.Token);
+using Image image = Image.Load(upload, untrusted, timeout.Token);
 image.Mutate(x => x.Thumbnail(512, 512), timeout.Token);
-ImageWriter.Save(image, output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
+image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
 ```
 
 ## Limits
@@ -33,7 +31,7 @@ ImageWriter.Save(image, output, new WebPEncoderOptions { Quality = 80 }, timeout
 | `MaxMetadataBytes` | 64 MiB | As each ICC, EXIF or XMP block is read, after decompression; the total of one image. |
 
 A limit that is exceeded throws `ImageFormatException`, whose message names the option. The limits apply to
-`ImageReader.Load`, `LoadAsync`, `Identify`, `IdentifyAsync`, `IcoFile.LoadAll` and `IcoFile.Identify`. Every `Identify`
+`Image.Load`, `LoadAsync`, `Identify`, `IdentifyAsync`, `IcoFile.LoadAll` and `IcoFile.Identify`. Every `Identify`
 overload has a variant that takes `DecoderOptions`; without it the defaults apply.
 
 **Input.** Files and streams are read into memory before decoding, so `MaxInputBytes` is what bounds that buffer.
@@ -70,8 +68,8 @@ Run untrusted work with a memory limit of the process or container if a hard cap
 
 | Operation | Overload with a token |
 | --- | --- |
-| Load | `ImageReader.Load(path \| stream \| data, options, cancellationToken)`, `LoadAsync`, `IcoFile.LoadAll(…, options, cancellationToken)` |
-| Save | `ImageWriter.Save(image, path \| stream, options, cancellationToken)`, `ImageWriter.Encode(image, options, cancellationToken)`, `SaveAsync`, `SaveAs*Async`, `IcoFile.Save(…, cancellationToken)` |
+| Load | `Image.Load(path \| stream \| data, options, cancellationToken)`, `LoadAsync`, `IcoFile.LoadAll(…, options, cancellationToken)` |
+| Save | `image.Save(path \| stream, options, cancellationToken)`, `image.Encode(options, cancellationToken)`, `SaveAsync`, `SaveAs*Async`, `IcoFile.Save(…, cancellationToken)` |
 | Processing | `image.Mutate(operation, cancellationToken)`, `image.Clone(operation, cancellationToken)` |
 
 The asynchronous methods pass their token to the decoder or encoder as well as to the I/O. A canceled operation
@@ -111,13 +109,11 @@ Rented buffers are returned to the pool when the work is canceled.
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.Png;
-using PictureSharp.IO;
-using PictureSharp.Processing;
 
 try
 {
     using Image result = image.Clone(x => x.Resize(1600, 0).GaussianBlur(2f), cancellationToken);
-    ImageWriter.Save(result, path, new PngEncoderOptions(), cancellationToken);
+    result.Save(path, new PngEncoderOptions(), cancellationToken);
 }
 catch (OperationCanceledException)
 {

@@ -2,7 +2,6 @@ using PictureSharp.Application.Decoding;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Domain.Metadata;
-using PictureSharp.IO;
 using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Infrastructure.Codecs.Jpeg;

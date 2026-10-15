@@ -97,6 +97,6 @@ dotnet publish samples/PictureSharp.AotSmoke -c Release -r linux-x64 --self-cont
 ./artifacts/aot/PictureSharp.AotSmoke
 ```
 
-Native AOT requires the platform linker/toolchain. Repeat the full tests and smoke consumer on ARM64 hardware before claiming ARM64 runtime verification. See [API migration](migration-layered-api.md).
+Native AOT requires the platform linker/toolchain. Repeat the full tests and smoke consumer on ARM64 hardware before claiming ARM64 runtime verification.
 
-See [Extending PictureSharp](extending-picturesharp.md) for model invariants, codec contracts, processing and C# 14 consumer checks. Push/PR and release use the same validation workflow; `bash scripts/verify-package-consumer.sh` verifies the local package with full trimming and Native AOT on linux-x64.
+See [Extending PictureSharp](extending-picturesharp.md) for model invariants, codec contracts, processing and C# 14 consumer checks. Push/PR and release use the same validation workflow; `bash scripts/verify-package-consumer.sh` verifies the local package with full trimming and Native AOT on linux-x64, including a format plugin, a frame processor and the package's `global using PictureSharp;` (added under `ImplicitUsings`, removed by `PictureSharpImplicitUsings=false` and for Windows Forms, WPF and MAUI).

@@ -1,4 +1,3 @@
-using PictureSharp.IO;
 using PictureSharp.Primitives.Numerics;
 using PictureSharp.Primitives.Parallelism;
 

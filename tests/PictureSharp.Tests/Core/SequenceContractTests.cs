@@ -2,7 +2,6 @@ using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Sequences;
 using PictureSharp.Infrastructure.IO;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;

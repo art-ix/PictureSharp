@@ -1,6 +1,7 @@
 using PictureSharp.Application.Processing;
+using PictureSharp.Processing;
 
-namespace PictureSharp.Processing;
+namespace PictureSharp;
 
 /// <summary>Applies fluent image operations in place or to a copy.</summary>
 public static class ImageProcessingExtensions

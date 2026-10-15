@@ -1,21 +1,21 @@
 using PictureSharp.Application.Abstractions;
+using PictureSharp.Application.Configuration;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Encoding;
 using PictureSharp.Composition;
 using PictureSharp.Formats.Png;
-using PictureSharp.IO;
 
 namespace PictureSharp.Tests.Core;
 
 public class CodecContractTests
 {
-    public static IEnumerable<object[]> Formats() => new CodecRegistry().Formats.Select(f => new object[] { f.Name });
+    public static IEnumerable<object[]> Formats() => new CodecResolver(CodecRegistry.BuiltIn()).Formats.Select(f => new object[] { f.Name });
 
     [Theory]
     [MemberData(nameof(Formats))]
     public void EveryCodec_ReportsCanonicalResult_AndHonorsLimitsAndCancellation(string name)
     {
-        var codecs = new CodecRegistry();
+        var codecs = new CodecResolver(CodecRegistry.BuiltIn());
         ImageFormat format = codecs.Formats.Single(f => f.Name == name);
         using var source = new Image(3, 2, new Rgba32(20, 30, 40));
         IImageEncoder encoder = codecs.GetEncoder(format)!;

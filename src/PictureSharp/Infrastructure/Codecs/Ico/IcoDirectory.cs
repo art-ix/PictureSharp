@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Formats.Ico;
 using PictureSharp.Infrastructure.Codecs.Png;
-using PictureSharp.IO;
 using PictureSharp.Primitives.Numerics;
 
 namespace PictureSharp.Infrastructure.Codecs.Ico;

@@ -10,7 +10,7 @@ Before starting, read [plan.md](plan.md) to identify the current phase and its d
 - Keep `src/PictureSharp` dependency-free: BCL only, no `PackageReference`, native libraries or P/Invoke. `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`) is allowed. Tests, benchmarks and samples may use packages.
 - Do not use `System.IO.Compression` in the library: `ZLibStream`/`DeflateStream` call native zlib. Use our deflate/inflate implementation in `Algorithms/Compression/`.
 - Do not use the `unsafe` keyword. Use `Span<T>`, `ref`, `Unsafe.Add` and `MemoryMarshal`; use `GCHandle` for the memory pinning required by `BitmapData.Scan0`.
-- Public model types use `PictureSharp`; I/O uses `PictureSharp.IO`, processing uses `PictureSharp.Processing`, and format-specific API uses `PictureSharp.Formats.<Format>`. Codecs and implementation details are `internal`.
+- `Image` is the single entry point: model types, options (`DecoderOptions`, `EncoderOptions`, `ImageInfo`, `ImageConfiguration`) and the `Image`/`ImageFormat` extension members (`Load`, `Identify`, `Save`, `Mutate`, …) use `PictureSharp`. Declare those operations as C# 14 extension blocks in `PublicApi`, never as `Image` members, and do not add static facades. Processing modes and options use `PictureSharp.Processing`, the plugin SPI `PictureSharp.Formats`, and format-specific API `PictureSharp.Formats.<Format>`. Codecs and implementation details are `internal`.
 - Store `Image`/`ImageFrame` pixels as `Rgba32` with straight (unpremultiplied) alpha.
 - Enforce decoder limits, including `DecoderOptions.MaxPixels`. Corrupt or unrecognized input must throw `ImageFormatException`; valid input with unsupported features must throw `NotSupportedException`. Malicious input must never expose unchecked exceptions such as `IndexOutOfRangeException`.
 
@@ -36,7 +36,7 @@ Follow `.editorconfig`. Enable nullable annotations, `TreatWarningsAsErrors` and
 | `samples/PictureSharp.Cli/` | CLI: `convert`, `info`, `resize` |
 | `reference/` | Uncommitted reference sources and tools, outside the build |
 
-Register each format in `Composition/CodecRegistry.cs` through application codec contracts. `Composition/LibraryServices.cs` constructs services and supplies concrete adapters. Decode, identify and encode services invoke codecs; shared errors and thumbnail policies do not depend on orchestration. Keep algorithm ports unchanged during structural refactoring. Split large codecs into partial files, for example `PngDecoder.Chunks.cs`.
+Register each built-in format in `Composition/CodecRegistry.cs` as a `FormatRegistration`; `ImageConfiguration` builds resolvers and services from registrations, and `Composition/LibraryServices.cs` composes the default configuration and supplies concrete adapters. Public plugins go through `IImageFormatModule` and the adapters in `Application/Extensibility`; keep built-in codecs on the internal contracts. Decode, identify and encode services invoke codecs; shared errors and thumbnail policies do not depend on orchestration. Keep algorithm ports unchanged during structural refactoring. Split large codecs into partial files, for example `PngDecoder.Chunks.cs`.
 
 ## Porting reference code
 

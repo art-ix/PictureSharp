@@ -6,7 +6,6 @@ using System.Runtime.Intrinsics;
 using PictureSharp.Algorithms.Compression;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Domain.Metadata;
-using PictureSharp.IO;
 using PictureSharp.Primitives.Numerics;
 using PictureSharp.Primitives.Parallelism;
 

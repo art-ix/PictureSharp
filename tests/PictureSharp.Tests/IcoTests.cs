@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Text.Json;
 using PictureSharp.Formats.Ico;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
@@ -18,7 +17,7 @@ public class IcoTests
         {
             using Image source = Pattern(size, 7);
             byte[] bytes = source.ToIco(new() { Encoding = encoding });
-            using Image result = ImageReader.Load(bytes);
+            using Image result = Image.Load(bytes);
             Assert.Equal(source.GetPixelSpan().ToArray(), result.GetPixelSpan().ToArray());
             Assert.Equal(ImageFormat.Ico, result.SourceFormat);
             Assert.False(result.IsAnimated);
@@ -39,16 +38,16 @@ public class IcoTests
         IcoFile.Save([small, large], stream);
         byte[] data = stream.ToArray();
         Assert.Equal(2, IcoFile.Identify(data).Count);
-        using Image selected = ImageReader.Load(data);
+        using Image selected = Image.Load(data);
         Assert.Equal(64, selected.Width);
-        using Image indexed = ImageReader.Load(data, new() { Ico = new() { Index = 0 }});
+        using Image indexed = Image.Load(data, new() { Ico = new() { Index = 0 }});
         Assert.Equal(16, indexed.Width);
-        using Image preferred = ImageReader.Load(data, new() { Ico = new() { PreferredSize = new(20, 20) }});
+        using Image preferred = Image.Load(data, new() { Ico = new() { PreferredSize = new(20, 20) }});
         Assert.Equal(16, preferred.Width);
         Assert.Equal(16, IcoFile.IdentifySelected(data, new() { Ico = new() { Index = 0 }}).Width);
-        Assert.Equal(64, ImageReader.Identify(data).Width);
-        using Image limited = ImageReader.Load(data, new() { Ico = new() { Index = 0 }, MaxPixels = 256 });
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(data, new() { MaxPixels = 4095 }));
+        Assert.Equal(64, Image.Identify(data).Width);
+        using Image limited = Image.Load(data, new() { Ico = new() { Index = 0 }, MaxPixels = 256 });
+        Assert.Throws<ImageFormatException>(() => Image.Load(data, new() { MaxPixels = 4095 }));
         Assert.Throws<ImageFormatException>(() => IcoFile.LoadAll(data, new() { MaxPixels = 4096 }));
         var collection = IcoFile.LoadAll(data, new() { MaxPixels = 4352 });
         Image borrowed = collection[0];
@@ -71,7 +70,7 @@ public class IcoTests
     public void TopDownDibMatchesBottomUp(int bits)
     {
         byte[] data = Corpus.Read($"ico/dib{bits}.ico");
-        using Image expected = ImageReader.Load(data);
+        using Image expected = Image.Load(data);
         int offset = (int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(18));
         int width = 17, height = 5;
         BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset + 8), -height * 2);
@@ -79,7 +78,7 @@ public class IcoTests
         int stride = ((width * bits + 31) / 32) * 4;
         ReverseRows(data, start, stride, height);
         ReverseRows(data, start + (stride * height), 4, height);
-        using Image actual = ImageReader.Load(data);
+        using Image actual = Image.Load(data);
         Assert.Equal(expected.GetPixelSpan().ToArray(), actual.GetPixelSpan().ToArray());
     }
 
@@ -89,7 +88,7 @@ public class IcoTests
         using Image image = new(3, 1, new Rgba32(1, 2, 3, 128));
         byte[] data = image.ToIco(new() { Encoding = IcoEncoding.Dib });
         data[^4] = 0xE0;
-        using (Image decoded = ImageReader.Load(data))
+        using (Image decoded = Image.Load(data))
         {
             Assert.All(decoded.GetPixelSpan().ToArray(), p => Assert.Equal(128, p.A));
         }
@@ -100,10 +99,10 @@ public class IcoTests
         }
 
         data[^4] = 0x40;
-        using Image legacy = ImageReader.Load(data);
+        using Image legacy = Image.Load(data);
         Assert.Equal(new byte[] { 255, 0, 255 }, legacy.GetPixelSpan().ToArray().Select(p => p.A));
         using Image transparent = new(3, 1, new Rgba32(9, 8, 7, 0));
-        using Image roundtrip = ImageReader.Load(transparent.ToIco(new() { Encoding = IcoEncoding.Dib }));
+        using Image roundtrip = Image.Load(transparent.ToIco(new() { Encoding = IcoEncoding.Dib }));
         Assert.Equal(transparent.GetPixelSpan().ToArray(), roundtrip.GetPixelSpan().ToArray());
     }
 
@@ -182,14 +181,14 @@ public class IcoTests
         using Image c = new(32, 32, Rgba32.White);
         using var stream = new MemoryStream();
         IcoFile.Save([a, b, c], stream);
-        using Image first = ImageReader.Load(stream.ToArray(), new() { Ico = new() { PreferredSize = new(16, 16) }});
+        using Image first = Image.Load(stream.ToArray(), new() { Ico = new() { PreferredSize = new(16, 16) }});
         Assert.Equal(new Rgba32(255, 0, 0), first[0, 0]);
-        using Image larger = ImageReader.Load(stream.ToArray(), new() { Ico = new() { PreferredSize = new(24, 24) }});
+        using Image larger = Image.Load(stream.ToArray(), new() { Ico = new() { PreferredSize = new(24, 24) }});
         Assert.Equal(32, larger.Width);
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(stream.ToArray(), new() { Ico = new() { Index = 3 }}));
+        Assert.Throws<ImageFormatException>(() => Image.Load(stream.ToArray(), new() { Ico = new() { Index = 3 }}));
         byte[] mixed = Corpus.Read("ico/mixed.ico");
-        using Image deepest = ImageReader.Load(mixed, new() { Ico = new() { PreferredSize = new(17, 5) }});
-        using Image expected = ImageReader.Load(Corpus.Read("ico/dib32.ico"));
+        using Image deepest = Image.Load(mixed, new() { Ico = new() { PreferredSize = new(17, 5) }});
+        using Image expected = Image.Load(Corpus.Read("ico/dib32.ico"));
         Assert.Equal(expected.ToPixelData(), deepest.ToPixelData());
     }
 
@@ -219,11 +218,11 @@ public class IcoTests
         }
         byte[] png = image.ToIco();
         BinaryPrimitives.WriteInt32BigEndian(png.AsSpan(22 + 16), int.MaxValue);
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(png));
+        Assert.Throws<ImageFormatException>(() => Image.Load(png));
         byte[] dib = image.ToIco(new() { Encoding = IcoEncoding.Dib });
         Array.Resize(ref dib, dib.Length - 4);
         BinaryPrimitives.WriteInt32LittleEndian(dib.AsSpan(14), dib.Length - 22);
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(dib));
+        Assert.Throws<ImageFormatException>(() => Image.Load(dib));
     }
 
     [Fact]
@@ -238,12 +237,12 @@ public class IcoTests
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(28), 16);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(offset + 14), 16);
         Assert.False(IcoFile.Identify(data)[1].IsSupported);
-        using Image selected = ImageReader.Load(data);
+        using Image selected = Image.Load(data);
         Assert.Equal(3, selected.Width);
-        Assert.Throws<NotSupportedException>(() => ImageReader.Load(data, new() { Ico = new() { Index = 1 }}));
+        Assert.Throws<NotSupportedException>(() => Image.Load(data, new() { Ico = new() { Index = 1 }}));
         Assert.Throws<NotSupportedException>(() => IcoFile.LoadAll(data));
         BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(offset + 4), 999);
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(data));
+        Assert.Throws<ImageFormatException>(() => Image.Load(data));
     }
 
     [Fact]
@@ -300,7 +299,7 @@ public class IcoTests
         {
             string source = Corpus.PathOf("ico/pillow_P.ico");
             Assert.True(ReferenceTools.Run("convert", $"\"{source}\" -depth 8 \"rgba:{path}\"", out string error) == 0, error);
-            using Image image = ImageReader.Load(source);
+            using Image image = Image.Load(source);
             Assert.Equal(File.ReadAllBytes(path), image.ToPixelData());
         }
         finally

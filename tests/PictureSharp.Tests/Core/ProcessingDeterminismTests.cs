@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
@@ -26,7 +25,7 @@ public class ProcessingDeterminismTests
     {
         using Image source = name.Contains("_noise_", StringComparison.Ordinal)
             ? ProcessingOracleTests.Noise(41, 29, 1)
-            : ImageReader.Load(Corpus.PathOf("jpeg/q90_444.jpg"));
+            : Image.Load(Corpus.PathOf("jpeg/q90_444.jpg"));
         using Image result = name switch
         {
             "enhance_noise_color_-0.4" or "enhance_photo_color_-0.4" => source.Clone(x => x.Saturate(-0.4f)),

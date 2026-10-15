@@ -3,7 +3,6 @@ using PictureSharp.Formats.Gif;
 using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Primitives.Memory;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
@@ -21,7 +20,7 @@ public class AllocationTests
     [Fact]
     public void LosslessWebPEncoding_PoolsHistograms()
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/photo.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         var options = new WebPEncoderOptions { Lossless = true, MaxDegreeOfParallelism = 1 };
 
         // 256×192: 8.4 MB before pooling, about 1.4 MB with it.
@@ -46,15 +45,15 @@ public class AllocationTests
     [InlineData("png")]
     public void EncodingToBytes_AllocatesAboutTheOutput(string extension)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/photo.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
         EncoderOptions options = extension switch
         {
             "png" => new PngEncoderOptions { MaxDegreeOfParallelism = 1 },
-            _ => LibraryServices.Codecs.GetEncoder(ImageFormats.FromExtension(extension)!)!.CreateDefaultOptions(),
+            _ => LibraryServices.Codecs.GetEncoder(ImageFormat.FromExtension(extension)!)!.CreateDefaultOptions(),
         };
-        int length = ImageWriter.Encode(large, options).Length;
-        long allocated = Measure(() => ImageWriter.Encode(large, options));
+        int length = large.Encode(options).Length;
+        long allocated = Measure(() => large.Encode(options));
 
         // PNG also needs its filtered rows (3 MiB here); MemoryStream growth used to add about twice the output.
         long budget = (2L * length) + (extension == "png" ? 4L << 20 : 1L << 20);
@@ -64,12 +63,12 @@ public class AllocationTests
     [Fact]
     public void GifEncoding_OfAStillImage_StaysBounded()
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/photo.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
         var options = new GifEncoderOptions();
 
         // 3 MiB of pixels; 61 MB before: canvas copies, the opaque pixel list and an unbounded color cache.
-        Assert.InRange(Measure(() => ImageWriter.Encode(large, options)), 0, 8L << 20);
+        Assert.InRange(Measure(() => large.Encode(options)), 0, 8L << 20);
     }
 
     [Theory]
@@ -81,9 +80,9 @@ public class AllocationTests
     [InlineData("gif")]
     public void Decoding_AllocatesAboutThePixels(string kind)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/photo.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
-        byte[] data = ImageWriter.Encode(large, kind switch
+        byte[] data = large.Encode(kind switch
         {
             "webp-lossless" => new WebPEncoderOptions { Lossless = true, Method = 0 },
             "webp-lossy" => new WebPEncoderOptions(),
@@ -97,7 +96,7 @@ public class AllocationTests
         // The decoded image is 3 MiB; intermediate planes, rows and ARGB buffers come from the pool.
         long allocated = Measure(() =>
         {
-            using Image decoded = ImageReader.Load(data, options);
+            using Image decoded = Image.Load(data, options);
             return decoded;
         });
         Assert.InRange(allocated, 3L << 20, (3L << 20) + (1L << 20));
@@ -108,15 +107,15 @@ public class AllocationTests
     [InlineData(true)]
     public void JpegTargetSize_DoesNotAllocateTheFullImage(bool progressive)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/photo.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
-        byte[] data = ImageWriter.Encode(large, new JpegEncoderOptions { Progressive = progressive });
+        byte[] data = large.Encode(new JpegEncoderOptions { Progressive = progressive });
         var options = new DecoderOptions { MaxDegreeOfParallelism = 1, TargetSize = new(128, 128) };
 
         // A 1/4 decode is 256x192 (192 KiB of pixels) resized to 128x96; the full decode alone would be 3 MiB.
         long allocated = Measure(() =>
         {
-            using Image decoded = ImageReader.Load(data, options);
+            using Image decoded = Image.Load(data, options);
             Assert.Equal((128, 96), (decoded.Width, decoded.Height));
             return decoded;
         });
@@ -152,7 +151,7 @@ public class AllocationTests
 
     private static Image Pan()
     {
-        using Image source = ImageReader.Load(Corpus.PathOf("src/photo.png"));
+        using Image source = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = source.Clone(x => x.Resize(source.Width * 2, source.Height * 2, ResamplingFilter.Bicubic));
         Image animation = large.Clone(x => x.Crop(0, 0, 256, 192));
         for (int i = 1; i < 8; i++)

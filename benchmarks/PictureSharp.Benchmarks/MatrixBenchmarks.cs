@@ -5,7 +5,6 @@ using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Pcx;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using static PictureSharp.Benchmarks.LosslessDecodeBenchmarks;
 
@@ -102,7 +101,7 @@ public class MatrixBenchmarks
 
         if (Op.ToString().Contains("Decode", StringComparison.Ordinal))
         {
-            _encoded = ImageWriter.Encode(_image, _options);
+            _encoded = _image.Encode(_options);
         }
     }
 
@@ -126,11 +125,11 @@ public class MatrixBenchmarks
                 }
             case var op when op.ToString().Contains("Decode", StringComparison.Ordinal):
                 {
-                    using Image image = ImageReader.Load(_encoded, _decoderOptions);
+                    using Image image = Image.Load(_encoded, _decoderOptions);
                     return image.Width;
                 }
             default:
-                return ImageWriter.Encode(_image, _options).Length;
+                return _image.Encode(_options).Length;
         }
     }
 
@@ -138,10 +137,10 @@ public class MatrixBenchmarks
     {
         if (!path.EndsWith(GraphicScale, StringComparison.Ordinal))
         {
-            return ImageReader.Load(path);
+            return Image.Load(path);
         }
 
-        using Image source = ImageReader.Load(path[..^GraphicScale.Length]);
+        using Image source = Image.Load(path[..^GraphicScale.Length]);
         return source.Clone(x => x.Resize(source.Width * 8, source.Height * 8, ResamplingFilter.Nearest));
     }
 }

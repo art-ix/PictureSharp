@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.Drawing;
 using PictureSharp.Formats.WebP;
 using PictureSharp.Infrastructure.Codecs.WebP.Container;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
@@ -30,8 +29,8 @@ public class AnimationEncoderTests
         Rgba32[][] before = image.Frames.Select(f => f.GetPixelSpan().ToArray()).ToArray();
         var options = new WebPEncoderOptions { Lossless = lossless, Exact = true, Method = 0, AllowMixed = mixed, MinimizeSize = minimize };
         byte[] encoded = image.ToWebP(options);
-        Assert.Equal(encoded, ImageWriter.Encode(image, options));
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        Assert.Equal(encoded, image.Encode(options));
+        using Image decoded = Image.Load(encoded.AsMemory());
         Assert.Equal((width, height), (decoded.Width, decoded.Height));
         Assert.Equal(image.FrameCount, decoded.FrameCount);
         Assert.Equal(image.LoopCount, decoded.LoopCount);
@@ -50,9 +49,9 @@ public class AnimationEncoderTests
             Assert.Equal(0, f.X & 1); Assert.Equal(0, f.Y & 1);
             Assert.InRange(f.Width, 1, width - f.X); Assert.InRange(f.Height, 1, height - f.Y);
         });
-        using Image first = ImageReader.Load(encoded.AsMemory(), new DecoderOptions { FirstFrameOnly = true });
+        using Image first = Image.Load(encoded.AsMemory(), new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(decoded.Frames[0].GetPixelSpan().ToArray(), first.GetPixelSpan().ToArray());
-        Assert.Equal(image.FrameCount, ImageReader.Identify(encoded.AsSpan()).FrameCount);
+        Assert.Equal(image.FrameCount, Image.Identify(encoded.AsSpan()).FrameCount);
     }
 
     [Fact]
@@ -87,7 +86,7 @@ public class AnimationEncoderTests
         third.Duration = TimeSpan.FromTicks(15500);
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true, Method = 0 });
         AssertLosslessFrames(image, encoded);
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        using Image decoded = Image.Load(encoded.AsMemory());
         Assert.Equal(new[] { 0, 16777215, 2 }, decoded.Frames.Select(f => (int)f.Duration.TotalMilliseconds));
     }
 
@@ -103,7 +102,7 @@ public class AnimationEncoderTests
         WebPContainer container = WebPContainer.Parse(encoded);
         Assert.Contains(container.Frames, f => f.IsLossless);
         Assert.Contains(container.Frames, f => !f.IsLossless);
-        Assert.Equal(WebPCompression.Mixed, ImageReader.Identify(encoded.AsSpan()).WebPCompression);
+        Assert.Equal(WebPCompression.Mixed, Image.Identify(encoded.AsSpan()).WebPCompression);
     }
 
     [Theory]
@@ -165,7 +164,7 @@ public class AnimationEncoderTests
         if (selection.HasFlag(MetadataKinds.Exif)) expected.Add("EXIF");
         if (selection.HasFlag(MetadataKinds.Xmp)) expected.Add("XMP ");
         Assert.Equal(expected, tags);
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        using Image decoded = Image.Load(encoded.AsMemory());
         Assert.Equal(selection.HasFlag(MetadataKinds.Icc) ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
         Assert.Equal(selection.HasFlag(MetadataKinds.Exif) ? image.Metadata.Exif : null, decoded.Metadata.Exif);
         Assert.Equal(selection.HasFlag(MetadataKinds.Xmp) ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);
@@ -176,17 +175,17 @@ public class AnimationEncoderTests
     {
         using Image image = Pattern(3, 3, 2);
         using var output = new MemoryStream();
-        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, new WebPEncoderOptions { KeyframeMin = -1 }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, new WebPEncoderOptions { KeyframeMax = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, new WebPEncoderOptions { KeyframeMin = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, new WebPEncoderOptions { KeyframeMax = -1 }));
         Assert.Throws<ArgumentOutOfRangeException>(() => image.LoopCount = -1);
         image.LoopCount = 65536;
-        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, new WebPEncoderOptions()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, new WebPEncoderOptions()));
         image.LoopCount = 0;
         Assert.Throws<ArgumentOutOfRangeException>(() => image.Frames[1].Duration = TimeSpan.FromTicks(-1));
         foreach (TimeSpan duration in new[] { TimeSpan.FromMilliseconds(16777216), TimeSpan.MaxValue })
         {
             image.Frames[1].Duration = duration;
-            Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, new WebPEncoderOptions()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, new WebPEncoderOptions()));
         }
         Assert.Equal(0, output.Length);
     }
@@ -221,9 +220,9 @@ public class AnimationEncoderTests
         image.Frames.Add(image.Frames.RootFrame.Clone());
         AssertLosslessFrames(image, image.ToWebP(new WebPEncoderOptions { Lossless = true, AllowMixed = mixed, Exact = true, Method = 0 }));
         using var output = new MemoryStream();
-        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, new WebPEncoderOptions()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, new WebPEncoderOptions()));
         using var oversized = new Image(16385, 1); oversized.Frames.Add(oversized.Frames.RootFrame.Clone());
-        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(oversized, output, new WebPEncoderOptions { Lossless = true }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => oversized.Save(output, new WebPEncoderOptions { Lossless = true }));
         Assert.Equal(0, output.Length);
     }
 
@@ -234,19 +233,19 @@ public class AnimationEncoderTests
         var options = new WebPEncoderOptions { Lossless = true, Exact = true, Method = 0 };
         byte[] expected = image.ToWebP(options);
         using var target = new NonSeekableStream();
-        ImageWriter.Save(image, target, options);
+        image.Save(target, options);
         Assert.Equal(expected, target.Bytes);
         using var asynchronous = new NonSeekableStream();
-        await ImageWriter.SaveAsync(image, asynchronous, options);
+        await image.SaveAsync(asynchronous, options);
         Assert.Equal(expected, asynchronous.Bytes);
         Assert.True(asynchronous.CanWrite);
         string path = Path.Combine(Path.GetTempPath(), $"picturesharp-animation-{Guid.NewGuid():N}.webp");
         try
         {
-            await ImageWriter.SaveAsync(image, path, options);
+            await image.SaveAsync(path, options);
             Assert.Equal(expected, File.ReadAllBytes(path));
-            ImageWriter.Save(image, path);
-            using Image defaults = ImageReader.Load(path);
+            image.Save(path);
+            using Image defaults = Image.Load(path);
             Assert.Equal(image.FrameCount, defaults.FrameCount);
         }
         finally { File.Delete(path); }
@@ -291,7 +290,7 @@ public class AnimationEncoderTests
                 new WebPEncoderOptions { AllowMixed = true, MinimizeSize = true, Method = 0 },
             })
                 {
-                    using Image image = ImageReader.Load(source);
+                    using Image image = Image.Load(source);
                     CheckExternal(image, options, Path.Combine(directory, "corpus.webp"), Path.Combine(directory, "exif.bin"), script, directory);
                     if (options.Lossless) AssertLosslessFrames(image, File.ReadAllBytes(Path.Combine(directory, "corpus.webp")));
                 }
@@ -306,7 +305,7 @@ public class AnimationEncoderTests
 
     private static void CheckExternal(Image image, WebPEncoderOptions options, string path, string exif, string script, string directory)
     {
-        ImageWriter.Save(image, path, options);
+        image.Save(path, options);
         Assert.True(ReferenceTools.Run("webpmux", $"-info \"{path}\"", out string info) == 0, info);
         Assert.Contains($"Number of frames: {image.FrameCount}", info);
         if (image.Metadata.Exif is not null)
@@ -315,7 +314,7 @@ public class AnimationEncoderTests
             Assert.Equal(image.Metadata.Exif, File.ReadAllBytes(exif));
         }
         Assert.True(ReferenceTools.Run("python3", $"-I \"{script}\" \"{path}\" \"{directory}\"", out string pillow) == 0, pillow);
-        using Image decoded = ImageReader.Load(path);
+        using Image decoded = Image.Load(path);
         Assert.Equal(image.FrameCount, decoded.FrameCount);
         for (int i = 0; i < decoded.FrameCount; i++)
             Assert.Equal(decoded.Frames[i].GetPixelByteSpan().ToArray(), File.ReadAllBytes(Path.Combine(directory, $"frame-{i}.rgba")));
@@ -373,7 +372,7 @@ public class AnimationEncoderTests
 
     private static void AssertLosslessFrames(Image source, byte[] encoded)
     {
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        using Image decoded = Image.Load(encoded.AsMemory());
         Assert.Equal(source.FrameCount, decoded.FrameCount);
         for (int i = 0; i < source.FrameCount; i++) Assert.Equal(source.Frames[i].GetPixelSpan().ToArray(), decoded.Frames[i].GetPixelSpan().ToArray());
     }

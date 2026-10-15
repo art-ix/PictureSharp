@@ -1,6 +1,5 @@
 using BenchmarkDotNet.Attributes;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 
 namespace PictureSharp.Benchmarks;
 
@@ -38,7 +37,7 @@ public class LosslessDecodeBenchmarks
     public void Setup()
     {
         _data = System.IO.File.ReadAllBytes(File.Path);
-        ImageInfo info = ImageReader.Identify(_data);
+        ImageInfo info = Image.Identify(_data);
         if (info.Format != ImageFormat.WebP || info.IsAnimated || info.WebPCompression != WebPCompression.Lossless)
         {
             throw new ArgumentException("The decode benchmark requires a static lossless WebP.", nameof(File));
@@ -48,7 +47,7 @@ public class LosslessDecodeBenchmarks
     [Benchmark]
     public int Decode()
     {
-        using Image image = ImageReader.Load(_data);
+        using Image image = Image.Load(_data);
         return image.Width;
     }
 

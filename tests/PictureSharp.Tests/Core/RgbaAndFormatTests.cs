@@ -3,7 +3,6 @@ using PictureSharp.Application.Abstractions;
 using PictureSharp.Composition;
 using PictureSharp.Formats.Bmp;
 using PictureSharp.Infrastructure.Codecs.Png;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
@@ -29,10 +28,10 @@ public class RgbaAndFormatTests
     [InlineData(".jpg", "JPEG")]
     [InlineData("jfif", "JPEG")]
     public void ImageFormat_FromExtension(string input, string expected) =>
-        Assert.Equal(expected, ImageFormats.FromExtension(input)?.Name);
+        Assert.Equal(expected, ImageFormat.FromExtension(input)?.Name);
 
     [Fact]
-    public void ImageFormat_FromExtension_Unknown() => Assert.Null(ImageFormats.FromExtension("file.tiff"));
+    public void ImageFormat_FromExtension_Unknown() => Assert.Null(ImageFormat.FromExtension("file.tiff"));
 
     public static TheoryData<string> AllFiles => Corpus.Files("");
 
@@ -40,7 +39,7 @@ public class RgbaAndFormatTests
     [MemberData(nameof(AllFiles))]
     public void FormatDetector_RecognizesCorpus(string file)
     {
-        ImageFormat? format = ImageFormats.DetectFormat(Corpus.Read(file).AsSpan(0, LibraryServices.Codecs.HeaderSize));
+        ImageFormat? format = Image.DetectFormat(Corpus.Read(file).AsSpan(0, LibraryServices.Codecs.HeaderSize));
         Assert.NotNull(format);
         Assert.Equal(Corpus.References[file].Format, format.Name);
     }
@@ -48,25 +47,25 @@ public class RgbaAndFormatTests
     [Fact]
     public void FormatDetector_RejectsGarbage()
     {
-        Assert.Null(ImageFormats.DetectFormat("RIFF\0\0\0\0WAVE"u8));
-        Assert.Null(ImageFormats.DetectFormat([]));
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load("not an image"u8));
+        Assert.Null(Image.DetectFormat("RIFF\0\0\0\0WAVE"u8));
+        Assert.Null(Image.DetectFormat([]));
+        Assert.Throws<ImageFormatException>(() => Image.Load("not an image"u8));
     }
 
-    public static TheoryData<string> AllFormats => [.. ImageFormats.All.Select(f => f.Name)];
+    public static TheoryData<string> AllFormats => [.. ImageFormat.All.Select(f => f.Name)];
 
     [Theory]
     [MemberData(nameof(AllFormats))]
     public void CodecRegistry_CoversEveryFormat(string name)
     {
-        ImageFormat format = ImageFormats.All.Single(f => f.Name == name);
+        ImageFormat format = ImageFormat.All.Single(f => f.Name == name);
         IImageFormatDetector? detector = LibraryServices.Codecs.GetDetector(format);
         Assert.NotNull(detector);
         Assert.True(detector.HeaderSize <= LibraryServices.Codecs.HeaderSize);
         Assert.Equal(format, LibraryServices.Codecs.GetDecoder(format)?.Format);
         Assert.Equal(format, LibraryServices.Codecs.GetEncoder(format)?.Format);
-        Assert.True(ImageFormats.CanDecode(format));
-        Assert.True(ImageFormats.CanEncode(format));
+        Assert.True(format.CanDecode);
+        Assert.True(format.CanEncode);
         Assert.Equal(format, LibraryServices.Codecs.GetEncoder(format)!.CreateDefaultOptions().Format);
     }
 

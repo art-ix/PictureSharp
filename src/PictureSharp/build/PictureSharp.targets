@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Adds `global using PictureSharp;` to projects that reference the package directly and enable ImplicitUsings.
+    Set PictureSharpImplicitUsings to false to opt out, or to true to opt in without ImplicitUsings.
+    UI frameworks with their own Image type (Windows Forms, WPF, MAUI) are opted out unless the property is set.
+  -->
+  <PropertyGroup>
+    <_PictureSharpImplicitUsings>$(PictureSharpImplicitUsings)</_PictureSharpImplicitUsings>
+    <_PictureSharpImplicitUsings Condition="'$(_PictureSharpImplicitUsings)' == '' and ('$(UseWindowsForms)' == 'true' or '$(UseWPF)' == 'true' or '$(UseMaui)' == 'true')">false</_PictureSharpImplicitUsings>
+    <_PictureSharpImplicitUsings Condition="'$(_PictureSharpImplicitUsings)' == ''">$(ImplicitUsings)</_PictureSharpImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_PictureSharpImplicitUsings)' == 'enable' or '$(_PictureSharpImplicitUsings)' == 'true'">
+    <Using Include="PictureSharp" />
+  </ItemGroup>
+</Project>

@@ -6,11 +6,10 @@ All operations run inside `Mutate` (changes the image) or `Clone` (returns a new
 using System.Drawing;
 using PictureSharp;
 using PictureSharp.Formats.Jpeg;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
-using var photo = ImageReader.Load("photo.jpg");
-using var logo = ImageReader.Load("logo.png");
+using var photo = Image.Load("photo.jpg");
+using var logo = Image.Load("logo.png");
 photo.Mutate(x => x
     .AutoOrient()
     .Resize(new ResizeOptions { Size = new(1200, 800), Mode = ResizeMode.Crop, Position = AnchorPosition.Top })
@@ -112,7 +111,6 @@ image.Mutate(x => x.Rotate(45, ResamplingFilter.Nearest, expand: false));      /
 ## Color
 
 ```csharp
-using PictureSharp.Processing;
 
 image.Mutate(x => x.Brightness(1.2f));      // 0 = black, 1 = unchanged, >1 brighter
 image.Mutate(x => x.Contrast(0.8f));        // 0 = flat gray (mean luma), 1 = unchanged
@@ -127,7 +125,6 @@ All of them keep the alpha channel. `Brightness`, `Contrast` and `Saturate` are 
 ### Transparency and fills
 
 ```csharp
-using PictureSharp.Processing;
 
 image.Mutate(x => x.BackgroundColor(Color.White));                    // composite over white: removes transparency
 image.Mutate(x => x.Opacity(0.5f));                                   // scale alpha
@@ -141,7 +138,6 @@ image.Mutate(x => x.Fill(Color.FromArgb(128, 255, 0, 0), new Rectangle(0, 0, 50,
 ## Blur and sharpen
 
 ```csharp
-using PictureSharp.Processing;
 
 image.Mutate(x => x.GaussianBlur(2.5f));                    // sigma (Pillow's GaussianBlur radius)
 image.Mutate(x => x.BoxBlur(3));                            // box radius; fractional values allowed
@@ -155,10 +151,9 @@ Filters run on premultiplied alpha, so a blurred logo on a transparent backgroun
 ## Drawing images
 
 ```csharp
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
-using var watermark = ImageReader.Load("logo.png");
+using var watermark = Image.Load("logo.png");
 image.Mutate(x => x.DrawImage(watermark, AnchorPosition.BottomRight, opacity: 0.6f));
 image.Mutate(x => x.DrawImage(watermark, new Point(20, 20)));
 ```
@@ -171,7 +166,6 @@ image.Mutate(x => x.DrawImage(watermark, new Point(20, 20)));
 
 ```csharp
 using PictureSharp;
-using PictureSharp.Processing;
 
 image.Mutate(x => x.Apply(frame =>
 {
@@ -201,6 +195,34 @@ public static class MyOperations
 // usage
 image.Mutate(x => x.Resize(600, 0).Polaroid());
 ```
+
+An operation that produces new buffers, possibly of another size, implements `IFrameProcessor` and runs through `ApplyProcessor`. All frames are prepared first and published together, so an exception or cancellation leaves the image unchanged; within `Clone` the source is read without being copied:
+
+```csharp
+using System.Drawing;
+using PictureSharp;
+using PictureSharp.Processing;
+
+public readonly struct Transpose : IFrameProcessor          // a struct avoids allocations
+{
+    public Size GetOutputSize(Size source) => new(source.Height, source.Width);
+
+    public void Process(ReadOnlySpan<Rgba32> source, Size sourceSize, Span<Rgba32> destination, Size destinationSize,
+        CancellationToken cancellationToken)
+    {
+        for (int y = 0; y < sourceSize.Height; y++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            for (int x = 0; x < sourceSize.Width; x++)
+                destination[x * destinationSize.Width + y] = source[y * sourceSize.Width + x];
+        }
+    }
+}
+
+image.Mutate(x => x.ApplyProcessor(new Transpose()).Resize(800, 0));
+```
+
+`GetOutputSize` is asked once, because every frame shares one canvas; the destination starts transparent black. See [Extending PictureSharp](extending-picturesharp.md#custom-frame-processors) for the full contract.
 
 ## Compatibility with Pillow
 

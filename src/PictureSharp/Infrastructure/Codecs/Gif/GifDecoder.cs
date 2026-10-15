@@ -1,7 +1,6 @@
 using PictureSharp.Application.Decoding;
 using System.Buffers;
 using PictureSharp.Application.Abstractions;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.Codecs.Gif;
 

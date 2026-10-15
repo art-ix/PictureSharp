@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -23,7 +22,7 @@ public class LosslessEncoderOptionsTests
     [Trait("Category", "Oracle")]
     public void EffortSettings_PreservePixels(int method, int quality)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/odd_alpha.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/odd_alpha.png"));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true, Method = method, Quality = quality });
         AssertPixels(image, encoded);
     }
@@ -67,9 +66,9 @@ public class LosslessEncoderOptionsTests
     [Trait("Category", "Oracle")]
     public void NonExact_PreservesVisiblePixels(int method)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/odd_alpha.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/odd_alpha.png"));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Method = method });
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        using Image decoded = Image.Load(encoded.AsMemory());
         ReadOnlySpan<Rgba32> source = image.GetPixelSpan(), result = decoded.GetPixelSpan();
         for (int i = 0; i < source.Length; i++)
         {
@@ -91,9 +90,9 @@ public class LosslessEncoderOptionsTests
     [Trait("Category", "Oracle")]
     public void NearLossless_BoundsChannelError_AndDecodesInBothImplementations(int level, bool exact)
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("src/photo_alpha.png"));
+        using Image image = Image.Load(Corpus.PathOf("src/photo_alpha.png"));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, NearLossless = level, Exact = exact });
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        using Image decoded = Image.Load(encoded.AsMemory());
         ReadOnlySpan<Rgba32> source = image.GetPixelSpan(), result = decoded.GetPixelSpan();
         int limit = level == 100 ? 0 : (1 << (5 - level / 20)) - 1;
         for (int i = 0; i < source.Length; i++)
@@ -120,7 +119,7 @@ public class LosslessEncoderOptionsTests
         image.Metadata.Xmp = [9, 10, 11];
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true, Metadata = selection });
         Assert.Equal(encoded.Length - 8, (int)BinaryPrimitives.ReadUInt32LittleEndian(encoded.AsSpan(4)));
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        using Image decoded = Image.Load(encoded.AsMemory());
         Assert.Equal(selection.HasFlag(MetadataKinds.Icc) ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
         Assert.Equal(selection.HasFlag(MetadataKinds.Exif) ? image.Metadata.Exif : null, decoded.Metadata.Exif);
         Assert.Equal(selection.HasFlag(MetadataKinds.Xmp) ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);
@@ -132,15 +131,15 @@ public class LosslessEncoderOptionsTests
     {
         byte[] rgba = [1, 2, 3, 4, 5, 6, 7, 8, 99, 99, 99, 99, 9, 10, 11, 12, 13, 14, 15, 16];
         using Image source = Image.LoadPixelData(rgba, 2, 2, PixelFormat.Rgba32, 12);
-        byte[] encoded = ImageWriter.Encode(source, new WebPEncoderOptions { Lossless = true, Exact = true });
-        using Image image = ImageReader.Load(encoded.AsMemory());
+        byte[] encoded = source.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
+        using Image image = Image.Load(encoded.AsMemory());
         Assert.Equal((byte[])[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], image.ToPixelData(PixelFormat.Rgba32));
         using var output = new MemoryStream();
-        ImageWriter.Save(image, output, new WebPEncoderOptions { Lossless = true, Exact = true });
+        image.Save(output, new WebPEncoderOptions { Lossless = true, Exact = true });
         Assert.True(output.CanWrite);
         Assert.Equal(encoded, output.ToArray());
-        Assert.Equal(encoded, ImageWriter.Encode(image, new WebPEncoderOptions { Lossless = true, Exact = true }));
-        Assert.True(ImageFormats.CanEncode(ImageFormat.WebP));
+        Assert.Equal(encoded, image.Encode(new WebPEncoderOptions { Lossless = true, Exact = true }));
+        Assert.True(ImageFormat.WebP.CanEncode);
     }
 
     [Fact]
@@ -159,9 +158,9 @@ public class LosslessEncoderOptionsTests
             () => new WebPEncoderOptions { Lossless = true, Method = 7 },
             () => new WebPEncoderOptions { Lossless = true, NearLossless = -1 },
             () => new WebPEncoderOptions { Lossless = true, NearLossless = 101 },
-        }) Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, create()));
+        }) Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, create()));
         using var wide = new Image(16385, 1);
-        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(wide, output, new WebPEncoderOptions { Lossless = true }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => wide.Save(output, new WebPEncoderOptions { Lossless = true }));
         Assert.Equal(0, output.Length);
     }
 
@@ -170,14 +169,14 @@ public class LosslessEncoderOptionsTests
     {
         using var image = new Image(5, 3, System.Drawing.Color.CornflowerBlue);
         using var output = new WriteOnlyStream();
-        ImageWriter.Save(image, output, new WebPEncoderOptions { Lossless = true, Exact = true });
-        using Image decoded = ImageReader.Load(output.Bytes.AsMemory());
+        image.Save(output, new WebPEncoderOptions { Lossless = true, Exact = true });
+        using Image decoded = Image.Load(output.Bytes.AsMemory());
         Assert.Equal(image.ToPixelData(PixelFormat.Rgba32), decoded.ToPixelData(PixelFormat.Rgba32));
         Assert.True(output.CanWrite);
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(50), image, image);
         using var target = new MemoryStream();
-        ImageWriter.Save(animation, target, new WebPEncoderOptions { Lossless = true, Exact = true });
-        using Image decodedAnimation = ImageReader.Load(target.ToArray().AsMemory());
+        animation.Save(target, new WebPEncoderOptions { Lossless = true, Exact = true });
+        using Image decodedAnimation = Image.Load(target.ToArray().AsMemory());
         Assert.Equal(2, decodedAnimation.FrameCount);
         Assert.All(decodedAnimation.Frames, frame => Assert.Equal(image.GetPixelSpan().ToArray(), frame.GetPixelSpan().ToArray()));
     }
@@ -201,7 +200,7 @@ public class LosslessEncoderOptionsTests
 
     private static void AssertPixels(Image expected, byte[] encoded)
     {
-        using Image decoded = ImageReader.Load(encoded.AsMemory());
+        using Image decoded = Image.Load(encoded.AsMemory());
         byte[] rgba = expected.ToPixelData(PixelFormat.Rgba32);
         Assert.Equal(rgba, decoded.ToPixelData(PixelFormat.Rgba32));
         if (!ReferenceTools.HasDwebp) return;

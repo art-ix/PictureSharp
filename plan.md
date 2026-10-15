@@ -2,9 +2,9 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.5.5. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.5.6. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
 
-PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `ImageReader.Load` / `Mutate` / `Clone` / `SaveAs*`.
+PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
 Do 0.7.0 dodajemy odczyt i zapis ICO oraz rozwijamy sześć obszarów: miniatury przy dekodowaniu, kontrolę zasobów, sekwencyjne animacje, zarządzanie kolorem, metadane i operacje graficzne. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL) pozostają poza tym planem.
 
@@ -12,7 +12,7 @@ Szczegóły istniejącego API i ograniczeń: `README.md`, `docs/`, XML docs oraz
 
 ## Zasady obowiązujące we wszystkich wydaniach
 
-- `net10.0`, `LangVersion=14.0`, nullable, warnings as errors i XML docs. Publiczne API w `PictureSharp`, `PictureSharp.IO`, `PictureSharp.Processing` i `PictureSharp.Formats.<Format>`; implementacja jest `internal`.
+- `net10.0`, `LangVersion=14.0`, nullable, warnings as errors i XML docs. Publiczne API w `PictureSharp` (model, opcje, konfiguracja i rozszerzenia `Image`), `PictureSharp.Processing`, `PictureSharp.Formats` (SPI wtyczek) i `PictureSharp.Formats.<Format>`; implementacja jest `internal`.
 - Biblioteka używa wyłącznie BCL: bez `PackageReference`, P/Invoke, `unsafe` oraz `System.IO.Compression`. Deflate/inflate pochodzi z `Algorithms/Compression/`. `System.Drawing.Primitives` jest dozwolone.
 - `Image` i `ImageFrame` przechowują `Rgba32` z prostą alfą. Bufory robocze z `ArrayPool<T>`, piksele z `GC.AllocateUninitializedArray`; gorące pętle bez alokacji.
 - Zachowujemy dotychczasowe wyniki i domyślne zachowanie. Nowe przekształcenia obrazu wymagają jawnej opcji. Ewentualne nowe domyślne limity zasobów muszą być opisane jako zmiana zachowania.
@@ -48,6 +48,7 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Ukończona — opublikowana |
 | 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Ukończona — opublikowana |
 | 0.5.5 | Warstwy, model domenowy, własność buforów i API C# 14 | Ukończona — wydanie 0.5.5 |
+| 0.5.6 | API skupione na `Image`, `ImageConfiguration`, wtyczki formatów i procesory ramek | Ukończona — commit lokalny, nieopublikowana |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana — następny etap |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
@@ -62,7 +63,7 @@ Zakres:
 - Zarejestrować ICO w `CodecRegistry`: detektor, dekoder, enkoder, `ImageFormat.Ico`, opcje w `Formats/Ico/` i rozszerzenia `SaveAsIco` / `ToIco`, także zapis async. Obsługa w `Identify`, CLI i dokumentacji.
 - Odczytywać kontener z pojedynczymi lub wieloma wariantami: osadzony PNG oraz nieskompresowany DIB z paletą 1/4/8-bit i truecolor 24/32-bit. Wykorzystać istniejące kodeki i wspólne helpery, uwzględniając specyfikę DIB w ICO.
 - Poprawnie interpretować maskę AND, kanał alfa 32-bit, padding wierszy i orientację rastera. Jawnie ustalić regułę dla starszych ikon z zerowym kanałem alfa oraz sprzeczności maski i alfy.
-- `ImageReader.Load` zwraca jeden wybrany wariant, domyślnie największy obsługiwany, z deterministycznym rozstrzyganiem remisów; umożliwić wybór indeksu lub preferowanego rozmiaru. `Identify` opisuje ten sam wybór. Ikona nie jest animacją.
+- `Image.Load` zwraca jeden wybrany wariant, domyślnie największy obsługiwany, z deterministycznym rozstrzyganiem remisów; umożliwić wybór indeksu lub preferowanego rozmiaru. `Identify` opisuje ten sam wybór. Ikona nie jest animacją.
 - Osobne API do listowania wariantów (rozmiar, głębia, sposób kodowania), odczytu wybranego wariantu i zapisu kolekcji obrazów o różnych rozmiarach. Nie wykorzystywać `Image.Frames` jako kolekcji wariantów ICO; przed implementacją ustalić własność i zwalnianie obrazów.
 - Zapis pojedynczego obrazu i zestawu wariantów 1–256 px w każdej osi; tryb PNG oraz DIB 32-bit z maską AND. Generowanie typowych rozmiarów ikon przez jawnie wybrany resize. Nie kwantyzować kolorów bez żądania użytkownika.
 - Sprawdzać katalog, offsety, długości, wymiary i rozmiary alokacji przed dekodem, także wewnątrz osadzonego PNG/DIB. `MaxPixels` obejmuje wybrany obraz, a przy ładowaniu kolekcji sumę ładowanych wariantów. Uszkodzone dane nie mogą być po cichu pomijane jako nieobsługiwane.
@@ -134,6 +135,18 @@ formaty: pełny dekod + `Thumbnail`, identycznie z ręcznym wywołaniem. Pomiary
 baseline 12 MP→256 px 68→7 MiB, 27 MP 149→4 MiB; progressive ograniczony przez współczynniki (2 B/próbkę). Build Release
 bez ostrzeżeń, 5076/5076 testów, 150/150 Oracle; migawka API (3 dodane właściwości). Bez nowych ścieżek SIMD.
 VERSION 0.5.4; paczka z symbolami `.snupkg` i Source Link. README zaktualizowane do wydania.
+
+## 0.5.6 — API skupione na `Image` i rozszerzalność
+
+Biblioteka nie ma jeszcze zewnętrznych użytkowników, więc zmiana łamie API 0.5.5 bez przewodnika migracji. Model DDD pozostaje bez zmian.
+
+- `Image` jako jedyne wejście (styl ImageSharp): `Image.Load/LoadAsync/Identify/IdentifyAsync/DetectFormat`, `image.Save/SaveAsync/Encode/Mutate/Clone`, `ImageFormat.All/FromExtension/FromMimeType`, `format.CanDecode/CanEncode` jako extension blocks C# 14 w `PublicApi`, namespace `PictureSharp`. Usunięte `ImageReader`, `ImageWriter`, `ImageFormats` i namespace `PictureSharp.IO`.
+- Niezmienna `ImageConfiguration` z builderem (`KeepOnly`, `RemoveFormat`, `AddFormat`, `ReplaceFormat`), podmienialne `ImageConfiguration.Default` i `DecoderOptions.Configuration`.
+- Publiczne SPI wtyczek (`IImageFormatModule`, `IImageFormatDecoder`, `IImageFormatEncoder<TOptions>`, `ImageDecodeContext`), `ImageFormat.Create`, otwarty konstruktor `EncoderOptions`; adaptery egzekwują limity i bezpieczną detekcję.
+- `IFrameProcessor` i `ApplyProcessor<T>` z atomową podmianą ramek.
+- Paczka dodaje `global using PictureSharp;` przy `ImplicitUsings` (opt-out `PictureSharpImplicitUsings=false`, wyłączone dla Windows Forms, WPF i MAUI).
+
+DoD: Release bez ostrzeżeń; pełne testy, Oracle i testy architektury; testy wtyczek, konfiguracji i procesorów; migawka API przejrzana; konsument C# 14 z jednym `using`; `verify-package-consumer.sh` z trimmingiem, Native AOT, wtyczką, procesorem i global usings; dokumentacja z `Image.*` jako formą domyślną.
 
 ## 0.6.0 — sekwencyjne animacje
 

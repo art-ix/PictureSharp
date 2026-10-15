@@ -2,7 +2,7 @@
 
 **A pure managed image processing library for .NET. No native dependencies.**
 
-PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and processes images in 100% C# for **.NET 10 and later**: no NuGet dependencies, native libraries or P/Invoke. The API separates the image model from I/O (`ImageReader.Load`, `ImageWriter.Save`) and fluent processing (`Mutate`, `Clone`, `SaveAs*`), and its results are verified pixel for pixel against libwebp, libjpeg-turbo and Pillow.
+PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and processes images in 100% C# for **.NET 10 and later**: no NuGet dependencies, native libraries or P/Invoke. Everything starts from `Image` (`Image.Load`, `Mutate`, `Clone`, `Save`, `SaveAs*`) with a single `using PictureSharp;`, and results are verified pixel for pixel against libwebp, libjpeg-turbo and Pillow.
 
 - WebP lossy, lossless, alpha and animation (encoder byte-compatible with `cwebp` 1.6.0 where possible)
 - PNG (including APNG and Adam7), JPEG (baseline and progressive), BMP
@@ -16,6 +16,7 @@ PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and process
 - SIMD on x64 (SSE2–AVX2) and ARM64 (AdvSimd/NEON), bit-identical to the scalar code
 - ICC, EXIF and XMP metadata preserved where the output format supports them
 - Limits for untrusted input (encoded size, pixels, frames, metadata) and cancellation of decoding, encoding and processing
+- Extensible: format plugins, per-call or application-wide format configurations, custom frame processors
 
 | Format | Read | Write |
 | --- | --- | --- |
@@ -34,10 +35,9 @@ using PictureSharp;
 using PictureSharp.Formats.Pcx;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
-using var image = await ImageReader.LoadAsync("photo.jpg");
+using var image = await Image.LoadAsync("photo.jpg");
 image.Mutate(x => x
     .AutoOrient()
     .Resize(1600, 0)                 // 0 keeps the aspect ratio
@@ -53,7 +53,7 @@ thumbnail.SaveAsPcx("thumbnail.pcx");
 
 ## Documentation
 
-**Version 0.5.5 introduces breaking API changes from 0.5.4.** See the [migration guide](https://github.com/art-ix/PictureSharp/blob/main/docs/migration-layered-api.md) and [architecture](https://github.com/art-ix/PictureSharp/blob/main/docs/architecture.md).
+The library is not yet stable: public API may still change between 0.x releases. See also the [architecture](https://github.com/art-ix/PictureSharp/blob/main/docs/architecture.md).
 
 - [Getting started](https://github.com/art-ix/PictureSharp/blob/main/docs/getting-started.md): installation, the `Load` → `Mutate`/`Clone` → `Save` model, disposal and errors
 - [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md): files, streams, memory, async, format detection, thumbnails while loading, web responses
@@ -64,6 +64,7 @@ thumbnail.SaveAsPcx("thumbnail.pcx");
 - [Pixels and interop](https://github.com/art-ix/PictureSharp/blob/main/docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, frame pixel access and conversion
 - [Animation](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md): frames, durations, animated WebP, APNG and GIF, GIF ↔ WebP conversion
 - [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
+- [Extending PictureSharp](https://github.com/art-ix/PictureSharp/blob/main/docs/extending-picturesharp.md): format plugins, `ImageConfiguration`, custom frame processors and shortcuts
 - [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md): `info`, `convert`, `resize`, `thumbnail`, `decode` and `icon`
 - [Development](https://github.com/art-ix/PictureSharp/blob/main/docs/development.md): building, tests, reference tools and oracles
 - [Performance](https://github.com/art-ix/PictureSharp/blob/main/docs/performance.md): benchmark matrix, comparison with libwebp, memory use, benchmark commands and limitations
@@ -75,7 +76,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release **0.5.5**, with a layered architecture, explicit frame ownership, atomic geometry updates and an updated public API). See the [release notes](https://github.com/art-ix/PictureSharp/releases/tag/v0.5.5) and [migration guide](https://github.com/art-ix/PictureSharp/blob/v0.5.5/docs/migration-layered-api.md).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release **0.5.6**: `Image` as the single entry point, `ImageConfiguration`, format plugins and custom frame processors). See the [release notes](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.5.6.md).
 
 ## License
 

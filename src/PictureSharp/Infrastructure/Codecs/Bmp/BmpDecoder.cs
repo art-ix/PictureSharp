@@ -1,7 +1,6 @@
 using PictureSharp.Application.Decoding;
 using System.Buffers.Binary;
 using PictureSharp.Application.Abstractions;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.Codecs.Bmp;
 
@@ -108,12 +107,15 @@ internal sealed partial class BmpDecoder(ICodecResolver codecs) : IImageDecoder
     private IImageDecoder EmbeddedDecoder(ReadOnlySpan<byte> file, BmpHeader h)
     {
         ImageFormat expected = h.RawCompression == BmpConstants.Png ? ImageFormat.Png : ImageFormat.Jpeg;
+        // The configuration may have removed the embedded format; that is a missing feature, not corrupt data.
+        IImageDecoder decoder = codecs.GetDecoder(expected)
+            ?? throw new NotSupportedException($"BMP with embedded {expected.Name} data needs the {expected.Name} format in the configuration.");
         if (codecs.GetDetector(expected)?.IsSupported(file[(int)h.DataOffset..]) != true)
         {
             throw Error($"The BMP does not contain the {expected.Name} data its header declares.");
         }
 
-        return codecs.GetDecoder(expected)!;
+        return decoder;
     }
 
     private DecodedImage DecodeEmbedded(ReadOnlyMemory<byte> data, BmpHeader h, DecodeContext context)

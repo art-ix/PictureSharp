@@ -1,6 +1,5 @@
 using PictureSharp.Application.Decoding;
 using PictureSharp.Formats.Ico;
-using PictureSharp.IO;
 
 namespace PictureSharp.Application.Abstractions;
 

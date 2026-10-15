@@ -4,9 +4,8 @@
 
 ```csharp
 using PictureSharp;
-using PictureSharp.IO;
 
-using var photo = ImageReader.Load("photo.jpg");
+using var photo = Image.Load("photo.jpg");
 ImageMetadata meta = photo.Metadata;
 Console.WriteLine($"{meta.HorizontalResolution} × {meta.VerticalResolution} DPI, orientation {meta.Orientation}");
 Console.WriteLine($"ICC: {meta.GetBlockLength(MetadataKinds.Icc)} bytes, EXIF: {meta.GetBlockLength(MetadataKinds.Exif)} bytes, XMP: {meta.GetBlockLength(MetadataKinds.Xmp)} bytes");
@@ -26,19 +25,17 @@ meta.Clear();                             // drop ICC, EXIF and XMP (the resolut
 | `Orientation` | The EXIF orientation tag (`ExifOrientation`), read and written inside the EXIF bytes; `Unknown` without EXIF. |
 | `IsEmpty`, `Clear()`, `Clone()` | Whether ICC/EXIF/XMP are absent; remove them; deep copy. |
 
-`ImageReader.Identify` also reports `Orientation` and the resolution without decoding pixels.
+`Image.Identify` also reports `Orientation` and the resolution without decoding pixels.
 
 ## EXIF orientation
 
 Cameras often store photos sideways and record the rotation in EXIF. Make the pixels upright either while loading or later:
 
 ```csharp
-using PictureSharp.IO;
-using PictureSharp.Processing;
 
-using var upright = ImageReader.Load("photo.jpg", new DecoderOptions { ApplyExifOrientation = true });
+using var upright = Image.Load("photo.jpg", new DecoderOptions { ApplyExifOrientation = true });
 
-using var photo = ImageReader.Load("photo.jpg");
+using var photo = Image.Load("photo.jpg");
 photo.Mutate(x => x.AutoOrient());        // rotates/flips for orientations 2–8 and resets the tag to TopLeft
 ```
 

@@ -1,5 +1,4 @@
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -13,7 +12,7 @@ public class WebPIdentifyTests
     public void Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        ImageInfo info = ImageReader.Identify(Corpus.PathOf(file));
+        ImageInfo info = Image.Identify(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.WebP, info.Format);
         Assert.Equal(r.Width, info.Width);
         Assert.Equal(r.Height, info.Height);
@@ -26,7 +25,7 @@ public class WebPIdentifyTests
     [Fact]
     public void Identify_ReadsExifOrientation()
     {
-        ImageInfo info = ImageReader.Identify(Corpus.PathOf("webp/meta/lossless_exif.webp"));
+        ImageInfo info = Image.Identify(Corpus.PathOf("webp/meta/lossless_exif.webp"));
         Assert.Equal(ExifOrientation.RightTop, info.Orientation);
     }
 }

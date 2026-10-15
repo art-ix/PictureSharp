@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 using PictureSharp.Formats.Jpeg;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using static PictureSharp.Benchmarks.LosslessDecodeBenchmarks;
 
@@ -62,12 +61,12 @@ public class ThumbnailBenchmarks
     {
         if (mode == Mode.LoadThenThumbnail)
         {
-            Image image = ImageReader.Load(data);
+            Image image = Image.Load(data);
             image.Mutate(x => x.Thumbnail(size, size));
             return image;
         }
 
-        return ImageReader.Load(data, new DecoderOptions { TargetSize = new(size, size), TargetReducingGap = mode == Mode.TargetSize ? 2 : 1 });
+        return Image.Load(data, new DecoderOptions { TargetSize = new(size, size), TargetReducingGap = mode == Mode.TargetSize ? 2 : 1 });
     }
 
     internal static byte[] Read(string path)
@@ -77,7 +76,7 @@ public class ThumbnailBenchmarks
             return System.IO.File.ReadAllBytes(path);
         }
 
-        using Image source = ImageReader.Load(Path.Combine(FindRoot(), "tests", "assets", "corpus", "src", "photo.png"));
+        using Image source = Image.Load(Path.Combine(FindRoot(), "tests", "assets", "corpus", "src", "photo.png"));
         using Image large = source.Clone(x => x.Resize(4032, 3024, ResamplingFilter.Bicubic));
         return large.ToJpeg(new JpegEncoderOptions { Progressive = path.EndsWith("progressive", StringComparison.Ordinal) });
     }
@@ -92,7 +91,7 @@ public class ThumbnailBenchmarks
         byte[] data = Read(args[1]);
         Mode mode = Enum.Parse<Mode>(args[2]);
         int size = int.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
-        using (Image warm = ImageReader.Load(Path.Combine(FindRoot(), "tests", "assets", "corpus", "jpeg", "q90_420.jpg")))
+        using (Image warm = Image.Load(Path.Combine(FindRoot(), "tests", "assets", "corpus", "jpeg", "q90_420.jpg")))
         {
             Run(warm.ToJpeg(), mode, 64).Dispose();
         }

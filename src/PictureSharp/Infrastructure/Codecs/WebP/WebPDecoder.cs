@@ -10,7 +10,6 @@ using PictureSharp.Infrastructure.Codecs.WebP.Animation;
 using PictureSharp.Infrastructure.Codecs.WebP.Container;
 using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
 using PictureSharp.Infrastructure.Codecs.WebP.Lossy;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.Codecs.WebP;
 

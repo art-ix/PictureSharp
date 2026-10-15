@@ -1,6 +1,5 @@
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Identification;
-using PictureSharp.IO;
 using PictureSharp.Primitives.Memory;
 
 namespace PictureSharp.Application.Encoding;

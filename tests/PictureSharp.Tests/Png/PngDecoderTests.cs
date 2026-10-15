@@ -1,5 +1,4 @@
 using PictureSharp.Infrastructure.Codecs.Png;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 using PictureSharp.Tests.WebP;
@@ -15,7 +14,7 @@ public class PngDecoderTests
     public void Decode_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image image = Image.Load(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Png, image.SourceFormat);
         Assert.Equal(r.HasAlpha, image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
@@ -40,7 +39,7 @@ public class PngDecoderTests
     public void Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        ImageInfo info = ImageReader.Identify(Corpus.PathOf(file));
+        ImageInfo info = Image.Identify(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Png, info.Format);
         Assert.Equal((r.Width, r.Height), (info.Width, info.Height));
         Assert.Equal(r.HasAlpha, info.HasAlpha);
@@ -53,14 +52,14 @@ public class PngDecoderTests
     [Fact]
     public void Decode_ExifOrientation()
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("png/exif.png"));
+        using Image image = Image.Load(Corpus.PathOf("png/exif.png"));
         Assert.Equal(ExifOrientation.BottomRight, image.Metadata.Orientation);
     }
 
     [Fact]
     public void Decode_FirstFrameOnly_Apng()
     {
-        using Image image = ImageReader.Load(Corpus.PathOf("png/apng_alpha.png"), new DecoderOptions { FirstFrameOnly = true });
+        using Image image = Image.Load(Corpus.PathOf("png/apng_alpha.png"), new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(1, image.FrameCount);
         Assert.Equal(Corpus.References["png/apng_alpha.png"].Frames[0].Sha256,
             Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan())));
@@ -71,7 +70,7 @@ public class PngDecoderTests
     {
         byte[] data = Corpus.Read("png/rgb8.png");
         data[^20] ^= 0x40;  // inside the last IDAT, before IEND
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(data, new DecoderOptions { Png = new() { StrictChecksums = true }}));
+        Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { Png = new() { StrictChecksums = true }}));
     }
 
     [Fact]
@@ -111,7 +110,7 @@ public class PngDecoderTests
 
                 try
                 {
-                    using Image img = ImageReader.Load(data);
+                    using Image img = Image.Load(data);
                 }
                 catch (ImageFormatException)
                 {

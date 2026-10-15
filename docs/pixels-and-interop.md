@@ -143,19 +143,18 @@ The same `Image` API handles every supported format. Request the first frame exp
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 
 byte[] data = File.ReadAllBytes("image.webp");
-ImageInfo info = ImageReader.Identify(data);
-using Image decoded = ImageReader.Load(data, new DecoderOptions { FirstFrameOnly = true });
+ImageInfo info = Image.Identify(data);
+using Image decoded = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
 byte[] rgba = decoded.ToPixelData();
 byte[] bgra = decoded.ToPixelData(PixelFormat.Bgra32);
 var buffer = new byte[decoded.Width * decoded.Height * 4];
 decoded.CopyPixelDataTo(buffer, PixelFormat.Bgra32);
 
 using Image fromRgba = Image.LoadPixelData(rgba, decoded.Width, decoded.Height, PixelFormat.Rgba32);
-byte[] lossless = ImageWriter.Encode(fromRgba, new WebPEncoderOptions { Lossless = true, Exact = true });
+byte[] lossless = fromRgba.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
 WebPConverter.Convert("input.png", "output.webp", new() { Quality = 80 });
 ```
 
-`ImageReader.Load` detects the format from the contents. To require WebP, check `ImageReader.Identify(data).Format == ImageFormat.WebP` before decoding.
+`Image.Load` detects the format from the contents. To require WebP, check `Image.Identify(data).Format == ImageFormat.WebP` before decoding.

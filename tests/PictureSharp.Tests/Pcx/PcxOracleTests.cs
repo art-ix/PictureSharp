@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using PictureSharp.Formats.Pcx;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Pcx;
@@ -29,7 +28,7 @@ public class PcxOracleTests
         foreach (string file in Directory.EnumerateFiles(directory, "*.pcx").Order(StringComparer.Ordinal))
         {
             byte[] expected = PillowRgbaBytes(file);
-            using Image image = ImageReader.Load(file);
+            using Image image = Image.Load(file);
             byte[] actual = MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray();
             Assert.True(expected.AsSpan().SequenceEqual(actual), Path.GetFileName(file));
             Assert.Equal((100f, 100f), (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution));
@@ -62,7 +61,7 @@ public class PcxOracleTests
             byte[] pcx = colored.ToPcx(new() { BitsPerPixel = 1 });
             string path = Path.Combine(directory, "colored.pcx");
             File.WriteAllBytes(path, pcx);
-            using Image ours = ImageReader.Load(pcx);
+            using Image ours = Image.Load(pcx);
             byte[] pillow = PillowRgbaBytes(path);
             Assert.False(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(ours.GetPixelSpan())),
                 "Pillow ignores a 1-bit PCX palette and should not match a colored bilevel image.");
@@ -104,7 +103,7 @@ public class PcxOracleTests
                     }
 
                     byte[] pcx = image.ToPcx(new() { BitsPerPixel = bits });
-                    using (Image decoded = ImageReader.Load(pcx))
+                    using (Image decoded = Image.Load(pcx))
                     {
                         Assert.Equal(image.GetPixelSpan().ToArray(), decoded.GetPixelSpan().ToArray());
                     }
@@ -160,7 +159,7 @@ public class PcxOracleTests
             string raw = Path.Combine(directory, "padded.rgba");
             File.WriteAllBytes(path, pcx);
             Assert.True(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0, error);
-            using Image image = ImageReader.Load(pcx);
+            using Image image = Image.Load(pcx);
             Assert.Equal(File.ReadAllBytes(raw), MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray());
         }
         finally

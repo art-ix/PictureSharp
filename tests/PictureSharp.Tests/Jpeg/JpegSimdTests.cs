@@ -1,6 +1,5 @@
 using PictureSharp.Formats.Jpeg;
 using PictureSharp.Infrastructure.Codecs.Jpeg;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Jpeg;
@@ -189,8 +188,8 @@ public class JpegSimdTests
         Assert.Equal(sequential, image.ToJpeg(options with { MaxDegreeOfParallelism = 3 }));
         Assert.Equal(sequential, image.ToJpeg(options with { MaxDegreeOfParallelism = -1 }));
 
-        using Image serial = ImageReader.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
-        using Image parallel = ImageReader.Load(sequential);
+        using Image serial = Image.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
+        using Image parallel = Image.Load(sequential);
         Assert.True(serial.Frames[0].GetPixelSpan().SequenceEqual(parallel.Frames[0].GetPixelSpan()));
     }
 }

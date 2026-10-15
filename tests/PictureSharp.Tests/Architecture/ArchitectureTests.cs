@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using PictureSharp.Tests.Infrastructure;
@@ -73,12 +74,29 @@ public class ArchitectureTests
     {
         foreach (Type type in Library.GetExportedTypes())
         {
-            Assert.True(type.Namespace is "PictureSharp" or "PictureSharp.IO" or "PictureSharp.Processing"
+            Assert.True(type.Namespace is "PictureSharp" or "PictureSharp.Processing" or "PictureSharp.Formats"
                 || type.Namespace?.StartsWith("PictureSharp.Formats.", StringComparison.Ordinal) == true, type.FullName);
         }
         string[] removed = ["Load", "LoadAsync", "Identify", "IdentifyAsync", "DetectFormat", "Save", "SaveAsync", "Encode", "Mutate"];
         Assert.DoesNotContain(typeof(Image).GetMethods(), m => removed.Contains(m.Name));
         Assert.All(typeof(Image).GetMethods().Where(m => m.Name == "Clone"), m => Assert.Empty(m.GetParameters()));
+    }
+
+    [Fact]
+    public void ImageOperations_AreExtensionMembersOfImage_InTheRootNamespace()
+    {
+        // The model stays free of I/O; callers still write Image.Load and image.Save through C# 14 extension blocks.
+        string[] operations = ["Load", "LoadAsync", "Identify", "IdentifyAsync", "DetectFormat", "Save", "SaveAsync", "Encode", "Mutate"];
+        var owners = Library.GetExportedTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            .Where(m => operations.Contains(m.Name) && m.GetParameters() is [{ ParameterType: var first }, ..]
+                && (first == typeof(Image) || m.ReturnType == typeof(Image) || m.ReturnType == typeof(Task<Image>)))
+            .Select(m => m.DeclaringType!)
+            .Where(t => !t.Name.Contains('<'))
+            .Distinct()
+            .ToArray();
+        Assert.Equal([typeof(ImageIOExtensions), typeof(ImageProcessingExtensions)], owners.OrderBy(t => t.Name));
+        Assert.All(owners, t => Assert.True(t.Namespace == "PictureSharp" && t.IsDefined(typeof(ExtensionAttribute)), t.FullName));
     }
 
     [Fact]

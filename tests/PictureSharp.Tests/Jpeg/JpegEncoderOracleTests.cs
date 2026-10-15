@@ -1,5 +1,4 @@
 using PictureSharp.Formats.Jpeg;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Jpeg;
@@ -50,7 +49,7 @@ public class JpegEncoderOracleTests
                             Assert.Equal(0, ReferenceTools.Run(oracle, $"\"{raw}\" \"{expectedPath}\" {width} {height} 90 {(int)sampling} {(optimize ? 1 : 0)} {(progressive ? 1 : 0)} {interval} {(gray ? 1 : 0)}", out _));
                             Assert.True(File.ReadAllBytes(expectedPath).AsSpan().SequenceEqual(encoded), $"{width}x{height} gray={gray}, {sampling}, restart={interval}, optimize={optimize}, progressive={progressive}");
                             File.WriteAllBytes(actualPath, encoded);
-                            using Image decoded = ImageReader.Load(encoded.AsMemory());
+                            using Image decoded = Image.Load(encoded.AsMemory());
                             if (pillow)
                             {
                                 Assert.Equal(0, ReferenceTools.Run("python3", $"-I \"{script}\" \"{actualPath}\" \"{rgba}\"", out _));

@@ -1,4 +1,3 @@
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
@@ -53,7 +52,7 @@ public class RobustnessTests
         ImageInfo info;
         try
         {
-            info = ImageReader.Identify(data);
+            info = Image.Identify(data);
         }
         catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
         {
@@ -67,7 +66,7 @@ public class RobustnessTests
         }
 
         var options = new DecoderOptions { MaxPixels = limit };
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(data, options).Dispose());
+        Assert.Throws<ImageFormatException>(() => Image.Load(data, options).Dispose());
     }
 
     public static TheoryData<string> AnimatedCorpusFiles()
@@ -77,7 +76,7 @@ public class RobustnessTests
         {
             try
             {
-                if (ImageReader.Identify(Corpus.Read(file)).FrameCount > 1)
+                if (Image.Identify(Corpus.Read(file)).FrameCount > 1)
                 {
                     data.Add(file);
                 }
@@ -95,16 +94,16 @@ public class RobustnessTests
     public void MaxPixels_CoversAllAnimationFrames(string file)
     {
         byte[] data = Corpus.Read(file);
-        ImageInfo info = ImageReader.Identify(data);
+        ImageInfo info = Image.Identify(data);
         long all = (long)info.Width * info.Height * info.FrameCount;
 
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(data, new DecoderOptions { MaxPixels = all - 1 }).Dispose());
-        using (Image image = ImageReader.Load(data, new DecoderOptions { MaxPixels = all }))
+        Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxPixels = all - 1 }).Dispose());
+        using (Image image = Image.Load(data, new DecoderOptions { MaxPixels = all }))
         {
             Assert.Equal(info.FrameCount, image.FrameCount);
         }
 
-        using Image first = ImageReader.Load(data, new DecoderOptions { MaxPixels = (long)info.Width * info.Height, FirstFrameOnly = true });
+        using Image first = Image.Load(data, new DecoderOptions { MaxPixels = (long)info.Width * info.Height, FirstFrameOnly = true });
         Assert.Equal(1, first.FrameCount);
     }
 
@@ -188,7 +187,7 @@ public class RobustnessTests
     {
         try
         {
-            ImageReader.Identify(data);
+            Image.Identify(data);
         }
         catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
         {
@@ -200,7 +199,7 @@ public class RobustnessTests
 
         try
         {
-            using Image image = ImageReader.Load(data, Options);
+            using Image image = Image.Load(data, Options);
         }
         catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
         {

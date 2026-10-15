@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using PictureSharp.Domain.Metadata;
 using PictureSharp.Infrastructure.Codecs.Jpeg;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 using PictureSharp.Tests.WebP;
@@ -20,7 +19,7 @@ public class JpegDecoderTests
     public void Decode_IsBitExactWithPillow(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image image = Image.Load(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Jpeg, image.SourceFormat);
         Assert.False(image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
@@ -40,7 +39,7 @@ public class JpegDecoderTests
     public void Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        ImageInfo info = ImageReader.Identify(Corpus.PathOf(file));
+        ImageInfo info = Image.Identify(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Jpeg, info.Format);
         Assert.Equal((r.Width, r.Height), (info.Width, info.Height));
         Assert.False(info.HasAlpha);
@@ -55,18 +54,18 @@ public class JpegDecoderTests
     [Fact]
     public void Format_DecodesAndEncodes()
     {
-        Assert.Equal(ImageFormat.Jpeg, ImageFormats.DetectFormat(Corpus.Read("jpeg/q90_420.jpg")));
-        Assert.True(ImageFormats.CanDecode(ImageFormat.Jpeg));
-        Assert.True(ImageFormats.CanEncode(ImageFormat.Jpeg));
+        Assert.Equal(ImageFormat.Jpeg, Image.DetectFormat(Corpus.Read("jpeg/q90_420.jpg")));
+        Assert.True(ImageFormat.Jpeg.CanDecode);
+        Assert.True(ImageFormat.Jpeg.CanEncode);
     }
 
     [Fact]
     public void Resolution_InCentimeters_IsConvertedToDpi()
     {
         // Pillow 10.2 ignores JFIF density unit 2, so this is not covered by the reference.
-        using Image image = ImageReader.Load(Corpus.PathOf("jpeg/dpcm.jpg"));
+        using Image image = Image.Load(Corpus.PathOf("jpeg/dpcm.jpg"));
         Assert.Equal(28 * 2.54f, image.Metadata.HorizontalResolution, 2);
-        Assert.Equal(28 * 2.54f, ImageReader.Identify(Corpus.PathOf("jpeg/dpcm.jpg")).VerticalResolution, 2);
+        Assert.Equal(28 * 2.54f, Image.Identify(Corpus.PathOf("jpeg/dpcm.jpg")).VerticalResolution, 2);
     }
 
     [Fact]
@@ -104,10 +103,10 @@ public class JpegDecoderTests
     [Fact]
     public void Metadata_CanBeIgnored_AndOrientationApplied()
     {
-        using Image plain = ImageReader.Load(Corpus.PathOf("jpeg/icc_multi.jpg"), new DecoderOptions { IgnoreMetadata = true });
+        using Image plain = Image.Load(Corpus.PathOf("jpeg/icc_multi.jpg"), new DecoderOptions { IgnoreMetadata = true });
         Assert.True(plain.Metadata.IsEmpty);
 
-        using Image rotated = ImageReader.Load(Corpus.PathOf("jpeg/orientation_6.jpg"), new DecoderOptions { ApplyExifOrientation = true });
+        using Image rotated = Image.Load(Corpus.PathOf("jpeg/orientation_6.jpg"), new DecoderOptions { ApplyExifOrientation = true });
         Assert.Equal((192, 256), (rotated.Width, rotated.Height));
         Assert.Equal(ExifOrientation.TopLeft, rotated.Metadata.Orientation);
     }
@@ -151,7 +150,7 @@ public class JpegDecoderTests
 
     private static Rgba32[] Pixels(byte[] jpeg)
     {
-        using Image image = ImageReader.Load(jpeg);
+        using Image image = Image.Load(jpeg);
         return image.GetPixelSpan().ToArray();
     }
 
@@ -169,7 +168,7 @@ public class JpegDecoderTests
     public void Truncated_Progressive_StillDecodes()
     {
         byte[] full = Corpus.Read("jpeg/progressive_420.jpg");
-        using Image image = ImageReader.Load(full[..(full.Length * 2 / 3)]);
+        using Image image = Image.Load(full[..(full.Length * 2 / 3)]);
         Assert.Equal((256, 192), (image.Width, image.Height));
     }
 
@@ -178,9 +177,9 @@ public class JpegDecoderTests
     {
         byte[] full = Corpus.Read("jpeg/q90_420.jpg");
         (int sos, _) = Find(full, 0xDA);
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(full[..sos]));
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(full[..(sos - 3)]));
-        Assert.Equal(256, ImageReader.Identify(full[..(sos + 2)]).Width);
+        Assert.Throws<ImageFormatException>(() => Image.Load(full[..sos]));
+        Assert.Throws<ImageFormatException>(() => Image.Load(full[..(sos - 3)]));
+        Assert.Equal(256, Image.Identify(full[..(sos + 2)]).Width);
     }
 
     [Fact]
@@ -208,7 +207,7 @@ public class JpegDecoderTests
     [MemberData(nameof(UnsupportedFiles))]
     public void Decode_UnsupportedVariant_ThrowsNotSupported(string name, byte[] jpeg)
     {
-        Assert.Throws<NotSupportedException>(() => ImageReader.Load(jpeg));
+        Assert.Throws<NotSupportedException>(() => Image.Load(jpeg));
         Assert.NotEmpty(name);
     }
 
@@ -252,7 +251,7 @@ public class JpegDecoderTests
     [MemberData(nameof(InvalidFiles))]
     public void Decode_InvalidFile_ThrowsFormatException(string name, byte[] jpeg)
     {
-        var ex = Assert.ThrowsAny<Exception>(() => ImageReader.Load(jpeg));
+        var ex = Assert.ThrowsAny<Exception>(() => Image.Load(jpeg));
         Assert.True(ex is ImageFormatException, $"{name}: {ex}");
     }
 
@@ -260,8 +259,8 @@ public class JpegDecoderTests
     public void Decode_RespectsMaxPixels()
     {
         byte[] jpeg = Build(Sof(0xC0, 8, 60000, 60000, (1, 1, 1)));
-        Assert.Throws<ImageFormatException>(() => ImageReader.Load(jpeg, new DecoderOptions { MaxPixels = 1 << 20 }));
-        Assert.Equal(60000, ImageReader.Identify(jpeg).Width);
+        Assert.Throws<ImageFormatException>(() => Image.Load(jpeg, new DecoderOptions { MaxPixels = 1 << 20 }));
+        Assert.Equal(60000, Image.Identify(jpeg).Width);
     }
 
     [Fact]
@@ -291,7 +290,7 @@ public class JpegDecoderTests
 
                 try
                 {
-                    using Image img = ImageReader.Load(data);
+                    using Image img = Image.Load(data);
                 }
                 catch (ImageFormatException)
                 {

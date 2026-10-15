@@ -1,6 +1,5 @@
 using System.Buffers;
 using PictureSharp.Application.Abstractions;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.IO;
 

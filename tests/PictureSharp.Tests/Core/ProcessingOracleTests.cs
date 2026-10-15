@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using PictureSharp.Formats.Png;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
@@ -78,8 +77,8 @@ public class ProcessingOracleTests
             {
                 ["noise.png"] = Noise(41, 29, 1),
                 ["gradient.png"] = Gradient(100, 3),
-                ["photo.png"] = ImageReader.Load(Corpus.PathOf("jpeg/q90_444.jpg")),
-                ["alpha.png"] = ImageReader.Load(Corpus.PathOf("png/odd_rgba.png")),
+                ["photo.png"] = Image.Load(Corpus.PathOf("jpeg/q90_444.jpg")),
+                ["alpha.png"] = Image.Load(Corpus.PathOf("png/odd_rgba.png")),
                 ["overlay.png"] = Noise(23, 17, 2),
             };
 
@@ -88,7 +87,7 @@ public class ProcessingOracleTests
             foreach ((string file, Image image) in inputs)
             {
                 image.Metadata.Clear();
-                ImageWriter.Save(image, Path.Combine(dir, file), new PngEncoderOptions());
+                image.Save(Path.Combine(dir, file), new PngEncoderOptions());
             }
 
             void AddResize(string input, int w, int h, string filter, ResamplingFilter f, string mode, ResizeMode m)
@@ -261,7 +260,7 @@ public class ProcessingOracleTests
                 jobs.Add(new() { ["name"] = name, ["input"] = file, ["op"] = "exif_transpose" });
                 expected[name] = () =>
                 {
-                    Image image = ImageReader.Load(Path.Combine(dir, file));
+                    Image image = Image.Load(Path.Combine(dir, file));
                     image.Mutate(x => x.AutoOrient());
                     return image;
                 };

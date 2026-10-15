@@ -1,5 +1,4 @@
 using System.Text.Json;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Png;
@@ -62,12 +61,12 @@ public class PngSuiteTests
         string expected = Reference.Value![name];
         if (expected == "error")
         {
-            Exception ex = Assert.ThrowsAny<Exception>(() => ImageReader.Load(path, new DecoderOptions { Png = new() { StrictChecksums = true }}));
+            Exception ex = Assert.ThrowsAny<Exception>(() => Image.Load(path, new DecoderOptions { Png = new() { StrictChecksums = true }}));
             Assert.True(ex is ImageFormatException or NotSupportedException, ex.ToString());
             return;
         }
 
-        using Image image = ImageReader.Load(path, new DecoderOptions { FirstFrameOnly = true });
+        using Image image = Image.Load(path, new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(expected, Corpus.Sha256(image.ToPixelData()));
     }
 }

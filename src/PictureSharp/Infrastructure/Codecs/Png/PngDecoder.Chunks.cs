@@ -2,7 +2,6 @@ using PictureSharp.Application.Decoding;
 using System.Buffers.Binary;
 using System.Text;
 using PictureSharp.Algorithms.Compression;
-using PictureSharp.IO;
 
 namespace PictureSharp.Infrastructure.Codecs.Png;
 

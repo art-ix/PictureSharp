@@ -11,14 +11,13 @@ compressed DIB are not decoded.
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.Ico;
-using PictureSharp.IO;
 
-using Image largest = ImageReader.Load("app.ico");
-using Image preferred = ImageReader.Load("app.ico", new()
+using Image largest = Image.Load("app.ico");
+using Image preferred = Image.Load("app.ico", new()
 {
     Ico = new() { PreferredSize = new System.Drawing.Size(32, 32) },
 });
-using Image indexed = ImageReader.Load("app.ico", new() { Ico = new() { Index = 0 } });
+using Image indexed = Image.Load("app.ico", new() { Ico = new() { Index = 0 } });
 ```
 
 Default selection chooses the largest supported area, then the greatest source
@@ -27,14 +26,13 @@ absolute width and height differences, using the same tie-breakers. An explicit
 index takes precedence. An absent index is an `ImageFormatException`; selecting
 an unsupported entry throws `NotSupportedException`.
 
-`ImageReader.Identify` describes the default choice with one frame and `IsAnimated = false`.
+`Image.Identify` describes the default choice with one frame and `IsAnimated = false`.
 Use `IcoFile.IdentifySelected(bytes, options)` to apply the same selection as a load
 with options. No implicit resizing occurs while loading.
 
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.Ico;
-using PictureSharp.Processing;
 
 foreach (IcoEntryInfo entry in IcoFile.Identify("app.ico"))
 {
@@ -56,10 +54,9 @@ streams; corruption in pixel data is checked when that variant is decoded.
 ```csharp
 using PictureSharp;
 using PictureSharp.Formats.Ico;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
-using Image source = ImageReader.Load("logo.png");
+using Image source = Image.Load("logo.png");
 using Image small = source.Clone(x => x.Resize(16, 16, ResizeMode.Pad));
 using Image large = source.Clone(x => x.Resize(256, 256, ResizeMode.Pad));
 small.SaveAsIco("favicon.ico");

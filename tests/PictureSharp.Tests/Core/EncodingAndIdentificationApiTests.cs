@@ -5,7 +5,6 @@ using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Pcx;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
@@ -27,23 +26,23 @@ public class EncodingAndIdentificationApiTests
     [MemberData(nameof(Formats))]
     public void Encode_UsesDefaultOptionsAndMatchesStreamSave(ImageFormat format, EncoderOptions options)
     {
-        using Image image = ImageReader.Load(Corpus.Read("png/tiny.png"));
+        using Image image = Image.Load(Corpus.Read("png/tiny.png"));
         using var stream = new MemoryStream();
-        ImageWriter.Save(image, stream, options);
-        Assert.Equal(stream.ToArray(), ImageWriter.Encode(image, options));
-        Assert.Equal(stream.ToArray(), ImageWriter.Encode(image, format));
-        Assert.Equal(format, ImageReader.Identify(ImageWriter.Encode(image, format)).Format);
+        image.Save(stream, options);
+        Assert.Equal(stream.ToArray(), image.Encode(options));
+        Assert.Equal(stream.ToArray(), image.Encode(format));
+        Assert.Equal(format, Image.Identify(image.Encode(format)).Format);
     }
 
     [Fact]
     public void Encode_ValidatesNullAndDisposedImage()
     {
         using var image = new Image(1, 1);
-        Assert.Equal("format", Assert.Throws<ArgumentNullException>(() => ImageWriter.Encode(image, (ImageFormat)null!)).ParamName);
-        Assert.Equal("options", Assert.Throws<ArgumentNullException>(() => ImageWriter.Encode(image, (EncoderOptions)null!)).ParamName);
+        Assert.Equal("format", Assert.Throws<ArgumentNullException>(() => image.Encode((ImageFormat)null!)).ParamName);
+        Assert.Equal("options", Assert.Throws<ArgumentNullException>(() => image.Encode((EncoderOptions)null!)).ParamName);
         image.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => ImageWriter.Encode(image, ImageFormat.Png));
-        Assert.Throws<ObjectDisposedException>(() => ImageWriter.Encode(image, new PngEncoderOptions()));
+        Assert.Throws<ObjectDisposedException>(() => image.Encode(ImageFormat.Png));
+        Assert.Throws<ObjectDisposedException>(() => image.Encode(new PngEncoderOptions()));
     }
 
     [Theory]
@@ -55,12 +54,12 @@ public class EncodingAndIdentificationApiTests
     {
         byte[] data = Corpus.Read(path);
         byte[] padded = [99, 98, .. data, 97];
-        ImageInfo expected = ImageReader.Identify(data);
-        Assert.Equal(expected, ImageReader.Identify(padded.AsMemory(2, data.Length)));
-        Assert.Equal(expected, ImageReader.Identify(padded.AsSpan(2, data.Length)));
-        Assert.Equal(expected, ImageReader.Identify((ReadOnlyMemory<byte>)data));
-        Assert.Equal(expected, ImageReader.Identify((ReadOnlySpan<byte>)data));
-        Assert.Throws<ImageFormatException>(() => ImageReader.Identify(ReadOnlyMemory<byte>.Empty));
+        ImageInfo expected = Image.Identify(data);
+        Assert.Equal(expected, Image.Identify(padded.AsMemory(2, data.Length)));
+        Assert.Equal(expected, Image.Identify(padded.AsSpan(2, data.Length)));
+        Assert.Equal(expected, Image.Identify((ReadOnlyMemory<byte>)data));
+        Assert.Equal(expected, Image.Identify((ReadOnlySpan<byte>)data));
+        Assert.Throws<ImageFormatException>(() => Image.Identify(ReadOnlyMemory<byte>.Empty));
     }
 
     [Fact]
@@ -70,9 +69,9 @@ public class EncodingAndIdentificationApiTests
         byte[] padded = new byte[2 * 1024 * 1024];
         png.CopyTo(padded, 0);
         ReadOnlyMemory<byte> memory = padded;
-        ImageInfo expected = ImageReader.Identify(memory);
+        ImageInfo expected = Image.Identify(memory);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        ImageInfo actual = ImageReader.Identify(memory);
+        ImageInfo actual = Image.Identify(memory);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(expected, actual);
         Assert.True(allocated < padded.Length / 2, $"Identify allocated {allocated} bytes for {padded.Length} input bytes.");

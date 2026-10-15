@@ -5,10 +5,9 @@ Every format has an options record: `WebPEncoderOptions`, `PngEncoderOptions`, `
 ```csharp
 using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.WebP;
-using PictureSharp.IO;
 
 image.SaveAsWebP("photo.webp", new() { Quality = 85, Method = 6 });
-ImageWriter.Save(image, "photo.jpg", new JpegEncoderOptions { Quality = 90 });
+image.Save("photo.jpg", new JpegEncoderOptions { Quality = 90 });
 ```
 
 - **Checked when set.** An out-of-range value throws `ArgumentOutOfRangeException` on the line that sets it, not later during encoding.

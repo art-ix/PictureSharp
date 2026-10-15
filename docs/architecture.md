@@ -2,6 +2,8 @@
 
 PictureSharp ships one assembly and one dependency-free NuGet package. Folders express layers; public namespaces express the operations a caller wants to use. Internal namespaces follow the layer and module.
 
+Callers start from `Image` with one `using PictureSharp;`: `Image.Load`, `Image.Identify`, `image.Save`, `image.Mutate` and `ImageFormat.FromExtension` are C# 14 extension members declared in `PublicApi`, so the model type itself has no I/O or processing members. `PictureSharp.Processing` holds processing modes and options, `PictureSharp.Formats` the plugin interfaces and `PictureSharp.Formats.<Format>` format options and shortcuts.
+
 ## Model and boundaries
 
 `Image` owns its frames and pixel buffers. `ImageFrameCollection` enforces frame dimensions and ownership; metadata and pixel layouts are model concepts. Animations contain full-canvas frames of a common size. ICO variants are independent images held by an owning `IcoImageCollection`, not animation frames.
@@ -16,27 +18,33 @@ The model has no codec registry, filesystem access or processing orchestration. 
 | `Application` | Codec ports, read/write/identify workflows, processing contexts, options, ICO orchestration | Algorithms, Domain, Primitives |
 | `Infrastructure` | Codec implementations, input/output adapters, metadata selection | Application, Algorithms, Domain, Primitives |
 | `Composition` | Codec registration and construction of default services | Infrastructure, Application, Algorithms, Domain, Primitives |
-| `PublicApi` | Static entrypoints and fluent extensions | Composition, Application, Algorithms, Domain, Primitives |
+| `PublicApi` | Extension members on `Image`, `ImageFormat` and `ImageConfiguration`, format shortcuts | Composition, Application, Algorithms, Domain, Primitives |
 
 Dependencies inside a layer are allowed. Higher layers may not be referenced from lower ones; the layer graph is acyclic. Public API wrappers do not reference concrete infrastructure. BCL `Stream` is allowed in codec contracts; filesystem operations are confined to infrastructure. `Path` operations used for format lookup do not open files.
 
 ## Data flow
 
-`ImageReader` delegates to the composed read service. Input adapters enforce byte limits while reading; application services select codecs through `ICodecResolver`, normalize corrupt-input exceptions and apply thumbnail/orientation policies. A decoder returns an internal `DecodedImage` value carrying the stored size and JPEG scale; these transient details are absent from `Image`.
+The `Image` load and identify members select the configuration (`DecoderOptions.Configuration`, otherwise `ImageConfiguration.Default`) and call its read service. Input adapters enforce byte limits while reading; application services select codecs through `ICodecResolver`, normalize corrupt-input exceptions and apply thumbnail/orientation policies. A decoder returns an internal `DecodedImage` value carrying the stored size and JPEG scale; these transient details are absent from `Image`.
 
-`ImageWriter` accepts the image explicitly and delegates to the write service. File output is buffered before writing, and direct stream output retains its existing partial-write behavior on cancellation. The input and output ports have BCL-only implementations.
+`image.Save` and `image.Encode` call the write service of `ImageConfiguration.Default`. File output is buffered before writing, and direct stream output retains its existing partial-write behavior on cancellation. The input and output ports have BCL-only implementations.
 
 `ImageProcessingExtensions` delegates to the processing service and context; contexts invoke numeric algorithms. Scalar and SIMD files remain together by responsibility, with architecture dispatch outside hot loops where previously implemented.
 
 `IcoFile` delegates to an icon service through an ICO-specific codec port. Infrastructure validates directory entries and sums variant pixel budgets; application orchestration handles orientation and cleanup. PNG embedded in ICO and PNG/JPEG embedded in BMP reuse injected codecs without referencing composition.
 
-Only `Composition/CodecRegistry.cs` registers formats. `LibraryServices` constructs the default resolver and services. These are internal implementation details; no external DI container is required.
+Only `Composition/CodecRegistry.cs` registers the built-in formats, as `FormatRegistration` entries with codec factories. `ImageConfiguration` (Application) is immutable: it builds a `CodecResolver` from its registrations, so container codecs receive the resolver of their own configuration, and creates its read and write services from the input/output ports supplied by composition. `LibraryServices` composes the initial default; `ImageConfiguration.Default` is a static extension property in `PublicApi`, so Application never references Composition. Replacing the default publishes a complete snapshot with a volatile write. No external DI container is required.
+
+## Extension points
+
+Format plugins implement the public `IImageFormatModule`, `IImageFormatDecoder` and `IImageFormatEncoder` interfaces and are registered with `ImageConfigurationBuilder.AddFormat`/`ReplaceFormat`. `Application/Extensibility` adapts them to the internal codec contracts: detection failures on malformed headers count as no match, plugin results are checked against `MaxPixels` and `MaxFrames` and receive their `SourceFormat`, and `ImageDecodeContext` exposes the shared decode budget and nested decoding without exposing `DecodeContext`. Built-in codecs keep their internal contracts and are not wrapped.
+
+`IFrameProcessor` operations run through `ProcessingState.ReplaceFrames`, like built-in geometry: every frame is prepared, then the aggregate commits the batch. Destination buffers are zeroed because third-party code writes them.
 
 ## Enforcement and development
 
 Architecture tests map compiled types to source-layer folders, then inspect type signatures, generic arguments, fields, interfaces, method IL, local variables and catch clauses. They reject forbidden directions, layer cycles, filesystem access outside infrastructure and references to codec registration outside composition. An inspector fixture verifies that method calls, fields, generic arguments and exception handlers are observed.
 
-Public types remain documented and implementation types remain internal. See [API migration](migration-layered-api.md). Run `dotnet test -c Release`; architecture checks are included. The library remains BCL-only, managed, compatible with trimming and Native AOT, with existing limits, cancellation and buffer ownership semantics.
+Public types remain documented and implementation types remain internal. Run `dotnet test -c Release`; architecture checks are included. The library remains BCL-only, managed, compatible with trimming and Native AOT, with existing limits, cancellation and buffer ownership semantics.
 
 ## Aggregate invariants and lifetime
 

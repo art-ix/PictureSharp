@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.5.5 has breaking API changes from 0.5.4: ImageReader/ImageWriter/ImageFormats, functional namespaces, grouped decoder options and explicit frame/metadata ownership. Migration: https://github.com/art-ix/PictureSharp/blob/v0.5.5/docs/migration-layered-api.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.5.6 has breaking API changes from 0.5.5: Image.Load/image.Save and ImageFormat lookups replace ImageReader/ImageWriter/ImageFormats (PictureSharp.IO removed); one using PictureSharp, added globally under ImplicitUsings. New: ImageConfiguration, format plugins (PictureSharp.Formats) and custom frame processors. Notes: https://github.com/art-ix/PictureSharp/blob/v0.5.6/docs/release-0.5.6.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>
@@ -25,6 +25,7 @@
     <None Include="../../LICENSE" Pack="true" PackagePath="" />
     <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" />
     <None Include="../../README.md" Pack="true" PackagePath="" />
+    <None Update="build/PictureSharp.targets" Pack="true" PackagePath="build/PictureSharp.targets" />
   </ItemGroup>
 
 </Project>

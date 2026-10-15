@@ -3,7 +3,6 @@ using PictureSharp.Domain.Frames;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Processing;
-using PictureSharp.IO;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Application.Decoding;

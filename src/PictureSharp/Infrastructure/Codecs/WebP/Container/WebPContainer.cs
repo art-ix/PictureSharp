@@ -3,7 +3,6 @@ using System.Buffers.Binary;
 using PictureSharp.Algorithms.ColorConversion;
 using PictureSharp.Infrastructure.Codecs.WebP;
 using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
-using PictureSharp.IO;
 using static PictureSharp.Infrastructure.Codecs.WebP.WebPConstants;
 
 namespace PictureSharp.Infrastructure.Codecs.WebP.Container;
