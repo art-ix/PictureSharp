@@ -65,7 +65,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.5.1, which adds ICO reading and writing, variant selection, multi-size icon collections and the `icon` CLI command).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.5.2, which renames the library from RasterSharp to PictureSharp: package, assembly, `PictureSharp` namespace, `picturesharp-cli` and `PICTURESHARP_*` environment variables; behavior is unchanged from 0.5.1).
 
 ## License
 

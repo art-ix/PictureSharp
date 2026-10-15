@@ -2,9 +2,9 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.5.1. Fazy 0–10 oraz obsługa ICO ukończone.** Wydanie przygotowane lokalnie; push i publikacja pozostają osobnymi czynnościami. Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.5.2. Fazy 0–10 oraz obsługa ICO ukończone; 0.5.2 zmienia nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
 
-PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; implementacja 0.5.1 dodaje ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `SaveAs*`.
+PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `SaveAs*`.
 
 Do 0.7.0 dodajemy odczyt i zapis ICO oraz rozwijamy sześć obszarów: miniatury przy dekodowaniu, kontrolę zasobów, sekwencyjne animacje, zarządzanie kolorem, metadane i operacje graficzne. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL) pozostają poza tym planem.
 
@@ -35,9 +35,10 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 
 | Wersja | Zakres | Status |
 | --- | --- | --- |
-| 0.5.1 | Odczyt i zapis ICO | Ukończona — wydanie przygotowane lokalnie |
-| 0.5.2 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Planowana — następny etap |
-| 0.5.3 | Miniatury podczas dekodowania JPEG (1) | Planowana |
+| 0.5.1 | Odczyt i zapis ICO (jako RasterSharp) | Ukończona — opublikowana |
+| 0.5.2 | Zmiana nazwy RasterSharp → PictureSharp | Ukończona — opublikowana |
+| 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Planowana — następny etap |
+| 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Planowana |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
@@ -69,10 +70,16 @@ Weryfikacja 2026-10-15: build Release bez ostrzeżeń; 4136/4136 testów Release
 14 plików ICO, referencje każdego wariantu z Pillow (dla paletowego PNG z tRNS
 bezpośrednio z osadzonego PNG, dodatkowo wyrocznia ImageMagick). CLI i pakiet
 z lokalnego feedu sprawdzone; pomiary w `docs/performance.md`. Nie dodano nowych
-ścieżek SIMD. API i ograniczenia: `docs/ico.md`. VERSION 0.5.1; README i plan zaktualizowane do wydania. Push i publikacja
-pozostają osobnymi czynnościami na polecenie.
+ścieżek SIMD. API i ograniczenia: `docs/ico.md`. VERSION 0.5.1; README i plan zaktualizowane do wydania. Opublikowane
+jako RasterSharp 0.5.1 (tag v0.5.1, GitHub Release z paczką).
 
-## 0.5.2 — kontrola zasobów i anulowanie
+## 0.5.2 — zmiana nazwy na PictureSharp
+
+Nazwa RasterSharp jest zajęta. Wydanie zmienia wyłącznie nazwę: pakiet NuGet, assembly, przestrzeń nazw `PictureSharp`, projekty, CLI `picturesharp-cli`, zmienne środowiskowe `PICTURESHARP_*`, dokumentację i repozytorium `art-ix/PictureSharp`. Kod, formaty i wyniki bez zmian względem 0.5.1.
+
+DoD: brak pozostałości starej nazwy w śledzonych plikach poza historią; build Release bez ostrzeżeń, pełne testy Release i Oracle, paczka `PictureSharp.0.5.2.nupkg` z `LICENSE` i notices, tag v0.5.2 i GitHub Release.
+
+## 0.5.3 — kontrola zasobów i anulowanie
 
 Zakres:
 - Dodać limity `MaxInputBytes`, `MaxMetadataBytes` (łączny rozmiar obsługiwanych metadanych, także po dekompresji) i `MaxFrames`; zachować dotychczasową semantykę `MaxPixels`.
@@ -86,7 +93,7 @@ DoD:
 - Anulowanie przed startem i w trakcie odczytu, dekodu, kodowania oraz przetwarzania kończy operację i zwraca bufory. Udokumentowane zachowanie częściowego wyniku zapisu i obrazu po przerwanym `Mutate`.
 - Pomiary narzutu kontroli i szczytowej pamięci; brak nieograniczonego buforowania wejścia ponad ustawiony limit.
 
-## 0.5.3 — miniatury bez pełnego dekodowania JPEG
+## 0.5.4 — miniatury bez pełnego dekodowania JPEG
 
 Zakres:
 - Opcja docelowego rozmiaru przy ładowaniu: zachowanie proporcji, bez powiększania domyślnie, jednoznaczna kolejność względem EXIF orientation.
@@ -123,7 +130,7 @@ Zakres:
 - Polityka zachowania wybranych pól oraz usuwanie GPS. Rozróżnić usunięcie znanych tagów GPS od pełnego usunięcia metadanych; nie obiecywać anonimizacji nieznanych MakerNotes/XMP.
 - Edycja EXIF/XMP/ICC w JPEG, PNG/APNG i WebP bez dekodowania/rekompresji pikseli; zakres tagów zapisywalnych określony jawnie.
 - Poprawne długości, offsety, CRC i nagłówki kontenerów; pozostawienie nienaruszonych danych obrazu, animacji i bezpiecznych nieznanych segmentów/chunków.
-- Zapis do osobnego wyniku; atomowe zastąpienie pliku dopiero po poprawnym zakończeniu. Limity i anulowanie z 0.5.2.
+- Zapis do osobnego wyniku; atomowe zastąpienie pliku dopiero po poprawnym zakończeniu. Limity i anulowanie z 0.5.3.
 
 DoD:
 - Testy EXIF little-/big-endian, niepoprawnych offsetów, cyklicznych IFD, brakujących pól i dużych bloków.
@@ -167,7 +174,7 @@ Zakres:
 - Testy end-to-end: tworzenie i odczyt wielowariantowego ICO; miniatura JPEG z orientacją i konwersją ICC; sekwencyjna konwersja animacji z maską i resize; edycja metadanych bez rekompresji; przetwarzanie przy ograniczonych zasobach.
 - Uzupełnić CLI i przewodniki o ICO, miniatury, limity, sekwencyjne animacje, kolor, metadane i nowe operacje. Przykłady sprawdzane przez `DocsExamplesTests`.
 - Rozszerzyć istniejącą macierz wydajności o nowe ścieżki, czas anulowania, szczytową pamięć i długie animacje; opisać kompromisy jakości i ograniczenia.
-- Sprawdzić pakiet NuGet, trimming/NativeAOT w obsługiwanym zakresie i użycie z lokalnego feedu na x64/ARM64. Przygotować notatki migracyjne z 0.5.0.
+- Sprawdzić pakiet NuGet, trimming/NativeAOT w obsługiwanym zakresie i użycie z lokalnego feedu na x64/ARM64. Przygotować notatki migracyjne z 0.5.0, w tym zmianę nazwy pakietu i przestrzeni nazw z RasterSharp na PictureSharp.
 
 DoD: wszystkie wcześniejsze kryteria zamknięte, pełna wspólna bramka jakości zaliczona, dokumentacja i paczka gotowe. Niezrealizowanych punktów nie oznaczamy jako ukończone; zmiana zakresu wymaga jawnej decyzji i aktualizacji planu.
 
