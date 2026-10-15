@@ -10,15 +10,16 @@ namespace PictureSharp.Processing;
 internal static class Blur
 {
     // port: Pillow src/libImaging/BoxBlur.c ImagingBoxBlur
-    public static Rgba32[] BoxBlur(ReadOnlySpan<Rgba32> src, int width, int height, float xRadius, float yRadius, int passes)
+    public static Rgba32[] BoxBlur(ReadOnlySpan<Rgba32> src, int width, int height, float xRadius, float yRadius, int passes,
+        CancellationToken cancellationToken = default)
     {
         var dst = GC.AllocateUninitializedArray<Rgba32>(src.Length);
         if (xRadius != 0)
         {
-            HorizontalBoxBlur(src, dst, width, height, xRadius);
+            HorizontalBoxBlur(src, dst, width, height, xRadius, cancellationToken);
             for (int i = 1; i < passes; i++)
             {
-                HorizontalBoxBlur(dst, dst, width, height, xRadius);
+                HorizontalBoxBlur(dst, dst, width, height, xRadius, cancellationToken);
             }
         }
 
@@ -31,7 +32,7 @@ internal static class Blur
                 Transpose(xRadius == 0 ? src : dst, t, width, height);
                 for (int i = 0; i < passes; i++)
                 {
-                    HorizontalBoxBlur(t, t, height, width, yRadius);
+                    HorizontalBoxBlur(t, t, height, width, yRadius, cancellationToken);
                 }
 
                 Transpose(t, dst, height, width);
@@ -63,17 +64,20 @@ internal static class Blur
     }
 
     // port: Pillow src/libImaging/BoxBlur.c ImagingGaussianBlur
-    public static Rgba32[] GaussianBlur(ReadOnlySpan<Rgba32> src, int width, int height, float radius)
+    public static Rgba32[] GaussianBlur(ReadOnlySpan<Rgba32> src, int width, int height, float radius,
+        CancellationToken cancellationToken = default)
     {
         const int Passes = 3;
         float r = GaussianBlurRadius(radius, Passes);
-        return BoxBlur(src, width, height, r, r, Passes);
+        return BoxBlur(src, width, height, r, r, Passes, cancellationToken);
     }
 
     // port: Pillow src/libImaging/UnsharpMask.c ImagingUnsharpMask
-    public static Rgba32[] UnsharpMask(ReadOnlySpan<Rgba32> src, int width, int height, float radius, int percent, int threshold)
+    public static Rgba32[] UnsharpMask(ReadOnlySpan<Rgba32> src, int width, int height, float radius, int percent, int threshold,
+        CancellationToken cancellationToken = default)
     {
-        Rgba32[] blurred = GaussianBlur(src, width, height, radius);
+        Rgba32[] blurred = GaussianBlur(src, width, height, radius, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         ReadOnlySpan<byte> lineIn = MemoryMarshal.AsBytes(src);
         Span<byte> lineOut = MemoryMarshal.AsBytes(blurred.AsSpan());
         for (int i = 0; i < lineIn.Length; i++)
@@ -87,7 +91,8 @@ internal static class Blur
 
     // port: Pillow src/libImaging/Filter.c ImagingFilter3x3 (4 bands); kernel already divided by its divisor.
     // Border rows and columns are copied unchanged.
-    public static Rgba32[] Filter3x3(ReadOnlySpan<Rgba32> src, int width, int height, ReadOnlySpan<float> kernel, float offset)
+    public static Rgba32[] Filter3x3(ReadOnlySpan<Rgba32> src, int width, int height, ReadOnlySpan<float> kernel, float offset,
+        CancellationToken cancellationToken = default)
     {
         var dst = GC.AllocateUninitializedArray<Rgba32>(src.Length);
         src.CopyTo(dst);
@@ -103,6 +108,7 @@ internal static class Blur
         int stride = width * 4;
         for (int y = 1; y < height - 1; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ReadOnlySpan<byte> inM1 = image.Slice((y - 1) * stride, stride);
             ReadOnlySpan<byte> in0 = image.Slice(y * stride, stride);
             ReadOnlySpan<byte> in1 = image.Slice((y + 1) * stride, stride);
@@ -125,7 +131,8 @@ internal static class Blur
         (row[x - 4] * kernel[0]) + (row[x] * kernel[1]) + (row[x + 4] * kernel[2]);
 
     // port: Pillow src/libImaging/BoxBlur.c ImagingHorizontalBoxBlur
-    private static void HorizontalBoxBlur(ReadOnlySpan<Rgba32> src, Span<Rgba32> dst, int width, int height, float floatRadius)
+    private static void HorizontalBoxBlur(ReadOnlySpan<Rgba32> src, Span<Rgba32> dst, int width, int height, float floatRadius,
+        CancellationToken cancellationToken)
     {
         int radius = (int)floatRadius;
         uint ww = (uint)((float)(1 << 24) / ((floatRadius * 2) + 1));
@@ -137,6 +144,7 @@ internal static class Blur
         {
             for (int y = 0; y < height; y++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 ReadOnlySpan<Rgba32> lineIn = src.Slice(y * width, width);
                 LineBoxBlur32(line, lineIn, width - 1, radius, edgeA, edgeB, ww, fw);
                 line.AsSpan(0, width).CopyTo(dst.Slice(y * width, width));

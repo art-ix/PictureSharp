@@ -50,13 +50,16 @@ internal sealed class WebPContainer
     public ChunkRange Xmp;
     public readonly List<WebPFrameInfo> Frames = [];
 
+    private DecoderOptions? _options;
+
     public bool IsAnimated => (Flags & AnimationFlag) != 0;
 
     public bool HasAlpha => IsExtended ? (Flags & AlphaFlag) != 0 : Frames.Count > 0 && Frames[0].HasAlpha;
 
     private static ImageFormatException Error(string message) => new(ImageFormat.WebP, message);
 
-    public static WebPContainer Parse(ReadOnlySpan<byte> data)
+    /// <summary>Parses the chunks; <paramref name="options"/> limits the number of animation frames.</summary>
+    public static WebPContainer Parse(ReadOnlySpan<byte> data, DecoderOptions? options = null)
     {
         if (data.Length < RiffHeaderSize + ChunkHeaderSize || !data.StartsWith("RIFF"u8) || !data.Slice(8, 4).SequenceEqual("WEBP"u8))
         {
@@ -76,7 +79,7 @@ internal sealed class WebPContainer
 
         // There's no point in reading past the end of the RIFF chunk.
         int end = (int)riffSize + ChunkHeaderSize;
-        var container = new WebPContainer();
+        var container = new WebPContainer { _options = options };
         var reader = new ChunkReader(data[..end], RiffHeaderSize);
 
         Chunk first = reader.Peek();
@@ -238,6 +241,7 @@ internal sealed class WebPContainer
             throw Error("Frame bitstream size does not match the ANMF header.");
         }
 
+        _options?.ValidateFrameCount(ImageFormat.WebP, Frames.Count + 1L);
         Frames.Add(frame);
     }
 

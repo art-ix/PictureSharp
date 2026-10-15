@@ -40,6 +40,7 @@ internal sealed partial class PngDecoder
         public byte[]? Icc;
         public byte[]? Exif;
         public byte[]? Xmp;
+        public long MetadataBytes;
         public float? DpiX;
         public float? DpiY;
         public bool StrictChecksums;
@@ -142,17 +143,20 @@ internal sealed partial class PngDecoder
                         png.DpiY = (float)(BinaryPrimitives.ReadUInt32BigEndian(body[4..]) * 0.0254);
                     }
                 }
-                else if (type.SequenceEqual("iCCP"u8) && !options.IgnoreMetadata)
+                // Like libpng, the first iCCP and eXIf are kept and duplicates ignored. Identify reports only the EXIF
+                // orientation, so it does not decompress the profile or XMP.
+                else if (type.SequenceEqual("iCCP"u8) && !options.IgnoreMetadata && !metadataOnly)
                 {
-                    png.Icc = ReadIccp(body);
+                    png.Icc ??= png.ReadIccp(body, options);
                 }
-                else if (type.SequenceEqual("eXIf"u8) && !options.IgnoreMetadata)
+                else if (type.SequenceEqual("eXIf"u8) && !options.IgnoreMetadata && png.Exif is null)
                 {
+                    png.MetadataBytes = options.AddMetadata(ImageFormat.Png, png.MetadataBytes, body.Length);
                     png.Exif = body.ToArray();
                 }
-                else if (type.SequenceEqual("iTXt"u8) && !options.IgnoreMetadata)
+                else if (type.SequenceEqual("iTXt"u8) && !options.IgnoreMetadata && !metadataOnly)
                 {
-                    png.Xmp ??= ReadXmp(body);
+                    png.Xmp ??= png.ReadXmp(body, options);
                 }
                 else if (type.SequenceEqual("acTL"u8))
                 {
@@ -174,6 +178,7 @@ internal sealed partial class PngDecoder
                         continue;
                     }
 
+                    options.ValidateFrameCount(ImageFormat.Png, png.Animation.Frames.Count + 1L);
                     currentFrame = new ApngFrame
                     {
                         Sequence = (int)BinaryPrimitives.ReadUInt32BigEndian(body),
@@ -274,7 +279,7 @@ internal sealed partial class PngDecoder
             Interlaced = body[12] == 1;
         }
 
-        private static byte[]? ReadIccp(ReadOnlySpan<byte> body)
+        private byte[]? ReadIccp(ReadOnlySpan<byte> body, DecoderOptions options)
         {
             int nul = body.IndexOf((byte)0);
             if (nul < 1 || nul > 79 || nul + 2 > body.Length || body[nul + 1] != 0)
@@ -282,18 +287,32 @@ internal sealed partial class PngDecoder
                 return null;
             }
 
+            byte[] compressed = body[(nul + 2)..].ToArray();
+            return InflateMetadata(compressed, options);  // null for a broken profile, which libpng ignores too
+        }
+
+        /// <summary>Inflates a metadata block within the remaining <see cref="DecoderOptions.MaxMetadataBytes"/>; null when corrupt.</summary>
+        private byte[]? InflateMetadata(byte[] compressed, DecoderOptions options)
+        {
+            byte[] inflated;
             try
             {
-                byte[] compressed = body[(nul + 2)..].ToArray();
-                return Inflater.InflateZlib(compressed, 0, compressed.Length, 4096, 64 << 20);
+                inflated = Inflater.InflateZlib(compressed, 0, compressed.Length, 4096, options.MaxMetadataBytes - MetadataBytes);
+            }
+            catch (OutputLimitExceededException)
+            {
+                throw options.MetadataTooLarge(ImageFormat.Png);
             }
             catch (InvalidDataStreamException)
             {
-                return null;  // a broken profile is ignored, like libpng does
+                return null;
             }
+
+            MetadataBytes = options.AddMetadata(ImageFormat.Png, MetadataBytes, inflated.Length);
+            return inflated;
         }
 
-        private static byte[]? ReadXmp(ReadOnlySpan<byte> body)
+        private byte[]? ReadXmp(ReadOnlySpan<byte> body, DecoderOptions options)
         {
             int nul = body.IndexOf((byte)0);
             if (nul < 0 || !body[..nul].SequenceEqual(Encoding.ASCII.GetBytes(PngConstants.XmpKeyword)) || nul + 3 > body.Length)
@@ -319,18 +338,11 @@ internal sealed partial class PngDecoder
             rest = rest[(keyEnd + 1)..];
             if (!compressed)
             {
+                MetadataBytes = options.AddMetadata(ImageFormat.Png, MetadataBytes, rest.Length);
                 return rest.ToArray();
             }
 
-            try
-            {
-                byte[] data = rest.ToArray();
-                return Inflater.InflateZlib(data, 0, data.Length, 4096, 64 << 20);
-            }
-            catch (InvalidDataStreamException)
-            {
-                return null;
-            }
+            return InflateMetadata(rest.ToArray(), options);
         }
     }
 }

@@ -14,6 +14,7 @@ PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and process
 - Raw pixel access and conversion to BGRA/RGB/gray buffers for interop
 - SIMD on x64 (SSE2–AVX2) and ARM64 (AdvSimd/NEON), bit-identical to the scalar code
 - ICC, EXIF and XMP metadata preserved where the output format supports them
+- Limits for untrusted input (encoded size, pixels, frames, metadata) and cancellation of decoding, encoding and processing
 
 | Format | Read | Write |
 | --- | --- | --- |
@@ -48,6 +49,7 @@ thumbnail.SaveAsPcx("thumbnail.pcx");
 
 - [Getting started](https://github.com/art-ix/PictureSharp/blob/main/docs/getting-started.md): installation, the `Load` → `Mutate`/`Clone` → `Save` model, disposal and errors
 - [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md): files, streams, memory, async, format detection, web responses
+- [Resource limits and cancellation](https://github.com/art-ix/PictureSharp/blob/main/docs/limits-and-cancellation.md): `MaxInputBytes`, `MaxPixels`, `MaxFrames`, `MaxMetadataBytes` and cancellation tokens
 - [ICO icons](https://github.com/art-ix/PictureSharp/blob/main/docs/ico.md): selecting variants and creating favicons or multi-size icons
 - [Encoder options](https://github.com/art-ix/PictureSharp/blob/main/docs/encoder-options.md): WebP, PNG, JPEG, BMP, GIF and PCX settings with recipes
 - [Image processing](https://github.com/art-ix/PictureSharp/blob/main/docs/image-processing.md): resize modes, geometry, color, filters, compositing, custom operations
@@ -65,7 +67,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release 0.5.2, which renames the library from RasterSharp to PictureSharp: package, assembly, `PictureSharp` namespace, `picturesharp-cli` and `PICTURESHARP_*` environment variables; behavior is unchanged from 0.5.1).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release 0.5.3, which adds the `MaxInputBytes`, `MaxMetadataBytes` and `MaxFrames` decoder limits and cancellation tokens that also stop the decoding, encoding and processing work; metadata above 64 MiB and animations above 65536 frames now need raised limits).
 
 ## License
 

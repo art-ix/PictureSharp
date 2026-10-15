@@ -7,7 +7,9 @@ internal static class Parallelism
     public static bool IsWorthwhile(int maxDegreeOfParallelism, long work, long minimumWork) =>
         maxDegreeOfParallelism != 1 && Environment.ProcessorCount > 1 && work >= minimumWork;
 
-    public static ParallelOptions Options(int maxDegreeOfParallelism) => new() { MaxDegreeOfParallelism = maxDegreeOfParallelism };
+    /// <summary>Options for <see cref="Parallel"/> loops; a canceled token stops the loop with <see cref="OperationCanceledException"/>.</summary>
+    public static ParallelOptions Options(int maxDegreeOfParallelism, CancellationToken cancellationToken = default) =>
+        new() { MaxDegreeOfParallelism = maxDegreeOfParallelism, CancellationToken = cancellationToken };
 
     /// <summary>Lets a consumer follow a producer that publishes rows in order (or aborts).</summary>
     public sealed class RowGate

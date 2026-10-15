@@ -5,7 +5,7 @@ namespace PictureSharp;
 /// <summary>
 /// A decoded raster image. Pixels are stored as <see cref="Rgba32"/> with straight alpha; animated images hold several
 /// full-canvas <see cref="Frames"/>. Load images with <see cref="Load(string, DecoderOptions?)"/>, transform them with
-/// <see cref="Mutate"/> (in place) or <see cref="Clone(Action{ImageProcessingContext})"/> (a new image), and write them
+/// <see cref="Mutate(Action{ImageProcessingContext})"/> (in place) or <see cref="Clone(Action{ImageProcessingContext})"/> (a new image), and write them
 /// with <see cref="Save(string)"/> or the <c>SaveAs*</c> methods.
 /// </summary>
 /// <example>

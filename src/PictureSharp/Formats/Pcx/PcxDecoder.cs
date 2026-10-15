@@ -29,7 +29,7 @@ internal sealed class PcxDecoder : IImageDecoder
         };
     }
 
-    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
+    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken)
     {
         ReadOnlySpan<byte> file = data.Span;
         PcxHeader header = PcxHeader.Parse(file);
@@ -72,6 +72,7 @@ internal sealed class PcxDecoder : IImageDecoder
             int offset = PcxConstants.HeaderSize;
             for (int y = 0; y < header.Height; y++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 PcxRle.Decode(raster, ref offset, scanline, header.Encoding == PcxConstants.EncodingRle);
                 Expand(header, scanline, pixels.AsSpan(y * header.Width, header.Width), palette);
             }

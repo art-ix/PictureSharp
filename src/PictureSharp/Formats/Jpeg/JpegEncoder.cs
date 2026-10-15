@@ -5,7 +5,7 @@ internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
     public static JpegEncoder Instance { get; } = new();
     public ImageFormat Format => ImageFormat.Jpeg;
 
-    public void Encode(Image image, Stream output, JpegEncoderOptions options)
+    public void Encode(Image image, Stream output, JpegEncoderOptions options, CancellationToken cancellationToken)
     {
         if (image.Width > 65535 || image.Height > 65535)
             throw new ArgumentOutOfRangeException(nameof(image), "JPEG dimensions must not exceed 65535.");
@@ -25,7 +25,8 @@ internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
         {
             for (int c = 0; c < components.Length; c++)
                 components[c] = new JpegEncoderComponent(image.Width, image.Height, c == 0 ? h : 1, c == 0 ? v : 1, h, v);
-            JpegEncoderComponent.PrepareAll(image, components, h, v, options.BackgroundColor, quantization, options.MaxDegreeOfParallelism);
+            JpegEncoderComponent.PrepareAll(image, components, h, v, options.BackgroundColor, quantization, options.MaxDegreeOfParallelism,
+                cancellationToken);
 
             var markers = new JpegMarkerWriter(output);
             markers.Header(image, options.Metadata);
@@ -43,7 +44,7 @@ internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
                 if (options.OptimizeCoding || options.Progressive)
                 {
                     var statistics = new JpegScanEncoder(components, scan, options.Progressive, options.RestartInterval, tables, null);
-                    statistics.Encode();
+                    statistics.Encode(cancellationToken);
                     for (int i = 0; i < 4; i++)
                         if (statistics.Frequencies[i].Any(f => f != 0)) tables[i] = JpegHuffmanEncoder.Optimize(statistics.Frequencies[i]);
                 }
@@ -60,7 +61,7 @@ internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
                 if (first && options.RestartInterval != 0) markers.RestartInterval(options.RestartInterval);
                 first = false;
                 markers.Scan(scan, components.Length, options.Progressive);
-                new JpegScanEncoder(components, scan, options.Progressive, options.RestartInterval, tables, output).Encode();
+                new JpegScanEncoder(components, scan, options.Progressive, options.RestartInterval, tables, output).Encode(cancellationToken);
             }
 
             markers.Marker(0xD9);

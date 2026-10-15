@@ -4,7 +4,7 @@ namespace PictureSharp.Formats.Jpeg;
 internal static class JpegScanDecoder
 {
     /// <summary>Decodes a scan starting at <paramref name="position"/>; returns the position where its data ends.</summary>
-    public static int Decode(ReadOnlySpan<byte> data, int position, JpegFrame frame, JpegScan scan)
+    public static int Decode(ReadOnlySpan<byte> data, int position, JpegFrame frame, JpegScan scan, CancellationToken cancellationToken)
     {
         var reader = new JpegBitReader(data, position);
         foreach (JpegComponent c in scan.Components)
@@ -14,11 +14,11 @@ internal static class JpegScanDecoder
 
         if (frame.Progressive)
         {
-            DecodeProgressive(ref reader, frame, scan);
+            DecodeProgressive(ref reader, frame, scan, cancellationToken);
         }
         else
         {
-            DecodeSequential(ref reader, frame, scan);
+            DecodeSequential(ref reader, frame, scan, cancellationToken);
         }
 
         return reader.Position;
@@ -27,7 +27,8 @@ internal static class JpegScanDecoder
     private delegate void McuAction(ref JpegBitReader reader, int mcuX, int mcuY, ref int eobRun);
 
     /// <summary>Calls <paramref name="decodeMcu"/> for every MCU of the scan, handling restart intervals.</summary>
-    private static void ForEachMcu(ref JpegBitReader reader, JpegFrame frame, JpegScan scan, McuAction decodeMcu)
+    private static void ForEachMcu(ref JpegBitReader reader, JpegFrame frame, JpegScan scan, McuAction decodeMcu,
+        CancellationToken cancellationToken)
     {
         int eobRun = 0;
         int mcusX, mcusY;
@@ -47,6 +48,7 @@ internal static class JpegScanDecoder
         int nextRestart = 0;
         for (int my = 0; my < mcusY; my++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             for (int mx = 0; mx < mcusX; mx++)
             {
                 if (scan.RestartInterval > 0)
@@ -78,7 +80,7 @@ internal static class JpegScanDecoder
 
     // ------------------------------------------------------------------ sequential
 
-    private static void DecodeSequential(ref JpegBitReader reader, JpegFrame frame, JpegScan scan)
+    private static void DecodeSequential(ref JpegBitReader reader, JpegFrame frame, JpegScan scan, CancellationToken cancellationToken)
     {
         JpegComponent[] comps = scan.Components;
         short[] block = new short[64];
@@ -105,7 +107,7 @@ internal static class JpegScanDecoder
         }
 
         // Blocks skipped after the data ran out stay at the plane's initial mid-gray.
-        ForEachMcu(ref reader, frame, scan, DecodeMcu);
+        ForEachMcu(ref reader, frame, scan, DecodeMcu, cancellationToken);
     }
 
     // port: libjpeg-turbo jdhuff.c decode_mcu_slow (one block)
@@ -143,7 +145,7 @@ internal static class JpegScanDecoder
 
     // ------------------------------------------------------------------ progressive
 
-    private static void DecodeProgressive(ref JpegBitReader reader, JpegFrame frame, JpegScan scan)
+    private static void DecodeProgressive(ref JpegBitReader reader, JpegFrame frame, JpegScan scan, CancellationToken cancellationToken)
     {
         JpegComponent[] comps = scan.Components;
         bool single = comps.Length == 1;
@@ -193,7 +195,7 @@ internal static class JpegScanDecoder
             }
         }
 
-        ForEachMcu(ref reader, frame, scan, DecodeMcu);
+        ForEachMcu(ref reader, frame, scan, DecodeMcu, cancellationToken);
     }
 
     // port: libjpeg-turbo jdphuff.c decode_mcu_AC_first

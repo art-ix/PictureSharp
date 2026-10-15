@@ -56,9 +56,12 @@ internal sealed class Vp8LDecoder
     private int _nextTransform;
     private uint _transformsSeen;
 
-    private Vp8LDecoder(byte[] data, int offset, int length)
+    private readonly CancellationToken _cancellationToken;
+
+    private Vp8LDecoder(byte[] data, int offset, int length, CancellationToken cancellationToken)
     {
         _br = new Vp8LBitReader(data, offset, length);
+        _cancellationToken = cancellationToken;
     }
 
     /// <summary>Header information of a VP8L bitstream.</summary>
@@ -91,9 +94,10 @@ internal sealed class Vp8LDecoder
     /// Decodes a complete VP8L bitstream (with its 5-byte header) to ARGB pixels in a buffer rented from
     /// <see cref="ArrayPool{T}.Shared"/>: the first width × height entries are the image; return it after use.
     /// </summary>
-    public static uint[] Decode(byte[] data, int offset, int length, out int width, out int height)
+    public static uint[] Decode(byte[] data, int offset, int length, out int width, out int height,
+        CancellationToken cancellationToken = default)
     {
-        var dec = new Vp8LDecoder(data, offset, length);
+        var dec = new Vp8LDecoder(data, offset, length, cancellationToken);
         if (!ReadImageInfo(dec._br, out width, out height, out _))
         {
             throw Error("Invalid VP8L header.");
@@ -106,9 +110,10 @@ internal sealed class Vp8LDecoder
     /// Decodes a headerless VP8L image stream of known size, as used by the ALPH chunk.
     /// Returns ARGB pixels in a rented buffer like <see cref="Decode"/>; the alpha values are in the green channel.
     /// </summary>
-    public static uint[] DecodeHeaderless(byte[] data, int offset, int length, int width, int height)
+    public static uint[] DecodeHeaderless(byte[] data, int offset, int length, int width, int height,
+        CancellationToken cancellationToken = default)
     {
-        var dec = new Vp8LDecoder(data, offset, length);
+        var dec = new Vp8LDecoder(data, offset, length, cancellationToken);
         return dec.DecodeImageStream(width, height, isLevel0: true);
     }
 
@@ -613,6 +618,8 @@ internal sealed class Vp8LDecoder
                 throw Error("Truncated data.");
             }
 
+            // Not checked inside the transforms: a color-indexing transform swaps the rented buffer.
+            _cancellationToken.ThrowIfCancellationRequested();
             return isLevel0 ? ApplyInverseTransforms(data, xsize, ysize) : data;
         }
         catch
@@ -740,6 +747,7 @@ internal sealed class Vp8LDecoder
                 {
                     col -= width;
                     ++row;
+                    _cancellationToken.ThrowIfCancellationRequested();
                 }
 
                 if ((col & mask) != 0)
@@ -780,6 +788,7 @@ internal sealed class Vp8LDecoder
             {
                 col = 0;
                 ++row;
+                _cancellationToken.ThrowIfCancellationRequested();
                 if (colorCache is not null)
                 {
                     while (lastCached < src)

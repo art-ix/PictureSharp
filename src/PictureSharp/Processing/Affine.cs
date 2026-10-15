@@ -47,7 +47,8 @@ internal static class Affine
 
     /// <summary>Nearest-neighbour affine transform of straight-alpha pixels; pixels mapped from outside the source keep their value.</summary>
     // port: Pillow src/libImaging/Geometry.c ImagingTransformAffine (nearest: affine_fixed, else the floating point loop)
-    public static void TransformNearest(ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Span<Rgba32> dst, int width, int height, double[] a)
+    public static void TransformNearest(ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Span<Rgba32> dst, int width, int height, double[] a,
+        CancellationToken cancellationToken = default)
     {
         if (CheckFixed(a, 0, 0) && CheckFixed(a, width, height) && CheckFixed(a, 0, height) && CheckFixed(a, width, 0))
         {
@@ -57,6 +58,7 @@ internal static class Affine
             int a5 = Fix(a[5] + (a[4] * 0.5) + (a[3] * 0.5));
             for (int y = 0; y < height; y++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 Span<Rgba32> row = dst.Slice(y * width, width);
                 int xx = a2, yy = a5;
                 for (int x = 0; x < width; x++)
@@ -86,6 +88,7 @@ internal static class Affine
         double yo = a[5] + (a[4] * 0.5) + (a[3] * 0.5);
         for (int y = 0; y < height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Span<Rgba32> row = dst.Slice(y * width, width);
             double xx = xo, yy = yo;
             for (int x = 0; x < width; x++)
@@ -112,13 +115,14 @@ internal static class Affine
     /// <summary>Bilinear or bicubic affine transform of premultiplied pixels; pixels mapped from outside the source keep their value.</summary>
     // port: Pillow src/libImaging/Geometry.c ImagingGenericTransform with affine_transform
     public static void TransformFiltered(ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Span<Rgba32> dst, int width, int height,
-        double[] a, ResamplingFilter filter)
+        double[] a, ResamplingFilter filter, CancellationToken cancellationToken = default)
     {
         ReadOnlySpan<byte> image = MemoryMarshal.AsBytes(src);
         Span<byte> output = MemoryMarshal.AsBytes(dst);
         bool bicubic = filter == ResamplingFilter.Bicubic;
         for (int y = 0; y < height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             for (int x = 0; x < width; x++)
             {
                 // port: Geometry.c affine_transform

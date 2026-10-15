@@ -23,7 +23,7 @@ internal static partial class Resizer
     /// The box is in source pixels and may be fractional, like Pillow's <c>box</c> argument.
     /// </summary>
     public static Rgba32[] Resize(Rgba32[] src, int srcWidth, int srcHeight, int width, int height,
-        ResamplingFilter filter, float x0, float y0, float x1, float y1)
+        ResamplingFilter filter, float x0, float y0, float x1, float y1, CancellationToken cancellationToken = default)
     {
         var dst = GC.AllocateUninitializedArray<Rgba32>(checked(width * height));
         if (width == srcWidth && height == srcHeight && x0 == 0 && y0 == 0 && x1 == srcWidth && y1 == srcHeight)
@@ -32,11 +32,11 @@ internal static partial class Resizer
         }
         else if (filter == ResamplingFilter.Nearest)
         {
-            ScaleNearest(src, srcWidth, srcHeight, dst, width, height, x0, y0, x1, y1);
+            ScaleNearest(src, srcWidth, srcHeight, dst, width, height, x0, y0, x1, y1, cancellationToken);
         }
         else
         {
-            ResampleInner(src, srcWidth, srcHeight, dst, width, height, filter, x0, y0, x1, y1);
+            ResampleInner(src, srcWidth, srcHeight, dst, width, height, filter, x0, y0, x1, y1, cancellationToken);
         }
 
         return dst;
@@ -118,7 +118,7 @@ internal static partial class Resizer
 
     // port: Pillow src/libImaging/Geometry.c ImagingScaleAffine (via _imaging.c _resize for NEAREST)
     private static void ScaleNearest(Rgba32[] src, int srcWidth, int srcHeight, Rgba32[] dst, int width, int height,
-        float x0, float y0, float x1, float y1)
+        float x0, float y0, float x1, float y1, CancellationToken cancellationToken)
     {
         double a0 = (double)(x1 - x0) / width;
         double a4 = (double)(y1 - y0) / height;
@@ -148,6 +148,7 @@ internal static partial class Resizer
             double yo = y0 + (a4 * 0.5);
             for (int y = 0; y < height; y++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 Span<Rgba32> row = dst.AsSpan(y * width, width);
                 row.Clear();
                 int yi = Coord(yo);
@@ -173,7 +174,7 @@ internal static partial class Resizer
 
     // port: Pillow src/libImaging/Resample.c ImagingResampleInner
     private static void ResampleInner(Rgba32[] src, int srcWidth, int srcHeight, Rgba32[] dst, int width, int height,
-        ResamplingFilter filter, float x0, float y0, float x1, float y1)
+        ResamplingFilter filter, float x0, float y0, float x1, float y1, CancellationToken cancellationToken)
     {
         bool needHorizontal = width != srcWidth || x0 != 0 || x1 != width;
         bool needVertical = height != srcHeight || y0 != 0 || y1 != height;
@@ -200,7 +201,7 @@ internal static partial class Resizer
             if (premul is not null)
             {
                 const int band = 64;
-                ForRows((rowCount + band - 1) / band, (long)band * srcWidth, b =>
+                ForRows((rowCount + band - 1) / band, (long)band * srcWidth, cancellationToken, b =>
                 {
                     int start = b * band * srcWidth;
                     int length = Math.Min(band * srcWidth, regionLength - start);
@@ -220,14 +221,14 @@ internal static partial class Resizer
                 }
 
                 Rgba32[] target = needVertical ? (temp = ArrayPool<Rgba32>.Shared.Rent(rowCount * width)) : dst;
-                ResampleHorizontal(source, sourceStart, srcWidth, target, width, rowCount, ksizeH, boundsH, kkH);
+                ResampleHorizontal(source, sourceStart, srcWidth, target, width, rowCount, ksizeH, boundsH, kkH, cancellationToken);
                 current = target;
                 currentWidth = width;
             }
 
             if (needVertical)
             {
-                ResampleVertical(current, currentWidth, dst, height, ksizeV, boundsV, kkV);
+                ResampleVertical(current, currentWidth, dst, height, ksizeV, boundsV, kkV, cancellationToken);
             }
 
             Premultiplied.ToStraight(dst);
@@ -400,9 +401,9 @@ internal static partial class Resizer
 
     // port: Pillow src/libImaging/Resample.c ImagingResampleHorizontal_8bpc (4 bands)
     private static void ResampleHorizontal(Rgba32[] src, int srcStart, int srcWidth, Rgba32[] dst, int width, int rows,
-        int ksize, int[] bounds, int[] kk)
+        int ksize, int[] bounds, int[] kk, CancellationToken cancellationToken)
     {
-        ForRows(rows, (long)width * ksize, y =>
+        ForRows(rows, (long)width * ksize, cancellationToken, y =>
         {
             ReadOnlySpan<byte> inRow = MemoryMarshal.AsBytes(src.AsSpan(srcStart + (y * srcWidth), srcWidth));
             Span<Rgba32> outRow = dst.AsSpan(y * width, width);
@@ -438,9 +439,9 @@ internal static partial class Resizer
     // port: Pillow src/libImaging/Resample.c ImagingResampleVertical_8bpc (4 bands). Integer sums are order
     // independent, so accumulating per source row or per output byte gives the same result.
     private static void ResampleVertical(Rgba32[] src, int width, Rgba32[] dst, int height,
-        int ksize, int[] bounds, int[] kk)
+        int ksize, int[] bounds, int[] kk, CancellationToken cancellationToken)
     {
-        ForRows(height, (long)width * ksize, yy =>
+        ForRows(height, (long)width * ksize, cancellationToken, yy =>
         {
             int ymin = bounds[yy * 2];
             int ymax = bounds[(yy * 2) + 1];
@@ -494,18 +495,19 @@ internal static partial class Resizer
         return v < 0 ? (byte)0 : v > 255 ? (byte)255 : (byte)v;
     }
 
-    private static void ForRows(int rows, long workPerRow, Action<int> body)
+    private static void ForRows(int rows, long workPerRow, CancellationToken cancellationToken, Action<int> body)
     {
         if (rows * workPerRow < ParallelThreshold || Environment.ProcessorCount == 1)
         {
             for (int y = 0; y < rows; y++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 body(y);
             }
         }
         else
         {
-            Parallel.For(0, rows, body);
+            Parallel.For(0, rows, new ParallelOptions { CancellationToken = cancellationToken }, body);
         }
     }
 }

@@ -38,7 +38,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
         public double DurationMs;
     }
 
-    public void Encode(Image image, Stream output, GifEncoderOptions options)
+    public void Encode(Image image, Stream output, GifEncoderOptions options, CancellationToken cancellationToken)
     {
         int width = image.Width;
         int height = image.Height;
@@ -51,19 +51,35 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
 
         // Exact local palettes are tried first; a frame whose drawn pixels need too many colors switches the whole
         // animation to one shared quantized palette.
-        using PooledBufferStream encoded = TryEncode(image, frames, options, new GifPaletteBuilder(frames, options))
-            ?? TryEncode(image, frames, options, new GifPaletteBuilder(frames, options, forceShared: true))
+        using PooledBufferStream encoded = TryEncode(image, frames, options, new GifPaletteBuilder(frames, options), cancellationToken)
+            ?? TryEncode(image, frames, options, new GifPaletteBuilder(frames, options, forceShared: true), cancellationToken)
             ?? throw new InvalidOperationException("GIF palette selection failed.");
         encoded.WriteTo(output);
     }
 
-    private static PooledBufferStream? TryEncode(Image image, IReadOnlyList<ImageFrame> frames, GifEncoderOptions options, GifPaletteBuilder palettes)
+    private static PooledBufferStream? TryEncode(Image image, IReadOnlyList<ImageFrame> frames, GifEncoderOptions options, GifPaletteBuilder palettes,
+        CancellationToken cancellationToken)
+    {
+        var stream = new PooledBufferStream();
+        try
+        {
+            return TryEncode(image, frames, options, palettes, stream, cancellationToken);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+    }
+
+    private static PooledBufferStream? TryEncode(Image image, IReadOnlyList<ImageFrame> frames, GifEncoderOptions options, GifPaletteBuilder palettes,
+        PooledBufferStream stream, CancellationToken cancellationToken)
     {
         int width = image.Width;
         int height = image.Height;
         bool animated = frames.Count > 1;
-        var stream = new PooledBufferStream();
-        var writer = new GifBlockWriter(stream);
+        var writer = new GifBlockWriter(stream, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         GifFramePalette first;
         Rgba32[]? firstRendered;
@@ -112,6 +128,7 @@ internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
 
         for (int index = 1; index < frames.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             GifFramePalette? palette = palettes.IsLocal ? null : palettes.Build(index);
             Rgba32[] rendered = palette is null ? palettes.Binarize(index) : GifPaletteBuilder.Render(palette);
             Rgba32[] before = Dispose(pending, rendered, width, height, options.OptimizeFrames);

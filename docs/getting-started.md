@@ -72,7 +72,8 @@ See [Pixels and interop](pixels-and-interop.md) for spans, raw buffers and conve
 | Valid file using an unsupported feature (e.g. arithmetic-coded JPEG) | `NotSupportedException` |
 | Saving to an unknown extension, e.g. `Save("x.tiff")` | `NotSupportedException` |
 | Out-of-range option value, e.g. `new WebPEncoderOptions { Quality = 120 }` | `ArgumentOutOfRangeException`, thrown where the value is set |
-| Image larger than `DecoderOptions.MaxPixels` (default 2^28 pixels) | `ImageFormatException` |
+| Image larger than `DecoderOptions.MaxPixels` (default 2^28 pixels), or input, frames or metadata beyond `MaxInputBytes`, `MaxFrames` or `MaxMetadataBytes` | `ImageFormatException` |
+| Canceled `CancellationToken` passed to a load, save or processing call | `OperationCanceledException` |
 
 ```csharp
 try
@@ -85,7 +86,7 @@ catch (ImageFormatException ex)
 }
 ```
 
-Decoders never let index errors escape on malicious input; anything unexpected is reported as `ImageFormatException`.
+Decoders never let index errors escape on malicious input; anything unexpected is reported as `ImageFormatException`. For untrusted uploads see [Resource limits and cancellation](limits-and-cancellation.md).
 
 ## Next steps
 

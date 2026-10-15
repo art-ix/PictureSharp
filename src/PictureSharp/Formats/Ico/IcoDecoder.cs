@@ -7,14 +7,15 @@ internal sealed class IcoDecoder : IImageDecoder
     public static IcoDecoder Instance { get; } = new();
     public ImageFormat Format => ImageFormat.Ico;
 
-    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options) =>
-        DecodeEntry(IcoDirectory.Parse(data, options).Select(options), options);
+    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken) =>
+        DecodeEntry(IcoDirectory.Parse(data, options).Select(options), options, cancellationToken);
 
-    internal static Image DecodeEntry(IcoDirectory.Entry entry, DecoderOptions options)
+    internal static Image DecodeEntry(IcoDirectory.Entry entry, DecoderOptions options, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            return DecodeEntryCore(entry, options);
+            return DecodeEntryCore(entry, options, cancellationToken);
         }
         catch (Exception ex) when (ImageCodec.IsCorruptDataException(ex))
         {
@@ -22,7 +23,7 @@ internal sealed class IcoDecoder : IImageDecoder
         }
     }
 
-    private static Image DecodeEntryCore(IcoDirectory.Entry entry, DecoderOptions options)
+    private static Image DecodeEntryCore(IcoDirectory.Entry entry, DecoderOptions options, CancellationToken cancellationToken)
     {
         IcoEntryInfo info = entry.Info;
         options.ValidateDimensions(ImageFormat.Ico, info.Width, info.Height);
@@ -32,7 +33,7 @@ internal sealed class IcoDecoder : IImageDecoder
         }
 
         Image image = info.Encoding == IcoEncoding.Png
-            ? PngDecoder.Instance.Decode(entry.Data, options with { FirstFrameOnly = true })
+            ? PngDecoder.Instance.Decode(entry.Data, options with { FirstFrameOnly = true }, cancellationToken)
             : IcoDib.Decode(entry.Data.Span, info.Width, info.Height);
         image.SourceFormat = ImageFormat.Ico;
         return image;

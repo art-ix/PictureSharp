@@ -74,6 +74,6 @@ public class RgbaAndFormatTests
     {
         IImageEncoder encoder = Formats.Png.PngEncoder.Instance;
         using Image image = Image.LoadPixelData([default(Rgba32)], 1, 1);
-        Assert.Throws<ArgumentException>(() => encoder.Encode(image, Stream.Null, new BmpEncoderOptions()));
+        Assert.Throws<ArgumentException>(() => encoder.Encode(image, Stream.Null, new BmpEncoderOptions(), CancellationToken.None));
     }
 }

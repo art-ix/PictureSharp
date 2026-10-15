@@ -35,7 +35,7 @@ internal sealed partial class JpegScanEncoder
     }
 
     // port: libjpeg-turbo jccoefct.c compress_output; jcphuff.c emit_restart
-    public void Encode()
+    public void Encode(CancellationToken cancellationToken = default)
     {
         JpegEncoderComponent first = _components[_scan.Interleaved ? 0 : _scan.Component];
         int width = _scan.Interleaved ? first.PaddedWidth / first.Horizontal : first.WidthInBlocks;
@@ -43,6 +43,7 @@ internal sealed partial class JpegScanEncoder
         int mcu = 0, restart = 0;
         for (int y = 0; y < height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             for (int x = 0; x < width; x++, mcu++)
             {
                 if (_restartInterval != 0 && mcu != 0 && mcu % _restartInterval == 0)

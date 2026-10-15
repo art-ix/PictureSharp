@@ -69,11 +69,14 @@ internal sealed partial class Deflater : IDisposable
     private int _symCount;
     private int _blockStart;
 
-    private Deflater(byte[] input, int level, int maxDegreeOfParallelism)
+    private readonly CancellationToken _cancellationToken;
+
+    private Deflater(byte[] input, int level, int maxDegreeOfParallelism, CancellationToken cancellationToken = default)
     {
         _input = input;
         _level = level;
         _maxDegreeOfParallelism = maxDegreeOfParallelism;
+        _cancellationToken = cancellationToken;
     }
 
     /// <summary>Compresses <paramref name="data"/> into a zlib stream.</summary>
@@ -89,29 +92,44 @@ internal sealed partial class Deflater : IDisposable
 
     /// <summary>
     /// Compresses <paramref name="input"/> into a zlib stream kept in a pooled buffer: read <see cref="Output"/>,
-    /// then dispose the returned instance.
+    /// then dispose the returned instance. <paramref name="cancellationToken"/> is checked before each block.
     /// </summary>
-    public static Deflater CompressZlibPooled(byte[] input, int level, int maxDegreeOfParallelism)
+    public static Deflater CompressZlibPooled(byte[] input, int level, int maxDegreeOfParallelism, CancellationToken cancellationToken = default)
     {
         level = Math.Clamp(level, 0, 9);
-        var deflater = new Deflater(input, level, maxDegreeOfParallelism);
+        var deflater = new Deflater(input, level, maxDegreeOfParallelism, cancellationToken);
+        try
+        {
+            deflater.WriteZlib();
+        }
+        catch
+        {
+            deflater.Dispose();
+            throw;
+        }
+
+        return deflater;
+    }
+
+    private void WriteZlib()
+    {
+        int level = _level;
 
         // zlib header: CM=8, CINFO=7 (32K window), FLEVEL from the level, FCHECK so header % 31 == 0.
         int flevel = level < 2 ? 0 : level < 6 ? 1 : level == 6 ? 2 : 3;
         int cmf = 0x78;
         int flg = flevel << 6;
         flg |= 31 - (((cmf << 8) | flg) % 31);
-        deflater._out.WriteByte((byte)cmf);
-        deflater._out.WriteByte((byte)flg);
+        _out.WriteByte((byte)cmf);
+        _out.WriteByte((byte)flg);
 
-        deflater.Compress();
+        Compress();
 
-        uint adler = Adler32.Compute(input);
-        deflater._out.WriteByte((byte)(adler >> 24));
-        deflater._out.WriteByte((byte)(adler >> 16));
-        deflater._out.WriteByte((byte)(adler >> 8));
-        deflater._out.WriteByte((byte)adler);
-        return deflater;
+        uint adler = Adler32.Compute(_input);
+        _out.WriteByte((byte)(adler >> 24));
+        _out.WriteByte((byte)(adler >> 16));
+        _out.WriteByte((byte)(adler >> 8));
+        _out.WriteByte((byte)adler);
     }
 
     /// <summary>The compressed bytes of <see cref="CompressZlibPooled"/>.</summary>
@@ -228,6 +246,7 @@ internal sealed partial class Deflater : IDisposable
 
     private void FlushBlock(int end, bool final)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         int count = _symCount;
         Span<int> litFreq = stackalloc int[NumLitLen];
         Span<int> distFreq = stackalloc int[NumDist];

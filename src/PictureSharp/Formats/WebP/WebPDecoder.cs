@@ -19,7 +19,7 @@ internal sealed partial class WebPDecoder : IImageDecoder
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
-        WebPContainer c = WebPContainer.Parse(data.Span);
+        WebPContainer c = WebPContainer.Parse(data.Span, options);
         ExifOrientation orientation = c.Exif.IsEmpty
             ? ExifOrientation.Unknown
             : ExifReader.GetOrientation(c.Exif.Slice(data.Span));
@@ -36,16 +36,21 @@ internal sealed partial class WebPDecoder : IImageDecoder
         };
     }
 
-    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
+    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken)
     {
-        WebPContainer c = WebPContainer.Parse(data.Span);
+        WebPContainer c = WebPContainer.Parse(data.Span, options);
+        if (!options.IgnoreMetadata)
+        {
+            options.AddMetadata(ImageFormat.WebP, 0, (long)c.Icc.Length + c.Exif.Length + c.Xmp.Length);
+        }
+
         options.ValidateFrames(ImageFormat.WebP, c.CanvasWidth, c.CanvasHeight,
             c.IsAnimated && !options.FirstFrameOnly ? c.Frames.Count : 1);
 
         Image image;
         if (c.IsAnimated)
         {
-            image = new Image(AnimationDecoder.Decode(data, c, options))
+            image = new Image(AnimationDecoder.Decode(data, c, options, cancellationToken))
             {
                 LoopCount = c.LoopCount,
                 AnimationBackgroundColor = Rgba32.FromArgb(c.BackgroundColor),
@@ -53,7 +58,7 @@ internal sealed partial class WebPDecoder : IImageDecoder
         }
         else
         {
-            image = new Image([DecodeFrame(data, c.Frames[0], options)]);
+            image = new Image([DecodeFrame(data, c.Frames[0], options, cancellationToken)]);
         }
 
         image.SourceFormat = ImageFormat.WebP;
@@ -99,12 +104,14 @@ internal sealed partial class WebPDecoder : IImageDecoder
     }
 
     /// <summary>Decodes the bitstream of one frame to a frame-sized RGBA buffer.</summary>
-    internal static ImageFrame DecodeFrame(ReadOnlyMemory<byte> data, WebPFrameInfo info, DecoderOptions options)
+    internal static ImageFrame DecodeFrame(ReadOnlyMemory<byte> data, WebPFrameInfo info, DecoderOptions options,
+        CancellationToken cancellationToken)
     {
         (byte[] array, int offset) = GetArray(data);
         if (info.IsLossless)
         {
-            uint[] argb = Vp8LDecoder.Decode(array, offset + info.Image.Offset, info.Image.Length, out int width, out int height);
+            uint[] argb = Vp8LDecoder.Decode(array, offset + info.Image.Offset, info.Image.Length, out int width, out int height,
+                cancellationToken);
             try
             {
                 ImageFrame frame = ImageFrame.CreateUninitialized(width, height);
@@ -118,12 +125,13 @@ internal sealed partial class WebPDecoder : IImageDecoder
         }
         else
         {
-            Vp8Frame yuv = Vp8Decoder.Decode(array, offset + info.Image.Offset, info.Image.Length, options.WebPBypassFiltering, options.MaxDegreeOfParallelism);
+            Vp8Frame yuv = Vp8Decoder.Decode(array, offset + info.Image.Offset, info.Image.Length, options.WebPBypassFiltering,
+                options.MaxDegreeOfParallelism, cancellationToken);
             ImageFrame frame = ImageFrame.CreateUninitialized(yuv.Width, yuv.Height);
             Span<Rgba32> pixels = frame.GetPixelSpan();
             try
             {
-                YuvToRgb.Convert(yuv, frame.Pixels, options.WebPFancyUpsampling, options.MaxDegreeOfParallelism);
+                YuvToRgb.Convert(yuv, frame.Pixels, options.WebPFancyUpsampling, options.MaxDegreeOfParallelism, cancellationToken: cancellationToken);
             }
             finally
             {
@@ -132,7 +140,7 @@ internal sealed partial class WebPDecoder : IImageDecoder
 
             if (!info.Alpha.IsEmpty)
             {
-                byte[] alpha = AlphaDecoder.Decode(array, offset + info.Alpha.Offset, info.Alpha.Length, yuv.Width, yuv.Height);
+                byte[] alpha = AlphaDecoder.Decode(array, offset + info.Alpha.Offset, info.Alpha.Length, yuv.Width, yuv.Height, cancellationToken);
                 for (int i = 0; i < pixels.Length; i++)
                 {
                     pixels[i].A = alpha[i];

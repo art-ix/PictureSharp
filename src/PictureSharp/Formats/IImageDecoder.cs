@@ -5,7 +5,8 @@ internal interface IImageDecoder
 {
     ImageFormat Format { get; }
 
-    Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options);
+    /// <summary>Decodes the image; long-running work checks <paramref name="cancellationToken"/> between rows, blocks or frames.</summary>
+    Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken);
 
     ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options);
 }

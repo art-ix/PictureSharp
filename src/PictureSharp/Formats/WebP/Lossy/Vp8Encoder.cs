@@ -7,14 +7,15 @@ internal static partial class Vp8Encoder
     private const long Partition0Limit = ((1L << 19) - 2048) << 11;
 
     // port: src/enc/webp_enc.c WebPEncode, InitVP8Encoder
-    public static byte[] Encode(Image image, WebPEncoderOptions options)
+    public static byte[] Encode(Image image, WebPEncoderOptions options, CancellationToken cancellationToken = default)
     {
         var config = new Vp8EncoderConfig(options);
         using var source = new RgbToYuv(image.Width, image.Height);
-        if (options.UseSharpYuv) SharpYuv.Convert(image.GetPixelSpan(), source);
-        else source.Convert(image.Frames.RootFrame.Pixels, config.Dithering, options.MaxDegreeOfParallelism);
+        if (options.UseSharpYuv) SharpYuv.Convert(image.GetPixelSpan(), source, cancellationToken);
+        else source.Convert(image.Frames.RootFrame.Pixels, config.Dithering, options.MaxDegreeOfParallelism, cancellationToken);
         if (!options.Exact) source.CleanupTransparent(image.GetPixelSpan());
-        using var context = new Vp8EncoderContext(source, config);
+        cancellationToken.ThrowIfCancellationRequested();
+        using var context = new Vp8EncoderContext(source, config) { CancellationToken = cancellationToken };
         Vp8Analysis.Analyze(context);
         var probabilities = new Vp8EncoderProba();
         var filter = new Vp8EncoderFilter(options.AutoFilter);

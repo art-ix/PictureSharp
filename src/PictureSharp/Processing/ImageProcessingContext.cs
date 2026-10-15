@@ -4,7 +4,7 @@ using PictureSharp.Processing;
 namespace PictureSharp;
 
 /// <summary>
-/// The operations available inside <see cref="Image.Mutate"/> and <see cref="Image.Clone(Action{ImageProcessingContext})"/>.
+/// The operations available inside <see cref="Image.Mutate(Action{ImageProcessingContext})"/> and <see cref="Image.Clone(Action{ImageProcessingContext})"/>.
 /// Each operation applies to every frame and returns the context, so calls chain in the order they run.
 /// Own operations can be added with a C# 14 <c>extension(ImageProcessingContext x)</c> block built on
 /// <see cref="Apply"/> and the other operations.
@@ -20,6 +20,12 @@ public readonly ref partial struct ImageProcessingContext
 
     /// <summary>The current size of the image (after the operations so far).</summary>
     public Size Size => _state.Image.Size;
+
+    /// <summary>
+    /// The token passed to <see cref="Image.Mutate(Action{ImageProcessingContext}, CancellationToken)"/> or
+    /// <see cref="Image.Clone(Action{ImageProcessingContext}, CancellationToken)"/>; long custom operations should check it.
+    /// </summary>
+    public CancellationToken CancellationToken => _state.CancellationToken;
 
     /// <summary>The number of frames the operations apply to.</summary>
     public int FrameCount => _state.Image.FrameCount;

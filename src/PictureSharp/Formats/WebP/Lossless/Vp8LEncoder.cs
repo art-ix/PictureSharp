@@ -17,7 +17,7 @@ internal static class Vp8LEncoder
     private sealed record CrunchConfig(EntropyIx Entropy, PaletteSorting Sorting, Vp8LCrunchSubConfig[] SubConfigs);
 
     // port: src/enc/webp_enc.c WebPEncode (lossless branch); src/enc/vp8l_enc.c VP8LEncodeImage
-    public static byte[] Encode(Image image, WebPEncoderOptions options)
+    public static byte[] Encode(Image image, WebPEncoderOptions options, CancellationToken cancellationToken = default)
     {
         int width = image.Width, height = image.Height, size = checked(width * height);
         uint[] argb = ArrayPool<uint>.Shared.Rent(size);
@@ -33,13 +33,14 @@ internal static class Vp8LEncoder
                 argb[i] = !options.Exact && p.A == 0 ? 0 : value;
                 alpha |= p.A != 255;
             }
-            return Encode(argb, width, height, alpha, options, header: true);
+            return Encode(argb, width, height, alpha, options, header: true, cancellationToken);
         }
         finally { ArrayPool<uint>.Shared.Return(argb); }
     }
 
     // Encodes argb[..width * height] in place; without the 5-byte header for the alpha plane (ALPH chunk).
-    internal static byte[] Encode(uint[] argb, int width, int height, bool alpha, WebPEncoderOptions options, bool header)
+    internal static byte[] Encode(uint[] argb, int width, int height, bool alpha, WebPEncoderOptions options, bool header,
+        CancellationToken cancellationToken = default)
     {
         using var writer = new Vp8LBitWriter();
         if (header)
@@ -47,14 +48,15 @@ internal static class Vp8LEncoder
             writer.Put(0x2f, 8); writer.Put(width - 1, 14); writer.Put(height - 1, 14);
             writer.Put(alpha ? 1 : 0, 1); writer.Put(0, 3);
         }
-        using (Vp8LBitWriter stream = EncodeStream(argb, width, height, options)) writer.Append(stream);
+        using (Vp8LBitWriter stream = EncodeStream(argb, width, height, options, cancellationToken)) writer.Append(stream);
         return writer.ToArray();
     }
 
     // port: src/enc/vp8l_enc.c VP8LEncodeStream
     // Crunch configurations are independent; the smallest result wins and ties go to the earliest
     // configuration, as in the sequential order, so the output does not depend on threading.
-    private static Vp8LBitWriter EncodeStream(uint[] argb, int width, int height, WebPEncoderOptions options)
+    // Cancellation is checked between the encoding stages of each configuration.
+    private static Vp8LBitWriter EncodeStream(uint[] argb, int width, int height, WebPEncoderOptions options, CancellationToken cancellationToken)
     {
         uint[]? paletteSorted = GetColorPalette(argb.AsSpan(0, width * height));
         CrunchConfig[] configs = Analyze(argb, width, height, options, paletteSorted, out int histoBits, out int transformBits, out bool redAndBlueAlwaysZero);
@@ -65,13 +67,16 @@ internal static class Vp8LEncoder
             {
                 // The configurations already use the threads; nested parallelism would only add buffers.
                 WebPEncoderOptions inner = options with { MaxDegreeOfParallelism = 1 };
-                Parallel.For(0, configs.Length, new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism },
-                    i => results[i] = EncodeConfig(argb, width, height, inner, configs[i], paletteSorted, histoBits, transformBits, redAndBlueAlwaysZero));
+                Parallel.For(0, configs.Length,
+                    new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = cancellationToken },
+                    i => results[i] = EncodeConfig(argb, width, height, inner, configs[i], paletteSorted, histoBits, transformBits, redAndBlueAlwaysZero,
+                        cancellationToken));
             }
             else
             {
                 for (int i = 0; i < configs.Length; i++)
-                    results[i] = EncodeConfig(argb, width, height, options, configs[i], paletteSorted, histoBits, transformBits, redAndBlueAlwaysZero);
+                    results[i] = EncodeConfig(argb, width, height, options, configs[i], paletteSorted, histoBits, transformBits, redAndBlueAlwaysZero,
+                        cancellationToken);
             }
             int best = 0;
             for (int i = 1; i < results.Length; i++) if (results[i].ByteCount < results[best].ByteCount) best = i;
@@ -230,8 +235,9 @@ internal static class Vp8LEncoder
 
     // port: src/enc/vp8l_enc.c EncodeStreamHook
     private static Vp8LBitWriter EncodeConfig(uint[] argb, int width, int height, WebPEncoderOptions options, CrunchConfig config,
-        uint[]? paletteSorted, int histoBits, int transformBits, bool redAndBlueAlwaysZero)
+        uint[]? paletteSorted, int histoBits, int transformBits, bool redAndBlueAlwaysZero, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         int method = options.Method, quality = (int)options.Quality;
         bool lowEffort = method == 0;
         bool usePalette = config.Entropy is EntropyIx.Palette or EntropyIx.PaletteAndSpatial;
@@ -264,6 +270,7 @@ internal static class Vp8LEncoder
             }
             if (usePredict)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 // port: src/enc/vp8l_enc.c ApplyPredictFilter
                 int maxBits = ClampBits(currentWidth, height, transformBits, MinTransformBits, MaxTransformBits, MaxPredictorImageSize);
                 int minBits = ClampBits(currentWidth, height, maxBits - 2 * (method > 4 ? method - 4 : 0), MinTransformBits, MaxTransformBits, MaxPredictorImageSize);
@@ -273,12 +280,14 @@ internal static class Vp8LEncoder
             }
             if (useCrossColor)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 // port: src/enc/vp8l_enc.c ApplyCrossColorFilter
                 uint[] colors = Vp8LForwardTransforms.ColorSpaceTransform(currentWidth, height, transformBits, quality, work, out int bits);
                 WriteTransform(writer, colors, currentWidth, height, bits, 1, quality, lowEffort);
             }
             writer.Put(0, 1);
-            Vp8LEntropyEncoder.EncodeImageInternal(writer, work, currentWidth, height, quality, lowEffort, config.SubConfigs, ref cacheBits, histoBits, options.MaxDegreeOfParallelism);
+            Vp8LEntropyEncoder.EncodeImageInternal(writer, work, currentWidth, height, quality, lowEffort, config.SubConfigs, ref cacheBits, histoBits,
+                options.MaxDegreeOfParallelism, cancellationToken);
             return writer;
         }
         catch

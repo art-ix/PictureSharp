@@ -6,7 +6,8 @@ namespace PictureSharp.Formats.WebP.Alpha;
 internal static class AlphaEncoder
 {
     // port: src/enc/alpha_enc.c EncodeAlpha, ApplyFiltersAndEncode
-    public static byte[] Encode(ReadOnlySpan<Rgba32> pixels, int width, int height, WebPEncoderOptions options)
+    public static byte[] Encode(ReadOnlySpan<Rgba32> pixels, int width, int height, WebPEncoderOptions options,
+        CancellationToken cancellationToken = default)
     {
         int size = checked(width * height);
         byte[] plane = ArrayPool<byte>.Shared.Rent(size), filtered = ArrayPool<byte>.Shared.Rent(size);
@@ -20,8 +21,9 @@ internal static class AlphaEncoder
             for (int filter = 0; filter < 4; filter++)
             {
                 if ((filterMap & (1 << filter)) == 0) continue;
+                cancellationToken.ThrowIfCancellationRequested();
                 Filter(plane, filtered, width, height, filter);
-                byte[]? compressed = options.AlphaCompression ? EncodeLossless(filtered.AsSpan(0, size), width, height, options.Method, options.AlphaQuality == 100) : null;
+                byte[]? compressed = options.AlphaCompression ? EncodeLossless(filtered.AsSpan(0, size), width, height, options.Method, options.AlphaQuality == 100, cancellationToken) : null;
                 bool useCompression = compressed is not null && compressed.Length <= size;
                 byte[] candidate = new byte[1 + (useCompression ? compressed!.Length : size)];
                 candidate[0] = (byte)((useCompression ? 1 : 0) | (filter << 2) | (options.AlphaQuality < 100 ? 16 : 0));
@@ -35,7 +37,8 @@ internal static class AlphaEncoder
     }
 
     // port: src/enc/alpha_enc.c EncodeLossless
-    private static byte[] EncodeLossless(ReadOnlySpan<byte> alpha, int width, int height, int method, bool fullQuality)
+    private static byte[] EncodeLossless(ReadOnlySpan<byte> alpha, int width, int height, int method, bool fullQuality,
+        CancellationToken cancellationToken)
     {
         // The alpha values go to the green channel of transparent black pixels (exact, so they stay as they are).
         uint[] argb = ArrayPool<uint>.Shared.Rent(alpha.Length);
@@ -43,7 +46,7 @@ internal static class AlphaEncoder
         {
             for (int i = 0; i < alpha.Length; i++) argb[i] = (uint)alpha[i] << 8;
             var options = new WebPEncoderOptions { Lossless = true, Exact = true, Method = method, Quality = fullQuality && method == 6 ? 100 : 8 * method };
-            return Vp8LEncoder.Encode(argb, width, height, alpha: true, options, header: false);
+            return Vp8LEncoder.Encode(argb, width, height, alpha: true, options, header: false, cancellationToken);
         }
         finally { ArrayPool<uint>.Shared.Return(argb); }
     }

@@ -29,13 +29,13 @@ internal sealed class RgbToYuv : IDisposable
         ConvertRows(pixels, 0, Height, dithering > 0 ? new DitherRandom(dithering) : null);
 
     /// <inheritdoc cref="Convert(ReadOnlySpan{Rgba32}, float)"/>
-    public void Convert(Rgba32[] pixels, float dithering, int maxDegreeOfParallelism)
+    public void Convert(Rgba32[] pixels, float dithering, int maxDegreeOfParallelism, CancellationToken cancellationToken = default)
     {
         const int band = 32;
         int bands = (Height + band - 1) / band;
         if (dithering <= 0 && bands > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)Width * Height, 1 << 18))
         {
-            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism),
+            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism, cancellationToken),
                 b => ConvertRows(pixels, b * band, Math.Min(Height, (b + 1) * band), null));
         }
         else

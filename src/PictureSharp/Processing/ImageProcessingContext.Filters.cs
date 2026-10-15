@@ -44,7 +44,7 @@ public readonly ref partial struct ImageProcessingContext
     public ImageProcessingContext BoxBlur(float radius)
     {
         CheckRadius(radius, nameof(radius));
-        return radius == 0f ? this : Spatial(radius, static (src, w, h, value) => Blur.BoxBlur(src, w, h, value, value, 1));
+        return radius == 0f ? this : Spatial(radius, static (src, w, h, value, token) => Blur.BoxBlur(src, w, h, value, value, 1, token));
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ public readonly ref partial struct ImageProcessingContext
     public ImageProcessingContext GaussianBlur(float sigma)
     {
         CheckRadius(sigma, nameof(sigma));
-        return sigma == 0f ? this : Spatial(sigma, static (src, w, h, value) => Blur.GaussianBlur(src, w, h, value));
+        return sigma == 0f ? this : Spatial(sigma, static (src, w, h, value, token) => Blur.GaussianBlur(src, w, h, value, token));
     }
 
     /// <summary>
@@ -66,17 +66,18 @@ public readonly ref partial struct ImageProcessingContext
         CheckRadius(radius, nameof(radius));
         ArgumentOutOfRangeException.ThrowIfNegative(percent);
         ArgumentOutOfRangeException.ThrowIfNegative(threshold);
-        return Spatial((radius, percent, threshold), static (src, w, h, state) => Blur.UnsharpMask(src, w, h, state.radius, state.percent, state.threshold));
+        return Spatial((radius, percent, threshold),
+            static (src, w, h, state, token) => Blur.UnsharpMask(src, w, h, state.radius, state.percent, state.threshold, token));
     }
 
     /// <summary>Sharpens with Pillow's 3×3 <c>ImageFilter.SHARPEN</c> kernel; the outermost pixels are kept.</summary>
-    public ImageProcessingContext Sharpen() => Spatial(static (src, w, h) => Blur.Filter3x3(src, w, h, SharpenKernel, 0f));
+    public ImageProcessingContext Sharpen() => Spatial(static (src, w, h, token) => Blur.Filter3x3(src, w, h, SharpenKernel, 0f, token));
 
     // port: Pillow src/PIL/ImageFilter.py SHARPEN (divided by its scale, 16)
     private static ReadOnlySpan<float> SharpenKernel => [-2f / 16, -2f / 16, -2f / 16, -2f / 16, 32f / 16, -2f / 16, -2f / 16, -2f / 16, -2f / 16];
 
     private ImageProcessingContext Spatial(SpatialFilter filter) =>
-        Spatial(filter, static (src, w, h, f) => f(src, w, h));
+        Spatial(filter, static (src, w, h, f, token) => f(src, w, h, token));
 
     /// <summary>Runs <paramref name="filter"/> on premultiplied copies of the frames, like Pillow filtering an "RGBa" image.</summary>
     private ImageProcessingContext Spatial<TState>(TState state, SpatialFilter<TState> filter)
@@ -87,7 +88,7 @@ public readonly ref partial struct ImageProcessingContext
         foreach (ImageFrame frame in _state.Frames)
         {
             Premultiplied.FromStraight(frame.Pixels, premultiplied);
-            Rgba32[] result = filter(premultiplied, w, h, state);
+            Rgba32[] result = filter(premultiplied, w, h, state, _state.CancellationToken);
             Premultiplied.ToStraight(result);
             frame.Replace(w, h, result);
         }
@@ -96,9 +97,9 @@ public readonly ref partial struct ImageProcessingContext
         return this;
     }
 
-    private delegate Rgba32[] SpatialFilter<TState>(ReadOnlySpan<Rgba32> src, int width, int height, TState state);
+    private delegate Rgba32[] SpatialFilter<TState>(ReadOnlySpan<Rgba32> src, int width, int height, TState state, CancellationToken cancellationToken);
 
-    private delegate Rgba32[] SpatialFilter(ReadOnlySpan<Rgba32> src, int width, int height);
+    private delegate Rgba32[] SpatialFilter(ReadOnlySpan<Rgba32> src, int width, int height, CancellationToken cancellationToken);
 
     private static void CheckFinite(float value, string paramName)
     {

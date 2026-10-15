@@ -19,7 +19,7 @@ internal enum AlphaFilterType
 internal static partial class AlphaDecoder
 {
     /// <summary>Decodes the ALPH payload into a width × height alpha plane.</summary>
-    public static byte[] Decode(byte[] data, int offset, int length, int width, int height)
+    public static byte[] Decode(byte[] data, int offset, int length, int width, int height, CancellationToken cancellationToken = default)
     {
         if (length <= WebPConstants.AlphaHeaderLength)
         {
@@ -53,7 +53,7 @@ internal static partial class AlphaDecoder
         else
         {
             // The alpha values are stored in the green channel of a headerless VP8L image.
-            uint[] argb = Vp8LDecoder.DecodeHeaderless(data, alphaOffset, alphaSize, width, height);
+            uint[] argb = Vp8LDecoder.DecodeHeaderless(data, alphaOffset, alphaSize, width, height, cancellationToken);
             for (int i = 0; i < alpha.Length; i++)
             {
                 alpha[i] = (byte)(argb[i] >> 8);

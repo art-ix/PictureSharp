@@ -22,15 +22,15 @@ internal static class AnimationEncoder
     }
 
     // Candidates are copied into one reusable subframe; the encoders return independent byte arrays.
-    public static List<EncodedAnimationFrame> Encode(Image image, WebPEncoderOptions options)
+    public static List<EncodedAnimationFrame> Encode(Image image, WebPEncoderOptions options, CancellationToken cancellationToken = default)
     {
         Image? scratch = null;
-        try { return Encode(image, options, ref scratch); }
+        try { return Encode(image, options, ref scratch, cancellationToken); }
         finally { scratch?.Dispose(); }
     }
 
     // port: src/mux/anim_encode.c CacheFrame, KeyFramePenalty
-    private static List<EncodedAnimationFrame> Encode(Image image, WebPEncoderOptions options, ref Image? scratch)
+    private static List<EncodedAnimationFrame> Encode(Image image, WebPEncoderOptions options, ref Image? scratch, CancellationToken cancellationToken)
     {
         var result = new List<EncodedAnimationFrame>(image.FrameCount);
         (int minimum, int maximum) = KeyframeBounds(options);
@@ -39,14 +39,15 @@ internal static class AnimationEncoder
         EncodedAnimationFrame? bestKeyframe = null;
         for (int i = 0; i < image.FrameCount; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             bool forceKeyframe = i == 0 || maximum == 1;
-            EncodedAnimationFrame frame = SetFrame(image, i, result, options, forceKeyframe, ref scratch);
+            EncodedAnimationFrame frame = SetFrame(image, i, result, options, forceKeyframe, ref scratch, cancellationToken);
             result.Add(frame);
             if (forceKeyframe || maximum == int.MaxValue) continue;
             int distance = i - lastKeyframe;
             if (distance > minimum)
             {
-                EncodedAnimationFrame keyframe = SetFrame(image, i, result, options, true, ref scratch);
+                EncodedAnimationFrame keyframe = SetFrame(image, i, result, options, true, ref scratch, cancellationToken);
                 long penalty = keyframe.Image.DiskSize - frame.Image.DiskSize;
                 if (penalty <= bestPenalty)
                 {
@@ -58,7 +59,7 @@ internal static class AnimationEncoder
             result[bestIndex] = bestKeyframe!;
             result[bestIndex - 1].DisposeBackground = false;
             // A selected keyframe changes its disposal rectangle; rebuild the buffered suffix.
-            for (int j = bestIndex + 1; j <= i; j++) result[j] = SetFrame(image, j, result, options, false, ref scratch);
+            for (int j = bestIndex + 1; j <= i; j++) result[j] = SetFrame(image, j, result, options, false, ref scratch, cancellationToken);
             lastKeyframe = bestIndex;
             bestPenalty = long.MaxValue; bestIndex = -1; bestKeyframe = null;
         }
@@ -89,7 +90,7 @@ internal static class AnimationEncoder
 
     // port: src/mux/anim_encode.c SetFrame, GenerateCandidates, PickBestCandidate
     private static EncodedAnimationFrame SetFrame(Image image, int index, List<EncodedAnimationFrame> frames,
-        WebPEncoderOptions options, bool keyframe, ref Image? scratch)
+        WebPEncoderOptions options, bool keyframe, ref Image? scratch, CancellationToken cancellationToken)
     {
         int width = image.Width, height = image.Height;
         ReadOnlySpan<Rgba32> current = image.Frames[index].GetPixelSpan();
@@ -102,20 +103,20 @@ internal static class AnimationEncoder
                 disposed = ArrayPool<Rgba32>.Shared.Rent(width * height);
                 disposed.AsSpan(0, width * height).Clear();
                 GenerateCandidates(disposed.AsSpan(0, width * height), current, width, height, false, false, false,
-                    Duration(image.Frames[index].Duration), options, ref best, ref scratch);
+                    Duration(image.Frames[index].Duration), options, ref best, ref scratch, cancellationToken);
             }
             else
             {
                 ReadOnlySpan<Rgba32> previous = image.Frames[index - 1].GetPixelSpan();
                 int duration = Duration(image.Frames[index].Duration);
-                GenerateCandidates(previous, current, width, height, keyframe, false, !keyframe, duration, options, ref best, ref scratch);
+                GenerateCandidates(previous, current, width, height, keyframe, false, !keyframe, duration, options, ref best, ref scratch, cancellationToken);
                 if (!keyframe)
                 {
                     disposed = ArrayPool<Rgba32>.Shared.Rent(width * height);
                     previous.CopyTo(disposed);
                     DisposeFrameRectangle(disposed.AsSpan(0, width * height), width, frames[index - 1].Rectangle);
                     GenerateCandidates(disposed.AsSpan(0, width * height), current, width, height, false, true, true,
-                        duration, options, ref best, ref scratch);
+                        duration, options, ref best, ref scratch, cancellationToken);
                 }
             }
             if (index > 0 && !keyframe) frames[index - 1].DisposeBackground = best!.DisposePrevious;
@@ -127,7 +128,7 @@ internal static class AnimationEncoder
     // port: src/mux/anim_encode.c GetSubRects, GenerateCandidates, EncodeCandidate
     private static void GenerateCandidates(ReadOnlySpan<Rgba32> previous, ReadOnlySpan<Rgba32> current,
         int width, int height, bool keyframe, bool disposePrevious, bool allowBlend, int duration, WebPEncoderOptions options,
-        ref EncodedAnimationFrame? best, ref Image? scratch)
+        ref EncodedAnimationFrame? best, ref Image? scratch, CancellationToken cancellationToken)
     {
         Rectangle full = new(0, 0, width, height);
         for (int mode = 0; mode < (options.AllowMixed ? 2 : 1); mode++)
@@ -135,16 +136,16 @@ internal static class AnimationEncoder
             bool lossless = mode == 0 ? options.Lossless : !options.Lossless;
             Rectangle rectangle = keyframe ? full : GetSubRect(previous, current, width, height, lossless, options.Quality);
             if (!lossless && (rectangle.Width > 16383 || rectangle.Height > 16383)) continue;
-            EncodeRectangle(previous, current, width, rectangle, lossless, allowBlend, disposePrevious, duration, options, ref best, ref scratch);
+            EncodeRectangle(previous, current, width, rectangle, lossless, allowBlend, disposePrevious, duration, options, ref best, ref scratch, cancellationToken);
             if (options.MinimizeSize && rectangle != full && (lossless || (width <= 16383 && height <= 16383)))
-                EncodeRectangle(previous, current, width, full, lossless, allowBlend, disposePrevious, duration, options, ref best, ref scratch);
+                EncodeRectangle(previous, current, width, full, lossless, allowBlend, disposePrevious, duration, options, ref best, ref scratch, cancellationToken);
         }
     }
 
     // port: src/mux/anim_encode.c EncodeCandidate, IncreaseTransparency
     private static void EncodeRectangle(ReadOnlySpan<Rgba32> previous, ReadOnlySpan<Rgba32> current,
         int width, Rectangle rectangle, bool lossless, bool allowBlend, bool disposePrevious, int duration,
-        WebPEncoderOptions options, ref EncodedAnimationFrame? best, ref Image? scratch)
+        WebPEncoderOptions options, ref EncodedAnimationFrame? best, ref Image? scratch, CancellationToken cancellationToken)
     {
         if (scratch is null || scratch.Width != rectangle.Width || scratch.Height != rectangle.Height)
         {
@@ -154,7 +155,7 @@ internal static class AnimationEncoder
         Image subframe = scratch;
         for (int y = 0; y < rectangle.Height; y++)
             current.Slice((y + rectangle.Y) * width + rectangle.X, rectangle.Width).CopyTo(subframe.GetRowSpan(y));
-        WebPEncodedImage encoded = WebPEncoder.EncodeFrame(subframe, options.ForAnimationFrame(lossless, false));
+        WebPEncodedImage encoded = WebPEncoder.EncodeFrame(subframe, options.ForAnimationFrame(lossless, false), cancellationToken);
         PickBest(encoded, rectangle, false, disposePrevious, duration, ref best);
         if (!allowBlend || !IsBlendingPossible(previous, current, width, rectangle)) return;
         bool changed = false;
@@ -171,7 +172,7 @@ internal static class AnimationEncoder
             }
         }
         if (!changed) return;
-        encoded = WebPEncoder.EncodeFrame(subframe, options.ForAnimationFrame(lossless, true));
+        encoded = WebPEncoder.EncodeFrame(subframe, options.ForAnimationFrame(lossless, true), cancellationToken);
         PickBest(encoded, rectangle, true, disposePrevious, duration, ref best);
     }
 

@@ -23,6 +23,7 @@ internal sealed class Vp8Segment
 internal sealed class Vp8EncoderContext : IDisposable
 {
     public Vp8EncoderConfig Config { get; }
+    public CancellationToken CancellationToken { get; init; }
     public RgbToYuv Source { get; }
     public int MbWidth { get; }
     public int MbHeight { get; }

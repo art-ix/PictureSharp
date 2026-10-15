@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.5.2. Fazy 0–10 oraz obsługa ICO ukończone; 0.5.2 zmienia nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.5.3. Fazy 0–10, obsługa ICO oraz kontrola zasobów i anulowanie ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `SaveAs*`.
 
@@ -37,8 +37,8 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | --- | --- | --- |
 | 0.5.1 | Odczyt i zapis ICO (jako RasterSharp) | Ukończona — opublikowana |
 | 0.5.2 | Zmiana nazwy RasterSharp → PictureSharp | Ukończona — opublikowana |
-| 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Planowana — następny etap |
-| 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Planowana |
+| 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Ukończona — przygotowana lokalnie (commit i tag) |
+| 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Planowana — następny etap |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
@@ -92,6 +92,14 @@ DoD:
 - Testy granic każdego limitu, strumieni seekable/non-seekable, zaniżonych deklaracji długości, dużych metadanych i animacji dla wszystkich właściwych formatów.
 - Anulowanie przed startem i w trakcie odczytu, dekodu, kodowania oraz przetwarzania kończy operację i zwraca bufory. Udokumentowane zachowanie częściowego wyniku zapisu i obrazu po przerwanym `Mutate`.
 - Pomiary narzutu kontroli i szczytowej pamięci; brak nieograniczonego buforowania wejścia ponad ustawiony limit.
+
+Weryfikacja 2026-10-15: `MaxInputBytes` (domyślnie `Array.MaxLength`), `MaxMetadataBytes` (64 MiB łącznie, po
+dekompresji) i `MaxFrames` (65536) w `Load`/`LoadAsync`/`Identify`/`IcoFile`; token w pracy CPU wszystkich kodeków i
+przetwarzania, przeciążenia synchroniczne z tokenem. Zmiany zachowania (limit metadanych i klatek, pierwszy `iCCP`/`eXIf`
+w PNG) opisane w `docs/limits-and-cancellation.md`. Build Release bez ostrzeżeń, 4823/4823 testów Release (dwa
+przebiegi), 150/150 Oracle; migawka API (wyłącznie dodane elementy) zatwierdzona. Narzut kontroli w granicach szumu,
+alokacje bez zmian, odczyt strumienia alokuje 1× wejście (wcześniej 2–3,2×); szczegóły w `docs/performance.md`. Nowych
+ścieżek SIMD brak. VERSION 0.5.3; README zaktualizowane do wydania.
 
 ## 0.5.4 — miniatury bez pełnego dekodowania JPEG
 

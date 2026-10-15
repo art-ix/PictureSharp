@@ -504,3 +504,44 @@ PNG includes the existing encoder's compression workspace costs. DIB writes rows
 through a pooled buffer. Container output uses pooled segments before emitting
 the directory and payloads, including on non-seekable streams. No new SIMD path
 was added; the PNG payload reuses existing optimized code.
+
+## Limits and cancellation in 0.5.3
+
+Cancellation checks run per row, block, MCU row, macroblock row, frame or encoding stage (see
+[Resource limits and cancellation](limits-and-cancellation.md)), never per pixel. The overhead was measured against
+the 0.5.2 build with a comparison probe: the same in-memory inputs and options, a photo scaled to 2048×1536 and the
+`graphic` source scaled 8× (1600×1200), single-threaded codecs, 5 warm-ups and the median of 21 calls, three
+alternating runs per build (i5-12500H, Linux x64, .NET 10.0.12, default JIT/GC, 2026-10-15).
+
+| Operation | 0.5.2 (ms) | 0.5.3 (ms) | Median change | Runs |
+| --- | ---: | ---: | ---: | --- |
+| photo WebP lossy encode / decode | 290.80 / 25.45 | 289.85 / 25.09 | −0.3% / −1.7% | ±2% |
+| photo WebP lossless (method 2) encode / decode | 960.55 / 23.73 | 960.13 / 23.94 | +0.3% / +1.4% | −1…+3% |
+| photo PNG encode / decode | 624.35 / 29.08 | 623.25 / 29.27 | −0.3% / +0.4% | −3…+1% |
+| photo JPEG encode / decode | 51.13 / 15.19 | 52.37 / 15.06 | +2.4% / −0.6% | −1…+5% / −2…0% |
+| photo GIF encode / decode | 268.53 / 14.35 | 270.93 / 14.39 | −0.2% / −1.4% | −4…+1% |
+| photo BMP encode / decode | 6.87 / 3.50 | 6.81 / 3.31 | +1.2% / −5.0% | −8…+3% |
+| graphic WebP lossy encode / decode | 121.17 / 8.15 | 115.44 / 7.91 | −4.8% / −2.5% | −5…−2% |
+| graphic PNG encode / decode | 12.18 / 5.48 | 12.18 / 5.46 | 0.0% / −0.4% | −3…+5% |
+| graphic JPEG encode / decode | 20.53 / 8.21 | 20.37 / 8.08 | +0.3% / −0.2% | −5…+2% |
+| graphic GIF encode / decode | 18.13 / 6.70 | 18.16 / 6.82 | +0.1% / +1.5% | 0…+4% |
+
+The changes stay within the run-to-run spread in both directions; no operation shows a repeatable regression.
+Allocations per operation are unchanged. A first, multithreaded run of the same probe (default parallelism) showed
+±4% noise with the same conclusion; resize, Gaussian blur and grayscale were also unchanged.
+
+Reading input now allocates the encoded bytes once. A 37.7 MB BMP (4096×3072) loaded from a stream allocated, besides
+the 50 MB of decoded pixels:
+
+| Stream | 0.5.2 | 0.5.3 |
+| --- | ---: | ---: |
+| Seekable (`MemoryStream` without an exposed buffer, `BufferedStream`) | 2.00× input | 1.00× input |
+| Non-seekable, 80 KiB reads | 3.22× input | 1.00× input |
+
+A seekable stream is read into an exactly sized array; a non-seekable one grows in pooled arrays and is copied once.
+The growing buffer is bounded by `MaxInputBytes`, so an endless stream stops after at most `MaxInputBytes + 1` bytes.
+Peak memory while reading is the input for a seekable stream; a non-seekable stream briefly holds the old and the
+doubled pooled buffer while growing, up to about three times the bytes read so far; the pool keeps large buffers for reuse until memory pressure trims it.
+
+`CancellationInFlightTests` cancel decoding, encoding, animations and processing of 1–9 MP images after a quarter of
+their uncanceled duration and require the call to end within 250 ms plus half that duration; all formats meet it.

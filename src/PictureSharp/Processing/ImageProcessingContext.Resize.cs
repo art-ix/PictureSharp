@@ -112,7 +112,7 @@ public readonly ref partial struct ImageProcessingContext
         foreach (ImageFrame frame in _state.Frames)
         {
             Rgba32[] pixels = cropOnly is { } rect ? Geometry.Crop(frame, rect)
-                : resample ? Resizer.Resize(frame.Pixels, srcWidth, srcHeight, w, h, options.Filter, x0, y0, x1, y1)
+                : resample ? Resizer.Resize(frame.Pixels, srcWidth, srcHeight, w, h, options.Filter, x0, y0, x1, y1, _state.CancellationToken)
                 : frame.Pixels;
             if (pad)
             {

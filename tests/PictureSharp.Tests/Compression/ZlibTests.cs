@@ -213,7 +213,7 @@ public class ZlibTests
         Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib([0x78, 0x9c], 0, 2, 0, 1000));
         Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib([0x00, 0x00, 1, 2], 0, 4, 0, 1000));
         Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib(compressed, 0, compressed.Length / 2, 0, long.MaxValue));
-        Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib(compressed, 0, compressed.Length, 0, 1000));
+        Assert.Throws<OutputLimitExceededException>(() => Inflater.InflateZlib(compressed, 0, compressed.Length, 0, 1000));
 
         byte[] badChecksum = (byte[])compressed.Clone();
         badChecksum[^1] ^= 1;

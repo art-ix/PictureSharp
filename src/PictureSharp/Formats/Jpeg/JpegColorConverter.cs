@@ -62,7 +62,8 @@ internal static class JpegColorConverter
     }
 
     /// <summary>Converts the planes to RGBA; bands of rows are independent and may run in parallel.</summary>
-    public static Rgba32[] Convert(JpegFrame frame, JpegColorSpace colorSpace, int maxDegreeOfParallelism = 1)
+    public static Rgba32[] Convert(JpegFrame frame, JpegColorSpace colorSpace, int maxDegreeOfParallelism = 1,
+        CancellationToken cancellationToken = default)
     {
         int width = frame.Width;
         int height = frame.Height;
@@ -71,12 +72,16 @@ internal static class JpegColorConverter
         int bands = (height + band - 1) / band;
         if (bands > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)width * height, 1 << 17))
         {
-            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism),
+            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism, cancellationToken),
                 b => ConvertRows(frame, colorSpace, pixels, b * band, Math.Min(height, (b + 1) * band)));
         }
         else
         {
-            ConvertRows(frame, colorSpace, pixels, 0, height);
+            for (int b = 0; b < bands; b++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ConvertRows(frame, colorSpace, pixels, b * band, Math.Min(height, (b + 1) * band));
+            }
         }
 
         return pixels;

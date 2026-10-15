@@ -27,15 +27,27 @@ internal sealed partial class JpegFile
             case JpegMarkers.App14 when s.Length >= 12 && s.StartsWith("Adobe"u8):
                 _adobeTransform = s[11];
                 break;
-            case JpegMarkers.App1 when s.StartsWith(ExifHeader):
-                Exif ??= s[ExifHeader.Length..].ToArray();
+            // EXIF is read even when metadata is ignored, for the resolution; one segment holds at most 64 KiB.
+            case JpegMarkers.App1 when Exif is null && s.StartsWith(ExifHeader):
+                CountMetadata(s.Length - ExifHeader.Length, ignoreMetadata);
+                Exif = s[ExifHeader.Length..].ToArray();
                 break;
-            case JpegMarkers.App1 when !ignoreMetadata && s.StartsWith(XmpHeader):
-                Xmp ??= s[XmpHeader.Length..].ToArray();
+            case JpegMarkers.App1 when !ignoreMetadata && Xmp is null && s.StartsWith(XmpHeader):
+                CountMetadata(s.Length - XmpHeader.Length, ignoreMetadata);
+                Xmp = s[XmpHeader.Length..].ToArray();
                 break;
             case JpegMarkers.App2 when !ignoreMetadata && s.Length > IccHeader.Length + 2 && s.StartsWith(IccHeader):
+                CountMetadata(s.Length - IccHeader.Length - 2, ignoreMetadata);
                 _iccChunks.Add((s[IccHeader.Length], s[IccHeader.Length + 1], s[(IccHeader.Length + 2)..].ToArray()));
                 break;
+        }
+    }
+
+    private void CountMetadata(int bytes, bool ignoreMetadata)
+    {
+        if (!ignoreMetadata)
+        {
+            _metadataBytes = _options.AddMetadata(ImageFormat.Jpeg, _metadataBytes, bytes);
         }
     }
 

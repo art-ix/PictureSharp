@@ -13,6 +13,8 @@ internal sealed partial class JpegFile
     private readonly List<(int Sequence, int Count, byte[] Data)> _iccChunks = [];
     private int _restartInterval;
     private int _scans;
+    private DecoderOptions _options = DecoderOptions.Default;
+    private long _metadataBytes;
 
     private bool _jfif;
     private int _jfifUnit;
@@ -29,9 +31,25 @@ internal sealed partial class JpegFile
     private static ImageFormatException Error(string message) => new(ImageFormat.Jpeg, message);
 
     // port: libjpeg-turbo jdmarker.c read_markers (with the scan input of jdinput.c)
-    public static JpegFile Read(ReadOnlySpan<byte> data, DecoderOptions options, bool headerOnly)
+    public static JpegFile Read(ReadOnlySpan<byte> data, DecoderOptions options, bool headerOnly,
+        CancellationToken cancellationToken = default)
     {
-        var file = new JpegFile();
+        var file = new JpegFile { _options = options };
+        try
+        {
+            file.ReadMarkers(data, options, headerOnly, cancellationToken);
+            return file;
+        }
+        catch
+        {
+            file.ReturnBuffers();  // a corrupt or canceled scan leaves rented planes behind
+            throw;
+        }
+    }
+
+    private void ReadMarkers(ReadOnlySpan<byte> data, DecoderOptions options, bool headerOnly, CancellationToken cancellationToken)
+    {
+        JpegFile file = this;
         bool ignoreMetadata = options.IgnoreMetadata && !headerOnly;
         int pos = 2;   // after SOI (checked by the format detector)
         while (true)
@@ -114,11 +132,11 @@ internal sealed partial class JpegFile
 
                     if (headerOnly)
                     {
-                        return file;
+                        return;
                     }
 
                     JpegScan scan = file.ReadScan(segment);
-                    pos = JpegScanDecoder.Decode(data, pos, file.Frame, scan);
+                    pos = JpegScanDecoder.Decode(data, pos, file.Frame, scan, cancellationToken);
                     file._scans++;
                     break;
                 case >= JpegMarkers.App0 and <= 0xEF:
@@ -136,7 +154,5 @@ internal sealed partial class JpegFile
         {
             throw Error("The JPEG file contains no image data.");
         }
-
-        return file;
     }
 }

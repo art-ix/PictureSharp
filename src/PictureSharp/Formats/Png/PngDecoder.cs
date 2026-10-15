@@ -35,7 +35,7 @@ internal sealed partial class PngDecoder : IImageDecoder
         };
     }
 
-    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
+    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken)
     {
         ReadOnlySpan<byte> span = data.Span;
         PngFile png = PngFile.Parse(span, options, metadataOnly: false);
@@ -46,7 +46,7 @@ internal sealed partial class PngDecoder : IImageDecoder
         int loopCount = 0;
         if (animated && png.Animation is { } anim)
         {
-            frames = DecodeAnimation(span, png, anim, options.MaxDegreeOfParallelism);
+            frames = DecodeAnimation(span, png, anim, options.MaxDegreeOfParallelism, cancellationToken);
             loopCount = anim.NumPlays;
         }
         else
@@ -56,7 +56,7 @@ internal sealed partial class PngDecoder : IImageDecoder
                 throw Error("Missing IDAT chunk.");
             }
 
-            var frame = new ImageFrame(png.Width, png.Height, DecodeImage(span, png, png.Idat, 0, png.Width, png.Height, options.MaxDegreeOfParallelism));
+            var frame = new ImageFrame(png.Width, png.Height, DecodeImage(span, png, png.Idat, 0, png.Width, png.Height, options.MaxDegreeOfParallelism, cancellationToken));
             frames = [frame];
         }
 
@@ -86,7 +86,7 @@ internal sealed partial class PngDecoder : IImageDecoder
 
     /// <summary>Inflates, unfilters and converts one image (or APNG frame) to RGBA.</summary>
     private static Rgba32[] DecodeImage(ReadOnlySpan<byte> file, PngFile png, List<(int Offset, int Length)> parts, int skip, int width, int height,
-        int maxDegreeOfParallelism)
+        int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         // Concatenate the compressed data (fdAT payloads start with a 4-byte sequence number).
         int total = 0;
@@ -132,8 +132,8 @@ internal sealed partial class PngDecoder : IImageDecoder
 
             var rowConverter = new RowConverter(png);
             return !png.Interlaced && Parallelism.IsWorthwhile(maxDegreeOfParallelism, expected, PipelineMinimumBytes)
-                ? DecodePipelined(compressed, total, png, width, height, bpp, (int)expected, rowConverter)
-                : DecodeSequential(compressed, total, png, width, height, bpp, (int)expected, rowConverter);
+                ? DecodePipelined(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken)
+                : DecodeSequential(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken);
         }
         finally
         {
@@ -142,13 +142,13 @@ internal sealed partial class PngDecoder : IImageDecoder
     }
 
     private static Rgba32[] DecodeSequential(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected,
-        RowConverter rowConverter)
+        RowConverter rowConverter, CancellationToken cancellationToken)
     {
         Inflater.PooledOutput inflated;
         try
         {
             inflated = Inflater.InflateZlibPooled(compressed, 0, compressedLength, expected, expected + (1L << 20),
-                verifyChecksum: png.StrictChecksums, stopAtExpectedSize: true);
+                verifyChecksum: png.StrictChecksums, stopAtExpectedSize: true, cancellationToken: cancellationToken);
         }
         catch (InvalidDataStreamException ex)
         {
@@ -170,6 +170,7 @@ internal sealed partial class PngDecoder : IImageDecoder
                 int rowBytes = (int)PngConstants.RowBytes(width, bpp);
                 for (int y = 0; y < height; y++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     rowConverter.Convert(raw.AsSpan((y * (rowBytes + 1)) + 1, rowBytes), pixels.AsSpan(y * width, width));
                 }
 
@@ -193,6 +194,7 @@ internal sealed partial class PngDecoder : IImageDecoder
                 int y0 = PngConstants.Adam7YStart[pass], dy = PngConstants.Adam7YStep[pass];
                 for (int j = 0; j < ph; j++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     rowConverter.Convert(raw.AsSpan(offset + (j * (rowBytes + 1)) + 1, rowBytes), tmp.AsSpan(0, pw));
                     int rowStart = ((y0 + (j * dy)) * width) + x0;
                     for (int i = 0; i < pw; i++)

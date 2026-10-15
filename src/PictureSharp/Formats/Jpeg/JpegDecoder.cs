@@ -26,9 +26,9 @@ internal sealed class JpegDecoder : IImageDecoder
         };
     }
 
-    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
+    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken)
     {
-        JpegFile file = JpegFile.Read(data.Span, options, headerOnly: false);
+        JpegFile file = JpegFile.Read(data.Span, options, headerOnly: false, cancellationToken);
         JpegFrame frame = file.Frame!;
         Rgba32[] pixels;
         try
@@ -37,11 +37,11 @@ internal sealed class JpegDecoder : IImageDecoder
             {
                 foreach (JpegComponent c in frame.Components)
                 {
-                    InverseDct(c, options.MaxDegreeOfParallelism);
+                    InverseDct(c, options.MaxDegreeOfParallelism, cancellationToken);
                 }
             }
 
-            pixels = JpegColorConverter.Convert(frame, file.ColorSpace(), options.MaxDegreeOfParallelism);
+            pixels = JpegColorConverter.Convert(frame, file.ColorSpace(), options.MaxDegreeOfParallelism, cancellationToken);
         }
         finally
         {
@@ -62,7 +62,7 @@ internal sealed class JpegDecoder : IImageDecoder
     }
 
     /// <summary>Transforms the coefficients collected by a progressive decode into samples.</summary>
-    private static void InverseDct(JpegComponent c, int maxDegreeOfParallelism)
+    private static void InverseDct(JpegComponent c, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         if (c.Quant is not { } quant)
         {
@@ -73,12 +73,13 @@ internal sealed class JpegDecoder : IImageDecoder
         short[] coefficients = c.Coefficients!;
         if (c.HeightInBlocks > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)c.WidthInBlocks * c.HeightInBlocks, 1024))
         {
-            Parallel.For(0, c.HeightInBlocks, Parallelism.Options(maxDegreeOfParallelism), by => TransformRow(c, coefficients, quant, by));
+            Parallel.For(0, c.HeightInBlocks, Parallelism.Options(maxDegreeOfParallelism, cancellationToken), by => TransformRow(c, coefficients, quant, by));
         }
         else
         {
             for (int by = 0; by < c.HeightInBlocks; by++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 TransformRow(c, coefficients, quant, by);
             }
         }

@@ -6,7 +6,7 @@ namespace PictureSharp.Formats.WebP.Animation;
 // port: src/demux/anim_decode.c
 internal static class AnimationDecoder
 {
-    public static List<ImageFrame> Decode(ReadOnlyMemory<byte> data, WebPContainer c, DecoderOptions options)
+    public static List<ImageFrame> Decode(ReadOnlyMemory<byte> data, WebPContainer c, DecoderOptions options, CancellationToken cancellationToken)
     {
         int width = c.CanvasWidth;
         int height = c.CanvasHeight;
@@ -18,6 +18,7 @@ internal static class AnimationDecoder
 
         for (int index = 0; index < count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             WebPFrameInfo iter = c.Frames[index];
             var curr = new uint[width * height];
             bool isKeyFrame = IsKeyFrame(index, iter, prev, prevWasKeyFrame, width, height);
@@ -27,7 +28,7 @@ internal static class AnimationDecoder
             }
 
             // Decode the frame straight into its rectangle of the canvas.
-            ImageFrame decoded = WebPDecoder.DecodeFrame(data, iter, options);
+            ImageFrame decoded = WebPDecoder.DecodeFrame(data, iter, options, cancellationToken);
             ReadOnlySpan<uint> src = System.Runtime.InteropServices.MemoryMarshal.Cast<Rgba32, uint>(decoded.GetPixelSpan());
             for (int y = 0; y < iter.Height; y++)
             {

@@ -11,8 +11,10 @@ internal static class Vp8LEntropyEncoder
 {
     // port: src/enc/vp8l_enc.c EncodeImageInternal
     public static void EncodeImageInternal(Vp8LBitWriter writer, uint[] pixels, int width, int height, int quality, bool lowEffort,
-        ReadOnlySpan<Vp8LCrunchSubConfig> subConfigs, ref int cacheBits, int histoBits, int maxDegreeOfParallelism)
+        ReadOnlySpan<Vp8LCrunchSubConfig> subConfigs, ref int cacheBits, int histoBits, int maxDegreeOfParallelism,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var matches = new Vp8LBackwardRefs(pixels, width, height, quality, lowEffort, maxDegreeOfParallelism: maxDegreeOfParallelism);
         Vp8LBackwardRefs? box = null;
         // A non-zero value was set by the palette analysis.
@@ -22,6 +24,7 @@ internal static class Vp8LEntropyEncoder
         {
             foreach (Vp8LCrunchSubConfig sub in subConfigs)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var refs = GetBackwardReferences(pixels, width, height, quality, lowEffort, sub.Lz77, cacheBitsInit, sub.DoNoCache, matches, ref box, out int cacheBitsBest, maxDegreeOfParallelism);
                 try
                 {
@@ -30,6 +33,7 @@ internal static class Vp8LEntropyEncoder
                         int cacheBitsTmp = iCache == 0 ? cacheBitsBest : 0;
                         // The no-cache case was already studied when the best cache size is 0.
                         if (iCache == 1 && cacheBitsBest == 0) break;
+                        cancellationToken.ThrowIfCancellationRequested();
                         Vp8LBitWriter candidate = StoreImage(refs[iCache]!, width, height, quality, lowEffort, cacheBitsTmp, histoBits, maxDegreeOfParallelism);
                         if (best is null || candidate.ByteCount < best.ByteCount)
                         {

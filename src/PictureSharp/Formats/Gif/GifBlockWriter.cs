@@ -4,7 +4,7 @@ using System.Drawing;
 namespace PictureSharp.Formats.Gif;
 
 /// <summary>Writes GIF blocks from prepared palette, frame and metadata values.</summary>
-internal readonly struct GifBlockWriter(Stream stream)
+internal readonly struct GifBlockWriter(Stream stream, CancellationToken cancellationToken = default)
 {
     public void WriteHeader(int width, int height, Rgba32[] colors, int backgroundIndex, bool extended)
     {
@@ -85,7 +85,7 @@ internal readonly struct GifBlockWriter(Stream stream)
 
     /// <summary>Writes LZW-compressed indices into a palette of <paramref name="colorCount"/> entries.</summary>
     public void WriteImageData(ReadOnlySpan<byte> indices, int colorCount) =>
-        GifLzwEncoder.Encode(indices, Math.Max(2, TableBits(colorCount)), stream);
+        GifLzwEncoder.Encode(indices, Math.Max(2, TableBits(colorCount)), stream, cancellationToken);
 
     public void WriteTrailer() => stream.WriteByte(GifConstants.Trailer);
 

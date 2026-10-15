@@ -51,6 +51,54 @@ public sealed class DocsExamplesTests : IDisposable
         Assert.Equal(large.ToPixelData(), legacy[1].ToPixelData());
     }
 
+    // ------------------------------------------------------------ limits-and-cancellation.md
+
+    [Fact]
+    public void Limits_UntrustedUpload()
+    {
+        using Stream upload = File.OpenRead(P("photo.jpg"));
+        using Stream output = File.Create(P("upload.webp"));
+        var untrusted = new DecoderOptions
+        {
+            MaxInputBytes = 20 * 1024 * 1024,   // encoded bytes read from the file or stream
+            MaxPixels = 40_000_000,             // width × height, summed over decoded frames
+            MaxFrames = 500,                    // frames stored in an animation
+            MaxMetadataBytes = 1024 * 1024,     // ICC + EXIF + XMP after decompression
+        };
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using Image image = Image.Load(upload, untrusted, timeout.Token);
+        image.Mutate(x => x.Thumbnail(512, 512), timeout.Token);
+        image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
+        Assert.True(output.Length > 0);
+    }
+
+    [Fact]
+    public void Limits_AtomicClone()
+    {
+        using Image image = Image.Load(P("input.png"));
+        Rgba32[] before = image.GetPixelSpan().ToArray();
+        string path = P("canceled.png");
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+        CancellationToken cancellationToken = source.Token;
+        bool canceled = false;
+        try
+        {
+            using Image result = image.Clone(x => x.Resize(1600, 0).GaussianBlur(2f), cancellationToken);
+            result.Save(path, new PngEncoderOptions(), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // image is unchanged and no file was written
+            canceled = true;
+        }
+
+        Assert.True(canceled);
+        Assert.False(File.Exists(path));
+        Assert.Equal(before, image.GetPixelSpan().ToArray());
+    }
+
     // ------------------------------------------------------------ README.md
 
     [Fact]

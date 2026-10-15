@@ -50,6 +50,7 @@ internal sealed partial class Deflater
             for (int first = 0, set = 0; first < segmentCount; first += wave, set ^= 1)
             {
                 pending!.GetAwaiter().GetResult();
+                _cancellationToken.ThrowIfCancellationRequested();
                 pending = first + wave < segmentCount ? ParseWave(sets[set ^ 1], first + wave) : null;
                 Segment[] segments = sets[set];
                 for (int i = 0; i < Math.Min(wave, segmentCount - first); i++)
@@ -104,7 +105,7 @@ internal sealed partial class Deflater
         Task ParseWave(Segment[] segments, int first)
         {
             int count = Math.Min(segments.Length, segmentCount - first);
-            return Task.Run(() => Parallel.For(0, count, Parallelism.Options(_maxDegreeOfParallelism),
+            return Task.Run(() => Parallel.For(0, count, Parallelism.Options(_maxDegreeOfParallelism, _cancellationToken),
                 () => new MatchFinder(_input, _level),
                 (i, _, finder) =>
                 {

@@ -15,7 +15,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
 
     public ImageFormat Format => ImageFormat.Png;
 
-    public void Encode(Image image, Stream output, PngEncoderOptions options)
+    public void Encode(Image image, Stream output, PngEncoderOptions options, CancellationToken cancellationToken)
     {
         List<ImageFrame> frames = image.IsAnimated && options.SaveAnimation
             ? [.. image.Frames]
@@ -117,8 +117,9 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
                 writer.Write("fcTL", fctl);
             }
 
-            byte[] raw = Serialize(frame, layout, options);
-            using Deflater deflater = Deflater.CompressZlibPooled(raw, options.CompressionLevel, options.MaxDegreeOfParallelism);
+            cancellationToken.ThrowIfCancellationRequested();
+            byte[] raw = Serialize(frame, layout, options, cancellationToken);
+            using Deflater deflater = Deflater.CompressZlibPooled(raw, options.CompressionLevel, options.MaxDegreeOfParallelism, cancellationToken);
             ReadOnlySpan<byte> compressed = deflater.Output;
             const int maxChunk = 1 << 20;
             for (int offset = 0; offset < compressed.Length || offset == 0; offset += maxChunk)
@@ -167,7 +168,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
 
     // ------------------------------------------------------------------ scanlines
 
-    private static byte[] Serialize(ImageFrame frame, Layout layout, PngEncoderOptions o)
+    private static byte[] Serialize(ImageFrame frame, Layout layout, PngEncoderOptions o, CancellationToken cancellationToken)
     {
         int width = frame.Width;
         int height = frame.Height;
@@ -208,7 +209,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             };
             if (p.Width > 0 && p.Height > 0)
             {
-                offset += WritePass(p, output, offset, o.MaxDegreeOfParallelism);
+                offset += WritePass(p, output, offset, o.MaxDegreeOfParallelism, cancellationToken);
             }
         }
 
@@ -242,7 +243,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
 
     // Each band of rows packs the row above it again, so bands are independent and the output does not
     // depend on how rows are split.
-    private static int WritePass(Pass pass, byte[] output, int offset, int maxDegreeOfParallelism)
+    private static int WritePass(Pass pass, byte[] output, int offset, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         int stride = pass.RowBytes + 1;
         int size = pass.Height * stride;
@@ -251,21 +252,21 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             int degree = maxDegreeOfParallelism > 0 ? maxDegreeOfParallelism : Environment.ProcessorCount;
             int band = Math.Max(8, pass.Height / (4 * degree));
             int bands = (pass.Height + band - 1) / band;
-            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism), b =>
+            Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism, cancellationToken), b =>
             {
                 int first = b * band;
-                WriteRows(pass, output.AsSpan(offset, size), first, Math.Min(pass.Height, first + band));
+                WriteRows(pass, output.AsSpan(offset, size), first, Math.Min(pass.Height, first + band), cancellationToken);
             });
         }
         else
         {
-            WriteRows(pass, output.AsSpan(offset, size), 0, pass.Height);
+            WriteRows(pass, output.AsSpan(offset, size), 0, pass.Height, cancellationToken);
         }
 
         return size;
     }
 
-    private static void WriteRows(Pass pass, Span<byte> output, int first, int end)
+    private static void WriteRows(Pass pass, Span<byte> output, int first, int end, CancellationToken cancellationToken)
     {
         int rowBytes = pass.RowBytes;
         int stride = rowBytes + 1;
@@ -290,6 +291,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
 
             for (int j = first; j < end; j++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 PackRow(pass, j, gathered, cur[pad..]);
                 int filter = pass.Strategy switch
                 {

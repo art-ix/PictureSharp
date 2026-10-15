@@ -8,6 +8,7 @@ namespace PictureSharp.Tests.Core;
 /// a copied subframe per animation candidate, a growing MemoryStream). Single-threaded, so the
 /// current-thread counter sees every allocation.
 /// </summary>
+[Collection(nameof(SerialCollection))]
 public class AllocationTests
 {
     [Fact]

@@ -4,7 +4,7 @@ namespace PictureSharp.Formats.Bmp;
 
 internal sealed partial class BmpDecoder
 {
-    private static void DecodeUncompressed(ReadOnlySpan<byte> file, BmpHeader h, Rgba32[] pixels)
+    private static void DecodeUncompressed(ReadOnlySpan<byte> file, BmpHeader h, Rgba32[] pixels, CancellationToken cancellationToken)
     {
         int width = h.Width;
         int height = h.Height;
@@ -25,6 +25,7 @@ internal sealed partial class BmpDecoder
 
         for (int y = 0; y < height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ReadOnlySpan<byte> src = file.Slice((int)(h.DataOffset + (stride * y)), (int)rowBytes);
             int outRow = h.TopDown ? y : height - 1 - y;
             Span<Rgba32> dst = pixels.AsSpan(outRow * width, width);

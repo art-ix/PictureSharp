@@ -126,6 +126,7 @@ internal sealed class Vp8EncoderIterator : IDisposable
     // Positions the iterator at the start of a row without touching the shared top context (parallel passes).
     public void StartRow(int y)
     {
+        Context.CancellationToken.ThrowIfCancellationRequested();
         X = 0; Y = y; _analysis = false;
         InitLeft();
     }
@@ -135,7 +136,7 @@ internal sealed class Vp8EncoderIterator : IDisposable
     // port: src/enc/iterator_enc.c VP8IteratorNext
     public bool Next()
     {
-        if (++X == Context.MbWidth) { X = 0; Y++; InitLeft(); }
+        if (++X == Context.MbWidth) { Context.CancellationToken.ThrowIfCancellationRequested(); X = 0; Y++; InitLeft(); }
         return Y < Context.MbHeight;
     }
 

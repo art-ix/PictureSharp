@@ -77,7 +77,7 @@ internal sealed class GifFile
 
     private static ImageFormatException Error(string message) => new(ImageFormat.Gif, message);
 
-    public static GifFile Parse(ReadOnlySpan<byte> data, bool readMetadata)
+    public static GifFile Parse(ReadOnlySpan<byte> data, DecoderOptions options, bool readMetadata)
     {
         if (data.Length < 13 || !GifFormatDetector.Instance.IsSupported(data))
         {
@@ -126,7 +126,7 @@ internal sealed class GifFile
                     }
                     else if (label == GifConstants.ApplicationLabel && first + 12 <= data.Length && data[first] == 11)
                     {
-                        gif.ReadApplicationExtension(data, data.Slice(first + 1, 11), first + 12, readMetadata);
+                        gif.ReadApplicationExtension(data, data.Slice(first + 1, 11), first + 12, readMetadata ? options : null);
                     }
 
                     done = !SkipSubBlocks(data, ref pos);
@@ -136,6 +136,7 @@ internal sealed class GifFile
                     GifFrameInfo? frame = ReadImage(data, ref pos, delay, disposal, transparent, out bool complete);
                     if (frame is not null)
                     {
+                        options.ValidateFrameCount(ImageFormat.Gif, gif.Frames.Count + 1L);
                         gif.Frames.Add(frame);
                     }
 
@@ -214,7 +215,8 @@ internal sealed class GifFile
         return frame;
     }
 
-    private void ReadApplicationExtension(ReadOnlySpan<byte> data, ReadOnlySpan<byte> identifier, int pos, bool readMetadata)
+    /// <summary>Reads loop counts, and ICC/XMP blocks when <paramref name="metadataOptions"/> is given.</summary>
+    private void ReadApplicationExtension(ReadOnlySpan<byte> data, ReadOnlySpan<byte> identifier, int pos, DecoderOptions? metadataOptions)
     {
         if (identifier.SequenceEqual(GifConstants.Netscape) || identifier.SequenceEqual(GifConstants.AnimExts))
         {
@@ -227,7 +229,7 @@ internal sealed class GifFile
             return;
         }
 
-        if (!readMetadata)
+        if (metadataOptions is null)
         {
             return;
         }
@@ -262,10 +264,13 @@ internal sealed class GifFile
         {
             // In XMP each sub-block's length byte is part of the packet, followed by a 257-byte "magic trailer".
             int length = pos - start;
-            Xmp = data.Slice(start, length > GifConstants.XmpTrailerLength ? length - GifConstants.XmpTrailerLength : length).ToArray();
+            length = length > GifConstants.XmpTrailerLength ? length - GifConstants.XmpTrailerLength : length;
+            metadataOptions.AddMetadata(ImageFormat.Gif, (Icc?.Length) ?? 0, length);
+            Xmp = data.Slice(start, length).ToArray();
         }
         else
         {
+            metadataOptions.AddMetadata(ImageFormat.Gif, (Xmp?.Length) ?? 0, payload.Count);
             Icc = [.. payload];
         }
     }

@@ -14,6 +14,26 @@ public sealed record DecoderOptions
     /// </summary>
     public long MaxPixels { get; init => field = Check.AtLeast(value, 1L); } = 1L << 28;
 
+    /// <summary>
+    /// Maximum size in bytes of the encoded input. Files and streams are read in full before decoding; reading stops
+    /// with <see cref="ImageFormatException"/> as soon as more bytes arrive, whatever length a stream declares.
+    /// Default: <see cref="Array.MaxLength"/> (no practical limit).
+    /// </summary>
+    public long MaxInputBytes { get; init => field = Check.AtLeast(value, 1L); } = Array.MaxLength;
+
+    /// <summary>
+    /// Maximum total size in bytes of the ICC, EXIF and XMP blocks read from one image, measured after decompression.
+    /// Larger metadata fails with <see cref="ImageFormatException"/>; set <see cref="IgnoreMetadata"/> to skip it
+    /// without reading or decompressing it. Default: 64 MiB.
+    /// </summary>
+    public long MaxMetadataBytes { get; init => field = Check.AtLeast(value, 0L); } = 64L << 20;
+
+    /// <summary>
+    /// Maximum number of frames in an animation. The limit applies to the frames stored in the file, also with
+    /// <see cref="FirstFrameOnly"/> and in <c>Identify</c>, and is checked before any frame is decoded. Default: 65536.
+    /// </summary>
+    public int MaxFrames { get; init => field = Check.AtLeast(value, 1); } = 1 << 16;
+
     /// <summary>Decode only the first frame of animations.</summary>
     public bool FirstFrameOnly { get; init; }
 
@@ -63,6 +83,30 @@ public sealed record DecoderOptions
                 $"Image dimensions {width}x{height} exceed the limit of {MaxPixels} pixels (DecoderOptions.MaxPixels).");
         }
     }
+
+    internal void ValidateFrameCount(ImageFormat format, long frameCount)
+    {
+        if (frameCount > MaxFrames)
+        {
+            throw new ImageFormatException(format,
+                $"The image has more than {MaxFrames} frames (DecoderOptions.MaxFrames).");
+        }
+    }
+
+    /// <summary>Adds a metadata block to the running total of one image and returns the new total.</summary>
+    internal long AddMetadata(ImageFormat format, long total, long blockBytes)
+    {
+        long sum = total + blockBytes;
+        if (sum > MaxMetadataBytes)
+        {
+            throw MetadataTooLarge(format);
+        }
+
+        return sum;
+    }
+
+    internal ImageFormatException MetadataTooLarge(ImageFormat format) =>
+        new(format, $"The image metadata exceeds the limit of {MaxMetadataBytes} bytes (DecoderOptions.MaxMetadataBytes).");
 
     // Every decoded animation frame is a full canvas, however small its encoded region is.
     internal void ValidateFrames(ImageFormat format, long width, long height, int frameCount)

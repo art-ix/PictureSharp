@@ -34,7 +34,7 @@ internal sealed partial class BmpDecoder : IImageDecoder
         };
     }
 
-    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
+    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken)
     {
         ReadOnlySpan<byte> file = data.Span;
         BmpHeader h = BmpHeader.Parse(file);
@@ -43,7 +43,7 @@ internal sealed partial class BmpDecoder : IImageDecoder
         Image image;
         if (h.Compression == BmpCompression.Embedded)
         {
-            image = DecodeEmbedded(data, h, options);
+            image = DecodeEmbedded(data, h, options, cancellationToken);
         }
         else
         {
@@ -52,13 +52,13 @@ internal sealed partial class BmpDecoder : IImageDecoder
             {
                 case BmpCompression.Rle8:
                 case BmpCompression.Rle4:
-                    DecodeRle(file, h, ReadPalette(file, h), pixels);
+                    DecodeRle(file, h, ReadPalette(file, h), pixels, cancellationToken);
                     break;
                 case BmpCompression.Rle24:
-                    DecodeRle24(file, h, pixels);
+                    DecodeRle24(file, h, pixels, cancellationToken);
                     break;
                 default:
-                    DecodeUncompressed(file, h, pixels);
+                    DecodeUncompressed(file, h, pixels, cancellationToken);
                     break;
             }
 
@@ -75,6 +75,7 @@ internal sealed partial class BmpDecoder : IImageDecoder
 
         if (!options.IgnoreMetadata && h.IccOffset >= 0)
         {
+            options.AddMetadata(ImageFormat.Bmp, 0, h.IccLength);
             image.Metadata.IccProfile = file.Slice(h.IccOffset, h.IccLength).ToArray();
         }
 
@@ -107,9 +108,9 @@ internal sealed partial class BmpDecoder : IImageDecoder
         return CodecRegistry.GetDecoder(expected)!;
     }
 
-    private static Image DecodeEmbedded(ReadOnlyMemory<byte> data, BmpHeader h, DecoderOptions options)
+    private static Image DecodeEmbedded(ReadOnlyMemory<byte> data, BmpHeader h, DecoderOptions options, CancellationToken cancellationToken)
     {
-        return EmbeddedDecoder(data.Span, h).Decode(EmbeddedData(data, h), options);
+        return EmbeddedDecoder(data.Span, h).Decode(EmbeddedData(data, h), options, cancellationToken);
     }
 
     // ------------------------------------------------------------------ palette

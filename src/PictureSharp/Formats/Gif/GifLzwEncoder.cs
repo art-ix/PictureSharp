@@ -6,7 +6,7 @@ internal static class GifLzwEncoder
     private const int HashSize = 8192;   // power of two, at least twice the number of codes
 
     /// <summary>Writes the minimum code size byte, the data sub-blocks and the block terminator.</summary>
-    public static void Encode(ReadOnlySpan<byte> indices, int minCodeSize, Stream output)
+    public static void Encode(ReadOnlySpan<byte> indices, int minCodeSize, Stream output, CancellationToken cancellationToken = default)
     {
         var writer = new SubBlockWriter(output);
         output.WriteByte((byte)minCodeSize);
@@ -30,6 +30,11 @@ internal static class GifLzwEncoder
         int prefix = indices[0];
         for (int i = 1; i < indices.Length; i++)
         {
+            if ((i & 0xFFFF) == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
             int symbol = indices[i];
             int key = ((prefix << 8) | symbol) + 1;
             int slot = Hash(key);

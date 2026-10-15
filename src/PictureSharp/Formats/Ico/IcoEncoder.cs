@@ -7,9 +7,10 @@ internal sealed class IcoEncoder : IImageEncoder<IcoEncoderOptions>
 {
     public static IcoEncoder Instance { get; } = new();
     public ImageFormat Format => ImageFormat.Ico;
-    public void Encode(Image image, Stream output, IcoEncoderOptions options) => EncodeImages([image], output, options);
+    public void Encode(Image image, Stream output, IcoEncoderOptions options, CancellationToken cancellationToken) =>
+        EncodeImages([image], output, options, cancellationToken);
 
-    internal static void EncodeImages(IReadOnlyList<Image> images, Stream output, IcoEncoderOptions options)
+    internal static void EncodeImages(IReadOnlyList<Image> images, Stream output, IcoEncoderOptions options, CancellationToken cancellationToken)
     {
         if (images.Count is < 1 or > ushort.MaxValue)
         {
@@ -35,11 +36,13 @@ internal sealed class IcoEncoder : IImageEncoder<IcoEncoderOptions>
         BinaryPrimitives.WriteUInt16LittleEndian(directory.AsSpan(4), (ushort)images.Count);
         for (int i = 0; i < images.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Image image = images[i];
             long start = buffer.Position;
             if (options.Encoding == IcoEncoding.Png)
             {
-                image.SaveAsPng(buffer, new() { ColorType = PngColorType.Rgba, SaveAnimation = false, Metadata = options.Metadata });
+                image.Save(buffer, new PngEncoderOptions { ColorType = PngColorType.Rgba, SaveAnimation = false, Metadata = options.Metadata },
+                    cancellationToken);
             }
             else
             {

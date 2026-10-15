@@ -11,11 +11,22 @@ public sealed partial class Image
     /// <example>
     /// <code>image.Mutate(x => x.AutoOrient().Resize(800, 0).Grayscale());</code>
     /// </example>
-    public void Mutate(Action<ImageProcessingContext> operation)
+    public void Mutate(Action<ImageProcessingContext> operation) => Mutate(operation, CancellationToken.None);
+
+    /// <summary>
+    /// Applies the operations in <paramref name="operation"/>; <paramref name="cancellationToken"/> stops them
+    /// between frames and, in long operations, between rows, with <see cref="OperationCanceledException"/>.
+    /// After a cancellation the image stays valid: operations that produce new buffers (resize, crop, rotation, blur)
+    /// leave the frames they had not finished unchanged, but the frames of an in-place operation (color changes,
+    /// <see cref="ImageProcessingContext.Apply"/>) may be partly processed. Use
+    /// <see cref="Clone(Action{ImageProcessingContext}, CancellationToken)"/> when the source must stay intact.
+    /// </summary>
+    public void Mutate(Action<ImageProcessingContext> operation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(operation);
         ThrowIfDisposed();
-        operation(new ImageProcessingContext(new ProcessingState(this, shared: false)));
+        cancellationToken.ThrowIfCancellationRequested();
+        operation(new ImageProcessingContext(new ProcessingState(this, shared: false, cancellationToken)));
     }
 
     /// <summary>
@@ -26,9 +37,16 @@ public sealed partial class Image
     /// <example>
     /// <code>using Image thumbnail = image.Clone(x => x.Resize(160, 160, ResizeMode.Crop));</code>
     /// </example>
-    public Image Clone(Action<ImageProcessingContext> operation)
+    public Image Clone(Action<ImageProcessingContext> operation) => Clone(operation, CancellationToken.None);
+
+    /// <summary>
+    /// Returns a new image with the operations in <paramref name="operation"/> applied; this image is not modified.
+    /// <paramref name="cancellationToken"/> stops the operations; the partly processed copy is then disposed.
+    /// </summary>
+    public Image Clone(Action<ImageProcessingContext> operation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(operation);
+        cancellationToken.ThrowIfCancellationRequested();
         var frames = new List<ImageFrame>(FrameCount);
         foreach (ImageFrame frame in Frames)
         {
@@ -36,7 +54,7 @@ public sealed partial class Image
         }
 
         Image clone = CopyPropertiesTo(new Image(frames));
-        var state = new ProcessingState(clone, shared: true);
+        var state = new ProcessingState(clone, shared: true, cancellationToken);
         try
         {
             operation(new ImageProcessingContext(state));

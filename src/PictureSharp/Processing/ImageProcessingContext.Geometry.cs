@@ -177,12 +177,12 @@ public readonly ref partial struct ImageProcessingContext
             output.AsSpan().Fill(fill);
             if (scratch is null)
             {
-                Affine.TransformNearest(frame.Pixels, w, h, output, width, height, matrix);
+                Affine.TransformNearest(frame.Pixels, w, h, output, width, height, matrix, _state.CancellationToken);
             }
             else
             {
                 Premultiplied.FromStraight(frame.Pixels, scratch);
-                Affine.TransformFiltered(scratch, w, h, output, width, height, matrix, filter);
+                Affine.TransformFiltered(scratch, w, h, output, width, height, matrix, filter, _state.CancellationToken);
                 Premultiplied.ToStraight(output);
             }
 

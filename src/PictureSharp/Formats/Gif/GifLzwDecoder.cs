@@ -8,7 +8,8 @@ internal static class GifLzwDecoder
     /// the end-of-information code, at the end of the sub-blocks or of the file, at an invalid code, or when the
     /// output is full; the caller treats indices that were not produced as missing (transparent).
     /// </summary>
-    public static int Decode(ReadOnlySpan<byte> data, int offset, int minCodeSize, Span<byte> output)
+    public static int Decode(ReadOnlySpan<byte> data, int offset, int minCodeSize, Span<byte> output,
+        CancellationToken cancellationToken = default)
     {
         if (minCodeSize is < 1 or > GifConstants.MaxCodeBits - 1)
         {
@@ -32,6 +33,7 @@ internal static class GifLzwDecoder
         uint bits = 0;
         int bitCount = 0;
         int produced = 0;
+        int blocks = 0;
 
         while (produced < output.Length)
         {
@@ -43,6 +45,12 @@ internal static class GifLzwDecoder
                     if (pos >= data.Length || (blockLeft = data[pos++]) == 0)
                     {
                         return produced;
+                    }
+
+                    // A sub-block holds at most 255 bytes, so this checks about every 64 KiB of input.
+                    if ((++blocks & 0xFF) == 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
                     }
                 }
 

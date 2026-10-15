@@ -32,7 +32,7 @@ internal sealed class JpegEncoderComponent : IDisposable
     // port: libjpeg-turbo jccolor.c rgb_ycc_convert; jcsample.c h2v1_downsample,
     // h2v2_downsample, int_downsample; jccoefct.c compress_first_pass
     public static void PrepareAll(Image image, JpegEncoderComponent[] components, int maxH, int maxV, Rgba32 background,
-        byte[][] quantization, int maxDegreeOfParallelism)
+        byte[][] quantization, int maxDegreeOfParallelism, CancellationToken cancellationToken = default)
     {
         int width = image.Width, height = image.Height;
         var planes = new byte[components.Length][];
@@ -41,7 +41,7 @@ internal sealed class JpegEncoderComponent : IDisposable
         {
             ReadOnlyMemory<Rgba32> pixels = image.Frames.RootFrame.Pixels;
             const int band = 32;
-            ForEach((height + band - 1) / band, (long)band * width, maxDegreeOfParallelism, b =>
+            ForEach((height + band - 1) / band, (long)band * width, maxDegreeOfParallelism, cancellationToken, b =>
             {
                 int start = b * band * width, end = Math.Min(height, (b + 1) * band) * width;
                 ConvertColors(pixels.Span[start..end], planes, start, background);
@@ -51,7 +51,7 @@ internal sealed class JpegEncoderComponent : IDisposable
             for (int c = 0; c < components.Length; c++) divisors[c] = new JpegFdct.Divisors(quantization[c == 0 ? 0 : 1]);
             int rows = 0;
             foreach (JpegEncoderComponent component in components) rows += component.HeightInBlocks;
-            ForEach(rows, (long)components[0].WidthInBlocks * 64 * 8, maxDegreeOfParallelism, row =>
+            ForEach(rows, (long)components[0].WidthInBlocks * 64 * 8, maxDegreeOfParallelism, cancellationToken, row =>
             {
                 int c = 0;
                 while (row >= components[c].HeightInBlocks) row -= components[c++].HeightInBlocks;
@@ -66,12 +66,16 @@ internal sealed class JpegEncoderComponent : IDisposable
         }
     }
 
-    private static void ForEach(int count, long workPerItem, int maxDegreeOfParallelism, Action<int> body)
+    private static void ForEach(int count, long workPerItem, int maxDegreeOfParallelism, CancellationToken cancellationToken, Action<int> body)
     {
         if (count > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, count * workPerItem, 1 << 18))
-            Parallel.For(0, count, Parallelism.Options(maxDegreeOfParallelism), body);
+            Parallel.For(0, count, Parallelism.Options(maxDegreeOfParallelism, cancellationToken), body);
         else
-            for (int i = 0; i < count; i++) body(i);
+            for (int i = 0; i < count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                body(i);
+            }
     }
 
     // The converted samples are 0–255 for any input: libjpeg's coefficients and offsets keep the sums in range.

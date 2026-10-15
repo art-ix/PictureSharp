@@ -16,7 +16,7 @@ internal sealed class GifDecoder : IImageDecoder
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
-        GifFile gif = GifFile.Parse(data.Span, readMetadata: false);
+        GifFile gif = GifFile.Parse(data.Span, options, readMetadata: false);
         return new ImageInfo
         {
             Format = ImageFormat.Gif,
@@ -28,10 +28,10 @@ internal sealed class GifDecoder : IImageDecoder
         };
     }
 
-    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options)
+    public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken)
     {
         ReadOnlySpan<byte> span = data.Span;
-        GifFile gif = GifFile.Parse(span, readMetadata: !options.IgnoreMetadata);
+        GifFile gif = GifFile.Parse(span, options, readMetadata: !options.IgnoreMetadata);
         int width = gif.Width;
         int height = gif.Height;
         int frameCount = options.FirstFrameOnly ? 1 : gif.Frames.Count;
@@ -43,6 +43,7 @@ internal sealed class GifDecoder : IImageDecoder
         var frames = new List<ImageFrame>(frameCount);
         for (int index = 0; index < frameCount; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             GifFrameInfo frame = gif.Frames[index];
             if (frame.Disposal == GifDisposal.Previous)
             {
@@ -50,7 +51,7 @@ internal sealed class GifDecoder : IImageDecoder
                 canvas.AsSpan().CopyTo(beforeFrame);
             }
 
-            DrawFrame(span, gif, frame, canvas);
+            DrawFrame(span, gif, frame, canvas, cancellationToken);
             // The last frame takes the canvas itself; its disposal no longer matters.
             bool last = index == frameCount - 1;
             frames.Add(new ImageFrame(width, height, last ? canvas : (Rgba32[])canvas.Clone())
@@ -124,7 +125,7 @@ internal sealed class GifDecoder : IImageDecoder
         (Math.Min(frame.X, width), Math.Min(frame.Y, height), Math.Min(frame.X + frame.Width, width), Math.Min(frame.Y + frame.Height, height));
 
     /// <summary>Decodes one frame and draws its non-transparent pixels onto the canvas (clipped to the canvas).</summary>
-    private static void DrawFrame(ReadOnlySpan<byte> data, GifFile gif, GifFrameInfo frame, Rgba32[] canvas)
+    private static void DrawFrame(ReadOnlySpan<byte> data, GifFile gif, GifFrameInfo frame, Rgba32[] canvas, CancellationToken cancellationToken)
     {
         int frameWidth = frame.Width;
         int frameHeight = frame.Height;
@@ -137,7 +138,7 @@ internal sealed class GifDecoder : IImageDecoder
         byte[] indices = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
-            int produced = GifLzwDecoder.Decode(data, frame.DataOffset, frame.MinCodeSize, indices.AsSpan(0, pixelCount));
+            int produced = GifLzwDecoder.Decode(data, frame.DataOffset, frame.MinCodeSize, indices.AsSpan(0, pixelCount), cancellationToken);
             Span<Rgba32> colors = stackalloc Rgba32[256];
             BuildPalette(frame.LocalColorTable ?? gif.GlobalColorTable, colors);
 

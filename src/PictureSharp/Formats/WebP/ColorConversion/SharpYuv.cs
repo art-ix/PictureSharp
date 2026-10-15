@@ -5,7 +5,7 @@ namespace PictureSharp.Formats.WebP.ColorConversion;
 internal static partial class SharpYuv
 {
     // port: sharpyuv/sharpyuv.c DoSharpArgbToYuv (8-bit RGB, WebP matrix, sRGB transfer)
-    public static void Convert(ReadOnlySpan<Rgba32> pixels, RgbToYuv output)
+    public static void Convert(ReadOnlySpan<Rgba32> pixels, RgbToYuv output, CancellationToken cancellationToken = default)
     {
         if (output.Width < 4 || output.Height < 4) { output.Convert(pixels); return; }
         int w = (output.Width + 1) & ~1, h = (output.Height + 1) & ~1, uvw = w >> 1;
@@ -29,6 +29,7 @@ internal static partial class SharpYuv
             long previousDifference = long.MaxValue;
             for (int iteration = 0; iteration < 4; iteration++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 long difference = 0;
                 for (int y = 0; y < h; y += 2)
                 {

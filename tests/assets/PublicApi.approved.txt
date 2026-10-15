@@ -28,7 +28,10 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     property System.Boolean WebPFancyUpsampling { get; init; }
     property System.Drawing.Size? IcoPreferredSize { get; init; }
     property System.Int32 MaxDegreeOfParallelism { get; init; }
+    property System.Int32 MaxFrames { get; init; }
     property System.Int32? IcoIndex { get; init; }
+    property System.Int64 MaxInputBytes { get; init; }
+    property System.Int64 MaxMetadataBytes { get; init; }
     property System.Int64 MaxPixels { get; init; }
     property static DecoderOptions Default { get; }
 abstract record EncoderOptions : System.IEquatable<EncoderOptions>
@@ -87,8 +90,11 @@ sealed record IcoEntryInfo : System.IEquatable<IcoEntryInfo>
     property System.Int32 Width { get; }
 static class IcoFile
     method static IcoImageCollection LoadAll(System.IO.Stream stream, DecoderOptions? options = null)
+    method static IcoImageCollection LoadAll(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static IcoImageCollection LoadAll(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
+    method static IcoImageCollection LoadAll(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static IcoImageCollection LoadAll(System.String path, DecoderOptions? options = null)
+    method static IcoImageCollection LoadAll(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static ImageInfo IdentifySelected(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
     method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.IO.Stream stream, DecoderOptions? options = null)
     method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
@@ -96,7 +102,9 @@ static class IcoFile
     method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options = null)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options = null)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options, System.Threading.CancellationToken cancellationToken)
 sealed class IcoImageCollection : System.Collections.Generic.IEnumerable<Image>, System.Collections.Generic.IReadOnlyCollection<Image>, System.Collections.Generic.IReadOnlyList<Image>, System.Collections.IEnumerable, System.IDisposable
     method System.Collections.Generic.IEnumerator<Image> GetEnumerator()
     method System.Void Dispose()
@@ -113,8 +121,10 @@ sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
     method Image Clone()
     method Image Clone(System.Action<ImageProcessingContext> operation)
+    method Image Clone(System.Action<ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
     method System.Boolean IsOpaque()
     method System.Byte[] Encode(EncoderOptions options)
+    method System.Byte[] Encode(EncoderOptions options, System.Threading.CancellationToken cancellationToken)
     method System.Byte[] Encode(ImageFormat format)
     method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
     method System.Memory<Rgba32> GetPixelMemory()
@@ -132,30 +142,43 @@ sealed class Image : System.IDisposable
     method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
     method System.Void Dispose()
     method System.Void Mutate(System.Action<ImageProcessingContext> operation)
+    method System.Void Mutate(System.Action<ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
     method System.Void Save(System.IO.Stream stream, EncoderOptions options)
+    method System.Void Save(System.IO.Stream stream, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
     method System.Void Save(System.IO.Stream stream, ImageFormat format)
     method System.Void Save(System.String path)
     method System.Void Save(System.String path, EncoderOptions options)
+    method System.Void Save(System.String path, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
     method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
     method static Image CreateAnimation(System.TimeSpan frameDuration, params System.ReadOnlySpan<Image> frames)
     method static Image Load(System.IO.Stream stream, DecoderOptions? options = null)
+    method static Image Load(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static Image Load(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
+    method static Image Load(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static Image Load(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options = null)
+    method static Image Load(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static Image Load(System.String path, DecoderOptions? options = null)
+    method static Image Load(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
     method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
     method static ImageFormat? DetectFormat(System.IO.Stream stream)
     method static ImageFormat? DetectFormat(System.ReadOnlySpan<System.Byte> header)
     method static ImageFormat? DetectFormat(System.String path)
     method static ImageInfo Identify(System.IO.Stream stream)
+    method static ImageInfo Identify(System.IO.Stream stream, DecoderOptions? options)
     method static ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data)
+    method static ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options)
     method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data)
+    method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options)
     method static ImageInfo Identify(System.String path)
+    method static ImageInfo Identify(System.String path, DecoderOptions? options)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
     property ImageFormat? SourceFormat { get; }
     property ImageFrameCollection Frames { get; }
@@ -287,6 +310,7 @@ readonly ref struct ImageProcessingContext
     method ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Int32 threshold = 3)
     property System.Drawing.Size Size { get; }
     property System.Int32 FrameCount { get; }
+    property System.Threading.CancellationToken CancellationToken { get; }
 sealed record JpegEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<JpegEncoderOptions>
     ctor()
     property ImageFormat Format { get; }

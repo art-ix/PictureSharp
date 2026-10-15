@@ -134,17 +134,21 @@ internal sealed class Vp8Decoder
     private int _yStride;
     private int _uvStride;
 
-    private Vp8Decoder(byte[] data)
+    private readonly CancellationToken _cancellationToken;
+
+    private Vp8Decoder(byte[] data, CancellationToken cancellationToken)
     {
         _data = data;
+        _cancellationToken = cancellationToken;
     }
 
     private static ImageFormatException Error(string message) => new(ImageFormat.WebP, message);
 
     /// <summary>Decodes a VP8 bitstream (the payload of a "VP8 " chunk) into YUV planes.</summary>
-    public static Vp8Frame Decode(byte[] data, int offset, int length, bool bypassFiltering = false, int maxDegreeOfParallelism = 1)
+    public static Vp8Frame Decode(byte[] data, int offset, int length, bool bypassFiltering = false, int maxDegreeOfParallelism = 1,
+        CancellationToken cancellationToken = default)
     {
-        var dec = new Vp8Decoder(data);
+        var dec = new Vp8Decoder(data, cancellationToken);
         dec.GetHeaders(offset, length);
         if (bypassFiltering)
         {
@@ -153,7 +157,18 @@ internal sealed class Vp8Decoder
 
         dec.PrecomputeFilterStrengths();
         dec.AllocateMemory();
-        dec.ParseAndFilterFrame(maxDegreeOfParallelism);
+        try
+        {
+            dec.ParseAndFilterFrame(maxDegreeOfParallelism);
+        }
+        catch
+        {
+            ArrayPool<byte>.Shared.Return(dec._planeY);
+            ArrayPool<byte>.Shared.Return(dec._planeU);
+            ArrayPool<byte>.Shared.Return(dec._planeV);
+            throw;
+        }
+
         return new Vp8Frame
         {
             Width = dec._width,
@@ -553,6 +568,7 @@ internal sealed class Vp8Decoder
         {
             for (int mbY = 0; mbY < _mbH; ++mbY)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 ParseRow(mbY);
                 ReconstructRow(mbY, _mbData);
             }
@@ -570,6 +586,7 @@ internal sealed class Vp8Decoder
             {
                 for (int mbY = 0; mbY < _mbH && parsed.WaitFor(mbY); ++mbY)
                 {
+                    _cancellationToken.ThrowIfCancellationRequested();
                     ReconstructRow(mbY, rows[mbY & 1]);
                     FilterRow(mbY);
                     reconstructed.Publish(mbY + 1);
@@ -587,6 +604,7 @@ internal sealed class Vp8Decoder
             // Buffer y & 1 is free once row y - 2 has been reconstructed.
             for (int mbY = 0; mbY < _mbH && (mbY < 2 || reconstructed.WaitFor(mbY - 2)); ++mbY)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 _mbData = rows[mbY & 1];
                 ParseRow(mbY);
                 parsed.Publish(mbY + 1);
@@ -1163,6 +1181,7 @@ internal sealed class Vp8Decoder
     {
         for (int mbY = 0; mbY < _mbH; ++mbY)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             FilterRow(mbY);
         }
     }

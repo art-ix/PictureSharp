@@ -7,7 +7,10 @@ using PictureSharp.Formats.WebP.Lossless;
 namespace PictureSharp.Compression;
 
 /// <summary>Thrown for malformed deflate / zlib streams.</summary>
-internal sealed class InvalidDataStreamException(string message) : Exception(message);
+internal class InvalidDataStreamException(string message) : Exception(message);
+
+/// <summary>Thrown when a stream inflates to more than the allowed output size.</summary>
+internal sealed class OutputLimitExceededException() : InvalidDataStreamException("Decompressed data exceeds the allowed size.");
 
 /// <summary>DEFLATE (RFC 1951) and zlib (RFC 1950) decompressor.</summary>
 /// <remarks>
@@ -50,6 +53,7 @@ internal sealed class Inflater
     private int _outputPos;
     private readonly long _maxOutput;
     private Action<byte[], int>? _progress;
+    private CancellationToken _cancellationToken;
 
     private Inflater(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool pooled = false)
     {
@@ -74,10 +78,12 @@ internal sealed class Inflater
     /// Called after each block with the output buffer and the number of bytes produced. Bytes already produced never
     /// change; a later call may pass a larger copy of the buffer.
     /// </param>
+    /// <param name="cancellationToken">Checked before each deflate block.</param>
     public static byte[] InflateZlib(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool verifyChecksum = true,
-        bool stopAtExpectedSize = false, Action<byte[], int>? progress = null)
+        bool stopAtExpectedSize = false, Action<byte[], int>? progress = null, CancellationToken cancellationToken = default)
     {
-        Inflater inflater = RunZlib(input, offset, length, expectedSize, maxOutput, verifyChecksum, stopAtExpectedSize, progress, pooled: false);
+        Inflater inflater = RunZlib(input, offset, length, expectedSize, maxOutput, verifyChecksum, stopAtExpectedSize, progress, pooled: false,
+            cancellationToken);
         return inflater.TakeOutput();
     }
 
@@ -87,9 +93,11 @@ internal sealed class Inflater
     /// once nothing reads it any more (including <paramref name="progress"/> consumers).
     /// </summary>
     public static PooledOutput InflateZlibPooled(byte[] input, int offset, int length, int expectedSize, long maxOutput,
-        bool verifyChecksum = true, bool stopAtExpectedSize = false, Action<byte[], int>? progress = null)
+        bool verifyChecksum = true, bool stopAtExpectedSize = false, Action<byte[], int>? progress = null,
+        CancellationToken cancellationToken = default)
     {
-        Inflater inflater = RunZlib(input, offset, length, expectedSize, maxOutput, verifyChecksum, stopAtExpectedSize, progress, pooled: true);
+        Inflater inflater = RunZlib(input, offset, length, expectedSize, maxOutput, verifyChecksum, stopAtExpectedSize, progress, pooled: true,
+            cancellationToken);
         return new PooledOutput(inflater._output, inflater._outputPos, inflater._rented);
     }
 
@@ -106,7 +114,7 @@ internal sealed class Inflater
     }
 
     private static Inflater RunZlib(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool verifyChecksum,
-        bool stopAtExpectedSize, Action<byte[], int>? progress, bool pooled)
+        bool stopAtExpectedSize, Action<byte[], int>? progress, bool pooled, CancellationToken cancellationToken)
     {
         if (length < 2)
         {
@@ -125,7 +133,7 @@ internal sealed class Inflater
             throw new InvalidDataStreamException("zlib preset dictionaries are not supported.");
         }
 
-        var inflater = new Inflater(input, offset + 2, length - 2, expectedSize, maxOutput, pooled) { _progress = progress };
+        var inflater = new Inflater(input, offset + 2, length - 2, expectedSize, maxOutput, pooled) { _progress = progress, _cancellationToken = cancellationToken };
         bool complete;
         try
         {
@@ -182,6 +190,7 @@ internal sealed class Inflater
         bool final;
         do
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             final = ReadBits(1) != 0;
             int type = (int)ReadBits(2);
             switch (type)
@@ -340,7 +349,7 @@ internal sealed class Inflater
 
         if (needed > _maxOutput)
         {
-            throw new InvalidDataStreamException("Decompressed data exceeds the allowed size.");
+            throw new OutputLimitExceededException();
         }
 
         long newSize = Math.Min(Math.Max(needed, (long)_capacity * 2), Math.Min(_maxOutput, Array.MaxLength));

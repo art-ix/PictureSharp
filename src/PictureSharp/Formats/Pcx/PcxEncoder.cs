@@ -10,7 +10,7 @@ internal sealed class PcxEncoder : IImageEncoder<PcxEncoderOptions>
 
     public ImageFormat Format => ImageFormat.Pcx;
 
-    public void Encode(Image image, Stream output, PcxEncoderOptions options)
+    public void Encode(Image image, Stream output, PcxEncoderOptions options, CancellationToken cancellationToken)
     {
         ImageFrame frame = image.Frames.RootFrame;
         int width = frame.Width;
@@ -60,6 +60,7 @@ internal sealed class PcxEncoder : IImageEncoder<PcxEncoderOptions>
             encoded = ArrayPool<byte>.Shared.Rent(scanBytes * 2);
             for (int y = 0; y < height; y++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 Span<byte> row = scan.AsSpan(0, scanBytes);
                 row.Clear();
                 Pack(pixels.Slice(y * width, width), row, bytesPerLine, layout, lookup);

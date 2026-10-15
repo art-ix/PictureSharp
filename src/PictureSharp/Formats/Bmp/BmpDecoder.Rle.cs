@@ -10,7 +10,7 @@ internal sealed partial class BmpDecoder
     /// Decodes BI_RLE8/BI_RLE4. Pixels skipped by delta or end-of-line codes keep palette index 0 (as in Pillow);
     /// pixels beyond the row width are dropped. A stream that ends early leaves the remaining rows at index 0.
     /// </summary>
-    private static void DecodeRle(ReadOnlySpan<byte> file, BmpHeader h, Rgba32[] palette, Rgba32[] pixels)
+    private static void DecodeRle(ReadOnlySpan<byte> file, BmpHeader h, Rgba32[] palette, Rgba32[] pixels, CancellationToken cancellationToken)
     {
         int width = h.Width;
         int height = h.Height;
@@ -20,8 +20,10 @@ internal sealed partial class BmpDecoder
         int pos = 0;
         int x = 0;
         int y = 0;
+        int commands = 0;
         while (pos + 1 < s.Length && y < height)
         {
+            CheckCancellation(++commands, cancellationToken);
             int count = s[pos];
             int value = s[pos + 1];
             pos += 2;
@@ -95,7 +97,7 @@ internal sealed partial class BmpDecoder
     }
 
     /// <summary>Decodes OS/2 RLE24 (three-byte BGR pixels in place of palette indices). Skipped pixels are black.</summary>
-    private static void DecodeRle24(ReadOnlySpan<byte> file, BmpHeader h, Rgba32[] pixels)
+    private static void DecodeRle24(ReadOnlySpan<byte> file, BmpHeader h, Rgba32[] pixels, CancellationToken cancellationToken)
     {
         int width = h.Width;
         int height = h.Height;
@@ -104,8 +106,10 @@ internal sealed partial class BmpDecoder
         int pos = 0;
         int x = 0;
         int y = 0;
+        int commands = 0;
         while (pos + 1 < s.Length && y < height)
         {
+            CheckCancellation(++commands, cancellationToken);
             int count = s[pos];
             int value = s[pos + 1];
             if (count > 0)
@@ -175,5 +179,14 @@ internal sealed partial class BmpDecoder
         }
 
         int Row(int line) => (h.TopDown ? line : height - 1 - line) * width;
+    }
+
+    // A command writes at most 255 pixels, so checking every 32768 commands bounds the work between checks.
+    private static void CheckCancellation(int commands, CancellationToken cancellationToken)
+    {
+        if ((commands & 0x7FFF) == 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
     }
 }

@@ -10,7 +10,7 @@ internal sealed class BmpEncoder : IImageEncoder<BmpEncoderOptions>
 
     public ImageFormat Format => ImageFormat.Bmp;
 
-    public void Encode(Image image, Stream output, BmpEncoderOptions options)
+    public void Encode(Image image, Stream output, BmpEncoderOptions options, CancellationToken cancellationToken)
     {
         ImageFrame frame = image.Frames.RootFrame;
         ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
@@ -87,6 +87,7 @@ internal sealed class BmpEncoder : IImageEncoder<BmpEncoderOptions>
         Dictionary<uint, byte>? lookup = palette is null ? null : BuildLookup(palette);
         for (int y = height - 1; y >= 0; y--)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             WriteRow(pixels.Slice(y * width, width), row, bits, lookup);
             output.Write(row);
         }

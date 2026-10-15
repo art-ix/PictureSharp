@@ -31,7 +31,8 @@ internal static partial class YuvToRgb
     private static Rgba32 ToRgba(int y, int u, int v) => new(YuvToR(y, v), YuvToG(y, u, v), YuvToB(y, u), 255);
 
     /// <summary>Converts a decoded frame to opaque RGBA pixels (width × height, tightly packed).</summary>
-    public static void Convert(Vp8Frame frame, Rgba32[] dst, bool fancyUpsampling, int maxDegreeOfParallelism = 1, bool allowSimd = true)
+    public static void Convert(Vp8Frame frame, Rgba32[] dst, bool fancyUpsampling, int maxDegreeOfParallelism = 1, bool allowSimd = true,
+        CancellationToken cancellationToken = default)
     {
         // Fancy upsampling works on row 0, then row pairs (2k-1, 2k), then a lone last row; sampling on rows.
         // Units only read the frame, so bands of units convert independently.
@@ -44,7 +45,7 @@ internal static partial class YuvToRgb
             return;
         }
 
-        Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism),
+        Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism, cancellationToken),
             band => ConvertUnits(frame, dst, fancyUpsampling, (int)((long)units * band / bands), (int)((long)units * (band + 1) / bands), allowSimd));
     }
 
