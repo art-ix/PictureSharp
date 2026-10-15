@@ -148,11 +148,12 @@ computation from ImageOps.contain/fit/pad), alpha compositing
 (AlphaComposite.c), brightness/contrast/color enhancement (ImageEnhance.py,
 Blend.c), box and Gaussian blur (BoxBlur.c), unsharp masking (UnsharpMask.c),
 3x3 kernel filtering (Filter.c, ImageFilter.SHARPEN), rotation
-(Image.rotate, affine transforms from Geometry.c) and GIF color quantization
-(median cut from Quant.c with QuantHash.c and QuantHeap.c, fast octree from
-QuantOctree.c, Floyd-Steinberg dithering from Convert.c and the palette color
-cache from Palette.c). The code was translated to
-C# and restructured; it is not the original source.
+(Image.rotate, affine transforms from Geometry.c), automatic contrast and
+histogram equalization (ImageOps.autocontrast and ImageOps.equalize) and GIF
+color quantization (median cut from Quant.c with QuantHash.c and QuantHeap.c,
+fast octree from QuantOctree.c, Floyd-Steinberg dithering from Convert.c and
+the palette color cache from Palette.c). The code was translated to C# and
+restructured; it is not the original source.
 -------------------------------------------------------------------------------
 Copyright (c) 1997-2011 by Secret Labs AB
 Copyright (c) 1995-2011 by Fredrik Lundh and contributors

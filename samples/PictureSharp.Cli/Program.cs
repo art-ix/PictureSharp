@@ -12,6 +12,7 @@ using PictureSharp.Processing;
 //   convert <input> <output> [-q quality] [-m method] [-lossless] [-colors n] [-octree] [-dither]
 //   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
 //   thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality]
+//   trim <input> <output> [-mode alpha|background] [-color RRGGBB[AA]] [-threshold n] [-tolerance n] [-padding n] [-q quality]
 
 if (args.Length == 0)
 {
@@ -217,6 +218,35 @@ try
                 return 0;
             }
 
+        case "trim" when args.Length >= 3:
+            {
+                var options = new AutoCropOptions();
+                float quality = 75;
+                for (int i = 3; i < args.Length; i++)
+                {
+                    switch (args[i])
+                    {
+                        case "-mode": options = options with { Mode = Enum.Parse<AutoCropMode>(args[++i], ignoreCase: true) }; break;
+                        case "-color": options = options with { Mode = AutoCropMode.Background, Background = ParseColor(args[++i]) }; break;
+                        case "-threshold": options = options with { AlphaThreshold = byte.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-tolerance": options = options with { Tolerance = byte.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-padding": options = options with { Padding = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                        default: throw new ArgumentException($"Unknown option {args[i]}");
+                    }
+                }
+
+                using Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
+                var sourceSize = image.Size;
+                System.Drawing.Rectangle? box = image.FindTrimBounds(options);
+                image.Mutate(x => x.AutoCrop(options));
+                Save(image, args[2], quality, 4, lossless: false);
+                string result = box is { } b ? $"content at {b.X},{b.Y} {b.Width}x{b.Height}" : "no content, unchanged";
+                Console.WriteLine($"{args[1]} -> {args[2]}: {sourceSize.Width}x{sourceSize.Height} -> {image.Width}x{image.Height} " +
+                                  $"({options.Mode}, {result}), frames: {image.FrameCount}, {new FileInfo(args[2]).Length} bytes");
+                return 0;
+            }
+
         default:
             PrintUsage();
             return 1;
@@ -247,6 +277,23 @@ static void Save(Image image, string path, float quality, int method, bool lossl
     }
 }
 
+// RRGGBB or RRGGBBAA, with or without a leading '#'.
+static Rgba32 ParseColor(string text)
+{
+    string hex = text.TrimStart('#');
+    if (hex.Length is not (6 or 8) || !uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint value))
+    {
+        throw new ArgumentException($"Expected a color as RRGGBB or RRGGBBAA, got {text}.");
+    }
+
+    if (hex.Length == 6)
+    {
+        value = (value << 8) | 0xFF;
+    }
+
+    return new Rgba32((byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value);
+}
+
 static void PrintUsage() => Console.Error.WriteLine(
     """
     usage:
@@ -258,4 +305,6 @@ static void PrintUsage() => Console.Error.WriteLine(
       picturesharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]
                              [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
       picturesharp-cli thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality]
+      picturesharp-cli trim <input> <output> [-mode alpha|background] [-color RRGGBB[AA]] [-threshold n]
+                           [-tolerance n] [-padding n] [-q quality]
     """);

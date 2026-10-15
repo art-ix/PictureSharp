@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja kodu: 0.6.2 (przygotowana do publikacji; ostatnia opublikowana: 0.6.1). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane oraz zarządzanie kolorem ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Kolejnym etapem implementacji jest 0.6.3. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja kodu: 0.6.3 (przygotowana do publikacji; ostatnia opublikowana: 0.6.2). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Kolejnym etapem implementacji jest 0.6.4. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
@@ -52,8 +52,8 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.5.7 | Porządki w testach: duplikaty, mniejsze macierze, kategoria `Slow`, migracja na TUnit | Ukończona — wydanie 0.5.7 |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Ukończona — wydanie 0.6.0 |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Ukończona — wydanie 0.6.1 |
-| 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Ukończona — wersja 0.6.2 przygotowana do publikacji |
-| 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Planowana |
+| 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Ukończona — opublikowana |
+| 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Ukończona — wersja 0.6.3 przygotowana do publikacji |
 | 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Planowana |
 | 0.7.0 | Integracja ICO i sześciu obszarów, stabilizacja API i wydanie | Planowana |
 
@@ -277,18 +277,70 @@ przypadków >5% potwierdzonych naprzemiennie w osobnych ALC: od −1,79% do +2,2
 
 ## 0.6.3 — operacje graficzne
 
+Zakres porównany z libvips (`find_trim`), Pillow (`getbbox`, `ImageChops`, `ImageOps`), ImageMagick (`-trim -fuzz`,
+`-level`, `-compose`), ImageSharp (tryby mieszania, `HistogramEqualization`) i W3C Compositing and Blending Level 1.
+Rozszerzenia zatwierdzone 2026-10-15: dodatkowe tryby W3C, AutoCrop po kolorze tła, `FindTrimBounds`, `AutoContrast`,
+`Equalize` i komenda CLI `trim`. Nazwy API są robocze do czasu zatwierdzenia migawki.
+
 Zakres:
-- `AutoCrop`: obcięcie przezroczystych marginesów według progu alfy, opcjonalny padding; określone zachowanie całkowicie przezroczystego obrazu. Dla animacji wspólna obwiednia klatek zachowująca płótno i pozycje.
-- Maski alfa: jawny wybór kanału alfa albo luminancji maski, pozycja i przycinanie, mnożenie istniejącej alfy bez zmiany RGB.
-- Tryby mieszania `Normal`, `Multiply`, `Screen`, `Overlay`, `Darken`, `Lighten`, `Difference`, z opacity i poprawną kompozycją source-over. Współpraca z trybem liniowym z 0.6.2.
-- Histogram RGB/luminancji z określoną polityką przezroczystych pikseli; wynik analizy nie modyfikuje obrazu.
-- Gamma oraz poziomy wejściowe/wyjściowe, per RGB lub kanał; zdefiniowana kolejność i przestrzeń obliczeń, walidacja parametrów, alfa bez zmian.
-- Operacje dostępne przez istniejący styl `Mutate`/`Clone`; analiza jako API odczytowe. Rysowanie tekstu, fonty i pełny silnik wektorowy poza zakresem.
+- `AutoCrop(AutoCropOptions)`: tryb `Alpha` (próg alfy) albo `Background` (kolor tła, domyślnie piksel narożny, z
+  tolerancją jak `-trim -fuzz`, ale jako największa różnica kanału RGBA; piksele z alfą 0 pasują do przezroczystego
+  tła niezależnie od koloru), opcjonalny padding ograniczony do płótna. Obraz bez treści pozostaje bez zmian (bez
+  obrazu 0×0). Animacje: suma obwiedni wszystkich klatek i jedno przycięcie wspólnego płótna; czasy i metadane bez zmian.
+  `Image.FindTrimBounds(options) → Rectangle?` zwraca obwiednię bez modyfikacji obrazu.
+- Maski `ApplyMask(Image mask, MaskOptions)`: kanał `Alpha` albo `Luminance` (BT.601, jak `Grayscale`), pozycja lub
+  kotwica, `Invert`, obszar poza maską `Keep` albo `Transparent`; `A' = A·m/255` z zaokrągleniem, RGB bez zmian. Maska
+  może być obrazem docelowym.
+- `BlendMode` w `DrawImageOptions`: `Normal`, `Multiply`, `Screen`, `Overlay`, `Darken`, `Lighten`, `Difference` oraz
+  `HardLight`, `SoftLight`, `ColorDodge`, `ColorBurn`, `Exclusion`. Wzory B(Cb, Cs) i wariant z alfą według W3C
+  (`Cs' = (1−αb)·Cs + αb·B(Cb, Cs)`, potem source-over) z opacity; z `LinearLight` w liniowym sRGB. `Normal` używa
+  dotychczasowej ścieżki, więc wynik jest bajtowo identyczny z 0.6.2.
+- Histogram `Image.GetHistogram(HistogramOptions) → ImageHistogram`: R, G, B, A i luminancja po 256 koszyków, liczba
+  pikseli, średnia i percentyl (nearest rank). Przezroczystość: `Include` (domyślnie, jak Pillow `histogram()`) albo
+  `Exclude` dla A = 0; opcjonalny region i wybór klatki (pierwsza lub wszystkie). Analiza nie modyfikuje obrazu.
+  `WeightByAlpha` usunięte z zakresu (2026-10-15): wymagałoby ułamkowych liczników zamiast całkowitych.
+  `AutoContrast`/`Equalize` liczą histogram z wszystkich pikseli i klatek; animacja dostaje jedno wspólne mapowanie.
+- `Gamma` i `Levels(LevelsOptions)` dla RGB albo pojedynczego kanału:
+  `out = ob + (ow−ob)·clamp((x−ib)/(iw−ib), 0, 1)^(1/γ)` w zakodowanym sRGB. LUT jest liczony w double i zaokrąglany
+  połówkowo w górę. Kolejność: poziomy wejściowe, gamma, poziomy wyjściowe. Walidacja `ib < iw`, skończonego γ > 0 i
+  zakresu 0–255; alfa bez zmian.
+- `AutoContrast(cutoffLow, cutoffHigh, preserveTone)` i `Equalize()` jako port Pillow 10.2.0 `ImageOps`; wspólny
+  wewnętrzny LUT dla operacji tonalnych.
+- CLI: komenda `trim` (tryb alfa/tło, tolerancja, padding).
+- Operacje dostępne przez `Mutate`/`Clone`, analiza jako API odczytowe. Poza zakresem: tryby nierozdzielne
+  (Hue/Saturation/Color/Luminosity), pełne operatory Porter-Duff, krzywe ze splajnami, `EntropyCrop`, tekst i grafika wektorowa.
+
+Referencje (przed implementacją, `tests/assets/graphics_reference.py`, `python3 -I`):
+- Model double (numpy) dla mieszania, masek i poziomów z alfą. Pillow 10.2.0 `ImageChops` dla nieprzezroczystych
+  trybów, `ImageOps.autocontrast/equalize` i `getbbox`. ImageMagick 6 `-trim -fuzz` i `-level` jako dodatkowa wyrocznia.
+- Tolerancja: LUT, maski i AutoCrop 0; tryby mieszania ≤ 1 na kanał 8-bit względem modelu double; autocontrast i
+  equalize bit-exact z Pillow.
+
+Kolejność prac: referencje → LUT, Gamma i Levels → histogram, AutoContrast i Equalize → AutoCrop i FindTrimBounds →
+maski → tryby mieszania (`Compositor.Blend.cs`) → CLI, dokumentacja, migawka API i pomiary.
 
 DoD:
 - Małe ręcznie policzone wektory dla każdego trybu, masek, histogramu, gammy i poziomów; testy alfy 0/255 i pośredniej, przycinania oraz granic parametrów.
 - Testy animacji, `Clone`/`Mutate`, źródła będącego celem i braku niezamierzonych zmian RGB pod alfą.
-- Pomiary pełnych operacji na małych grafikach i 12 MP; SIMD dopiero przy wykazanej korzyści i identyczności ze skalarem.
+- Wyrocznie zielone w ustalonej tolerancji; `DrawImage` z `Normal` bajtowo identyczne z 0.6.2.
+- Pomiary pełnych operacji na małych grafikach i 12 MP, macierz regresji względem v0.6.2; SIMD dopiero przy wykazanej korzyści i identyczności ze skalarem.
+- Dokumentacja (`docs/image-processing.md`, `docs/cli.md`) z przykładami w `DocsExamplesTests`, migawka API z samymi dodatkami, konsument trim/AOT.
+
+Weryfikacja 2026-10-15: `Levels`/`Gamma`, `AutoContrast`/`Equalize` (bit-exact z Pillow 10.2.0 `ImageOps`),
+`GetHistogram`, `AutoCrop`/`FindTrimBounds`, `ApplyMask` i 12 trybów `BlendMode` w `DrawImageOptions`; komenda CLI
+`trim`. 59 plików referencji w `tests/assets/corpus/graphics/` z `graphics_reference.py`. Kalibracja: model mieszania
+a Pillow `ImageChops` maks. 1, trim a `getbbox` identyczne, poziomy a ImageMagick 6 maks. 1. Tolerancje dotrzymane:
+LUT, maski i trim 0, mieszanie ≤ 1, `Normal` bajtowo jak 0.6.2. `WeightByAlpha` usunięte z zakresu.
+Build Release bez ostrzeżeń, 5261/5261 testów (110 grafiki), Oracle 155/155, scalar 113/113, grafika bez intrinsics
+110/110, package consumer z AotSmoke nowych operacji (trim + Native AOT linux-x64). Pomiary (`docs/performance.md`):
+12 MP Levels 10,5 ms, histogram 26 ms (po przeplecionych licznikach, wcześniej 56 ms), mieszanie Multiply 75 ms (po
+specjalizacji trybów, wcześniej 117 ms). Macierz 80 przypadków ABBA względem v0.6.2: mediana −0,52%, alokacje maks.
++0,13%; przypadki >5% sprawdzone naprzemiennie w osobnych ALC, bez potwierdzonej regresji (PCX decode dwumodalny,
+kodek niezmieniony). Bez nowych ścieżek SIMD; ARM64 nieuruchamiany.
+
+Przygotowanie wydania (2026-10-15): VERSION 0.6.3, `docs/releases/release-0.6.3.md`, PackageReleaseNotes,
+README, `docs/README.md` i getting-started. Build Release bez ostrzeżeń, 5261/5261, package consumer 0.6.3 (trim +
+AOT, AotSmoke z nowymi operacjami). Bez commita, tagu i publikacji.
 
 ## 0.6.4 — adaptery do ekosystemu .NET
 

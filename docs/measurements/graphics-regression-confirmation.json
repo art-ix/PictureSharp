@@ -1,0 +1,74 @@
+[
+  {
+    "File": "photo.png",
+    "Operation": "WebPLosslessEncode",
+    "BaselineNs": 23197787.5,
+    "CurrentNs": 23409625,
+    "TimeChangePercent": 0.9131797590610669,
+    "Run": "base/current"
+  },
+  {
+    "File": "photo.png",
+    "Operation": "JpegEncode",
+    "BaselineNs": 375331.25,
+    "CurrentNs": 377587.00209643604,
+    "TimeChangePercent": 0.6010030063939631,
+    "Run": "base/current"
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 5405941.176470588,
+    "CurrentNs": 5846948.387096774,
+    "TimeChangePercent": 8.157824812183945,
+    "Run": "base/current"
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 5757271.875,
+    "CurrentNs": 6125376.666666667,
+    "TimeChangePercent": 6.393736472045042,
+    "Run": "current/base (contexts swapped)"
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 6302006.8965517245,
+    "CurrentNs": 5851048.387096774,
+    "TimeChangePercent": -7.15579206524991,
+    "Run": "v0.6.2 benchmarks with current PictureSharp.dll"
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 6064293.333333333,
+    "CurrentNs": 6255700,
+    "TimeChangePercent": 3.1562897133384116,
+    "Run": "base/current repeat"
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 5856458.064516129,
+    "CurrentNs": 6178786.666666667,
+    "TimeChangePercent": 5.5038147392107994,
+    "Run": "base/current repeat"
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 5855764.516129033,
+    "CurrentNs": 6132310,
+    "TimeChangePercent": 4.722619618826096,
+    "Run": "current benchmarks: v0.6.2 PictureSharp.dll vs current PictureSharp.dll"
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 6390068.9655172415,
+    "CurrentNs": 5807419.354838709,
+    "TimeChangePercent": -9.11804886336418,
+    "Run": "current benchmarks: v0.6.2 PictureSharp.dll vs current PictureSharp.dll"
+  }
+]

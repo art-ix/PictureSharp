@@ -20,6 +20,12 @@ if (args is ["metadata-probe", string metadataOutput])
     return;
 }
 
+if (args is ["graphics-probe", string graphicsOutput])
+{
+    GraphicsBenchmarks.Probe(graphicsOutput);
+    return;
+}
+
 if (args is ["sequence-probe", string format, string count, string mode, string path])
 {
     await SequenceMemoryProbe.RunAsync(format, int.Parse(count, System.Globalization.CultureInfo.InvariantCulture), mode, path);

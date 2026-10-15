@@ -730,3 +730,49 @@ per version of at least 180 ms. Confirmed changes ranged from −1.79% (GIF deco
 lossless decode). No repeatable regression above 5% was confirmed. Default resize weights are computed by the same
 code, now shared with the float passes, without extra allocations.
 [Raw matrix](measurements/color-regression.csv), [alternating confirmations](measurements/color-regression-confirmation.json).
+
+## Graphics operations (0.6.3)
+
+`graphics-probe` (CPUs 0–7, median of seven samples of at least 150 ms, linux-x64, .NET 10, Intel i5-12500H) on
+`photo_alpha.png` (200×160, "small") and the same image resized to 4000×3000 ("12 MP"). Every in-place operation
+runs on a copy-on-write `Clone`, so its time includes copying the pixels once; `CopyOnly` is that copy alone.
+`AutoCrop` and `FindTrimBounds` use a version with 5% transparent margins on each side.
+
+| Operation | Small µs | 12 MP ms | 12 MP allocated |
+| --- | ---: | ---: | ---: |
+| `CopyOnly` (clone baseline) | 6.1 | 2.9 | 45.8 MiB |
+| `Levels` | 36.5 | 10.5 | 45.8 MiB |
+| `Gamma` | 34.3 | 10.4 | 45.8 MiB |
+| `AutoContrast(1)` | 98.1 | 34.2 | 45.8 MiB |
+| `Equalize` | 91.2 | 35.4 | 45.8 MiB |
+| `GetHistogram` | 66.3 | 26.1 | 10 KiB |
+| `FindTrimBounds` | 6.2 | 2.3 | 107 B |
+| `AutoCrop` | 12.8 | 6.1 | 35.5 MiB |
+| `ApplyMask` (alpha) | 50.5 | 17.9 | 45.8 MiB |
+| `ApplyMask` (luminance) | 76.7 | 25.3 | 45.8 MiB |
+| `DrawImage` `Normal`, opacity 0.8 | 136.4 | 49.4 | 45.8 MiB |
+| `DrawImage` `Multiply` | 205.7 | 74.8 | 45.8 MiB |
+| `DrawImage` `SoftLight` | 279.4 | 97.4 | 45.8 MiB |
+| `DrawImage` `Multiply`, linear light | 232.3 | 83.4 | 45.8 MiB |
+
+Two scalar changes came from these measurements; both keep the results bit-identical. First, the histogram
+alternates between two sets of 32-bit counters, so runs of equal values do not form a chain of dependent increments
+on one entry. This halved `GetHistogram`, `AutoContrast` and `Equalize` at 12 MP (56 → 26 ms, 68 → 34 ms). Second,
+blend modes are specialized per mode through generic structs instead of a switch inside the pixel loop: `Multiply`
+went from 117 to 75 ms and `SoftLight` from 148 to 97 ms. Allocations are the cloned frame plus small tables. No SIMD paths were
+added; the operations are memory-bound LUT and per-pixel float loops, and only the blend modes would be candidates.
+[Raw data](measurements/graphics-benchmarks.json).
+
+```bash
+taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- graphics-probe /tmp/graphics.json
+```
+
+The frozen 80-case complete-operation matrix was compared with release 0.6.2 (`v0.6.2`, extracted with `git archive`)
+in ABBA order (v0.6.2, current, current, v0.6.2), seven samples of at least 120 ms, CPUs 0–7. Median time change:
+−0.52%; largest allocation increase: +0.13%. Three aggregates above +5% were rechecked in separate
+AssemblyLoadContexts in one process, alternating, 15 samples of at least 180 ms per version: WebP lossless encode
++0.91% and JPEG encode +0.60%. The third, PCX decode of the 1600×1200 graphic, is bimodal (about 5.4 or 6.1–6.3 ms
+per run) and moved between −9.1% and +8.2% across seven alternating runs. That included −7.2% and −9.1% when only
+`PictureSharp.dll` differed under the same benchmark assembly. The PCX decoder and every codec are unchanged in 0.6.3,
+so this is measurement noise, not a regression. No repeatable regression above 5% was confirmed.
+[Raw matrix](measurements/graphics-regression.csv), [alternating confirmations](measurements/graphics-regression-confirmation.json).

@@ -39,7 +39,11 @@ public readonly ref partial struct ImageProcessingContext
 
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            if (options.LinearLight)
+            if (options.BlendMode != BlendMode.Normal)
+            {
+                Compositor.DrawBlended(frame, pixels, src.Width, src.Height, location, options.Opacity, options.BlendMode, options.LinearLight);
+            }
+            else if (options.LinearLight)
             {
                 Compositor.DrawOverLinear(frame, pixels, src.Width, src.Height, location, options.Opacity);
             }

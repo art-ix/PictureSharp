@@ -15,6 +15,8 @@ PictureSharp reads, writes and processes WebP, PNG, JPEG, BMP, GIF, PCX and ICO 
 | PCX | ✔ 1–8 bit, 24-bit RGB, 32-bit RGBA | ✔ 1/4/8/24/32-bit, RLE |
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
+- Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
+- Conversion of ICC and PNG color descriptions to sRGB, linear-light resize and compositing
 - Fast JPEG thumbnails decoded at 1/2, 1/4 or 1/8 scale
 - Frame-by-frame reading and writing of GIF, APNG and WebP animations
 - Typed EXIF and ICC/XMP metadata, editable without recompressing the image

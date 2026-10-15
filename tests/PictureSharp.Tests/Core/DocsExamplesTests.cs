@@ -417,6 +417,72 @@ public sealed class DocsExamplesTests : IDisposable
         await Assert.That(adjusted.Size).IsEqualTo(new Size(640, 420));
         await Assert.That(adjusted[0, 0]).IsEqualTo(Rgba32.White);
 
+        using Image toned = image.Clone(x => x
+            .Levels(new LevelsOptions { InputBlack = 20, InputWhite = 230 })
+            .Levels(new LevelsOptions { Gamma = 1.4f, OutputBlack = 16, OutputWhite = 235 })
+            .Gamma(2.2f)
+            .Gamma(0.8f, ColorChannels.Blue));
+        await Assert.That(toned.Size).IsEqualTo(image.Size);
+
+        using Image texture = Image.Load(P("logo.png"));
+        using Image blended = image.Clone(x => x
+            .DrawImage(texture, Point.Empty, new DrawImageOptions { BlendMode = BlendMode.Multiply })
+            .DrawImage(texture, AnchorPosition.Center, new DrawImageOptions
+            {
+                BlendMode = BlendMode.SoftLight,
+                Opacity = 0.7f,
+                LinearLight = true,
+            }));
+        await Assert.That(blended.Size).IsEqualTo(image.Size);
+
+        using Image shape = Image.Load(P("logo.png"));
+        using Image vignette = Image.Load(P("logo.png"));
+        using Image masked = image.Clone(x => x
+            .ApplyMask(shape)
+            .ApplyMask(vignette, AnchorPosition.Center, new MaskOptions
+            {
+                Channel = MaskChannel.Luminance,
+                Outside = MaskOutside.Transparent,
+            })
+            .ApplyMask(shape, new Point(40, 10), new MaskOptions { Invert = true }));
+        await Assert.That(masked.Size).IsEqualTo(image.Size);
+
+        using Image trimmed = image.Clone(x => x
+            .AutoCrop()
+            .AutoCrop(new AutoCropOptions { AlphaThreshold = 16, Padding = 4 })
+            .AutoCrop(new AutoCropOptions
+            {
+                Mode = AutoCropMode.Background,
+                Tolerance = 12,
+            })
+            .AutoCrop(new AutoCropOptions { Mode = AutoCropMode.Background, Background = Color.White }));
+        await Assert.That(trimmed.Width <= image.Width && trimmed.Height <= image.Height).IsTrue();
+        if (image.FindTrimBounds() is { } box)
+        {
+            await Assert.That(box.Width <= image.Width).IsTrue();
+        }
+
+        using Image automatic = image.Clone(x => x
+            .AutoContrast()
+            .AutoContrast(2f)
+            .AutoContrast(1f, 5f, preserveTone: true)
+            .Equalize());
+        await Assert.That(automatic.Size).IsEqualTo(image.Size);
+
+        ImageHistogram histogram = image.GetHistogram();
+        long darkPixels = histogram.Luminance[..32].ToArray().Sum();
+        byte median = histogram.Percentile(HistogramChannel.Luminance, 50);
+        double meanRed = histogram.Mean(HistogramChannel.Red);
+        ImageHistogram visible = image.GetHistogram(new HistogramOptions
+        {
+            Transparency = HistogramTransparency.Exclude,
+            Region = new Rectangle(0, 0, 100, 100),
+            AllFrames = true,
+        });
+        await Assert.That(histogram.PixelCount).IsEqualTo((long)image.Width * image.Height);
+        await Assert.That(darkPixels <= histogram.PixelCount && median <= 255 && meanRed >= 0).IsTrue();
+        await Assert.That(visible.PixelCount <= 100 * 100).IsTrue();
+
         // Custom frame processors: the Transpose sample, same code as Extensibility.TransposeProcessor.
         using Image transposed = image.Clone(x => x.ApplyProcessor(new Extensibility.TransposeProcessor()).Resize(800, 0));
         await Assert.That(transposed.Size).IsEqualTo(new Size(800, 1600));

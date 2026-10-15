@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace PictureSharp.Algorithms.Processing;
 
 /// <summary>Source-over compositing of straight-alpha buffers.</summary>
-internal static class Compositor
+internal static partial class Compositor
 {
     // port: Pillow src/libImaging/AlphaComposite.c PRECISION_BITS
     private const int PrecisionBits = 7;

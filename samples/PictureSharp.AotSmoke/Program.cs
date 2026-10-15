@@ -106,6 +106,25 @@ using (var tagged = new Image(4, 4, new Rgba32(128, 64, 32)))
         .DrawImage(source, AnchorPosition.Center, new DrawImageOptions { Opacity = 0.5f, LinearLight = true }));
     if (converted.Width != 2) throw new InvalidOperationException("Linear-light processing failed.");
 }
+using (var canvas = new Image(6, 6))
+{
+    canvas[1, 2] = new Rgba32(40, 120, 200);
+    canvas[4, 3] = new Rgba32(220, 60, 10, 128);
+    if (canvas.FindTrimBounds() != new System.Drawing.Rectangle(1, 2, 4, 2)) throw new InvalidOperationException("Trim bounds failed.");
+    ImageHistogram histogram = canvas.GetHistogram(new HistogramOptions { Transparency = HistogramTransparency.Exclude });
+    if (histogram.PixelCount != 2 || histogram.Percentile(HistogramChannel.Red, 100) != 220) throw new InvalidOperationException("Histogram failed.");
+    using var mask = new Image(4, 2, new Rgba32(255, 255, 255));
+    canvas.Mutate(x => x
+        .AutoCrop(new AutoCropOptions { Padding = 1 })
+        .Levels(new LevelsOptions { InputBlack = 10, InputWhite = 240 })
+        .Gamma(1.2f, ColorChannels.Blue)
+        .AutoContrast(1f)
+        .Equalize()
+        .ApplyMask(mask, new MaskOptions { Channel = MaskChannel.Luminance, Outside = MaskOutside.Transparent })
+        .DrawImage(source, AnchorPosition.Center, new DrawImageOptions { BlendMode = BlendMode.Multiply })
+        .DrawImage(source, AnchorPosition.Center, new DrawImageOptions { BlendMode = BlendMode.SoftLight, LinearLight = true }));
+    if (canvas.Width != 6 || canvas.Height != 4) throw new InvalidOperationException("Graphics operations failed.");
+}
 using Image jpegThumbnail = Image.Load(source.Encode(new JpegEncoderOptions()), new DecoderOptions { TargetSize = new(2, 2) });
 if (jpegThumbnail.Width != 2) throw new InvalidOperationException("JPEG reduction failed.");
 ImageConfiguration builtIn = ImageConfiguration.Default;
@@ -142,7 +161,7 @@ if (!source.Metadata.TrySetOrientation(ExifOrientation.TopLeft)) throw new Inval
 processed.Frames.AddClone(source.Frames[0]);
 using Image transferred = processed.Frames.ExportFrame(1);
 if (transferred.Size != source.Size) throw new InvalidOperationException("Frame transfer failed.");
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, JPEG thumbnails, configurations, a format plugin and a frame processor.");
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, configurations, a format plugin and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>

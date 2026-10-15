@@ -65,6 +65,14 @@ public class ConsumerCompilationTests
                     using Image copy = a.Clone(x => x.Resize(1, 1));
                     _ = copy.ToPng();
                     ImageProcessingExtensions.Mutate(a, x => x.Grayscale());
+                    a.Mutate(x => x.AutoContrast(1f, true));
+                    a.Mutate(x => x.AutoContrast(1f, 2f));
+                    a.Mutate(x => x.AutoContrast().Equalize().Gamma(2.2f));
+                    _ = a.GetHistogram().Percentile(PictureSharp.Processing.HistogramChannel.Luminance, 50);
+                    a.Mutate(x => x.AutoCrop());
+                    a.Mutate(x => x.ApplyMask(b));
+                    a.Mutate(x => x.ApplyMask(b, new PictureSharp.Processing.MaskOptions { Invert = true }));
+                    _ = a.FindTrimBounds() is { } trimBox ? trimBox.Width : 0;
                     using Image pixels = Image.LoadPixelData(new Rgba32[4], 2, 2);
                     using Image animation = Image.CreateAnimation(TimeSpan.Zero, new Image[] { a, b });
                     using ImageFrameWriter writer = Image.CreateFrameWriter(Stream.Null, a.Size, ImageFormat.Gif, new() { FrameCount = 1 });
@@ -95,6 +103,10 @@ public class ConsumerCompilationTests
         await Assert.That(FirstParameter(model, tree, "writer.WriteAsync(a.Frames[0], TimeSpan.Zero)")).IsEqualTo("PictureSharp.ImageFrame");
         await Assert.That(FirstParameter(model, tree, "writer.WriteAsync(a, TimeSpan.Zero)")).IsEqualTo("PictureSharp.Image");
         await Assert.That(Parameter(model, tree, "Image.CreateFrameWriter(\"out.webp\", a.Size)", 2)).IsEqualTo("PictureSharp.ImageFrameWriterOptions?");
+        await Assert.That(Parameter(model, tree, "x.AutoContrast(1f, true)", 1)).IsEqualTo("bool");
+        await Assert.That(Parameter(model, tree, "x.AutoContrast(1f, 2f)", 1)).IsEqualTo("float");
+        await Assert.That(Parameter(model, tree, "x.ApplyMask(b, new PictureSharp.Processing.MaskOptions { Invert = true })", 1))
+            .IsEqualTo("PictureSharp.Processing.MaskOptions?");
     }
 
     [Test]

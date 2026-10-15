@@ -19,4 +19,16 @@ public sealed record DrawImageOptions
     /// semi-transparent edges; it assumes sRGB pixels in both images. Default: false.
     /// </summary>
     public bool LinearLight { get; init; }
+
+    /// <summary>
+    /// How the source color mixes with the backdrop before compositing (see <see cref="Processing.BlendMode"/>).
+    /// <see cref="BlendMode.Normal"/> keeps the Pillow-compatible blend; the other modes compute in float precision
+    /// following W3C Compositing and Blending Level 1, in linear light when <see cref="LinearLight"/> is set.
+    /// Default: <see cref="BlendMode.Normal"/>.
+    /// </summary>
+    public BlendMode BlendMode
+    {
+        get;
+        init => field = Enum.IsDefined(value) ? value : throw new ArgumentOutOfRangeException(nameof(BlendMode), value, "Unknown blend mode.");
+    }
 }

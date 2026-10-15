@@ -1,0 +1,41 @@
+using PictureSharp.Application.Processing;
+using PictureSharp.Processing;
+
+namespace PictureSharp;
+
+/// <summary>Read-only analyses of an image's pixels.</summary>
+public static class ImageAnalysisExtensions
+{
+    extension(Image image)
+    {
+        /// <summary>
+        /// Counts the red, green, blue, alpha and luminance values of the image; the image is not modified.
+        /// By default every pixel of the first frame is counted, as Pillow's <c>Image.histogram()</c>.
+        /// </summary>
+        /// <example>
+        /// <code>byte median = image.GetHistogram().Percentile(HistogramChannel.Luminance, 50);</code>
+        /// </example>
+        /// <exception cref="ArgumentOutOfRangeException"><see cref="HistogramOptions.Region"/> is empty or not inside the image.</exception>
+        public ImageHistogram GetHistogram(HistogramOptions? options = null) =>
+            ImageAnalysisService.GetHistogram(image, options, CancellationToken.None);
+
+        /// <summary>Counts the channel values as <see cref="GetHistogram(Image, HistogramOptions?)"/>; <paramref name="cancellationToken"/> stops it between rows.</summary>
+        public ImageHistogram GetHistogram(HistogramOptions? options, CancellationToken cancellationToken) =>
+            ImageAnalysisService.GetHistogram(image, options, cancellationToken);
+
+        /// <summary>
+        /// Finds the bounding box of the content that <see cref="ImageProcessingContext.AutoCrop(AutoCropOptions?)"/> would keep,
+        /// including the padding; the image is not modified. Animations use the union of every frame's content.
+        /// </summary>
+        /// <returns>The box, or <see langword="null"/> when no pixel differs from the margin (fully transparent or uniform).</returns>
+        /// <example>
+        /// <code>if (image.FindTrimBounds() is { } box) Console.WriteLine($"content at {box}");</code>
+        /// </example>
+        public System.Drawing.Rectangle? FindTrimBounds(AutoCropOptions? options = null) =>
+            ImageAnalysisService.FindTrimBounds(image, options, CancellationToken.None);
+
+        /// <summary>Finds the content box as <see cref="FindTrimBounds(Image, AutoCropOptions?)"/>; <paramref name="cancellationToken"/> stops it between rows.</summary>
+        public System.Drawing.Rectangle? FindTrimBounds(AutoCropOptions? options, CancellationToken cancellationToken) =>
+            ImageAnalysisService.FindTrimBounds(image, options, cancellationToken);
+    }
+}
