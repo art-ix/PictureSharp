@@ -46,17 +46,17 @@ thumbnail.SaveAsPcx("thumbnail.pcx");
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md): installation, the `Load` → `Mutate`/`Clone` → `Save` model, disposal and errors
-- [Loading and saving](docs/loading-and-saving.md): files, streams, memory, async, format detection, web responses
-- [ICO icons](docs/ico.md): selecting variants and creating favicons or multi-size icons
-- [Encoder options](docs/encoder-options.md): WebP, PNG, JPEG, BMP, GIF and PCX settings with recipes
-- [Image processing](docs/image-processing.md): resize modes, geometry, color, filters, compositing, custom operations
-- [Pixels and interop](docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, frame pixel access and conversion
-- [Animation](docs/animation.md): frames, durations, animated WebP, APNG and GIF, GIF ↔ WebP conversion
-- [Metadata](docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
-- [Command-line sample](docs/cli.md): `info`, `convert`, `resize`, `decode` and `icon`
-- [Development](docs/development.md): building, tests, reference tools and oracles
-- [Performance](docs/performance.md): benchmark matrix, comparison with libwebp, memory use, benchmark commands and limitations
+- [Getting started](https://github.com/art-ix/PictureSharp/blob/main/docs/getting-started.md): installation, the `Load` → `Mutate`/`Clone` → `Save` model, disposal and errors
+- [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md): files, streams, memory, async, format detection, web responses
+- [ICO icons](https://github.com/art-ix/PictureSharp/blob/main/docs/ico.md): selecting variants and creating favicons or multi-size icons
+- [Encoder options](https://github.com/art-ix/PictureSharp/blob/main/docs/encoder-options.md): WebP, PNG, JPEG, BMP, GIF and PCX settings with recipes
+- [Image processing](https://github.com/art-ix/PictureSharp/blob/main/docs/image-processing.md): resize modes, geometry, color, filters, compositing, custom operations
+- [Pixels and interop](https://github.com/art-ix/PictureSharp/blob/main/docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, frame pixel access and conversion
+- [Animation](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md): frames, durations, animated WebP, APNG and GIF, GIF ↔ WebP conversion
+- [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
+- [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md): `info`, `convert`, `resize`, `decode` and `icon`
+- [Development](https://github.com/art-ix/PictureSharp/blob/main/docs/development.md): building, tests, reference tools and oracles
+- [Performance](https://github.com/art-ix/PictureSharp/blob/main/docs/performance.md): benchmark matrix, comparison with libwebp, memory use, benchmark commands and limitations
 
 ## Building from source
 
@@ -65,8 +65,8 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.5.2, which renames the library from RasterSharp to PictureSharp: package, assembly, `PictureSharp` namespace, `picturesharp-cli` and `PICTURESHARP_*` environment variables; behavior is unchanged from 0.5.1).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release 0.5.2, which renames the library from RasterSharp to PictureSharp: package, assembly, `PictureSharp` namespace, `picturesharp-cli` and `PICTURESHARP_*` environment variables; behavior is unchanged from 0.5.1).
 
 ## License
 
-PictureSharp is licensed under [MIT](LICENSE). It includes ports from libwebp, libjpeg-turbo, zlib and Pillow, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+PictureSharp is licensed under [MIT](https://github.com/art-ix/PictureSharp/blob/main/LICENSE). It includes ports from libwebp, libjpeg-turbo, zlib and Pillow, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](https://github.com/art-ix/PictureSharp/blob/main/THIRD-PARTY-NOTICES.txt).

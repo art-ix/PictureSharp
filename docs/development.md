@@ -81,3 +81,7 @@ mv tests/assets/PublicApi.received.txt tests/assets/PublicApi.approved.txt
 ## Documentation samples
 
 `DocsExamplesTests` compiles and runs the README quick start and the main samples of each guide in this folder against corpus files. Update it together with the guides so the documented code keeps working.
+
+## Releasing
+
+Set the version in `VERSION`, commit, and push a `v<VERSION>` tag. Publishing a GitHub Release for that tag runs `.github/workflows/release.yml`: it checks that the tag matches `VERSION`, builds, runs the tests except `Local` and `External`, packs the library, pushes the package to nuget.org through Trusted Publishing and attaches the `.nupkg` to the release. The README is packed into the package, so keep its links absolute.

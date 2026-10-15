@@ -17,3 +17,7 @@ samples/*.png
 
 # Public API snapshot written on mismatch (see PublicApiTests)
 tests/assets/PublicApi.received.txt
+
+# Packed packages
+*.nupkg
+artifacts/
