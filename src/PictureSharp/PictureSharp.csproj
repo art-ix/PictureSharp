@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.5.7 has no library changes from 0.5.6; the test suite was consolidated. Notes: https://github.com/art-ix/PictureSharp/blob/v0.5.7/docs/release-0.5.7.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.5.7 has no library changes from 0.5.6; the test suite was consolidated and moved to TUnit. Notes: https://github.com/art-ix/PictureSharp/blob/v0.5.7/docs/release-0.5.7.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

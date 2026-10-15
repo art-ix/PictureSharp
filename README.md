@@ -76,7 +76,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release **0.5.6**: `Image` as the single entry point, `ImageConfiguration`, format plugins and custom frame processors). See the [release notes](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.5.6.md).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release **0.5.7**: no library changes from 0.5.6, which made `Image` the single entry point and added `ImageConfiguration`, format plugins and custom frame processors; 0.5.7 consolidates the tests and moves them to TUnit). See the [0.5.7](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.5.7.md) and [0.5.6](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.5.6.md) release notes.
 
 ## License
 
