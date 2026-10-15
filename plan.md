@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.5.7. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.6.0. Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG oraz sekwencyjne animacje ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Kolejnym etapem implementacji jest 0.6.1. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
@@ -50,7 +50,7 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.5.5 | Warstwy, model domenowy, własność buforów i API C# 14 | Ukończona — wydanie 0.5.5 |
 | 0.5.6 | API skupione na `Image`, `ImageConfiguration`, wtyczki formatów i procesory ramek | Ukończona — opublikowana |
 | 0.5.7 | Porządki w testach: duplikaty, mniejsze macierze, kategoria `Slow`, migracja na TUnit | Ukończona — wydanie 0.5.7 |
-| 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana — następny etap |
+| 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Ukończona — wydanie 0.6.0 |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
 | 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Planowana |
@@ -171,6 +171,26 @@ DoD:
 - Konwersje GIF↔WebP↔APNG bez przechowywania całej animacji w pamięci.
 - Pomiary dla 10/100/1000 klatek o stałym płótnie pokazują brak wzrostu pamięci proporcjonalnego do liczby pełnych klatek; niewielkie indeksy i koszty formatu raportowane osobno.
 - Testy blend/dispose, częściowych prostokątów, pustej/obciętej sekwencji, niedotrzymanej deklaracji liczby klatek, non-seekable i anulowania.
+
+Weryfikacja 2026-10-15: `Image.OpenFrameReaderAsync` i `Image.CreateFrameWriter`, publiczne reader/writer/options,
+GIF/APNG/WebP z wejścia non-seekable, zapis forward-only GIF i APNG ze znaną liczbą klatek; pozostałe wyjścia przez
+jawny `UseTemporaryFile`. `FrameCount=1` używa zwykłego enkodera. Własność borrowed buffers, metadane/pętla znane
+po końcu, limity, anulowanie, cleanup i różnice optymalizacji opisane w `docs/animation.md`.
+
+Czytniki zgodne piksel w piksel, czasy/pętla/tło/metadane/DPI dla 206 plików korpusu (plik i non-seekable).
+Nowe pliki zweryfikowane przez Pillow i libwebp; 9 par konwersji, blend/dispose i częściowe prostokąty z korpusu,
+puste/obcięte sekwencje, count mismatch, błędy I/O i anulowanie (także kopiowania temp). APNG: fallback statyczny tylko
+przed pierwszą zwróconą klatką, różna liczba klatek od acTL odrzucana. GIF ma paletę i kwantyzację per klatka oraz pełne
+prostokąty; APNG Auto=RGBA, bez indexed; WebP współdzieli okno klatek kluczowych z zapisem wsadowym.
+
+Build Release 0 ostrzeżeń/błędów; **4651/4651 pełnych testów**, **152/152 Oracle** bez pominięć, **113/113 fallback SIMD**;
+paczka z notices/LICENSE, konsument z trimmingiem i Native AOT linux-x64 oraz przykładami sekwencji poprawny. API snapshot
+przejrzany; README quick start kompiluje się z jednym using. Pomiary 10/100/1000 klatek i raport ograniczonej pamięci:
+`docs/performance.md`, `docs/sequence-memory.tsv`. Macierz 80 przypadków przed/po (2 przebiegi na wersję, ABBA): mediana
++0,09%, alokacje maks. +0,49%; 2 podejrzane przypadki sprawdzone naprzemiennie (+1,62% / −0,91%), brak potwierdzonej
+regresji >5%; `docs/sequences-benchmarks.csv`. Nowych SIMD nie dodano. Rzeczywisty ARM64 i zdalny CI nieuruchamiane.
+VERSION 0.6.0; README, instrukcja instalacji i PackageReleaseNotes zaktualizowane. Notatki: `docs/release-0.6.0.md`.
+Publikacja przez workflow Release, po bramce Validate (managed, Oracle i package-consumer).
 
 ## 0.6.1 — metadane
 

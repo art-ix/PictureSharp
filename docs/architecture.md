@@ -56,6 +56,17 @@ After disposing an image, its state accessors and collection operations throw `O
 
 Options are immutable records; each decode creates a separate `DecodeContext` and monotonic `DecodeBudget`. Embedded codecs share the operation budget through child contexts. `DecodedImage` carries stored dimensions and reduction scale through nested containers, including JPEG embedded in BMP.
 
-Sequential reader/writer contracts and lifecycle are internal foundations. They define borrowed frames, cancellation, declared counts, capabilities and stream ownership, with contract tests using controlled readers/writers. Production sequential codecs and public streaming entrypoints remain planned for 0.6.0. No full-buffer implementation is advertised as streaming.
+`Image.OpenFrameReaderAsync` and `Image.CreateFrameWriter` delegate to the configuration's `ImageSequenceService`.
+Internal `ISequentialImageDecoder`/`ISequentialImageEncoder` ports create sessions for GIF, PNG/APNG and WebP.
+The reader owns its current borrowed frame through a session owner token; cloning transfers no ownership from it.
+Full and sequential decoders share GIF/APNG/WebP compositing implementations. Limits are checked before canvas
+allocation and before decoding each subsequent frame; input bytes and metadata have sequence-wide budgets.
+
+Writers borrow input frames for one call, stage one encoded fragment for async I/O and require explicit completion.
+GIF uses per-frame palettes and background disposal; APNG shares PNG serialization and chunk writing; WebP shares
+the incremental keyframe-window encoder and muxer. Declaring one frame selects the normal still encoder.
+Header patches use caller-relative offsets. Non-seekable output that requires patching is rejected unless the caller
+enables a temporary file through the output port. Application owns the temporary-file copy and cleanup; filesystem
+operations remain in infrastructure. Aborting a path writer removes its partial file. Caller streams remain open.
 
 Use C# 14 `field` for local property validation and `extension` blocks for facade operations. Keep required invariants as model methods, mutable models as classes, immutable options as records and small internal values as readonly structs. C# 14 span overload resolution is verified by compiling a consumer with the actual SDK compiler. See [extension guide](extending-picturesharp.md).

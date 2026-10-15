@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
 
 namespace PictureSharp.Application.Sequences;
@@ -17,8 +18,29 @@ internal abstract class FrameReadSession(Stream input, FrameSequenceInfo info, D
         get { CheckAlive(); return _current ?? throw new InvalidOperationException("No current frame."); }
     }
 
+    /// <summary>Frames returned so far.</summary>
+    public int FramesRead => _count;
+
+    /// <summary>Whether the reader reached the end of the sequence.</summary>
+    public bool IsComplete => _complete;
+
+    /// <summary>Number of plays (0 = forever). Formats that store it after the first frame update it while reading.</summary>
+    public int LoopCount { get; protected set; } = info.LoopCount;
+
+    /// <summary>Metadata read so far; formats may store blocks after the frames.</summary>
+    public ImageMetadata Metadata { get; } = new();
+
     protected abstract ValueTask<ImageFrame?> ReadNextCoreAsync(CancellationToken cancellationToken);
     protected virtual void DisposeReader() { }
+
+    /// <summary>Rejects the next canvas before allocating or decoding it; the successful move reserves it below.</summary>
+    protected void ValidateNextFrame()
+    {
+        if (Context.Budget.Frames >= Context.Options.MaxFrames)
+            throw new ImageFormatException(Info.Format, "Decoded frames exceed DecoderOptions.MaxFrames.");
+        if (Info.Width > (Context.Options.MaxPixels - Context.Budget.Pixels) / Info.Height)
+            throw new ImageFormatException(Info.Format, "Decoded pixels exceed DecoderOptions.MaxPixels.");
+    }
 
     public async ValueTask<bool> MoveNextAsync(CancellationToken cancellationToken = default)
     {
@@ -29,7 +51,16 @@ internal abstract class FrameReadSession(Stream input, FrameSequenceInfo info, D
             ReleaseCurrent();
             token.ThrowIfCancellationRequested();
             if (_complete) return false;
-            ImageFrame? frame = await ReadNextCoreAsync(token).ConfigureAwait(false);
+            ImageFrame? frame;
+            try
+            {
+                frame = await ReadNextCoreAsync(token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (CodecErrors.IsCorruptDataException(ex))
+            {
+                throw CodecErrors.CorruptData(Info.Format, ex);
+            }
+
             token.ThrowIfCancellationRequested();
             if (frame is null)
             {

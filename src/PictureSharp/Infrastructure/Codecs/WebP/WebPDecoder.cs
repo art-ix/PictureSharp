@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 using PictureSharp.Algorithms.ColorConversion;
 using PictureSharp.Application.Abstractions;
+using PictureSharp.Application.Sequences;
 using PictureSharp.Domain.Metadata;
 using PictureSharp.Formats.WebP;
 using PictureSharp.Infrastructure.Codecs.WebP.Alpha;
@@ -14,11 +15,16 @@ using PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 namespace PictureSharp.Infrastructure.Codecs.WebP;
 
 /// <summary>Decodes WebP files: still lossy/lossless images and animations.</summary>
-internal sealed partial class WebPDecoder : IImageDecoder
+internal sealed partial class WebPDecoder : IImageDecoder, ISequentialImageDecoder
 {
     public static WebPDecoder Instance { get; } = new();
 
     public ImageFormat Format => ImageFormat.WebP;
+
+    public bool SupportsNonSeekableInput => true;
+
+    public ValueTask<FrameReadSession> OpenAsync(Stream input, DecodeContext context, bool leaveOpen, CancellationToken cancellationToken) =>
+        WebPFrameReader.OpenAsync(input, context, leaveOpen, cancellationToken);
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {

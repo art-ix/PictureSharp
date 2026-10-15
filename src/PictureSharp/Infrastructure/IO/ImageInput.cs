@@ -40,4 +40,11 @@ internal sealed class ImageInput : IImageInput
 
         return read;
     }
+
+    public Stream OpenRead(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        // ForwardReader buffers, so the file stream itself does not.
+        return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 0, FileOptions.Asynchronous | FileOptions.SequentialScan);
+    }
 }

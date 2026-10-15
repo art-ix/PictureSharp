@@ -8,4 +8,7 @@ internal interface IImageInput
     Task<byte[]> ReadAllAsync(Stream stream, long maxBytes, CancellationToken cancellationToken);
     int ReadHeader(string path, Span<byte> header);
     int ReadHeader(Stream stream, Span<byte> header);
+
+    /// <summary>Opens a file for forward-only asynchronous reading.</summary>
+    Stream OpenRead(string path);
 }

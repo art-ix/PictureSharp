@@ -3,6 +3,7 @@ using PictureSharp.Application.Configuration;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Encoding;
 using PictureSharp.Application.Identification;
+using PictureSharp.Application.Sequences;
 
 namespace PictureSharp;
 
@@ -34,6 +35,7 @@ public sealed class ImageConfiguration
         Codecs = codecs;
         Reader = new ImageReadService(ports.Input, new ImageDecodeService(codecs), new ImageIdentifyService(codecs), codecs);
         Writer = new ImageWriteService(ports.Output, new ImageEncodeService(codecs), codecs);
+        Sequences = new ImageSequenceService(ports.Input, ports.Output, codecs);
     }
 
     /// <summary>The registered formats in detection order.</summary>
@@ -44,6 +46,8 @@ public sealed class ImageConfiguration
     internal ImageReadService Reader { get; }
 
     internal ImageWriteService Writer { get; }
+
+    internal ImageSequenceService Sequences { get; }
 
     /// <summary>Whether this configuration can decode the format.</summary>
     public bool CanDecode(ImageFormat format)

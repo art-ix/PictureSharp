@@ -13,7 +13,7 @@ using PictureSharp.Processing;
 namespace PictureSharp.Infrastructure.Codecs.Png;
 
 /// <summary>Encoder for PNG and APNG files.</summary>
-internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
+internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISequentialImageEncoder
 {
     public static PngEncoder Instance { get; } = new();
 
@@ -32,15 +32,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
         var writer = new ChunkWriter(output);
         output.Write(PngConstants.Signature);
 
-        Span<byte> ihdr = stackalloc byte[13];
-        BinaryPrimitives.WriteUInt32BigEndian(ihdr, (uint)width);
-        BinaryPrimitives.WriteUInt32BigEndian(ihdr[4..], (uint)height);
-        ihdr[8] = (byte)layout.BitDepth;
-        ihdr[9] = (byte)layout.Color;
-        ihdr[10] = 0;
-        ihdr[11] = 0;
-        ihdr[12] = (byte)(options.Interlace ? 1 : 0);
-        writer.Write("IHDR", ihdr);
+        WriteHeader(writer, width, height, layout, options);
 
         bool animated = frames.Count > 1;
         if (animated)
@@ -52,6 +44,39 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
         }
 
         ImageMetadata meta = image.Metadata;
+        WriteMetadata(writer, meta, layout, options);
+
+        int sequence = 0;
+        for (int index = 0; index < frames.Count; index++)
+        {
+            WriteFrame(writer, frames[index], layout, options, index, animated, ref sequence, cancellationToken);
+        }
+
+        if (MetadataSelection.Select(meta.XmpData, options.Metadata, MetadataKinds.Xmp) is { } xmp)
+        {
+            // iTXt: keyword, NUL, compression flag, compression method, language tag NUL, translated keyword NUL, text
+            byte[] header = [.. Encoding.ASCII.GetBytes(PngConstants.XmpKeyword), 0, 0, 0, 0, 0];
+            writer.Write("iTXt", [.. header, .. xmp]);
+        }
+
+        writer.Write("IEND", []);
+    }
+
+    private static void WriteHeader(ChunkWriter writer, int width, int height, Layout layout, PngEncoderOptions options)
+    {
+        Span<byte> ihdr = stackalloc byte[13];
+        BinaryPrimitives.WriteUInt32BigEndian(ihdr, (uint)width);
+        BinaryPrimitives.WriteUInt32BigEndian(ihdr[4..], (uint)height);
+        ihdr[8] = (byte)layout.BitDepth;
+        ihdr[9] = (byte)layout.Color;
+        ihdr[10] = 0;
+        ihdr[11] = 0;
+        ihdr[12] = (byte)(options.Interlace ? 1 : 0);
+        writer.Write("IHDR", ihdr);
+    }
+
+    private static void WriteMetadata(ChunkWriter writer, ImageMetadata meta, Layout layout, PngEncoderOptions options)
+    {
         if (MetadataSelection.Select(meta.IccData, options.Metadata, MetadataKinds.Icc) is { } icc)
         {
             byte[] name = "ICC Profile\0\0"u8.ToArray();
@@ -59,11 +84,11 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
             writer.Write("iCCP", [.. name, .. compressed]);
         }
 
-        if (image.Metadata.HorizontalResolution != 96f || image.Metadata.VerticalResolution != 96f)
+        if (meta.HorizontalResolution != 96f || meta.VerticalResolution != 96f)
         {
             Span<byte> phys = stackalloc byte[9];
-            BinaryPrimitives.WriteUInt32BigEndian(phys, (uint)Math.Round(image.Metadata.HorizontalResolution / 0.0254));
-            BinaryPrimitives.WriteUInt32BigEndian(phys[4..], (uint)Math.Round(image.Metadata.VerticalResolution / 0.0254));
+            BinaryPrimitives.WriteUInt32BigEndian(phys, (uint)Math.Round(meta.HorizontalResolution / 0.0254));
+            BinaryPrimitives.WriteUInt32BigEndian(phys[4..], (uint)Math.Round(meta.VerticalResolution / 0.0254));
             phys[8] = 1;  // unit: meter
             writer.Write("pHYs", phys);
         }
@@ -100,62 +125,54 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>
                 writer.Write("tRNS", trns);
             }
         }
+    }
 
-        int sequence = 0;
+    private static void WriteFrame(ChunkWriter writer, ImageFrame frame, Layout layout, PngEncoderOptions options,
+        int index, bool animated, ref int sequence, CancellationToken cancellationToken)
+    {
+        int width = frame.Width;
+        int height = frame.Height;
         Span<byte> fctl = stackalloc byte[26];
-        for (int index = 0; index < frames.Count; index++)
+        if (animated)
         {
-            ImageFrame frame = frames[index];
-            if (animated)
-            {
-                BinaryPrimitives.WriteUInt32BigEndian(fctl, (uint)sequence++);
-                BinaryPrimitives.WriteUInt32BigEndian(fctl[4..], (uint)width);
-                BinaryPrimitives.WriteUInt32BigEndian(fctl[8..], (uint)height);
-                BinaryPrimitives.WriteUInt32BigEndian(fctl[12..], 0);
-                BinaryPrimitives.WriteUInt32BigEndian(fctl[16..], 0);
-                (ushort num, ushort den) = ToDelay(frame.Duration);
-                BinaryPrimitives.WriteUInt16BigEndian(fctl[20..], num);
-                BinaryPrimitives.WriteUInt16BigEndian(fctl[22..], den);
-                fctl[24] = 0;  // dispose: none
-                fctl[25] = 0;  // blend: source
-                writer.Write("fcTL", fctl);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            byte[] raw = Serialize(frame, layout, options, cancellationToken);
-            using Deflater deflater = Deflater.CompressZlibPooled(raw, options.CompressionLevel, options.MaxDegreeOfParallelism, cancellationToken);
-            ReadOnlySpan<byte> compressed = deflater.Output;
-            const int maxChunk = 1 << 20;
-            for (int offset = 0; offset < compressed.Length || offset == 0; offset += maxChunk)
-            {
-                int len = Math.Min(maxChunk, compressed.Length - offset);
-                if (index == 0)
-                {
-                    writer.Write("IDAT", compressed.Slice(offset, len));
-                }
-                else
-                {
-                    var fdat = new byte[len + 4];
-                    BinaryPrimitives.WriteUInt32BigEndian(fdat, (uint)sequence++);
-                    compressed.Slice(offset, len).CopyTo(fdat.AsSpan(4));
-                    writer.Write("fdAT", fdat);
-                }
-
-                if (compressed.Length == 0)
-                {
-                    break;
-                }
-            }
+            BinaryPrimitives.WriteUInt32BigEndian(fctl, (uint)sequence++);
+            BinaryPrimitives.WriteUInt32BigEndian(fctl[4..], (uint)width);
+            BinaryPrimitives.WriteUInt32BigEndian(fctl[8..], (uint)height);
+            BinaryPrimitives.WriteUInt32BigEndian(fctl[12..], 0);
+            BinaryPrimitives.WriteUInt32BigEndian(fctl[16..], 0);
+            (ushort num, ushort den) = ToDelay(frame.Duration);
+            BinaryPrimitives.WriteUInt16BigEndian(fctl[20..], num);
+            BinaryPrimitives.WriteUInt16BigEndian(fctl[22..], den);
+            fctl[24] = 0;  // dispose: none
+            fctl[25] = 0;  // blend: source
+            writer.Write("fcTL", fctl);
         }
 
-        if (MetadataSelection.Select(meta.XmpData, options.Metadata, MetadataKinds.Xmp) is { } xmp)
+        cancellationToken.ThrowIfCancellationRequested();
+        byte[] raw = Serialize(frame, layout, options, cancellationToken);
+        using Deflater deflater = Deflater.CompressZlibPooled(raw, options.CompressionLevel, options.MaxDegreeOfParallelism, cancellationToken);
+        ReadOnlySpan<byte> compressed = deflater.Output;
+        const int maxChunk = 1 << 20;
+        for (int offset = 0; offset < compressed.Length || offset == 0; offset += maxChunk)
         {
-            // iTXt: keyword, NUL, compression flag, compression method, language tag NUL, translated keyword NUL, text
-            byte[] header = [.. Encoding.ASCII.GetBytes(PngConstants.XmpKeyword), 0, 0, 0, 0, 0];
-            writer.Write("iTXt", [.. header, .. xmp]);
-        }
+            int len = Math.Min(maxChunk, compressed.Length - offset);
+            if (index == 0)
+            {
+                writer.Write("IDAT", compressed.Slice(offset, len));
+            }
+            else
+            {
+                var fdat = new byte[len + 4];
+                BinaryPrimitives.WriteUInt32BigEndian(fdat, (uint)sequence++);
+                compressed.Slice(offset, len).CopyTo(fdat.AsSpan(4));
+                writer.Write("fdAT", fdat);
+            }
 
-        writer.Write("IEND", []);
+            if (compressed.Length == 0)
+            {
+                break;
+            }
+        }
     }
 
     private static (ushort Num, ushort Den) ToDelay(TimeSpan duration)

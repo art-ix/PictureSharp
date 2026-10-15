@@ -615,3 +615,61 @@ taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmark
 ```
 
 It uses the existing `MatrixBenchmarks` setup, operations and cleanup, with seven ≥120 ms samples per case. Use the standard BenchmarkDotNet modes above for deeper investigation.
+
+## Sequential animation memory (0.6.0)
+
+Measured on linux-x64/.NET 10 in fresh processes pinned to CPUs 0–7, 2026-10-15. Each animation has a fixed 256×256 canvas and a moving
+64×64 opaque sprite over transparency, with 10, 100 or 1000 frames. GIF uses default options, APNG compression level 1,
+and WebP lossless/exact method 0; PNG/WebP use one codec thread. One reused source frame is supplied to the writer;
+readers consume files from disk without retaining returned frames. No entire input/output is kept in a MemoryStream.
+
+The table reports the largest sampled **retained managed heap increase over a warmed baseline**, after forced full
+GCs (every 10 frames for writing, twice per 10 for reading). Warmup uses 25 frames of the same dimensions, initializes
+code and shared ArrayPools, and runs both write and read. Consequently this measures additional retained memory;
+it excludes already warmed pools/runtime and is not the total process footprint or a transient-allocation peak.
+WebP's default keyframe search retains a bounded window; ten frames do not fill that window.
+
+| Format | Frames | Writer retained +MiB | Reader retained +MiB | Output KiB |
+| --- | ---: | ---: | ---: | ---: |
+| GIF | 10 | 0.34 | 0.01 | 5.6 |
+| GIF | 100 | 0.34 | 0.08 | 55.8 |
+| GIF | 1000 | 0.34 | 0.14 | 557.7 |
+| PNG | 10 | 0.47 | 0.58 | 4.8 |
+| PNG | 100 | 0.47 | 0.58 | 47.9 |
+| PNG | 1000 | 0.47 | 1.33 | 477.5 |
+| WEBP | 10 | 1.46 | 0.14 | 0.6 |
+| WEBP | 100 | 2.32 | 0.39 | 9.3 |
+| WEBP | 1000 | 2.48 | 0.42 | 93.8 |
+
+The full RGBA canvases alone would occupy 2.5/25/250 MiB. Retained memory stays bounded while the frame count grows
+100-fold. GIF retains local palettes, APNG uses counters rather than a per-frame index, and WebP retains encoded
+candidates and canvases in its keyframe window; these costs are included in the measurements. File bytes grow with
+frame count. A non-seekable WebP/unknown-count APNG output uses an explicitly requested temporary disk file, whose
+space is the encoded file size rather than decoded canvases.
+
+The [raw measurements](sequence-memory.tsv) also report cumulative allocations and the process peak resident-set
+increase. Cumulative allocations grow with the amount of work (1000 frames: GIF write 64 MiB, PNG write 630 MiB,
+WebP write 215 MiB; read 1.3/259/45.6 MiB); these are reclaimed and do not represent simultaneously retained canvases.
+Observed RSS increases at 1000 frames were ≤5.0 MiB for writers and ≤2.4 MiB for readers. RSS deltas are noisy around
+the warmed baseline (negative observations are shown as zero). Sparse full-GC sampling can miss short-lived peaks;
+the structural bound comes from the per-frame buffers and WebP window, not from treating these samples as a hard
+process-memory limit. Large canvases, poorly compressing frames, metadata and different WebP keyframe options add
+their own bounded working set. The forced collections make this a memory probe, not a timing benchmark.
+
+Reproduce each row in its own process (write creates the input used by read):
+
+```bash
+dotnet build -c Release benchmarks/PictureSharp.Benchmarks
+# Repeat for gif/png/webp and 10/100/1000.
+taskset -c 0-7 dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll sequence-probe webp 1000 write /tmp/sequence.webp
+taskset -c 0-7 dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll sequence-probe webp 1000 read /tmp/sequence.webp
+```
+
+The existing 80-case complete-operation matrix was compared with release 0.5.7 (`457f333`): two sweeps per version,
+in baseline/current/current/baseline order, pinned to CPUs 0–7, seven samples of at least 120 ms per case. The median
+change across cases was +0.09%; the largest mean allocation difference was +0.49%. Two aggregate timing changes
+above +5% were rechecked in separate AssemblyLoadContexts in one process, alternating 15 samples per version
+of at least 180 ms after warmup: `photo.png` WebP lossless encoding +1.62%, lossy encoding −0.91%. No repeatable
+regression above 5% was confirmed. These are lightweight regression probes, not a full BenchmarkDotNet study.
+[Raw before/after and confirmation results](sequences-benchmarks.csv). The final forward-reader allocation hardening
+affects only the new sequential path; existing `Image.Load` operations in this matrix use the same measured code.

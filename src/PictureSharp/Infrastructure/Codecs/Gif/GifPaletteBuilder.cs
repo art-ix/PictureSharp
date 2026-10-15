@@ -40,12 +40,12 @@ internal sealed class GifPaletteBuilder
     private readonly Rgba32[]? _colors;
     private readonly int _transparent = -1;
 
-    public GifPaletteBuilder(IReadOnlyList<ImageFrame> frames, GifEncoderOptions options, bool forceShared = false)
+    public GifPaletteBuilder(IReadOnlyList<ImageFrame> frames, GifEncoderOptions options, bool forceShared = false, bool reserveTransparency = false)
     {
         _frames = frames;
         _options = options;
         int threshold = options.TransparencyThreshold;
-        HasTransparency = frames.Any(f => HasTransparentPixels(f.GetPixelSpan(), threshold));
+        HasTransparency = reserveTransparency || frames.Any(f => HasTransparentPixels(f.GetPixelSpan(), threshold));
         bool wantTransparent = HasTransparency || (frames.Count > 1 && options.OptimizeFrames);
 
         var unique = new Dictionary<uint, byte>();

@@ -106,6 +106,29 @@ internal sealed partial class PngDecoder : IImageDecoder
             total += length - skip;
         }
 
+        // The compressed bytes live in a pooled buffer until the pixels are converted.
+        byte[] compressed = ArrayPool<byte>.Shared.Rent(total);
+        try
+        {
+            int pos = 0;
+            foreach ((int offset, int length) in parts)
+            {
+                file.Slice(offset + skip, length - skip).CopyTo(compressed.AsSpan(pos));
+                pos += length - skip;
+            }
+
+            return DecodeCompressed(compressed, total, png, width, height, maxDegreeOfParallelism, cancellationToken);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(compressed);
+        }
+    }
+
+    /// <summary>Inflates, unfilters and converts the concatenated zlib data of one image (or APNG frame) to RGBA.</summary>
+    private static Rgba32[] DecodeCompressed(byte[] compressed, int total, PngFile png, int width, int height,
+        int maxDegreeOfParallelism, CancellationToken cancellationToken)
+    {
         int bpp = PngConstants.Channels(png.Color) * png.BitDepth;
         long expected = 0;
         if (png.Interlaced)
@@ -130,26 +153,10 @@ internal sealed partial class PngDecoder : IImageDecoder
             throw Error("Image is too large.");
         }
 
-        // The compressed bytes live in a pooled buffer until the pixels are converted.
-        byte[] compressed = ArrayPool<byte>.Shared.Rent(total);
-        try
-        {
-            int pos = 0;
-            foreach ((int offset, int length) in parts)
-            {
-                file.Slice(offset + skip, length - skip).CopyTo(compressed.AsSpan(pos));
-                pos += length - skip;
-            }
-
-            var rowConverter = new RowConverter(png);
-            return !png.Interlaced && Parallelism.IsWorthwhile(maxDegreeOfParallelism, expected, PipelineMinimumBytes)
-                ? DecodePipelined(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken)
-                : DecodeSequential(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(compressed);
-        }
+        var rowConverter = new RowConverter(png);
+        return !png.Interlaced && Parallelism.IsWorthwhile(maxDegreeOfParallelism, expected, PipelineMinimumBytes)
+            ? DecodePipelined(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken)
+            : DecodeSequential(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken);
     }
 
     private static Rgba32[] DecodeSequential(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected,

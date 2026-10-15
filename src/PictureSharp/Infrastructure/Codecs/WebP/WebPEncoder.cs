@@ -8,7 +8,7 @@ using PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 
 namespace PictureSharp.Infrastructure.Codecs.WebP;
 
-internal sealed class WebPEncoder : IImageEncoder<WebPEncoderOptions>
+internal sealed partial class WebPEncoder : IImageEncoder<WebPEncoderOptions>, ISequentialImageEncoder
 {
     public static WebPEncoder Instance { get; } = new();
     public ImageFormat Format => ImageFormat.WebP;

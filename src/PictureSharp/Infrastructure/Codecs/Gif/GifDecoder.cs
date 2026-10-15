@@ -1,6 +1,7 @@
 using PictureSharp.Application.Decoding;
 using System.Buffers;
 using PictureSharp.Application.Abstractions;
+using PictureSharp.Application.Sequences;
 
 namespace PictureSharp.Infrastructure.Codecs.Gif;
 
@@ -10,11 +11,16 @@ namespace PictureSharp.Infrastructure.Codecs.Gif;
 /// the canvas untouched, "restore to background" clears to transparent and "restore to previous" restores the
 /// canvas as it was before the frame was drawn.
 /// </summary>
-internal sealed class GifDecoder : IImageDecoder
+internal sealed class GifDecoder : IImageDecoder, ISequentialImageDecoder
 {
     public static GifDecoder Instance { get; } = new();
 
     public ImageFormat Format => ImageFormat.Gif;
+
+    public bool SupportsNonSeekableInput => true;
+
+    public ValueTask<FrameReadSession> OpenAsync(Stream input, DecodeContext context, bool leaveOpen, CancellationToken cancellationToken) =>
+        GifFrameReader.OpenAsync(input, context, leaveOpen, cancellationToken);
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
@@ -47,48 +53,25 @@ internal sealed class GifDecoder : IImageDecoder
         int frameCount = options.FirstFrameOnly ? 1 : gif.Frames.Count;
         context.Budget.ReserveImage(ImageFormat.Gif, width, height, frameCount);
 
-        long canvasPixels = (long)width * height;
-        var canvas = new Rgba32[canvasPixels];
-        Rgba32[]? beforeFrame = null;
+        var canvas = new GifCanvas(width, height);
         var frames = new List<ImageFrame>(frameCount);
         for (int index = 0; index < frameCount; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             GifFrameInfo frame = gif.Frames[index];
-            if (frame.Disposal == GifDisposal.Previous)
-            {
-                beforeFrame ??= new Rgba32[canvas.Length];
-                canvas.AsSpan().CopyTo(beforeFrame);
-            }
-
-            DrawFrame(span, gif, frame, canvas, cancellationToken);
+            canvas.Draw(span, gif.GlobalColorTable, frame, cancellationToken);
             // The last frame takes the canvas itself; its disposal no longer matters.
             bool last = index == frameCount - 1;
-            frames.Add(new ImageFrame(width, height, last ? canvas : (Rgba32[])canvas.Clone())
+            frames.Add(new ImageFrame(width, height, last ? canvas.Pixels : (Rgba32[])canvas.Pixels.Clone())
             {
-                Duration = TimeSpan.FromMilliseconds(frame.DelayCentiseconds * 10),
+                Duration = Duration(frame),
             });
             if (last)
             {
                 break;
             }
 
-            // port: examples/gifdec.c GIFDisposeFrame
-            if (frame.Disposal != GifDisposal.None && Clip(frame, width, height) is var (x0, y0, x1, y1) && x1 > x0 && y1 > y0)
-            {
-                for (int y = y0; y < y1; y++)
-                {
-                    Span<Rgba32> row = canvas.AsSpan((y * width) + x0, x1 - x0);
-                    if (frame.Disposal == GifDisposal.Background)
-                    {
-                        row.Clear();
-                    }
-                    else
-                    {
-                        beforeFrame.AsSpan((y * width) + x0, x1 - x0).CopyTo(row);
-                    }
-                }
-            }
+            canvas.ApplyDisposal(frame);
         }
 
         var image = new Image(frames)
@@ -96,7 +79,7 @@ internal sealed class GifDecoder : IImageDecoder
             SourceFormat = ImageFormat.Gif,
             HasAlpha = gif.HasTransparency,
             LoopCount = frames.Count > 1 ? LoopCount(gif.Repetitions) : 0,
-            AnimationBackgroundColor = BackgroundColor(gif),
+            AnimationBackgroundColor = BackgroundColor(gif.Frames[0].TransparentIndex, gif.BackgroundIndex, gif.GlobalColorTable),
         };
 
         if (!options.IgnoreMetadata)
@@ -118,24 +101,25 @@ internal sealed class GifDecoder : IImageDecoder
         int n => n + 1,
     };
 
+    internal static TimeSpan Duration(GifFrameInfo frame) => TimeSpan.FromMilliseconds(frame.DelayCentiseconds * 10);
+
     // port: examples/gifdec.c GIFGetBackgroundColor
-    private static Rgba32 BackgroundColor(GifFile gif)
+    internal static Rgba32 BackgroundColor(int firstTransparentIndex, int backgroundIndex, Rgba32[]? globalTable)
     {
-        int transparent = gif.Frames[0].TransparentIndex;
-        if (transparent >= 0 && gif.BackgroundIndex == transparent)
+        if (firstTransparentIndex >= 0 && backgroundIndex == firstTransparentIndex)
         {
             return default;
         }
 
-        Rgba32[]? table = gif.GlobalColorTable;
-        return table is not null && gif.BackgroundIndex < table.Length ? table[gif.BackgroundIndex] : new Rgba32(255, 255, 255);
+        return globalTable is not null && backgroundIndex < globalTable.Length ? globalTable[backgroundIndex] : new Rgba32(255, 255, 255);
     }
 
-    private static (int X0, int Y0, int X1, int Y1) Clip(GifFrameInfo frame, int width, int height) =>
+    internal static (int X0, int Y0, int X1, int Y1) Clip(GifFrameInfo frame, int width, int height) =>
         (Math.Min(frame.X, width), Math.Min(frame.Y, height), Math.Min(frame.X + frame.Width, width), Math.Min(frame.Y + frame.Height, height));
 
     /// <summary>Decodes one frame and draws its non-transparent pixels onto the canvas (clipped to the canvas).</summary>
-    private static void DrawFrame(ReadOnlySpan<byte> data, GifFile gif, GifFrameInfo frame, Rgba32[] canvas, CancellationToken cancellationToken)
+    internal static void DrawFrame(ReadOnlySpan<byte> data, Rgba32[]? globalTable, int width, int height, GifFrameInfo frame, Rgba32[] canvas,
+        CancellationToken cancellationToken)
     {
         int frameWidth = frame.Width;
         int frameHeight = frame.Height;
@@ -150,10 +134,9 @@ internal sealed class GifDecoder : IImageDecoder
         {
             int produced = GifLzwDecoder.Decode(data, frame.DataOffset, frame.MinCodeSize, indices.AsSpan(0, pixelCount), cancellationToken);
             Span<Rgba32> colors = stackalloc Rgba32[256];
-            BuildPalette(frame.LocalColorTable ?? gif.GlobalColorTable, colors);
+            BuildPalette(frame.LocalColorTable ?? globalTable, colors);
 
-            int width = gif.Width;
-            (int x0, _, int x1, int y1) = Clip(frame, width, gif.Height);
+            (int x0, _, int x1, int y1) = Clip(frame, width, height);
             int transparent = frame.TransparentIndex;
             int rowsProduced = (produced + frameWidth - 1) / frameWidth;
             for (int row = 0; row < frameHeight && row < rowsProduced; row++)

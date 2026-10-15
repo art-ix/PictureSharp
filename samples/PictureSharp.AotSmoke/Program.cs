@@ -36,6 +36,24 @@ if (icons.Count != 2) throw new InvalidOperationException("ICO variants failed."
 using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(100), source, processed);
 using Image animationCopy = Image.Load(animation.ToPng());
 if (animationCopy.FrameCount != 2) throw new InvalidOperationException("Animation failed.");
+foreach (ImageFormat format in new[] { ImageFormat.Gif, ImageFormat.Png, ImageFormat.WebP })
+{
+    using var sequential = new MemoryStream();
+    await using (var writer = Image.CreateFrameWriter(sequential, animation.Size, format, new() { FrameCount = 2 }))
+    {
+        foreach (ImageFrame frame in animation.Frames) await writer.WriteAsync(frame);
+        await writer.CompleteAsync();
+    }
+    sequential.Position = 0;
+    await using var reader = await Image.OpenFrameReaderAsync(sequential);
+    int read = 0;
+    await foreach (ImageFrame frame in reader.ReadFramesAsync())
+    {
+        if (frame.Size != animation.Size) throw new InvalidOperationException("Sequential frame size failed.");
+        read++;
+    }
+    if (read != 2 || !reader.IsComplete) throw new InvalidOperationException("Sequential animation failed.");
+}
 using Image jpegThumbnail = Image.Load(source.Encode(new JpegEncoderOptions()), new DecoderOptions { TargetSize = new(2, 2) });
 if (jpegThumbnail.Width != 2) throw new InvalidOperationException("JPEG reduction failed.");
 ImageConfiguration builtIn = ImageConfiguration.Default;
@@ -72,7 +90,7 @@ if (!source.Metadata.TrySetOrientation(ExifOrientation.TopLeft)) throw new Inval
 processed.Frames.AddClone(source.Frames[0]);
 using Image transferred = processed.Frames.ExportFrame(1);
 if (transferred.Size != source.Size) throw new InvalidOperationException("Frame transfer failed.");
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, JPEG thumbnails, configurations, a format plugin and a frame processor.");
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, JPEG thumbnails, configurations, a format plugin and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>

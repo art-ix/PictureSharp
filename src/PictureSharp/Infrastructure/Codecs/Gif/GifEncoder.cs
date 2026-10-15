@@ -13,7 +13,7 @@ namespace PictureSharp.Infrastructure.Codecs.Gif;
 /// changed, with unchanged pixels transparent where the palette has a transparent entry; a frame is disposed to the
 /// background only when the next frame makes pixels transparent.
 /// </summary>
-internal sealed class GifEncoder : IImageEncoder<GifEncoderOptions>
+internal sealed partial class GifEncoder : IImageEncoder<GifEncoderOptions>, ISequentialImageEncoder
 {
     public static GifEncoder Instance { get; } = new();
 

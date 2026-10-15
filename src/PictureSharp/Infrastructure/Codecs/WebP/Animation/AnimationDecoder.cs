@@ -13,76 +13,13 @@ internal static class AnimationDecoder
         int height = c.CanvasHeight;
         int count = options.FirstFrameOnly ? 1 : c.Frames.Count;
         var result = new List<ImageFrame>(count);
-        var prevDisposed = new uint[width * height];   // previous canvas, properly disposed
-        WebPFrameInfo? prev = null;
-        bool prevWasKeyFrame = false;
-
+        var compositor = new AnimationCompositor(width, height);
         for (int index = 0; index < count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             WebPFrameInfo iter = c.Frames[index];
             var curr = new uint[width * height];
-            bool isKeyFrame = IsKeyFrame(index, iter, prev, prevWasKeyFrame, width, height);
-            if (!isKeyFrame)
-            {
-                prevDisposed.AsSpan().CopyTo(curr);
-            }
-
-            // Decode the frame straight into its rectangle of the canvas.
-            ImageFrame decoded = WebPDecoder.DecodeFrame(data, iter, options, cancellationToken);
-            ReadOnlySpan<uint> src = System.Runtime.InteropServices.MemoryMarshal.Cast<Rgba32, uint>(decoded.GetPixelSpan());
-            for (int y = 0; y < iter.Height; y++)
-            {
-                src.Slice(y * iter.Width, iter.Width).CopyTo(curr.AsSpan(((iter.Y + y) * width) + iter.X, iter.Width));
-            }
-
-            // Pixels made (partially) transparent by the frame must be blended with the
-            // previous canvas when the blend method is "blend".
-            if (index > 0 && iter.Blend && !isKeyFrame)
-            {
-                if (prev!.Dispose == WebPDisposeMethod.None)
-                {
-                    for (int y = 0; y < iter.Height; ++y)
-                    {
-                        int offset = ((iter.Y + y) * width) + iter.X;
-                        BlendPixelRowNonPremult(curr.AsSpan(offset, iter.Width), prevDisposed.AsSpan(offset, iter.Width));
-                    }
-                }
-                else
-                {
-                    // Blend with the previous canvas outside of the previous frame's rectangle;
-                    // inside, the pixel was cleared to transparent, which is a no-op.
-                    for (int y = 0; y < iter.Height; ++y)
-                    {
-                        int canvasY = iter.Y + y;
-                        FindBlendRangeAtRow(iter, prev, canvasY, out int left1, out int width1, out int left2, out int width2);
-                        if (width1 > 0)
-                        {
-                            int offset1 = (canvasY * width) + left1;
-                            BlendPixelRowNonPremult(curr.AsSpan(offset1, width1), prevDisposed.AsSpan(offset1, width1));
-                        }
-
-                        if (width2 > 0)
-                        {
-                            int offset2 = (canvasY * width) + left2;
-                            BlendPixelRowNonPremult(curr.AsSpan(offset2, width2), prevDisposed.AsSpan(offset2, width2));
-                        }
-                    }
-                }
-            }
-
-            // Update info of the previous frame and dispose it for the next iteration.
-            prev = iter;
-            prevWasKeyFrame = isKeyFrame;
-            curr.AsSpan().CopyTo(prevDisposed);
-            if (iter.Dispose == WebPDisposeMethod.Background)
-            {
-                for (int y = 0; y < iter.Height; y++)
-                {
-                    prevDisposed.AsSpan(((iter.Y + y) * width) + iter.X, iter.Width).Clear();
-                }
-            }
-
+            compositor.Compose(iter, WebPDecoder.DecodeFrame(data, iter, options, cancellationToken), curr);
             var frame = new ImageFrame(width, height, System.Runtime.InteropServices.MemoryMarshal.Cast<uint, Rgba32>(curr.AsSpan()).ToArray())
             {
                 Duration = TimeSpan.FromMilliseconds(iter.Duration),
@@ -91,6 +28,87 @@ internal static class AnimationDecoder
         }
 
         return result;
+    }
+}
+
+/// <summary>The state of WebPAnimDecoder between frames: the previous, disposed canvas and the previous frame.</summary>
+// port: src/demux/anim_decode.c WebPAnimDecoderGetNext
+internal sealed class AnimationCompositor(int width, int height)
+{
+    private readonly uint[] _prevDisposed = new uint[width * height];   // previous canvas, properly disposed
+    private WebPFrameInfo? _prev;
+    private bool _prevWasKeyFrame;
+    private int _index;
+
+    /// <summary>Writes the canvas showing <paramref name="iter"/> (decoded into <paramref name="decoded"/>) to <paramref name="curr"/>.</summary>
+    public void Compose(WebPFrameInfo iter, ImageFrame decoded, Span<uint> curr)
+    {
+        int index = _index++;
+        WebPFrameInfo? prev = _prev;
+        uint[] prevDisposed = _prevDisposed;
+        bool isKeyFrame = IsKeyFrame(index, iter, prev, _prevWasKeyFrame, width, height);
+        if (isKeyFrame)
+        {
+            curr.Clear();
+        }
+        else
+        {
+            prevDisposed.AsSpan().CopyTo(curr);
+        }
+
+        // Decode the frame straight into its rectangle of the canvas.
+        ReadOnlySpan<uint> src = System.Runtime.InteropServices.MemoryMarshal.Cast<Rgba32, uint>(decoded.GetPixelSpan());
+        for (int y = 0; y < iter.Height; y++)
+        {
+            src.Slice(y * iter.Width, iter.Width).CopyTo(curr.Slice(((iter.Y + y) * width) + iter.X, iter.Width));
+        }
+
+        // Pixels made (partially) transparent by the frame must be blended with the
+        // previous canvas when the blend method is "blend".
+        if (index > 0 && iter.Blend && !isKeyFrame)
+        {
+            if (prev!.Dispose == WebPDisposeMethod.None)
+            {
+                for (int y = 0; y < iter.Height; ++y)
+                {
+                    int offset = ((iter.Y + y) * width) + iter.X;
+                    BlendPixelRowNonPremult(curr.Slice(offset, iter.Width), prevDisposed.AsSpan(offset, iter.Width));
+                }
+            }
+            else
+            {
+                // Blend with the previous canvas outside of the previous frame's rectangle;
+                // inside, the pixel was cleared to transparent, which is a no-op.
+                for (int y = 0; y < iter.Height; ++y)
+                {
+                    int canvasY = iter.Y + y;
+                    FindBlendRangeAtRow(iter, prev, canvasY, out int left1, out int width1, out int left2, out int width2);
+                    if (width1 > 0)
+                    {
+                        int offset1 = (canvasY * width) + left1;
+                        BlendPixelRowNonPremult(curr.Slice(offset1, width1), prevDisposed.AsSpan(offset1, width1));
+                    }
+
+                    if (width2 > 0)
+                    {
+                        int offset2 = (canvasY * width) + left2;
+                        BlendPixelRowNonPremult(curr.Slice(offset2, width2), prevDisposed.AsSpan(offset2, width2));
+                    }
+                }
+            }
+        }
+
+        // Update info of the previous frame and dispose it for the next iteration.
+        _prev = iter;
+        _prevWasKeyFrame = isKeyFrame;
+        curr.CopyTo(prevDisposed);
+        if (iter.Dispose == WebPDisposeMethod.Background)
+        {
+            for (int y = 0; y < iter.Height; y++)
+            {
+                prevDisposed.AsSpan(((iter.Y + y) * width) + iter.X, iter.Width).Clear();
+            }
+        }
     }
 
     private static bool IsFullFrame(int width, int height, int canvasWidth, int canvasHeight) =>

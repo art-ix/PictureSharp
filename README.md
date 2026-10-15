@@ -32,24 +32,23 @@ PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and process
 
 ```csharp
 using PictureSharp;
-using PictureSharp.Formats.Pcx;
-using PictureSharp.Formats.Png;
-using PictureSharp.Formats.WebP;
-using PictureSharp.Processing;
 
 using var image = await Image.LoadAsync("photo.jpg");
 image.Mutate(x => x
     .AutoOrient()
     .Resize(1600, 0)                 // 0 keeps the aspect ratio
     .UnsharpMask());
-await image.SaveAsWebPAsync("photo.webp", new() { Quality = 82 });
+await image.SaveAsync("photo.webp");  // the format comes from the extension
 
-using Image thumbnail = image.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
-thumbnail.SaveAsPng("thumbnail.png");
-thumbnail.SaveAsPcx("thumbnail.pcx");
+using Image thumbnail = image.Clone(x => x.Thumbnail(256, 256));
+thumbnail.Save("thumbnail.png");
 ```
 
-`Mutate` changes the image it is called on; `Clone` returns a new image and leaves the source untouched.
+`Mutate` changes the image it is called on; `Clone` returns a new image and leaves the source untouched. Format-specific settings such as WebP quality live in `PictureSharp.Formats.<Format>` (`image.SaveAsWebP(path, new() { Quality = 82 })`), and resize modes in `PictureSharp.Processing`; see the [encoder options](https://github.com/art-ix/PictureSharp/blob/main/docs/encoder-options.md) and [image processing](https://github.com/art-ix/PictureSharp/blob/main/docs/image-processing.md) guides.
+
+PictureSharp 0.6.0 adds `Image.OpenFrameReaderAsync` and `Image.CreateFrameWriter`
+to process GIF, APNG and WebP one frame at a time. See
+[streaming ownership, output capabilities and examples](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md#sequential-reading-and-writing-060).
 
 ## Documentation
 
@@ -76,7 +75,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release **0.5.7**: no library changes from 0.5.6, which made `Image` the single entry point and added `ImageConfiguration`, format plugins and custom frame processors; 0.5.7 consolidates the tests and moves them to TUnit). See the [0.5.7](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.5.7.md) and [0.5.6](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.5.6.md) release notes.
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release **0.6.0**: sequential GIF, APNG and WebP frame readers and writers, bounded animation memory, non-seekable streams, limits and cancellation). See the [0.6.0 release notes](https://github.com/art-ix/PictureSharp/blob/v0.6.0/docs/release-0.6.0.md).
 
 ## License
 

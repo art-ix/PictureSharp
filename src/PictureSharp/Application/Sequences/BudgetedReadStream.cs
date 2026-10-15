@@ -1,6 +1,6 @@
 using PictureSharp.Application.Decoding;
 
-namespace PictureSharp.Infrastructure.IO;
+namespace PictureSharp.Application.Sequences;
 
 /// <summary>Forward-only input charged to the same operation budget as decoded frames and metadata.</summary>
 internal sealed class BudgetedReadStream(Stream input, DecodeContext context, bool leaveOpen) : Stream

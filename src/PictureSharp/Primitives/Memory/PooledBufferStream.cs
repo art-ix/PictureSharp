@@ -73,6 +73,32 @@ internal sealed class PooledBufferStream : Stream
         }
     }
 
+    public async ValueTask WriteToAsync(Stream destination, CancellationToken cancellationToken)
+    {
+        for (int i = 0; i < _segments.Count; i++)
+        {
+            await destination.WriteAsync(_segments[i].AsMemory(0, i == _segments.Count - 1 ? _used : _segments[i].Length), cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Empties the stream; the first segment is kept for reuse.</summary>
+    public void Reset()
+    {
+        for (int i = 1; i < _segments.Count; i++)
+        {
+            ArrayPool<byte>.Shared.Return(_segments[i]);
+        }
+
+        if (_segments.Count > 1)
+        {
+            _segments.RemoveRange(1, _segments.Count - 1);
+        }
+
+        _used = 0;
+        _length = 0;
+    }
+
     public override void Flush()
     {
     }

@@ -8,6 +8,12 @@ internal abstract class FrameWriteSession(Stream output, FrameSequenceInfo info,
 {
     private int _count;
     private bool _complete;
+
+    /// <summary>Frames accepted so far.</summary>
+    public int FramesWritten => _count;
+
+    /// <summary>Whether the sequence footer was written.</summary>
+    public bool IsComplete => _complete;
     protected abstract ValueTask WriteCoreAsync(ImageFrame frame, CancellationToken cancellationToken);
     protected abstract ValueTask CompleteCoreAsync(CancellationToken cancellationToken);
 

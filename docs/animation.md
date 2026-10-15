@@ -126,3 +126,86 @@ webp.SaveAsGif("animated.gif");
 ```
 
 `WebPConverter.Convert` follows `gif2webp` 1.6.0: frames shown for 10 ms or less get 100 ms (as browsers display them) and frames are lossless unless options are passed; the loop count and background color carry over. Over the test corpus its frames, durations and loop counts are identical to `gif2webp` output. Converting the lossless WebP back to GIF restores the original frames.
+
+## Sequential reading and writing (0.6.0)
+
+Use `Image.OpenFrameReaderAsync(pathOrStream)` for GIF, PNG/APNG and WebP. It reads forward from the current
+stream position and accepts non-seekable input. A path reader owns its file; caller streams stay open. Compressed input is retained for the current image/frame rather than the entire animation. The reader keeps its
+borrowed output canvas and independent compositing state, so editing borrowed pixels cannot change later frames.
+GIF has two persistent canvases (three with restore-to-previous); WebP has two plus a decoded frame while composing;
+APNG has two, a saved restore region when needed, and the frame being decoded. PNG may also keep the default image until it has returned its first animation frame.
+
+```csharp
+using PictureSharp;
+
+await using ImageFrameReader reader = await Image.OpenFrameReaderAsync("animation.gif");
+while (await reader.MoveNextAsync())
+{
+    ImageFrame frame = reader.Current;
+    Console.WriteLine($"{frame.Duration.TotalMilliseconds} ms: {frame[0, 0]}");
+}
+Console.WriteLine($"{reader.FramesRead} frames, {reader.LoopCount} plays");
+```
+
+`Current` is borrowed until the next move or disposal. The reader reuses it, so call `frame.Clone()` to retain it;
+a borrowed frame cannot be added directly to an image. Editing the borrowed pixels does not affect later frames.
+`ReadFramesAsync(token)` also supports `await foreach`; completing or leaving that enumeration disposes the reader.
+`LoopCount` and `Metadata` are final only at the end, since metadata and GIF's loop extension may follow image data.
+`AnimationBackgroundColor` is a container hint. Some read-ahead is allowed, so the stream may advance past the image.
+
+Decoder limits apply to the sequence: `MaxInputBytes`, `MaxMetadataBytes`, `MaxFrames` and the sum of decoded
+canvas pixels in `MaxPixels`. `FirstFrameOnly` returns the same still/default image as `Image.Load` and parses the
+remaining sequence on the next move to validate frame/input/metadata limits without decoding more canvases.
+`TargetSize` and `ApplyExifOrientation` are unsupported in a frame reader. Early disposal skips validation of the unread
+tail. Corruption, I/O failure or cancellation aborts the reader; subsequent moves fail with `ObjectDisposedException`.
+
+Frames match `Image.Load` in pixels and durations, including partial rectangles, blending and disposal. Malformed APNG
+falls back to the static/default image only if detected before returning the first frame; later errors throw.
+Sequential APNG also rejects a frame count that differs from `acTL`, which the batch decoder tolerates.
+
+A writer accepts a complete canvas with its duration in each `WriteAsync` call. It copies/encodes everything it needs
+before returning, so the input frame can then be changed, reused or returned to its reader. Canvas dimensions must
+match. At least one frame is required, and a declared `FrameCount` must match exactly. A failure aborts the writer.
+Always call `CompleteAsync` to write the footer and patch headers; disposal alone aborts. A successfully completed
+path is closed immediately. Incomplete path output is deleted. Caller streams stay open and may contain partial bytes
+after failure, cancellation or abandonment. An existing path is truncated when a writer is created.
+
+This converts without collecting frames (loop/background settings must be known before writing):
+
+```csharp
+using PictureSharp;
+using PictureSharp.Formats.WebP;
+
+await using ImageFrameReader reader = await Image.OpenFrameReaderAsync("animation.png");
+await using ImageFrameWriter writer = Image.CreateFrameWriter(
+    "converted.webp", reader.Size, new WebPEncoderOptions { Lossless = true, Exact = true },
+    new ImageFrameWriterOptions { LoopCount = reader.LoopCount, AnimationBackgroundColor = reader.AnimationBackgroundColor });
+await foreach (ImageFrame frame in reader.ReadFramesAsync())
+{
+    await writer.WriteAsync(frame);
+}
+await writer.CompleteAsync();
+```
+
+`ImageFrameWriterOptions.Metadata` is copied at creation and filtered by `EncoderOptions.Metadata`. Metadata and GIF
+loop extensions encountered later cannot be retroactively transferred by this one-pass conversion. Supply known
+values explicitly or make a first pass if they must be preserved. This example uses APNG, whose loop count is in its
+initial header. GIF may reveal its loop count later.
+
+| Output | Non-seekable stream | Sequential encoding choices |
+| --- | --- | --- |
+| GIF | Supported directly | A palette per frame, quantization/dithering per frame, full-canvas rectangles and background disposal. One transparent entry is reserved even in opaque frames. `OptimizeFrames` is ignored; repeated frames retain their own timing. No shared animation-wide palette scan. |
+| APNG | Directly with a declared `FrameCount`; otherwise requires `UseTemporaryFile = true` | `Auto` uses RGBA for every frame; explicit non-indexed color types are supported. Indexed/palette APNG is unsupported. Full-canvas source replacement preserves alpha, including RGB under zero alpha. Unknown frame count patches `acTL` and its CRC on completion. |
+| WebP | Requires `UseTemporaryFile = true` | Same candidates and keyframe search as the batch animation encoder. A bounded keyframe window is retained; the default maximum distance is 17. `KeyframeMax` controls this memory tradeoff. RIFF size and alpha flags are patched on completion. |
+
+With `FrameCount = 1`, all three use the ordinary still encoder, including PNG palette selection, and can write
+directly to non-seekable output. Without that declaration, even one supplied frame uses the animation container.
+GIF/APNG sequence writers require `SaveAnimation = true`. Format-specific timing, color and alpha restrictions still
+apply. WebP without `Lossless = true, Exact = true` may change pixels; GIF quantizes colors and binarizes alpha.
+
+Temporary-file mode is explicit: it writes to a disk file through the output adapter, copies it to the caller stream
+only during `CompleteAsync`, and deletes it on completion, failure or disposal. It does not buffer the animation in
+RAM and does not impose a disk-size quota. Cancellation or I/O failure during the final copy may leave partial bytes
+in the caller stream. Operations on readers/writers must not overlap; CPU encoding runs on the calling thread.
+
+Memory measurements for 10/100/1000 frames are recorded in [performance](performance.md#sequential-animation-memory-060).

@@ -1,7 +1,6 @@
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Sequences;
-using PictureSharp.Infrastructure.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
@@ -134,10 +133,11 @@ public class SequenceContractTests
         var codec = new SequentialCodec();
         using var input = new NonSeekableStream([1, 2]);
         var context = new DecodeContext(DecoderOptions.Default);
-        Assert.ThrowsExactly<NotSupportedException>(() => SequenceSessionFactory.OpenReader(codec, input, context));
+        await Assert.ThrowsExactlyAsync<NotSupportedException>(async () => await SequenceSessionFactory.OpenReaderAsync(codec, input, context));
         await Assert.That(input.BytesRead).IsEqualTo(0);
-        using var output = new MemoryStream();
-        Assert.ThrowsExactly<NotSupportedException>(() => SequenceSessionFactory.OpenWriter(codec, output, new(ImageFormat.Png, 2, 2), context));
+        using var output = new NonSeekableWriteStream();
+        Assert.ThrowsExactly<NotSupportedException>(() => SequenceSessionFactory.OpenWriter(codec, output, new(ImageFormat.Png, 2, 2),
+            new Formats.Png.PngEncoderOptions(), new ImageMetadata(), context));
         await Assert.That(codec.Opens).IsEqualTo(0);
     }
 
@@ -182,6 +182,18 @@ public class SequenceContractTests
         await Assert.That(footer.Disposals).IsEqualTo(1);
     }
 
+    [Test]
+    public async Task ForwardInput_ForgedChunkLength_DoesNotPreallocateTheDeclaredPayload()
+    {
+        using var input = new NonSeekableStream([1, 2, 3, 4, 5, 6, 7], maxRead: 3);
+        using var reader = new PictureSharp.Infrastructure.IO.ForwardReader(input);
+        using var payload = new PictureSharp.Primitives.Memory.PooledByteBuffer();
+        long read = await reader.ReadToAsync(payload, 1L << 30, CancellationToken.None);
+        await Assert.That(read).IsEqualTo(7L);
+        await Assert.That(payload.Span.SequenceEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7 })).IsTrue();
+        await Assert.That(payload.Array.Length <= 64 * 1024).IsTrue().Because("A claimed gigabyte must not allocate from its length before input arrives.");
+    }
+
     private sealed class Reader(Stream input, FrameSequenceInfo info, DecodeContext context, bool leaveOpen, ImageFrame[] frames)
         : FrameReadSession(input, info, context, leaveOpen)
     {
@@ -220,11 +232,10 @@ public class SequenceContractTests
     {
         public int Opens;
         public bool SupportsNonSeekableInput => false;
-        public bool SupportsNonSeekableOutput => false;
-        public bool RequiresFrameCount => true;
-        public FrameReadSession Open(Stream input, DecodeContext context, bool leaveOpen)
-        { Opens++; return new Reader(input, new(ImageFormat.Png, 2, 2), context, leaveOpen, []); }
-        public FrameWriteSession Open(Stream output, FrameSequenceInfo info, DecodeContext context, bool leaveOpen)
+        public bool RequiresSeekableOutput(FrameSequenceInfo info) => true;
+        public ValueTask<FrameReadSession> OpenAsync(Stream input, DecodeContext context, bool leaveOpen, CancellationToken cancellationToken)
+        { Opens++; return ValueTask.FromResult<FrameReadSession>(new Reader(input, new(ImageFormat.Png, 2, 2), context, leaveOpen, [])); }
+        public FrameWriteSession Open(Stream output, FrameSequenceInfo info, EncoderOptions options, ImageMetadata metadata, DecodeContext context, bool leaveOpen)
         { Opens++; return new Writer(output, info, context, leaveOpen); }
     }
 }

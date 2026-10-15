@@ -358,6 +358,39 @@ sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<Image
     property ImageFrame RootFrame { get; }
     property ImageFrame this[System.Int32 index] { get; }
     property System.Int32 Count { get; }
+sealed class ImageFrameReader : System.IAsyncDisposable, System.IDisposable
+    method System.Collections.Generic.IAsyncEnumerable<ImageFrame> ReadFramesAsync(System.Threading.CancellationToken cancellationToken = default)
+    method System.String ToString()
+    method System.Threading.Tasks.ValueTask DisposeAsync()
+    method System.Threading.Tasks.ValueTask<System.Boolean> MoveNextAsync(System.Threading.CancellationToken cancellationToken = default)
+    method System.Void Dispose()
+    property ImageFormat Format { get; }
+    property ImageFrame Current { get; }
+    property ImageMetadata Metadata { get; }
+    property Rgba32 AnimationBackgroundColor { get; }
+    property System.Boolean IsComplete { get; }
+    property System.Drawing.Size Size { get; }
+    property System.Int32 FramesRead { get; }
+    property System.Int32 Height { get; }
+    property System.Int32 LoopCount { get; }
+    property System.Int32 Width { get; }
+sealed class ImageFrameWriter : System.IAsyncDisposable, System.IDisposable
+    method System.Threading.Tasks.ValueTask CompleteAsync(System.Threading.CancellationToken cancellationToken = default)
+    method System.Threading.Tasks.ValueTask DisposeAsync()
+    method System.Threading.Tasks.ValueTask WriteAsync(ImageFrame frame, System.Threading.CancellationToken cancellationToken = default)
+    method System.Void Dispose()
+    property ImageFormat Format { get; }
+    property System.Boolean IsComplete { get; }
+    property System.Drawing.Size Size { get; }
+    property System.Int32 FramesWritten { get; }
+sealed record ImageFrameWriterOptions : System.IEquatable<ImageFrameWriterOptions>
+    ctor()
+    property ImageMetadata? Metadata { get; init; }
+    property Rgba32 AnimationBackgroundColor { get; init; }
+    property System.Boolean UseTemporaryFile { get; init; }
+    property System.Int32 LoopCount { get; init; }
+    property System.Int32? FrameCount { get; init; }
+    property static ImageFrameWriterOptions Default { get; }
 static class ImageIOExtensions
     method [Extension] static System.Byte[] Encode(Image image, EncoderOptions options)
     method [Extension] static System.Byte[] Encode(Image image, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
@@ -385,6 +418,10 @@ static class ImageIOExtensions
     method static ImageFormat? DetectFormat(System.IO.Stream stream)
     method static ImageFormat? DetectFormat(System.ReadOnlySpan<System.Byte> header)
     method static ImageFormat? DetectFormat(System.String path)
+    method static ImageFrameWriter CreateFrameWriter(System.IO.Stream stream, System.Drawing.Size size, EncoderOptions options, ImageFrameWriterOptions? sequenceOptions = null)
+    method static ImageFrameWriter CreateFrameWriter(System.IO.Stream stream, System.Drawing.Size size, ImageFormat format, ImageFrameWriterOptions? sequenceOptions = null)
+    method static ImageFrameWriter CreateFrameWriter(System.String path, System.Drawing.Size size, EncoderOptions options, ImageFrameWriterOptions? sequenceOptions = null)
+    method static ImageFrameWriter CreateFrameWriter(System.String path, System.Drawing.Size size, ImageFormat format, ImageFrameWriterOptions? sequenceOptions = null)
     method static ImageInfo Identify(System.IO.Stream stream)
     method static ImageInfo Identify(System.IO.Stream stream, DecoderOptions? options)
     method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data)
@@ -395,6 +432,10 @@ static class ImageIOExtensions
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageFrameReader> OpenFrameReaderAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageFrameReader> OpenFrameReaderAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageFrameReader> OpenFrameReaderAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageFrameReader> OpenFrameReaderAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)

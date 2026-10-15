@@ -117,17 +117,16 @@ public sealed class DocsExamplesTests : IDisposable
             .AutoOrient()
             .Resize(1600, 0)                 // 0 keeps the aspect ratio
             .UnsharpMask());
-        await image.SaveAsWebPAsync(P("photo.webp"), new() { Quality = 82 });
+        await image.SaveAsync(P("photo.webp"));  // the format comes from the extension
 
-        using Image thumbnail = image.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
-        thumbnail.SaveAsPng(P("thumbnail.png"));
-        thumbnail.SaveAsPcx(P("thumbnail.pcx"));
+        using Image thumbnail = image.Clone(x => x.Thumbnail(256, 256));
+        thumbnail.Save(P("thumbnail.png"));
 
         await Assert.That(Image.Identify(P("photo.webp")).Width).IsEqualTo(1600);
         ImageInfo thumb = Image.Identify(P("thumbnail.png"));
-        await Assert.That((thumb.Width, thumb.Height)).IsEqualTo((256, 256));
-        using Image pcx = Image.Load(P("thumbnail.pcx"));
-        await Assert.That(pcx.GetPixelSpan().ToArray()).IsEquivalentTo(thumbnail.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(Math.Max(thumb.Width, thumb.Height)).IsEqualTo(256);
+        using Image png = Image.Load(P("thumbnail.png"));
+        await Assert.That(png.GetPixelSpan().ToArray()).IsEquivalentTo(thumbnail.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
     }
 
     // ------------------------------------------------------------ getting-started.md
@@ -479,6 +478,31 @@ public sealed class DocsExamplesTests : IDisposable
         using Image roundTrip = Image.Load(lossless, new DecoderOptions { FirstFrameOnly = true });
         await Assert.That(roundTrip.ToPixelData()).IsEquivalentTo(rgba, CollectionOrdering.Matching);
         await Assert.That(rgba).IsEquivalentTo(image.ToPixelData(), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task SequentialAnimation_DocumentationExample()
+    {
+        await using ImageFrameReader reader = await Image.OpenFrameReaderAsync(P("animated.webp"));
+        await using ImageFrameWriter writer = Image.CreateFrameWriter(
+            P("sequential.png"), reader.Size, ImageFormat.Png,
+            new ImageFrameWriterOptions { LoopCount = reader.LoopCount, AnimationBackgroundColor = reader.AnimationBackgroundColor });
+        int count = 0;
+        await foreach (ImageFrame frame in reader.ReadFramesAsync())
+        {
+            await writer.WriteAsync(frame);
+            count++;
+        }
+        await writer.CompleteAsync();
+        using Image actual = Image.Load(P("sequential.png"));
+        using Image expected = Image.Load(P("animated.webp"));
+        await Assert.That(count).IsEqualTo(expected.FrameCount);
+        await Assert.That(actual.LoopCount).IsEqualTo(expected.LoopCount);
+        for (int i = 0; i < count; i++)
+        {
+            await Assert.That(actual.Frames[i].GetPixelSpan().SequenceEqual(expected.Frames[i].GetPixelSpan())).IsTrue();
+            await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
+        }
     }
 
     // ------------------------------------------------------------ animation.md

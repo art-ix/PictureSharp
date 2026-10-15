@@ -20,7 +20,7 @@ public sealed record DecoderOptions
     public long MaxPixels { get; init => field = Check.AtLeast(value, 1L); } = 1L << 28;
 
     /// <summary>
-    /// Maximum size in bytes of the encoded input. Files and streams are read in full before decoding; reading stops
+    /// Maximum size in bytes of the encoded input. Load reads the input in full; frame readers consume it incrementally. Reading stops
     /// with <see cref="ImageFormatException"/> as soon as more bytes arrive, whatever length a stream declares.
     /// Default: <see cref="Array.MaxLength"/> (no practical limit).
     /// </summary>
@@ -35,7 +35,7 @@ public sealed record DecoderOptions
 
     /// <summary>
     /// Maximum number of frames in an animation. The limit applies to the frames stored in the file, also with
-    /// <see cref="FirstFrameOnly"/> and in <c>Identify</c>, and is checked before any frame is decoded. Default: 65536.
+    /// <see cref="FirstFrameOnly"/> and in <c>Identify</c>, and is checked during parsing (incrementally for frame readers). Default: 65536.
     /// </summary>
     public int MaxFrames { get; init => field = Check.AtLeast(value, 1); } = 1 << 16;
 

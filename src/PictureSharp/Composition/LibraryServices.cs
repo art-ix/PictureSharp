@@ -3,6 +3,7 @@ using PictureSharp.Application.Configuration;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Encoding;
 using PictureSharp.Application.Icons;
+using PictureSharp.Application.Sequences;
 using PictureSharp.Infrastructure.IO;
 
 namespace PictureSharp.Composition;
@@ -22,6 +23,10 @@ internal static class LibraryServices
     public static ICodecResolver Codecs => Configuration.Codecs;
     public static ImageReadService Reader => Configuration.Reader;
     public static ImageWriteService Writer => Configuration.Writer;
+    public static ImageSequenceService Sequences => Configuration.Sequences;
+
+    /// <summary>The sequence service of <paramref name="options"/>' configuration, or of the default one.</summary>
+    public static ImageSequenceService SequencesFor(DecoderOptions? options) => (options?.Configuration ?? Configuration).Sequences;
 
     /// <summary>The services of <paramref name="options"/>' configuration, or of the default one.</summary>
     public static ImageReadService ReaderFor(DecoderOptions? options) => (options?.Configuration ?? Configuration).Reader;

@@ -5,39 +5,60 @@ internal sealed partial class PngDecoder
     private static List<ImageFrame> DecodeAnimation(ReadOnlySpan<byte> file, PngFile png, PngAnimation anim, int maxDegreeOfParallelism,
         CancellationToken cancellationToken)
     {
-        int width = png.Width;
-        int height = png.Height;
-        var canvas = new Rgba32[width * height];
+        var canvas = new ApngCanvas(png.Width, png.Height);
         var frames = new List<ImageFrame>(anim.Frames.Count);
 
         for (int index = 0; index < anim.Frames.Count; index++)
         {
             ApngFrame f = anim.Frames[index];
-            if (f.Width <= 0 || f.Height <= 0 || f.X < 0 || f.Y < 0 ||
-                (long)f.X + f.Width > width || (long)f.Y + f.Height > height)
-            {
-                throw Error("APNG frame lies outside the image.");
-            }
-
+            canvas.Validate(f);
             if (f.Parts.Count == 0)
             {
                 throw Error("APNG frame has no image data.");
             }
 
             Rgba32[] pixels = DecodeImage(file, png, f.Parts, f.IsDefaultImage ? 0 : 4, f.Width, f.Height, maxDegreeOfParallelism, cancellationToken);
+            canvas.Draw(f, pixels, index);
+            frames.Add(new ImageFrame(png.Width, png.Height, (Rgba32[])canvas.Pixels.Clone()) { Duration = Duration(f) });
+            canvas.ApplyDisposal(f, index);
+        }
 
-            // The first frame's "previous" disposal is treated as "background".
-            int dispose = index == 0 && f.DisposeOp == 2 ? 1 : f.DisposeOp;
-            Rgba32[]? saved = null;
-            if (dispose == 2)
+        return frames;
+    }
+
+    private static TimeSpan Duration(ApngFrame f) =>
+        TimeSpan.FromMilliseconds(f.DelayDen == 0 ? f.DelayNum * 10.0 : f.DelayNum * 1000.0 / f.DelayDen);
+
+    /// <summary>The APNG output buffer, shared by the full decoder and the frame reader.</summary>
+    private sealed class ApngCanvas(int width, int height)
+    {
+        private Rgba32[]? _saved;
+
+        public Rgba32[] Pixels { get; } = new Rgba32[(long)width * height];
+
+        public void Validate(ApngFrame f)
+        {
+            if (f.Width <= 0 || f.Height <= 0 || f.X < 0 || f.Y < 0 ||
+                (long)f.X + f.Width > width || (long)f.Y + f.Height > height)
             {
-                saved = CopyRegion(canvas, width, f);
+                throw Error("APNG frame lies outside the image.");
+            }
+        }
+
+        // The first frame's "previous" disposal is treated as "background".
+        private static int DisposeOp(ApngFrame f, int index) => index == 0 && f.DisposeOp == 2 ? 1 : f.DisposeOp;
+
+        public void Draw(ApngFrame f, ReadOnlySpan<Rgba32> pixels, int index)
+        {
+            if (DisposeOp(f, index) == 2)
+            {
+                _saved = CopyRegion(Pixels, width, f);
             }
 
             for (int y = 0; y < f.Height; y++)
             {
-                Span<Rgba32> dst = canvas.AsSpan(((f.Y + y) * width) + f.X, f.Width);
-                ReadOnlySpan<Rgba32> src = pixels.AsSpan(y * f.Width, f.Width);
+                Span<Rgba32> dst = Pixels.AsSpan(((f.Y + y) * width) + f.X, f.Width);
+                ReadOnlySpan<Rgba32> src = pixels.Slice(y * f.Width, f.Width);
                 if (f.BlendOp == 0)
                 {
                     src.CopyTo(dst);
@@ -50,29 +71,26 @@ internal sealed partial class PngDecoder
                     }
                 }
             }
+        }
 
-            frames.Add(new ImageFrame(width, height, (Rgba32[])canvas.Clone())
-            {
-                Duration = TimeSpan.FromMilliseconds(f.DelayDen == 0 ? f.DelayNum * 10.0 : f.DelayNum * 1000.0 / f.DelayDen),
-            });
-
+        public void ApplyDisposal(ApngFrame f, int index)
+        {
+            int dispose = DisposeOp(f, index);
             if (dispose == 1)
             {
                 for (int y = 0; y < f.Height; y++)
                 {
-                    canvas.AsSpan(((f.Y + y) * width) + f.X, f.Width).Clear();
+                    Pixels.AsSpan(((f.Y + y) * width) + f.X, f.Width).Clear();
                 }
             }
             else if (dispose == 2)
             {
                 for (int y = 0; y < f.Height; y++)
                 {
-                    saved.AsSpan(y * f.Width, f.Width).CopyTo(canvas.AsSpan(((f.Y + y) * width) + f.X, f.Width));
+                    _saved.AsSpan(y * f.Width, f.Width).CopyTo(Pixels.AsSpan(((f.Y + y) * width) + f.X, f.Width));
                 }
             }
         }
-
-        return frames;
     }
 
     private static Rgba32[] CopyRegion(Rgba32[] canvas, int width, ApngFrame f)

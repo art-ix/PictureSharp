@@ -242,7 +242,7 @@ internal sealed partial class PngDecoder
             return png;
         }
 
-        private void ReadHeader(ReadOnlySpan<byte> body)
+        internal void ReadHeader(ReadOnlySpan<byte> body)
         {
             if (body.Length < 13)
             {
@@ -280,7 +280,7 @@ internal sealed partial class PngDecoder
             Interlaced = body[12] == 1;
         }
 
-        private byte[]? ReadIccp(ReadOnlySpan<byte> body, DecoderOptions options)
+        internal byte[]? ReadIccp(ReadOnlySpan<byte> body, DecoderOptions options)
         {
             int nul = body.IndexOf((byte)0);
             if (nul < 1 || nul > 79 || nul + 2 > body.Length || body[nul + 1] != 0)
@@ -313,7 +313,7 @@ internal sealed partial class PngDecoder
             return inflated;
         }
 
-        private byte[]? ReadXmp(ReadOnlySpan<byte> body, DecoderOptions options)
+        internal byte[]? ReadXmp(ReadOnlySpan<byte> body, DecoderOptions options)
         {
             int nul = body.IndexOf((byte)0);
             if (nul < 0 || !body[..nul].SequenceEqual(Encoding.ASCII.GetBytes(PngConstants.XmpKeyword)) || nul + 3 > body.Length)

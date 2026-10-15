@@ -7,5 +7,7 @@ namespace PictureSharp.Application.Abstractions;
 internal interface ISequentialImageDecoder
 {
     bool SupportsNonSeekableInput { get; }
-    FrameReadSession Open(Stream input, DecodeContext context, bool leaveOpen);
+
+    /// <summary>Reads the sequence header (up to the first frame) and returns a session positioned before the first frame.</summary>
+    ValueTask<FrameReadSession> OpenAsync(Stream input, DecodeContext context, bool leaveOpen, CancellationToken cancellationToken);
 }

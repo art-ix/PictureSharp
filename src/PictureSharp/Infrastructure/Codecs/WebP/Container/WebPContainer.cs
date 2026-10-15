@@ -210,15 +210,23 @@ internal sealed class WebPContainer
         }
     }
 
-    // port: ParseAnimationFrame
     private void ParseAnimationFrame(ReadOnlySpan<byte> data, Chunk anmf)
     {
-        if (anmf.Size < AnmfChunkSize)
+        WebPFrameInfo frame = ParseAnimationFrame(data, anmf.PayloadRange.Offset, anmf.Size);
+        _options?.ValidateFrameCount(ImageFormat.WebP, Frames.Count + 1L);
+        Frames.Add(frame);
+    }
+
+    /// <summary>Parses the ANMF payload at <paramref name="offset"/>; the frame's ranges point into <paramref name="data"/>.</summary>
+    // port: ParseAnimationFrame
+    internal static WebPFrameInfo ParseAnimationFrame(ReadOnlySpan<byte> data, int offset, int size)
+    {
+        if (size < AnmfChunkSize)
         {
             throw Error("ANMF chunk is too small.");
         }
 
-        ReadOnlySpan<byte> p = anmf.Payload(data);
+        ReadOnlySpan<byte> p = data.Slice(offset, size);
         var frame = new WebPFrameInfo
         {
             X = 2 * ReadLE24(p),
@@ -237,15 +245,23 @@ internal sealed class WebPContainer
 
         int declaredWidth = frame.Width;
         int declaredHeight = frame.Height;
-        var inner = new ChunkReader(data[..(anmf.PayloadRange.Offset + anmf.Size)], anmf.PayloadRange.Offset + AnmfChunkSize);
+        var inner = new ChunkReader(data[..(offset + size)], offset + AnmfChunkSize);
         ParseImageChunks(data, ref inner, frame);
         if (frame.Width != declaredWidth || frame.Height != declaredHeight)
         {
             throw Error("Frame bitstream size does not match the ANMF header.");
         }
 
-        _options?.ValidateFrameCount(ImageFormat.WebP, Frames.Count + 1L);
-        Frames.Add(frame);
+        return frame;
+    }
+
+    /// <summary>Parses top-level ALPH/VP8/VP8L chunks held in <paramref name="chunks"/> (headers included) as a still image.</summary>
+    internal static WebPFrameInfo ParseImage(ReadOnlySpan<byte> chunks)
+    {
+        var frame = new WebPFrameInfo();
+        var reader = new ChunkReader(chunks, 0);
+        ParseImageChunks(chunks, ref reader, frame);
+        return frame;
     }
 
     // port: StoreFrame. Reads an optional ALPH chunk followed by one VP8/VP8L chunk.

@@ -89,7 +89,7 @@ internal static class WebPMuxer
         }
     }
 
-    private static void WriteRiffHeader(Stream output, uint size)
+    internal static void WriteRiffHeader(Stream output, uint size)
     {
         output.Write("RIFF"u8);
         WriteSize(output, size);
@@ -97,7 +97,7 @@ internal static class WebPMuxer
     }
 
     // port: src/mux/muxedit.c CreateVP8XChunk
-    private static void WriteExtendedHeader(Stream output, int width, int height, int flags)
+    internal static void WriteExtendedHeader(Stream output, int width, int height, int flags)
     {
         Span<byte> header = stackalloc byte[Vp8XChunkSize];
         header.Clear();
@@ -107,7 +107,7 @@ internal static class WebPMuxer
         Chunk(output, "VP8X"u8, header);
     }
 
-    private static void WriteAnimationHeader(Stream output, Rgba32 background, int loopCount)
+    internal static void WriteAnimationHeader(Stream output, Rgba32 background, int loopCount)
     {
         Span<byte> header = stackalloc byte[AnimChunkSize];
         header[0] = background.B;
@@ -119,7 +119,7 @@ internal static class WebPMuxer
     }
 
     // port: src/mux/muxedit.c WebPMuxPushFrame
-    private static void WriteFrame(Stream output, EncodedAnimationFrame frame)
+    internal static void WriteFrame(Stream output, EncodedAnimationFrame frame)
     {
         long size = AnmfChunkSize + frame.Image.DiskSize;
         output.Write("ANMF"u8);
@@ -150,7 +150,7 @@ internal static class WebPMuxer
     internal static long ChunkSize(long length) => ChunkHeaderSize + length + (length & 1);
 
     // port: src/mux/muxinternal.c ChunkEmit
-    private static void Chunk(Stream stream, ReadOnlySpan<byte> tag, ReadOnlySpan<byte> data)
+    internal static void Chunk(Stream stream, ReadOnlySpan<byte> tag, ReadOnlySpan<byte> data)
     {
         stream.Write(tag);
         WriteSize(stream, (uint)data.Length);

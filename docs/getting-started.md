@@ -2,10 +2,10 @@
 
 ## Installation
 
-PictureSharp targets **.NET 10** (C# 14) and has no dependencies beyond the base class library. Install version 0.5.7 from NuGet:
+PictureSharp targets **.NET 10** (C# 14) and has no dependencies beyond the base class library. Install version 0.6.0 from NuGet:
 
 ```bash
-dotnet add package PictureSharp --version 0.5.7
+dotnet add package PictureSharp --version 0.6.0
 ```
 
 Everything you need for loading, processing and saving is reached from `Image` with one `using PictureSharp;`: `Image.Load`, `Image.Identify`, `image.Mutate`, `image.Clone`, `image.Save`, together with `DecoderOptions`, `ImageInfo` and `ImageConfiguration`. Processing modes and options (`ResizeMode`, `FlipMode`, `ResizeOptions`, …) are in `PictureSharp.Processing`, format options and the `SaveAs*`/`To*` shortcuts in `PictureSharp.Formats.<Format>`, and the plugin interfaces in `PictureSharp.Formats`. Geometry types (`Size`, `Rectangle`, `Point`) and `Color` come from `System.Drawing.Primitives`, which is part of the shared framework, so `using System.Drawing;` works on every platform without `System.Drawing.Common`.
