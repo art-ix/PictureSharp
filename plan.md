@@ -54,6 +54,7 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
 | 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Planowana |
+| 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Planowana |
 | 0.7.0 | Integracja ICO i sześciu obszarów, stabilizacja API i wydanie | Planowana |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości. Nazwy nowych opcji i metod poniżej są robocze do czasu zatwierdzenia migawki API.
@@ -215,10 +216,25 @@ DoD:
 - Testy animacji, `Clone`/`Mutate`, źródła będącego celem i braku niezamierzonych zmian RGB pod alfą.
 - Pomiary pełnych operacji na małych grafikach i 12 MP; SIMD dopiero przy wykazanej korzyści i identyczności ze skalarem.
 
+## 0.6.4 — adaptery do ekosystemu .NET
+
+Zakres:
+- Osobne paczki NuGet obok `PictureSharp`; sama biblioteka zostaje bez zależności i bez zmian w API poza ewentualnymi punktami rozszerzeń potrzebnymi adapterom.
+- `PictureSharp.Drawing`: konwersje `Image` ↔ `System.Drawing.Bitmap` (Windows) z poprawnym mapowaniem alfa/stride i jawnym kopiowaniem lub własnością bufora.
+- `PictureSharp.Skia`: konwersje `Image` ↔ `SKBitmap`/`SKImage`; przezroczystość prosta (nieprzemnożona), jawna polityka alfa.
+- `PictureSharp.AspNetCore`: zwracanie obrazu jako `IResult` (kodowanie do strumienia odpowiedzi, negocjacja formatu WebP/PNG/JPEG według `Accept`, nagłówki `Content-Type`/cache), z limitami i anulowaniem przez `RequestAborted`.
+- Każdy adapter w osobnym projekcie z własnym README, wersjonowaniem zgodnym z `VERSION` i zależnością tylko od `PictureSharp` oraz docelowego API.
+
+DoD:
+- Testy round-trip pikseli dla każdego adaptera (alfa 0/255 i pośrednia, nieparzyste szerokości, stride) oraz testy zwalniania zasobów.
+- Test integracyjny ASP.NET Core na `TestServer`: format, nagłówki, anulowanie, przekroczenie limitu.
+- Paczki z `LICENSE` i notices; `PictureSharp` nadal bez `PackageReference`; architektura nie zależy od adapterów (test architektury).
+- Konsument z lokalnego feedu buduje się; trimming/AOT sprawdzone tam, gdzie zależność to obsługuje.
+
 ## 0.7.0 — integracja i stabilizacja
 
 Zakres:
-- Ukończyć DoD obsługi ICO i wszystkich sześciu obszarów. Ujednolicić opcje, nazwy, własność buforów, limity, anulowanie i polityki metadanych/koloru.
+- Ukończyć DoD obsługi ICO, wszystkich sześciu obszarów i adapterów z 0.6.4. Ujednolicić opcje, nazwy, własność buforów, limity, anulowanie i polityki metadanych/koloru.
 - Testy end-to-end: tworzenie i odczyt wielowariantowego ICO; miniatura JPEG z orientacją i konwersją ICC; sekwencyjna konwersja animacji z maską i resize; edycja metadanych bez rekompresji; przetwarzanie przy ograniczonych zasobach.
 - Uzupełnić CLI i przewodniki o ICO, miniatury, limity, sekwencyjne animacje, kolor, metadane i nowe operacje. Przykłady sprawdzane przez `DocsExamplesTests`.
 - Rozszerzyć istniejącą macierz wydajności o nowe ścieżki, czas anulowania, szczytową pamięć i długie animacje; opisać kompromisy jakości i ograniczenia.
