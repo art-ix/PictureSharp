@@ -17,7 +17,7 @@ meta.Clear();                             // drop ICC, EXIF and XMP (the resolut
 | Member | Meaning |
 | --- | --- |
 | `HorizontalResolution`, `VerticalResolution` | DPI; 96 when the file does not specify it. |
-| `IccProfile` | Raw ICC profile. Carried over, not applied: RasterSharp does no color management. |
+| `IccProfile` | Raw ICC profile. Carried over, not applied: PictureSharp does no color management. |
 | `Exif` | Raw EXIF as a TIFF stream (`II*\0`/`MM\0*`); a JPEG `Exif\0\0` prefix is stripped when set. |
 | `Xmp` | Raw XMP packet (UTF-8 XML). |
 | `Orientation` | The EXIF orientation tag (`ExifOrientation`), read and written inside the EXIF bytes; `Unknown` without EXIF. |

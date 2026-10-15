@@ -2,18 +2,18 @@
 
 ## Installation
 
-RasterSharp targets **.NET 10** (C# 14) and has no dependencies beyond the base class library. Until the NuGet package is published, reference the project from a source checkout:
+PictureSharp targets **.NET 10** (C# 14) and has no dependencies beyond the base class library. Until the NuGet package is published, reference the project from a source checkout:
 
 ```bash
-dotnet add reference path/to/RasterSharp/src/RasterSharp/RasterSharp.csproj
+dotnet add reference path/to/PictureSharp/src/PictureSharp/PictureSharp.csproj
 ```
 
-Everything public lives in the `RasterSharp` namespace. Geometry types (`Size`, `Rectangle`, `Point`) and `Color` come from `System.Drawing.Primitives`, which is part of the shared framework, so `using System.Drawing;` works on every platform without `System.Drawing.Common`.
+Everything public lives in the `PictureSharp` namespace. Geometry types (`Size`, `Rectangle`, `Point`) and `Color` come from `System.Drawing.Primitives`, which is part of the shared framework, so `using System.Drawing;` works on every platform without `System.Drawing.Common`.
 
 ## The first program
 
 ```csharp
-using RasterSharp;
+using PictureSharp;
 
 using var image = Image.Load("photo.jpg");
 Console.WriteLine($"{image.Width}x{image.Height}, decoded from {image.SourceFormat}");

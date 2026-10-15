@@ -1,8 +1,8 @@
-# RasterSharp
+# PictureSharp
 
 **A pure managed image processing library for .NET. No native dependencies.**
 
-RasterSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and processes images in 100% C# for **.NET 10 and later**: no NuGet dependencies, native libraries or P/Invoke. The API follows ImageSharp (`Image.Load`, `Mutate`, `Clone`, `SaveAs*`), and its results are verified pixel for pixel against libwebp, libjpeg-turbo and Pillow.
+PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and processes images in 100% C# for **.NET 10 and later**: no NuGet dependencies, native libraries or P/Invoke. The API follows ImageSharp (`Image.Load`, `Mutate`, `Clone`, `SaveAs*`), and its results are verified pixel for pixel against libwebp, libjpeg-turbo and Pillow.
 
 - WebP lossy, lossless, alpha and animation (encoder byte-compatible with `cwebp` 1.6.0 where possible)
 - PNG (including APNG and Adam7), JPEG (baseline and progressive), BMP
@@ -28,7 +28,7 @@ RasterSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and processe
 ## Quick start
 
 ```csharp
-using RasterSharp;
+using PictureSharp;
 
 using var image = await Image.LoadAsync("photo.jpg");
 image.Mutate(x => x
@@ -65,8 +65,8 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/RasterSharp/RasterSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.5.1, which adds ICO reading and writing, variant selection, multi-size icon collections and the `icon` CLI command).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](plan.md); the library is in development (current release 0.5.1, which adds ICO reading and writing, variant selection, multi-size icon collections and the `icon` CLI command).
 
 ## License
 
-RasterSharp is licensed under [MIT](LICENSE). It includes ports from libwebp, libjpeg-turbo, zlib and Pillow, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+PictureSharp is licensed under [MIT](LICENSE). It includes ports from libwebp, libjpeg-turbo, zlib and Pillow, and is based in part on the work of the Independent JPEG Group. Original license and copyright notices are retained in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).

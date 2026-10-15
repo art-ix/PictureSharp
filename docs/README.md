@@ -1,4 +1,4 @@
-# RasterSharp documentation
+# PictureSharp documentation
 
 | Guide | What it covers |
 | --- | --- |
@@ -9,7 +9,7 @@
 | [Pixels and interop](pixels-and-interop.md) | `Rgba32`, pixel spans, `PixelFormat` conversions, WPF/SkiaSharp/WinForms, raw buffer encoding and decoding |
 | [Animation](animation.md) | Frames, durations, loops, animated WebP, APNG and GIF, GIF ↔ WebP conversion |
 | [Metadata](metadata.md) | Resolution, ICC/EXIF/XMP, EXIF orientation |
-| [Command-line sample](cli.md) | The `samples/RasterSharp.Cli` tool |
+| [Command-line sample](cli.md) | The `samples/PictureSharp.Cli` tool |
 | [Development](development.md) | Building, tests, oracles, corpus regeneration and the public API snapshot |
 | [Performance](performance.md) | VP8L measurements, benchmark commands, allocation costs and comparison limits |
 

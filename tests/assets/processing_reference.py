@@ -12,7 +12,7 @@ Each job: {"name", "input", "op", ...}; inputs are PNG files in <dir>.
   op "filter":    "kind" (box|gaussian|unsharp|sharpen), "radius", "percent", "threshold"
                   -> run on the premultiplied image: im.convert("RGBa").filter(...).convert("RGBA")
   op "rotate":    "angle" (counter-clockwise), "filter" (nearest|bilinear|bicubic), "expand", optional "fillcolor"
-  op "sepia":     the 0.393/0.769/0.189 matrix in thousandths, rounded half up (RasterSharp's definition)
+  op "sepia":     the 0.393/0.769/0.189 matrix in thousandths, rounded half up (PictureSharp's definition)
   op "exif_transpose": ImageOps.exif_transpose on the input as decoded by Pillow (any format)
 
 Run with:  python3 -I tests/assets/processing_reference.py <dir>

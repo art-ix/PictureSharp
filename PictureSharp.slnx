@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/PictureSharp.Benchmarks/PictureSharp.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/PictureSharp.Cli/PictureSharp.Cli.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PictureSharp/PictureSharp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PictureSharp.Tests/PictureSharp.Tests.csproj" />
+  </Folder>
+</Solution>

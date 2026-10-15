@@ -3,7 +3,7 @@
 ## Loading
 
 ```csharp
-using RasterSharp;
+using PictureSharp;
 
 using var fromFile = Image.Load("input.webp");
 using var fromStream = Image.Load(stream);               // read to the end; seeking is not needed

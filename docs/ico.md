@@ -1,7 +1,7 @@
 # ICO icons
 
 ICO contains alternative images, often at different sizes. It is not an animation.
-RasterSharp reads embedded PNG and uncompressed 40-byte Windows DIB headers with
+PictureSharp reads embedded PNG and uncompressed 40-byte Windows DIB headers with
 1/4/8-bit palettes or 24/32-bit pixels. It writes PNG (default) or 32-bit DIB with
 an AND mask. CUR, ANI, PE resources, legacy/extended DIB headers, bitfields and
 compressed DIB are not decoded.
@@ -77,11 +77,11 @@ cancellation belongs to the planned resource-control release.
 ## CLI
 
 ```bash
-dotnet run -c Release --project samples/RasterSharp.Cli -- icon logo.png app.ico 16,32,48,256
-dotnet run -c Release --project samples/RasterSharp.Cli -- icon logo.png legacy.ico 16,32 -dib
-dotnet run -c Release --project samples/RasterSharp.Cli -- info app.ico
-dotnet run -c Release --project samples/RasterSharp.Cli -- convert app.ico largest.png
-dotnet run -c Release --project samples/RasterSharp.Cli -- resize logo.png favicon.ico 32 32 -mode pad
+dotnet run -c Release --project samples/PictureSharp.Cli -- icon logo.png app.ico 16,32,48,256
+dotnet run -c Release --project samples/PictureSharp.Cli -- icon logo.png legacy.ico 16,32 -dib
+dotnet run -c Release --project samples/PictureSharp.Cli -- info app.ico
+dotnet run -c Release --project samples/PictureSharp.Cli -- convert app.ico largest.png
+dotnet run -c Release --project samples/PictureSharp.Cli -- resize logo.png favicon.ico 32 32 -mode pad
 ```
 
 Format references: Microsoft's [color icon layout](https://devblogs.microsoft.com/oldnewthing/20101019-00/?p=12503),

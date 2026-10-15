@@ -31,7 +31,7 @@ from PIL import Image, ImageSequence
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # Match the C# oracle selection without changing the system installation.
-WEBP_TOOLS = os.environ.get("RASTERSHARP_WEBP_TOOLS", os.path.join(ROOT, "..", "..", "reference", "libwebp-1.6.0-build"))
+WEBP_TOOLS = os.environ.get("PICTURESHARP_WEBP_TOOLS", os.path.join(ROOT, "..", "..", "reference", "libwebp-1.6.0-build"))
 if os.path.isdir(WEBP_TOOLS):
     os.environ["PATH"] = os.path.abspath(WEBP_TOOLS) + os.pathsep + os.environ.get("PATH", "")
 for tool in ['dwebp', 'gif2webp']:
@@ -217,7 +217,7 @@ def ref_pcx(path, rel):
 
 
 def gif_structure(data):
-    """Block structure as RasterSharp's GifFile parses it (for the metadata fields of the reference)."""
+    """Block structure as PictureSharp's GifFile parses it (for the metadata fields of the reference)."""
     width, height = struct.unpack_from("<HH", data, 6)
     pos, flags = 13, data[10]
     gct = None

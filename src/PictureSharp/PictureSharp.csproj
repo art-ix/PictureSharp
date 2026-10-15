@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>PictureSharp</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <PackageId>PictureSharp</PackageId>
+    <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
+    <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PictureSharp.Tests" />
+    <InternalsVisibleTo Include="PictureSharp.Benchmarks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

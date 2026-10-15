@@ -1,9 +1,9 @@
 # Command-line sample
 
-`samples/RasterSharp.Cli` is a small front-end that shows the library in use. Run it from the repository root:
+`samples/PictureSharp.Cli` is a small front-end that shows the library in use. Run it from the repository root:
 
 ```bash
-dotnet run -c Release --project samples/RasterSharp.Cli -- <command> [arguments]
+dotnet run -c Release --project samples/PictureSharp.Cli -- <command> [arguments]
 ```
 
 | Command | Usage | What it does |
@@ -18,16 +18,16 @@ dotnet run -c Release --project samples/RasterSharp.Cli -- <command> [arguments]
 ## Examples
 
 ```bash
-dotnet run -c Release --project samples/RasterSharp.Cli -- info photo.jpg animation.webp
-dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.png output.webp -q 85 -m 4
-dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.png exact.webp -lossless -q 75 -m 4
-dotnet run -c Release --project samples/RasterSharp.Cli -- convert input.webp output.jpg -q 90
-dotnet run -c Release --project samples/RasterSharp.Cli -- convert anim.gif anim.webp
-dotnet run -c Release --project samples/RasterSharp.Cli -- convert anim.webp anim.gif -colors 128 -dither
-dotnet run -c Release --project samples/RasterSharp.Cli -- resize photo.jpg thumb.webp 800 0 -mode max -filter lanczos3 -q 80
-dotnet run -c Release --project samples/RasterSharp.Cli -- resize animation.webp square.webp 256 256 -mode crop
-dotnet run -c Release --project samples/RasterSharp.Cli -- decode photo.webp 10
-dotnet run -c Release --project samples/RasterSharp.Cli -- icon logo.png app.ico 16,32,48,256
+dotnet run -c Release --project samples/PictureSharp.Cli -- info photo.jpg animation.webp
+dotnet run -c Release --project samples/PictureSharp.Cli -- convert input.png output.webp -q 85 -m 4
+dotnet run -c Release --project samples/PictureSharp.Cli -- convert input.png exact.webp -lossless -q 75 -m 4
+dotnet run -c Release --project samples/PictureSharp.Cli -- convert input.webp output.jpg -q 90
+dotnet run -c Release --project samples/PictureSharp.Cli -- convert anim.gif anim.webp
+dotnet run -c Release --project samples/PictureSharp.Cli -- convert anim.webp anim.gif -colors 128 -dither
+dotnet run -c Release --project samples/PictureSharp.Cli -- resize photo.jpg thumb.webp 800 0 -mode max -filter lanczos3 -q 80
+dotnet run -c Release --project samples/PictureSharp.Cli -- resize animation.webp square.webp 256 256 -mode crop
+dotnet run -c Release --project samples/PictureSharp.Cli -- decode photo.webp 10
+dotnet run -c Release --project samples/PictureSharp.Cli -- icon logo.png app.ico 16,32,48,256
 ```
 
 Errors such as missing files or invalid images are printed as `error: ...` with exit code 2.

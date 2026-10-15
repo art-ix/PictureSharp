@@ -1,7 +1,7 @@
 THIRD-PARTY NOTICES
 ===================
 
-RasterSharp contains C# ports of code from the projects listed below. Their
+PictureSharp contains C# ports of code from the projects listed below. Their
 license terms apply to the corresponding parts of this library.
 
 -------------------------------------------------------------------------------

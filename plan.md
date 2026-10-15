@@ -1,10 +1,10 @@
-# RasterSharp: plan rozwoju do 0.7.0
+# PictureSharp: plan rozwoju do 0.7.0
 
 ## Stan i cel
 
 **Bieżąca wersja: 0.5.1. Fazy 0–10 oraz obsługa ICO ukończone.** Wydanie przygotowane lokalnie; push i publikacja pozostają osobnymi czynnościami. Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
 
-RasterSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; implementacja 0.5.1 dodaje ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `SaveAs*`.
+PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; implementacja 0.5.1 dodaje ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `SaveAs*`.
 
 Do 0.7.0 dodajemy odczyt i zapis ICO oraz rozwijamy sześć obszarów: miniatury przy dekodowaniu, kontrolę zasobów, sekwencyjne animacje, zarządzanie kolorem, metadane i operacje graficzne. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL) pozostają poza tym planem.
 
@@ -12,7 +12,7 @@ Szczegóły istniejącego API i ograniczeń: `README.md`, `docs/`, XML docs oraz
 
 ## Zasady obowiązujące we wszystkich wydaniach
 
-- `net10.0`, `LangVersion=14.0`, nullable, warnings as errors i XML docs. Publiczne API w przestrzeni `RasterSharp`; kodeki i szczegóły implementacji są `internal`.
+- `net10.0`, `LangVersion=14.0`, nullable, warnings as errors i XML docs. Publiczne API w przestrzeni `PictureSharp`; kodeki i szczegóły implementacji są `internal`.
 - Biblioteka używa wyłącznie BCL: bez `PackageReference`, P/Invoke, `unsafe` oraz `System.IO.Compression`. Deflate/inflate pochodzi z `Compression/`. `System.Drawing.Primitives` jest dozwolone.
 - `Image` i `ImageFrame` przechowują `Rgba32` z prostą alfą. Bufory robocze z `ArrayPool<T>`, piksele z `GC.AllocateUninitializedArray`; gorące pętle bez alokacji.
 - Zachowujemy dotychczasowe wyniki i domyślne zachowanie. Nowe przekształcenia obrazu wymagają jawnej opcji. Ewentualne nowe domyślne limity zasobów muszą być opisane jako zmiana zachowania.

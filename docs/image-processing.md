@@ -4,7 +4,7 @@ All operations run inside `Mutate` (changes the image) or `Clone` (returns a new
 
 ```csharp
 using System.Drawing;
-using RasterSharp;
+using PictureSharp;
 
 using var photo = Image.Load("photo.jpg");
 using var logo = Image.Load("logo.png");
@@ -163,7 +163,7 @@ With C# 14 extension members, custom operations chain like built-in ones:
 
 ```csharp
 using System.Drawing;
-using RasterSharp;
+using PictureSharp;
 
 public static class MyOperations
 {

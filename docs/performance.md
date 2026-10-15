@@ -37,7 +37,7 @@ are described in later sections.
 
 `MatrixBenchmarks` freezes six inputs: the corpus sources `photo` (256×192), `graphic` (200×150) and `photo_alpha`
 (200×160), `graphic` scaled 8× with nearest neighbour (1600×1200), Kodak `kodim23` (768×512, external corpus) and a
-local 4032×3024 camera photo (through `RASTERSHARP_BENCHMARK_MATRIX_FILES`). Each input runs 20 operations with default
+local 4032×3024 camera photo (through `PICTURESHARP_BENCHMARK_MATRIX_FILES`). Each input runs 20 operations with default
 options: WebP lossy and lossless encoding and decoding (default threads and one thread), PNG, JPEG, BMP, GIF and PCX
 encoding and decoding, Lanczos halving and bicubic doubling. `AnimationBenchmarks` encodes and decodes 16-frame pans
 (384×320 opaque and 336×256 with alpha, derived from `photo` and `photo_alpha`) as lossy and lossless WebP, GIF and
@@ -48,10 +48,10 @@ BenchmarkDotNet 0.15.2 (default JIT, one launch, 3 warmups, 9 iterations).
 
 The native reference is a small C program linked with `libwebp.a` 1.6.0 that calls `WebPEncode` (quality 75,
 method 4, lossy or lossless, the same bytes as `cwebp -q 75 -m 4`) and `WebPDecode` to RGBA from memory, median of 21
-calls (7 for the 12 MP photo). Both sides exclude file I/O and process startup; RasterSharp's time includes the
-`Image` it returns. Single-threaded times are compared; RasterSharp's default (all cores) is shown for context.
+calls (7 for the 12 MP photo). Both sides exclude file I/O and process startup; PictureSharp's time includes the
+`Image` it returns. Single-threaded times are compared; PictureSharp's default (all cores) is shown for context.
 
-| Input | Operation | RasterSharp 1T (ms) | libwebp 1T (ms) | Ratio | RasterSharp default (ms) |
+| Input | Operation | PictureSharp 1T (ms) | libwebp 1T (ms) | Ratio | PictureSharp default (ms) |
 | --- | --- | ---: | ---: | ---: | ---: |
 | photo 256×192 | lossy encode | 7.22 | 3.46 | 2.09× | 4.56 |
 | photo 256×192 | lossy decode | 0.720 | 0.383 | 1.88× | 0.720 |
@@ -159,7 +159,7 @@ differences are run-to-run variation. PNG encoding time is dominated by the scal
 
 On the same board and cores, libwebp 1.6.0 (NEON, single thread) reported 2.01 s for `cwebp -q 75 -m 4` of the
 4032×3024 photo and 205 ms for `dwebp` of the resulting file (internal timers, three runs each; they exclude file
-I/O and process startup). RasterSharp's API times above are 1.05× and 0.96× of those, well within the 3× phase-10
+I/O and process startup). PictureSharp's API times above are 1.05× and 0.96× of those, well within the 3× phase-10
 target for these inputs; the frozen phase-10 matrix still has to confirm it. On x64 (i5-12500H) the same probe
 showed no change beyond run-to-run variation (within ±1.5%) for WebP, JPEG and lossless decoding.
 
@@ -167,7 +167,7 @@ showed no change beyond run-to-run variation (within ±1.5%) for WebP, JPEG and 
 
 The 0.4.6 matrix freezes 40 operations on fixed bytes: PNG decoding of the corpus `photo` and `photo_alpha`
 sources, a palette graphic scaled 8× (1600×1200), and local photos at 1920×1440 and 4000×3000 (written by
-RasterSharp 0.4.5 and by Pillow 10.2.0); PNG encoding at levels 1, 6 and 9; resizing with every kernel, down and
+PictureSharp 0.4.5 and by Pillow 10.2.0); PNG encoding at levels 1, 6 and 9; resizing with every kernel, down and
 up, opaque and with alpha; JPEG decoding (Pillow quality 85, baseline and progressive, and a 4032×3024 camera
 file) and encoding (4:2:0 q75, 4:4:4 q90, progressive with optimized tables); WebP lossy decoding and encoding;
 BMP and GIF encoding. Every output (encoded bytes or decoded/resized pixels) is identical to 0.4.5, also with
@@ -210,7 +210,7 @@ from Python, for context:
 
 | Operation | 0.4.5 (ms) | 0.4.6 (ms) | Reduction | Pillow (ms) |
 | --- | ---: | ---: | ---: | ---: |
-| PNG decode 1920×1440 (RasterSharp file) | 54.70 / 53.28 | 31.33 / 31.15 | 42–43% | — |
+| PNG decode 1920×1440 (PictureSharp file) | 54.70 / 53.28 | 31.33 / 31.15 | 42–43% | — |
 | PNG decode 1920×1440 (Pillow file) | 68.77 / 67.28 | 33.47 / 33.51 | 50–51% | 50.5 |
 | PNG decode 4000×3000 (Pillow file) | 296.97 / 285.82 | 135.63 / 136.28 | 52–54% | 227.7 |
 | PNG decode photo 256×192 | 4.42 / 5.05 | 2.11 / 2.07 | 52–59% | — |
@@ -248,7 +248,7 @@ The remaining gaps to libjpeg-turbo are the sequential Huffman coding (JPEG deco
 the color conversion and downsampling of the JPEG encoder; the single-threaded PNG encoder is now at Pillow's speed.
 
 `CodecBenchmarks` (BenchmarkDotNet) covers PNG, JPEG and lossy WebP (default options) encoding and decoding and Lanczos halving of three corpus
-sources; add local images through `RASTERSHARP_BENCHMARK_CODEC_FILES`.
+sources; add local images through `PICTURESHARP_BENCHMARK_CODEC_FILES`.
 
 ## VP8L encoding in 0.4.5
 
@@ -316,7 +316,7 @@ encodes): photo m4 58.22 → 26.35 ms, photo with alpha m4 38.97 → 16.91 ms, g
 1920×1440 m0 427.15 → 137.62 ms and m4 1603.29 → 738.87 ms.
 
 `LosslessEncodeBenchmarks` covers the six corpus sources at methods 0, 4 and 5; add local images through
-`RASTERSHARP_BENCHMARK_ENCODE_FILES` (same path separator rules as the decode benchmark).
+`PICTURESHARP_BENCHMARK_ENCODE_FILES` (same path separator rules as the decode benchmark).
 
 ## VP8L decoding in 0.4.4
 
@@ -417,14 +417,14 @@ For the second batch, the 10th–90th percentile intervals were 50.92–57.24 ms
 
 A separate BenchmarkDotNet run with tiered compilation disabled measured the new decoder at 53.70 ± 0.26 ms / 21.63 MiB for 1920×1440 and 215.54 ± 0.62 ms / 92.67 MiB for 4000×3000. These figures include the complete library API and GC costs and should not be substituted for the default-JIT before/after measurements above.
 
-On the same bytes, `dwebp -v` 1.6.0 reported median internal decode times of 47 ms and 190 ms (five warmups, 21 samples; 10th–90th percentiles 45–52 ms and 187–194 ms). That timer excludes file reading, process startup and output writing, has millisecond precision, and does not measure the same API overhead as RasterSharp. The BenchmarkDotNet/API times are about 1.14× / 1.13× those native internal times on these two inputs; this is context, not a guarantee for other files or machines.
+On the same bytes, `dwebp -v` 1.6.0 reported median internal decode times of 47 ms and 190 ms (five warmups, 21 samples; 10th–90th percentiles 45–52 ms and 187–194 ms). That timer excludes file reading, process startup and output writing, has millisecond precision, and does not measure the same API overhead as PictureSharp. The BenchmarkDotNet/API times are about 1.14× / 1.13× those native internal times on these two inputs; this is context, not a guarantee for other files or machines.
 
 ## Running the benchmarks
 
 Run from the repository root. The predictor benchmark has an iteration setup to restore the input; keep one invocation per iteration so previously reconstructed pixels are never reused as residuals:
 
 ```bash
-DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*LosslessPredictorBenchmarks*' --launchCount 1 --warmupCount 5 \
   --iterationCount 12 --invocationCount 1 --unrollFactor 1
 ```
@@ -434,16 +434,16 @@ The iterations are deliberately short for this focused comparison. BenchmarkDotN
 The decoder benchmark reads each file once during setup, checks that it is a static lossless WebP, decodes from memory, and disposes each image. The seven committed corpus inputs work without reference tools:
 
 ```bash
-DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*LosslessDecodeBenchmarks*' --launchCount 1 --warmupCount 3 \
   --iterationCount 8 --iterationTime 100
 ```
 
-Add local inputs through `RASTERSHARP_BENCHMARK_WEBP_FILES`: paths separated by the platform's path separator (`:` on Linux/macOS, `;` on Windows). Use the same encoded files for before/after comparisons; do not re-encode separately for each version. Local photos and benchmark artifacts remain ignored by Git.
+Add local inputs through `PICTURESHARP_BENCHMARK_WEBP_FILES`: paths separated by the platform's path separator (`:` on Linux/macOS, `;` on Windows). Use the same encoded files for before/after comparisons; do not re-encode separately for each version. Local photos and benchmark artifacts remain ignored by Git.
 
 ```bash
-RASTERSHARP_BENCHMARK_WEBP_FILES='/absolute/photo-2.8mp.webp:/absolute/photo-12mp.webp' \
-DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+PICTURESHARP_BENCHMARK_WEBP_FILES='/absolute/photo-2.8mp.webp:/absolute/photo-12mp.webp' \
+DOTNET_TieredCompilation=0 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*LosslessDecodeBenchmarks*' --launchCount 1 --warmupCount 3 \
   --iterationCount 8 --iterationTime 100
 reference/libwebp-1.6.0-build/dwebp -v /absolute/photo-12mp.webp
@@ -452,24 +452,24 @@ reference/libwebp-1.6.0-build/dwebp -v /absolute/photo-12mp.webp
 The encoder benchmark loads each image once and encodes it losslessly at quality 75:
 
 ```bash
-RASTERSHARP_BENCHMARK_ENCODE_FILES='/absolute/photo.png' \
-dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+PICTURESHARP_BENCHMARK_ENCODE_FILES='/absolute/photo.png' \
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*LosslessEncodeBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 8
 ```
 
 The codec benchmark encodes and decodes PNG and JPEG and halves each image with Lanczos:
 
 ```bash
-RASTERSHARP_BENCHMARK_CODEC_FILES='/absolute/photo.png' \
-dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+PICTURESHARP_BENCHMARK_CODEC_FILES='/absolute/photo.png' \
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*CodecBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 8
 ```
 
 The phase-10 matrix and the animation benchmarks (about 50 minutes together on the i5-12500H):
 
 ```bash
-RASTERSHARP_BENCHMARK_MATRIX_FILES='/absolute/kodim23.png:/absolute/photo-12mp.png' \
-dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- \
+PICTURESHARP_BENCHMARK_MATRIX_FILES='/absolute/kodim23.png:/absolute/photo-12mp.png' \
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*MatrixBenchmarks*' '*AnimationBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 9
 ```
 
@@ -483,7 +483,7 @@ ICO adds a small container around the existing PNG codec or an uncompressed DIB.
 synthetic RGBA icons with both encodings:
 
 ```bash
-dotnet run -c Release --project benchmarks/RasterSharp.Benchmarks -- --filter '*IcoBenchmarks*'
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- --filter '*IcoBenchmarks*'
 ```
 
 Quick local measurements (2026-10-15, i5-12500H, x64, .NET 10.0.12, default JIT/GC):

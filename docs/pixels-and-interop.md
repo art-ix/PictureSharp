@@ -6,7 +6,7 @@ Pixels are `Rgba32` structs: four bytes `R`, `G`, `B`, `A` in that order in memo
 
 ```csharp
 using System.Drawing;
-using RasterSharp;
+using PictureSharp;
 
 var orange = new Rgba32(255, 136, 0);                 // alpha defaults to 255
 var glass = new Rgba32(255, 255, 255, 64);
@@ -80,7 +80,7 @@ using Image fromStructs = Image.LoadPixelData(rgbaPixels, width, height);   // R
 
 ## Interop recipes
 
-These snippets need the other library's package; RasterSharp itself stays dependency-free.
+These snippets need the other library's package; PictureSharp itself stays dependency-free.
 
 ### WPF
 
@@ -94,12 +94,12 @@ BitmapSource source = BitmapSource.Create(
 ### SkiaSharp
 
 ```csharp
-// RasterSharp → SkiaSharp
+// PictureSharp → SkiaSharp
 var info = new SKImageInfo(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
 using var bitmap = new SKBitmap(info);
 image.CopyPixelDataTo(bitmap.GetPixelSpan(), PixelFormat.Rgba32, bitmap.RowBytes);
 
-// SkiaSharp (default Bgra8888, premultiplied) → RasterSharp
+// SkiaSharp (default Bgra8888, premultiplied) → PictureSharp
 using Image fromSkia = Image.LoadPixelData(skBitmap.GetPixelSpan(), skBitmap.Width, skBitmap.Height,
     PixelFormat.Bgra32Premultiplied, skBitmap.RowBytes);
 ```
@@ -114,7 +114,7 @@ SD.BitmapData data = bitmap.LockBits(new Rectangle(0, 0, image.Width, image.Heig
     SD.ImageLockMode.WriteOnly, SD.PixelFormat.Format32bppArgb);
 try
 {
-    byte[] bgra = image.ToPixelData(RasterSharp.PixelFormat.Bgra32);
+    byte[] bgra = image.ToPixelData(PictureSharp.PixelFormat.Bgra32);
     for (int y = 0; y < image.Height; y++)
     {
         Marshal.Copy(bgra, y * image.Width * 4, data.Scan0 + (y * data.Stride), image.Width * 4);

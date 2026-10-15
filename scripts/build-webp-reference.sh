@@ -14,7 +14,7 @@ if [[ "$(git -C "$webp_source" rev-parse HEAD)" != "$webp_commit" ]]; then
 fi
 cmake -S "$webp_source" -B "$webp_build" -DCMAKE_BUILD_TYPE=Release \
   -DWEBP_BUILD_EXTRAS=OFF -DWEBP_BUILD_VWEBP=OFF
-cmake --build "$webp_build" --parallel "${RASTERSHARP_BUILD_JOBS:-4}"
+cmake --build "$webp_build" --parallel "${PICTURESHARP_BUILD_JOBS:-4}"
 for webp_tool in cwebp dwebp webpmux img2webp; do
   "$webp_build/$webp_tool" -version
 done
