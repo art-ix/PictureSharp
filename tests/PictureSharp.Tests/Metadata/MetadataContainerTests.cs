@@ -37,7 +37,7 @@ public class MetadataContainerTests
         var read = Image.ReadMetadata(edited);
         await Assert.That(read.ExifProfile.TryGetValue(ExifTag.Model, out var model)).IsTrue();
         await Assert.That(model).IsEqualTo("Edited Camera");
-        await Assert.That(read.ExifProfile.TryGetValue(ExifTag.GPSLatitude, out _)).IsFalse();
+        await Assert.That(read.ExifProfile.TryGetValue(ExifTag.GpsLatitude, out _)).IsFalse();
         await Assert.That(read.GetBlockLength(MetadataKinds.Icc)).IsEqualTo(80000);
         using Image source = Image.Load(original);
         using Image result = Image.Load(edited, new DecoderOptions { Png = new() { StrictChecksums = true } });
@@ -90,7 +90,7 @@ public class MetadataContainerTests
         await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Task.Run(() => Image.EditMetadata(data, m => m.Xmp = new byte[20], new DecoderOptions { MaxMetadataBytes = Image.ReadMetadata(data).GetBlockLength(MetadataKinds.Exif) })));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => Task.Run(() => Image.ReadMetadata(data, cancellationToken: cts.Token)));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Task.Run(() => Image.ReadMetadata(data, null, cts.Token)));
     }
 
     [Test]
@@ -140,9 +140,14 @@ public class MetadataContainerTests
     public async Task Jpeg_RejectsOversizedReplacements()
     {
         byte[] data = Corpus.Read("jpeg/q90_420.jpg");
-        await Assert.ThrowsExactlyAsync<NotSupportedException>(() => Task.Run(() => Image.EditMetadata(data, m => m.Xmp = new byte[65534])));
+        // Same limits and exception type as Save.
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => Task.Run(() => Image.EditMetadata(data, m => m.Xmp = new byte[65534])));
         byte[] exif = [.. Corpus.Read("metadata/little.exif"), .. new byte[65534]];
-        await Assert.ThrowsExactlyAsync<NotSupportedException>(() => Task.Run(() => Image.EditMetadata(data, m => m.Exif = exif)));
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => Task.Run(() => Image.EditMetadata(data, m => m.Exif = exif)));
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => Task.Run(() => Image.EditMetadata(data, m => m.IccProfile = new byte[(65519 * 255) + 1])));
+        using Image image = Image.Load(data);
+        image.Metadata.Xmp = new byte[65534];
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => Task.Run(() => image.Encode(ImageFormat.Jpeg)));
     }
 
     // Compare entire coding/control chunks, not just decoded pixels or a re-encoding's hash.

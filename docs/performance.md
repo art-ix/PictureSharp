@@ -606,7 +606,7 @@ Linux peak resident set (`VmHWM`) after reading the input and warming up on a sm
 
 ## Layered architecture refactoring (2026-10-15)
 
-The post-0.5.4 refactoring was compared against `ca427ea` over all 80 existing matrix cases. Two pinned full sweeps per version, in ABBA order, had a median per-case change of −0.79%; three aggregates above +5% were checked in a longer, alternating same-process comparison and did not reproduce (−1.43% to +0.85%). No confirmed repeatable regression exceeded 5%; allocation differences were below 0.3%. These are lightweight regression measurements, not a full BenchmarkDotNet statistical study or a claimed speedup. See [method and verification](refactoring-verification.md) and [raw matrix](architecture-benchmarks.csv).
+The post-0.5.4 refactoring was compared against `ca427ea` over all 80 existing matrix cases. Two pinned full sweeps per version, in ABBA order, had a median per-case change of −0.79%; three aggregates above +5% were checked in a longer, alternating same-process comparison and did not reproduce (−1.43% to +0.85%). No confirmed repeatable regression exceeded 5%; allocation differences were below 0.3%. These are lightweight regression measurements, not a full BenchmarkDotNet statistical study or a claimed speedup. See [method and verification](refactoring-verification.md) and [raw matrix](measurements/architecture-benchmarks.csv).
 
 The complete current-tree regression probe can be run with:
 
@@ -647,7 +647,7 @@ candidates and canvases in its keyframe window; these costs are included in the 
 frame count. A non-seekable WebP/unknown-count APNG output uses an explicitly requested temporary disk file, whose
 space is the encoded file size rather than decoded canvases.
 
-The [raw measurements](sequence-memory.tsv) also report cumulative allocations and the process peak resident-set
+The [raw measurements](measurements/sequence-memory.tsv) also report cumulative allocations and the process peak resident-set
 increase. Cumulative allocations grow with the amount of work (1000 frames: GIF write 64 MiB, PNG write 630 MiB,
 WebP write 215 MiB; read 1.3/259/45.6 MiB); these are reclaimed and do not represent simultaneously retained canvases.
 Observed RSS increases at 1000 frames were ≤5.0 MiB for writers and ≤2.4 MiB for readers. RSS deltas are noisy around
@@ -671,7 +671,7 @@ change across cases was +0.09%; the largest mean allocation difference was +0.49
 above +5% were rechecked in separate AssemblyLoadContexts in one process, alternating 15 samples per version
 of at least 180 ms after warmup: `photo.png` WebP lossless encoding +1.62%, lossy encoding −0.91%. No repeatable
 regression above 5% was confirmed. These are lightweight regression probes, not a full BenchmarkDotNet study.
-[Raw before/after and confirmation results](sequences-benchmarks.csv). The final forward-reader allocation hardening
+[Raw before/after and confirmation results](measurements/sequences-benchmarks.csv). The final forward-reader allocation hardening
 affects only the new sequential path; existing `Image.Load` operations in this matrix use the same measured code.
 
 ## Metadata without image recompression (0.6.1 implementation)
@@ -693,7 +693,7 @@ owned array. No pixel buffers are allocated. Input files are still read in full 
 large encoded inputs and large metadata therefore still need proportional memory. Compressed PNG metadata may be
 inflated and deflated, while image IDAT/fdAT data stays unchanged. Allocations above are cumulative, not peak RSS.
 
-[Raw metadata measurements](metadata-benchmarks.json). Reproduce with:
+[Raw metadata measurements](measurements/metadata-benchmarks.json). Reproduce with:
 
 ```bash
 dotnet build -c Release benchmarks/PictureSharp.Benchmarks
@@ -706,5 +706,5 @@ Five cases above +5% were checked in separate AssemblyLoadContexts in one proces
 15 samples per version of at least 180 ms. Confirmed changes: JPEG encode +3.41%, GIF encode +1.56%, Lanczos
 resize +0.48%, large WebP lossless decode −0.29%, large PCX decode −0.92%. No repeatable regression above 5%
 was confirmed. The existing codecs and processing algorithms were not changed. This is a lightweight probe,
-not a full BenchmarkDotNet study. [Raw matrix](metadata-regression.csv),
-[alternating confirmations](metadata-regression-confirmation.json).
+not a full BenchmarkDotNet study. [Raw matrix](measurements/metadata-regression.csv),
+[alternating confirmations](measurements/metadata-regression-confirmation.json).

@@ -630,6 +630,19 @@ public sealed class DocsExamplesTests : IDisposable
         await Assert.That(meta.HorizontalResolution).IsEqualTo(300f);
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => meta.HorizontalResolution = 0);
     }
+
+    [Test]
+    public async Task Metadata_GpsPosition()
+    {
+        var metadata = new ImageMetadata();
+        metadata.ExifProfile.SetGpsLocation(new GpsLocation(-33.8688, 151.2093, altitude: 58));
+        await Assert.That(metadata.ExifProfile.TryGetGpsLocation(out GpsLocation location)).IsTrue();
+        await Assert.That($"{location.Latitude:F4}, {location.Longitude:F4}, {location.Altitude} m").IsEqualTo(
+            string.Create(System.Globalization.CultureInfo.CurrentCulture, $"{-33.8688:F4}, {151.2093:F4}, {58.0} m"));
+        bool removed = metadata.ExifProfile.RemoveGps();
+        await Assert.That(removed).IsTrue();
+        await Assert.That(metadata.ExifProfile.TryGetGpsLocation(out _)).IsFalse();
+    }
 }
 
 public static class MyOperations

@@ -32,11 +32,9 @@ internal sealed class WebPMetadataCodec : IImageMetadataCodec
         return metadata;
     }
 
-    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata metadata, DecodeContext context)
+    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, DecodeContext context)
     {
         var chunks = Parse(data.Span, context.CancellationToken, out int end);
-        var original = Read(data, new(context.Options, context.CancellationToken));
-        if (MetadataContainer.Same(original, metadata)) return data.ToArray();
         if (metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution)
             throw new NotSupportedException("WebP has no container resolution field; edit EXIF resolution tags instead.");
         WebPContainer container = WebPContainer.Parse(data.Span, context.Options);

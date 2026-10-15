@@ -49,11 +49,9 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
         return metadata;
     }
 
-    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata metadata, DecodeContext context)
+    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, DecodeContext context)
     {
         var segments = Parse(data.Span, context.CancellationToken);
-        var original = Read(data, new(context.Options, context.CancellationToken));
-        if (MetadataContainer.Same(original, metadata)) return data.ToArray();
         bool resolution = metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution;
         using var output = new PooledBufferStream();
         output.Write(new byte[] { 0xff, 0xd8 });
@@ -93,20 +91,12 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
 
     private static void WriteProfiles(Stream output, ImageMetadata metadata, CancellationToken token)
     {
-        if (metadata.ExifData is { Length: > 0 } exif)
-        {
-            if (exif.Length > 65533 - ExifPrefix.Length) throw new NotSupportedException("JPEG EXIF must fit in one APP1 segment.");
-            WriteSegment(output, 0xe1, [.. ExifPrefix, .. exif], token);
-        }
-        if (metadata.XmpData is { Length: > 0 } xmp)
-        {
-            if (xmp.Length > 65533 - XmpPrefix.Length) throw new NotSupportedException("JPEG XMP must fit in one APP1 segment.");
-            WriteSegment(output, 0xe1, [.. XmpPrefix, .. xmp], token);
-        }
+        JpegMarkerWriter.ValidateMetadata(metadata, MetadataKinds.All); // Same limits and exceptions as Save.
+        if (metadata.ExifData is { Length: > 0 } exif) WriteSegment(output, 0xe1, [.. ExifPrefix, .. exif], token);
+        if (metadata.XmpData is { Length: > 0 } xmp) WriteSegment(output, 0xe1, [.. XmpPrefix, .. xmp], token);
         if (metadata.IccData is not { Length: > 0 } icc) return;
         const int maximum = 65519;
         int count = (int)(((long)icc.Length + maximum - 1) / maximum);
-        if (count > 255) throw new NotSupportedException("The ICC profile exceeds JPEG's 255-segment limit.");
         for (int i = 0; i < count; i++)
         {
             int length = Math.Min(maximum, icc.Length - (i * maximum));
@@ -116,7 +106,7 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
 
     private static void WriteSegment(Stream output, byte marker, ReadOnlySpan<byte> body, CancellationToken token)
     {
-        if (body.Length > 65533) throw new NotSupportedException("JPEG EXIF/XMP must fit in one APP1 segment.");
+        if (body.Length > 65533) throw new ArgumentException("A JPEG marker segment must fit in 65533 bytes.", nameof(body));
         Span<byte> header = stackalloc byte[4];
         header[0] = 0xff; header[1] = marker;
         BinaryPrimitives.WriteUInt16BigEndian(header[2..], (ushort)(body.Length + 2));

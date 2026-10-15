@@ -59,11 +59,9 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
         return metadata;
     }
 
-    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata metadata, DecodeContext context)
+    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, DecodeContext context)
     {
         List<Chunk> chunks = Parse(data.Span, context.CancellationToken);
-        ImageMetadata original = Read(data, new(context.Options, context.CancellationToken));
-        if (MetadataContainer.Same(original, metadata)) return data.ToArray();
         bool resolution = metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution;
         using var output = new PooledBufferStream();
         output.Write(data.Span[..8]);

@@ -11,20 +11,13 @@ internal sealed class ImageMetadataService(IImageInput input, IImageOutput outpu
     public ImageMetadata Read(ReadOnlyMemory<byte> data, DecoderOptions? options, CancellationToken token)
     {
         DecodeContext context = Context(data.Length, options, token);
-        var (format, codec) = Codec(data.Span);
-        try { return codec.Read(data, context); }
-        catch (Exception ex) when (CodecErrors.IsCorruptDataException(ex)) { throw CodecErrors.CorruptData(format, ex); }
+        return Read(data, Codec(data.Span), context);
     }
 
     public ImageMetadata Read(ReadOnlySpan<byte> data, DecoderOptions? options, CancellationToken token)
     {
-        _ = Context(data.Length, options, token);
+        _ = Context(data.Length, options, token); // Check the limit before copying.
         return Read((ReadOnlyMemory<byte>)data.ToArray(), options, token);
-    }
-    public byte[] Edit(ReadOnlySpan<byte> data, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
-    {
-        _ = Context(data.Length, options, token);
-        return Edit((ReadOnlyMemory<byte>)data.ToArray(), edit, options, token);
     }
 
     public ImageMetadata Read(string path, DecoderOptions? options, CancellationToken token) =>
@@ -37,41 +30,38 @@ internal sealed class ImageMetadataService(IImageInput input, IImageOutput outpu
         Read(await input.ReadAllAsync(stream, Limits(options).MaxInputBytes, token).ConfigureAwait(false), options, token);
 
     [OverloadResolutionPriority(1)]
-    public byte[] Edit(ReadOnlyMemory<byte> data, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
+    public byte[] Edit(ReadOnlyMemory<byte> data, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token) =>
+        Rewrite(data, edit, options, token) ?? data.ToArray();
+
+    public byte[] Edit(ReadOnlySpan<byte> data, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
     {
-        ArgumentNullException.ThrowIfNull(edit);
-        DecodeContext context = Context(data.Length, options, token);
-        var (_, codec) = Codec(data.Span);
-        ImageMetadata metadata = Read(data, options, token);
-        edit(metadata);
-        token.ThrowIfCancellationRequested();
-        var outputBudget = new DecodeBudget(context.Options);
-        ImageFormat format = codecs.Detect(data.Span)!;
-        foreach (MetadataKinds kind in new[] { MetadataKinds.Exif, MetadataKinds.Icc, MetadataKinds.Xmp })
-            outputBudget.ReserveMetadata(format, metadata.GetBlockLength(kind));
-        _ = ExifDocument.Parse(metadata.ExifData, token);
-        return codec.Rewrite(data, metadata, context);
+        _ = Context(data.Length, options, token); // Check the limit before copying.
+        byte[] copy = data.ToArray();
+        return Rewrite(copy, edit, options, token) ?? copy;
     }
 
     public void Edit(string source, string destination, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
     {
-        ArgumentNullException.ThrowIfNull(destination);
-        ArgumentNullException.ThrowIfNull(edit);
-        byte[] result = Edit(input.ReadFile(source, Limits(options).MaxInputBytes, token), edit, options, token);
-        output.WriteAtomicFile(destination, result, token);
+        CheckPaths(source, destination, edit);
+        byte[] data = input.ReadFile(source, Limits(options).MaxInputBytes, token);
+        byte[]? result = Rewrite(data, edit, options, token);
+        if (result is not null || !SamePath(source, destination)) output.WriteAtomicFile(destination, result ?? data, token);
     }
+
     public async Task EditAsync(string source, string destination, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
     {
-        ArgumentNullException.ThrowIfNull(destination);
-        ArgumentNullException.ThrowIfNull(edit);
+        CheckPaths(source, destination, edit);
         byte[] data = await input.ReadFileAsync(source, Limits(options).MaxInputBytes, token).ConfigureAwait(false);
-        byte[] result = Edit(data, edit, options, token);
-        await output.WriteAtomicFileAsync(destination, result, token).ConfigureAwait(false);
+        byte[]? result = Rewrite(data, edit, options, token);
+        if (result is not null || !SamePath(source, destination))
+            await output.WriteAtomicFileAsync(destination, result ?? data, token).ConfigureAwait(false);
     }
+
     public void Edit(Stream source, Stream destination, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
     {
         CheckStreams(source, destination);
-        byte[] result = Edit(input.ReadAll(source, Limits(options).MaxInputBytes, token), edit, options, token);
+        byte[] data = input.ReadAll(source, Limits(options).MaxInputBytes, token);
+        byte[] result = Rewrite(data, edit, options, token) ?? data;
         for (int offset = 0; offset < result.Length;)
         {
             token.ThrowIfCancellationRequested();
@@ -80,11 +70,12 @@ internal sealed class ImageMetadataService(IImageInput input, IImageOutput outpu
             offset += length;
         }
     }
+
     public async Task EditAsync(Stream source, Stream destination, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
     {
         CheckStreams(source, destination);
         byte[] data = await input.ReadAllAsync(source, Limits(options).MaxInputBytes, token).ConfigureAwait(false);
-        byte[] result = Edit(data, edit, options, token);
+        byte[] result = Rewrite(data, edit, options, token) ?? data;
         for (int offset = 0; offset < result.Length;)
         {
             token.ThrowIfCancellationRequested();
@@ -92,6 +83,48 @@ internal sealed class ImageMetadataService(IImageInput input, IImageOutput outpu
             await destination.WriteAsync(result.AsMemory(offset, length), token).ConfigureAwait(false);
             offset += length;
         }
+    }
+
+    // Returns null when the edit leaves every block and the resolution unchanged.
+    private byte[]? Rewrite(ReadOnlyMemory<byte> data, Action<ImageMetadata> edit, DecoderOptions? options, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        DecodeContext context = Context(data.Length, options, token);
+        var (format, codec) = Codec(data.Span);
+        ImageMetadata original = Read(data, (format, codec), context);
+        ImageMetadata metadata = original.Clone();
+        edit(metadata);
+        token.ThrowIfCancellationRequested();
+        if (Same(original, metadata)) return null;
+        var outputBudget = new DecodeBudget(context.Options);
+        outputBudget.ReserveMetadata(format, metadata.GetBlockLength(MetadataKinds.Exif));
+        outputBudget.ReserveMetadata(format, metadata.GetBlockLength(MetadataKinds.Icc));
+        outputBudget.ReserveMetadata(format, metadata.GetBlockLength(MetadataKinds.Xmp));
+        _ = ExifDocument.Parse(metadata.ExifData, token);
+        return codec.Rewrite(data, original, metadata, new DecodeContext(context.Options, token));
+    }
+
+    private static ImageMetadata Read(ReadOnlyMemory<byte> data, (ImageFormat Format, IImageMetadataCodec Codec) target, DecodeContext context)
+    {
+        try { return target.Codec.Read(data, context); }
+        catch (Exception ex) when (CodecErrors.IsCorruptDataException(ex)) { throw CodecErrors.CorruptData(target.Format, ex); }
+    }
+
+    private static bool Same(ImageMetadata a, ImageMetadata b) =>
+        Same(a.ExifData, b.ExifData) && Same(a.XmpData, b.XmpData) && Same(a.IccData, b.IccData)
+        && a.HorizontalResolution == b.HorizontalResolution && a.VerticalResolution == b.VerticalResolution;
+
+    private static bool Same(byte[]? a, byte[]? b) => (a is null) == (b is null) && (a is null || a.AsSpan().SequenceEqual(b));
+
+    // Ordinal comparison: a false mismatch only costs an identical write, never a skipped one.
+    private static bool SamePath(string source, string destination) =>
+        string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.Ordinal);
+
+    private static void CheckPaths(string source, string destination, Action<ImageMetadata> edit)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(edit);
     }
 
     private static void CheckStreams(Stream source, Stream destination)
@@ -107,6 +140,7 @@ internal sealed class ImageMetadataService(IImageInput input, IImageOutput outpu
         ImageFormat format = codecs.Detect(data) ?? throw new ImageFormatException("Unrecognized image format.");
         return (format, codecs.GetMetadataCodec(format) ?? throw new NotSupportedException($"Metadata-only operations are not supported for {format.Name}."));
     }
+
     private static DecoderOptions Limits(DecoderOptions? options)
     {
         options ??= DecoderOptions.Default;
@@ -114,6 +148,7 @@ internal sealed class ImageMetadataService(IImageInput input, IImageOutput outpu
             throw new NotSupportedException("Metadata-only operations do not accept pixel transforms, FirstFrameOnly or IgnoreMetadata.");
         return options;
     }
+
     private static DecodeContext Context(int length, DecoderOptions? options, CancellationToken token)
     {
         var context = new DecodeContext(Limits(options), token);

@@ -33,6 +33,8 @@ Follow `.editorconfig`. Enable nullable annotations, `TreatWarningsAsErrors` and
 | `tests/assets/` | Corpus, reference data and generation scripts |
 | `benchmarks/` | BenchmarkDotNet |
 | `docs/` | User guides; examples checked by `DocsExamplesTests` |
+| `docs/releases/` | Release notes (`release-x.y.z.md`) |
+| `docs/measurements/` | Raw benchmark and verification data (`.csv`, `.tsv`, `.json`) |
 | `samples/PictureSharp.Cli/` | CLI: `convert`, `info`, `resize` |
 | `reference/` | Uncommitted reference sources and tools, outside the build |
 

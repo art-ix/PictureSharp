@@ -52,7 +52,7 @@ Dziesięć agregatów przekroczyło początkowo 5%. Sprawdzono je dla końcowych
 
 Najbliższy progowi WebPLossyEncode dla dużej grafiki powtórzono: +1.97%. Dodatkowo WebPLossyEncode1T: −0.63%, różnica alokacji 0 B; początkowy wzrost +1710 B/op nie powtórzył się. Pozostałe dodatnie różnice alokacji w pełnej macierzy wyniosły poniżej 0.03%. Nie dodano alokacji w gorących pętlach algorytmów. Nie potwierdzono powtarzalnej regresji czasu powyżej 5%.
 
-Pełna tabela: [ddd-benchmarks.csv](ddd-benchmarks.csv). Są to pomiary lightweight probe istniejącej macierzy oraz dokładniejsze porównania naprzemienne, a nie pełne badanie BenchmarkDotNet. Późniejsze doprecyzowanie walidacji uszkodzonego EXIF i anulowania sesji nie zmienia ścieżek tej macierzy; porównania podejrzanych przypadków używają końcowych binariów.
+Pełna tabela: [ddd-benchmarks.csv](measurements/ddd-benchmarks.csv). Są to pomiary lightweight probe istniejącej macierzy oraz dokładniejsze porównania naprzemienne, a nie pełne badanie BenchmarkDotNet. Późniejsze doprecyzowanie walidacji uszkodzonego EXIF i anulowania sesji nie zmienia ścieżek tej macierzy; porównania podejrzanych przypadków używają końcowych binariów.
 
 ## CI i dokumentacja
 

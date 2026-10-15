@@ -11,11 +11,108 @@ public sealed class ExifProfile
     private readonly ImageMetadata _owner;
     internal ExifProfile(ImageMetadata owner) => _owner = owner;
 
-    /// <summary>Reads a supported tag. Missing tags, unsupported value shapes and invalid dates/fractions return false; malformed TIFF structure throws.</summary>
+    /// <summary>Reads a supported tag. Missing tags, unsupported value shapes and invalid values return false; malformed TIFF structure throws.</summary>
     public bool TryGetValue<T>(ExifTag<T> tag, [MaybeNullWhen(false)] out T value) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(tag);
+        return TryRead(ExifDocument.Parse(_owner.ExifData), tag, out value);
+    }
+
+    /// <summary>Creates or replaces a supported tag, preserving unrelated EXIF data. Dates must have Unspecified kind.</summary>
+    public void SetValue<T>(ExifTag<T> tag, T value) where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        ArgumentNullException.ThrowIfNull(value);
         var document = ExifDocument.Parse(_owner.ExifData);
+        Write(document, tag, value);
+        _owner.ExifData = document.Serialize();
+    }
+
+    /// <summary>Removes a tag and its known data, returning whether it existed.</summary>
+    public bool RemoveValue(ExifTag tag)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        var document = ExifDocument.Parse(_owner.ExifData);
+        if (!document.Remove(tag)) return false;
+        _owner.ExifData = document.Serialize();
+        return true;
+    }
+
+    /// <summary>Keeps only the listed supported tags. Other tags, thumbnails, unknown data and MakerNotes are discarded.</summary>
+    public void KeepOnly(params ReadOnlySpan<ExifTag> tags)
+    {
+        foreach (ExifTag tag in tags)
+            if (tag is null) throw new ArgumentException("Tags cannot contain null.", nameof(tags));
+        var document = ExifDocument.Parse(_owner.ExifData);
+        _owner.ExifData = document.KeepOnly(tags);
+    }
+
+    /// <summary>
+    /// Removes all standard EXIF GPS directories and their data, returning whether any existed. XMP and private
+    /// MakerNotes are not inspected; use <see cref="ImageMetadata.Clear"/> to drop every metadata block.
+    /// </summary>
+    public bool RemoveGps()
+    {
+        var document = ExifDocument.Parse(_owner.ExifData);
+        if (!document.RemoveGps()) return false;
+        _owner.ExifData = document.Serialize();
+        return true;
+    }
+
+    /// <summary>
+    /// Reads the position from the latitude, longitude and hemisphere tags, with the altitude when present.
+    /// Returns false when a required tag is missing or invalid; malformed TIFF structure throws.
+    /// </summary>
+    public bool TryGetGpsLocation(out GpsLocation location)
+    {
+        location = default;
+        var document = ExifDocument.Parse(_owner.ExifData);
+        if (!TryRead(document, ExifTag.GpsLatitude, out var latitude) || !TryRead(document, ExifTag.GpsLatitudeRef, out var north)
+            || !TryRead(document, ExifTag.GpsLongitude, out var longitude) || !TryRead(document, ExifTag.GpsLongitudeRef, out var east)
+            || north is not ("N" or "S") || east is not ("E" or "W"))
+            return false;
+        double lat = Degrees(latitude) * (north == "S" ? -1 : 1);
+        double lon = Degrees(longitude) * (east == "W" ? -1 : 1);
+        if (!(lat is >= -90 and <= 90 && lon is >= -180 and <= 180)) return false;
+        double? altitude = null;
+        if (TryRead(document, ExifTag.GpsAltitude, out var meters))
+        {
+            bool below = TryRead(document, ExifTag.GpsAltitudeRef, out var reference) && reference == ExifGpsAltitudeReference.BelowSeaLevel;
+            altitude = below ? -meters.ToDouble() : meters.ToDouble();
+        }
+        location = new(lat, lon, altitude);
+        return true;
+    }
+
+    /// <summary>
+    /// Writes the latitude, longitude and hemisphere tags (seconds to 1/10000″), and the altitude tags when
+    /// <see cref="GpsLocation.Altitude"/> is set or removes them otherwise. Other GPS tags are preserved.
+    /// </summary>
+    public void SetGpsLocation(GpsLocation location)
+    {
+        double latitude = location.Latitude, longitude = location.Longitude; // Validated by GpsLocation.
+        var document = ExifDocument.Parse(_owner.ExifData);
+        Write(document, ExifTag.GpsLatitudeRef, latitude < 0 ? "S" : "N");
+        Write(document, ExifTag.GpsLatitude, DegreesMinutesSeconds(Math.Abs(latitude)));
+        Write(document, ExifTag.GpsLongitudeRef, longitude < 0 ? "W" : "E");
+        Write(document, ExifTag.GpsLongitude, DegreesMinutesSeconds(Math.Abs(longitude)));
+        if (location.Altitude is { } altitude)
+        {
+            double millimeters = Math.Round(Math.Abs(altitude) * 1000);
+            if (!(millimeters <= uint.MaxValue)) throw new ArgumentOutOfRangeException(nameof(location), "The altitude does not fit an EXIF fraction in millimeters.");
+            Write(document, ExifTag.GpsAltitudeRef, altitude < 0 ? ExifGpsAltitudeReference.BelowSeaLevel : ExifGpsAltitudeReference.AboveSeaLevel);
+            Write(document, ExifTag.GpsAltitude, new ExifRational((uint)millimeters, 1000));
+        }
+        else
+        {
+            document.Remove(ExifTag.GpsAltitudeRef);
+            document.Remove(ExifTag.GpsAltitude);
+        }
+        _owner.ExifData = document.Serialize();
+    }
+
+    private static bool TryRead<T>(ExifDocument document, ExifTag<T> tag, [MaybeNullWhen(false)] out T value) where T : notnull
+    {
         var entry = document.Find(tag);
         object? result = null;
         if (entry is not null && entry.Type == tag.Type)
@@ -27,13 +124,21 @@ public sealed class ExifProfile
                 if (DateTime.TryParseExact(Encoding.ASCII.GetString(bytes).TrimEnd('\0'), "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out DateTime date)) result = DateTime.SpecifyKind(date, DateTimeKind.Unspecified);
             }
-            else if (entry.Count == 1 && typeof(T) == typeof(ushort)) result = document.Read16(bytes);
-            else if (entry.Count == 1 && typeof(T) == typeof(byte)) result = bytes[0];
             else if (entry.Count == 1 && typeof(T) == typeof(ExifOrientation))
             {
                 ushort orientation = document.Read16(bytes);
                 if (orientation is >= 1 and <= 8) result = (ExifOrientation)orientation;
             }
+            else if (entry.Count == 1 && typeof(T) == typeof(ExifResolutionUnit))
+            {
+                ushort unit = document.Read16(bytes);
+                if (unit is >= 1 and <= 3) result = (ExifResolutionUnit)unit;
+            }
+            else if (entry.Count == 1 && typeof(T) == typeof(ExifGpsAltitudeReference))
+            {
+                if (bytes[0] <= 1) result = (ExifGpsAltitudeReference)bytes[0];
+            }
+            else if (entry.Count == 1 && typeof(T) == typeof(ushort)) result = document.Read16(bytes);
             else if (typeof(T) == typeof(ExifRational) || typeof(T) == typeof(ExifRational[]))
             {
                 if (typeof(T) == typeof(ExifRational) && entry.Count != 1 || typeof(T) == typeof(ExifRational[]) && entry.Count != 3) { value = default; return false; }
@@ -53,18 +158,14 @@ public sealed class ExifProfile
         return false;
     }
 
-    /// <summary>Creates or replaces a supported tag, preserving unrelated EXIF data. Dates must have Unspecified kind.</summary>
-    public void SetValue<T>(ExifTag<T> tag, T value) where T : notnull
+    private static void Write<T>(ExifDocument document, ExifTag<T> tag, T value) where T : notnull
     {
-        ArgumentNullException.ThrowIfNull(tag);
-        ArgumentNullException.ThrowIfNull(value);
-        var document = ExifDocument.Parse(_owner.ExifData);
         byte[] bytes;
         uint count = 1;
         switch (value)
         {
             case string text:
-                if (text.Any(c => c > 127 || c == '\0')) throw new ArgumentException("EXIF text must be ASCII without embedded nulls.", nameof(value));
+                if (text.AsSpan().ContainsAnyExceptInRange('\x01', '\x7f')) throw new ArgumentException("EXIF text must be ASCII without embedded nulls.", nameof(value));
                 bytes = Encoding.ASCII.GetBytes(text + "\0");
                 count = (uint)bytes.Length;
                 break;
@@ -76,48 +177,24 @@ public sealed class ExifProfile
             case ExifOrientation orientation:
                 if (orientation is < ExifOrientation.TopLeft or > ExifOrientation.LeftBottom) throw new ArgumentOutOfRangeException(nameof(value));
                 bytes = new byte[2]; document.Write16(bytes, (ushort)orientation); break;
+            case ExifResolutionUnit unit:
+                if (unit is < ExifResolutionUnit.None or > ExifResolutionUnit.Centimeter) throw new ArgumentOutOfRangeException(nameof(value));
+                bytes = new byte[2]; document.Write16(bytes, (ushort)unit); break;
+            case ExifGpsAltitudeReference reference:
+                if (reference is not (ExifGpsAltitudeReference.AboveSeaLevel or ExifGpsAltitudeReference.BelowSeaLevel)) throw new ArgumentOutOfRangeException(nameof(value));
+                bytes = [(byte)reference]; break;
             case ushort number:
                 bytes = new byte[2]; document.Write16(bytes, number); break;
-            case byte number: bytes = [number]; break;
             case ExifRational fraction: bytes = EncodeFractions(document, [fraction]); break;
             case ExifRational[] fractions:
                 if (fractions.Length != 3) throw new ArgumentException("GPS coordinates and time require three fractions.", nameof(value));
                 bytes = EncodeFractions(document, fractions); count = (uint)fractions.Length; break;
             default: throw new NotSupportedException("Unsupported EXIF value type.");
         }
-        if (ReferenceEquals(tag, ExifTag.GPSLatitudeRef) && value is not ("N" or "S")
-            || ReferenceEquals(tag, ExifTag.GPSLongitudeRef) && value is not ("E" or "W")
-            || ReferenceEquals(tag, ExifTag.GPSAltitudeRef) && value is byte altitudeRef && altitudeRef > 1
-            || ReferenceEquals(tag, ExifTag.ResolutionUnit) && value is ushort unit && unit is < 1 or > 3)
+        if (ReferenceEquals(tag, ExifTag.GpsLatitudeRef) && value is not ("N" or "S")
+            || ReferenceEquals(tag, ExifTag.GpsLongitudeRef) && value is not ("E" or "W"))
             throw new ArgumentOutOfRangeException(nameof(value));
         document.Set(tag, bytes, count);
-        _owner.ExifData = document.Serialize();
-    }
-
-    /// <summary>Removes a tag and its known data, returning whether it existed.</summary>
-    public bool RemoveValue(ExifTag tag)
-    {
-        ArgumentNullException.ThrowIfNull(tag);
-        var document = ExifDocument.Parse(_owner.ExifData);
-        if (!document.Remove(tag)) return false;
-        _owner.ExifData = document.Serialize();
-        return true;
-    }
-
-    /// <summary>Keeps only the listed supported tags. Other tags, thumbnails, unknown data and MakerNotes are discarded.</summary>
-    public void KeepOnly(params ExifTag[] tags)
-    {
-        ArgumentNullException.ThrowIfNull(tags);
-        if (tags.Any(t => t is null)) throw new ArgumentException("Tags cannot contain null.", nameof(tags));
-        var document = ExifDocument.Parse(_owner.ExifData);
-        _owner.ExifData = document.KeepOnly(tags);
-    }
-
-    /// <summary>Removes all standard EXIF GPS directories and their data. Does not inspect XMP or private MakerNotes.</summary>
-    public void RemoveGps()
-    {
-        var document = ExifDocument.Parse(_owner.ExifData);
-        if (document.RemoveGps()) _owner.ExifData = document.Serialize();
     }
 
     private static byte[] EncodeFractions(ExifDocument document, ExifRational[] values)
@@ -130,5 +207,19 @@ public sealed class ExifProfile
             document.Write32(bytes.AsSpan((i * 8) + 4), values[i].Denominator);
         }
         return bytes;
+    }
+
+    private static double Degrees(ExifRational[] dms) => dms[0].ToDouble() + (dms[1].ToDouble() / 60) + (dms[2].ToDouble() / 3600);
+
+    private static ExifRational[] DegreesMinutesSeconds(double degrees)
+    {
+        // Whole degrees and minutes with seconds rounded to 1/10000; carry a rounded 60″ or 60′ upward.
+        uint whole = (uint)Math.Floor(degrees);
+        double minutes = (degrees - whole) * 60;
+        uint wholeMinutes = (uint)Math.Floor(minutes);
+        uint seconds = (uint)Math.Round((minutes - wholeMinutes) * 600_000);
+        if (seconds >= 600_000) { seconds -= 600_000; wholeMinutes++; }
+        if (wholeMinutes >= 60) { wholeMinutes -= 60; whole++; }
+        return [new(whole, 1), new(wholeMinutes, 1), new(seconds, 10_000)];
     }
 }

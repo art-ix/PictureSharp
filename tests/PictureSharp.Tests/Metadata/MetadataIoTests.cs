@@ -21,7 +21,7 @@ public class MetadataIoTests
             async Task Edit(string target, Action<ImageMetadata> action, CancellationToken token = default)
             {
                 if (asynchronous) await Image.EditMetadataAsync(source, target, action, cancellationToken: token);
-                else Image.EditMetadata(source, target, action, cancellationToken: token);
+                else Image.EditMetadata(source, target, action, null, token);
             }
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => Edit(destination, _ => throw new InvalidOperationException("callback")));
             await Sequence.AssertEqual(original, File.ReadAllBytes(destination));
@@ -39,6 +39,35 @@ public class MetadataIoTests
             await Assert.That(Image.ReadMetadata(source).ExifProfile.TryGetValue(ExifTag.Model, out var inPlace)).IsTrue();
             await Assert.That(inPlace).IsEqualTo("In place");
             await Assert.That(Directory.GetFiles(directory, ".picturesharp-*.tmp")).IsEmpty();
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task UnchangedEdit_LeavesInPlaceFileUntouched_AndCopiesToOtherPaths(bool asynchronous)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-metadata-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            byte[] bytes = Corpus.Read("png/apng_alpha.png");
+            string source = Path.Combine(directory, "source.png"), copy = Path.Combine(directory, "copy.png");
+            File.WriteAllBytes(source, bytes);
+            var stamp = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(source, stamp);
+            // Removing absent GPS data is not a change.
+            Action<ImageMetadata> edit = m => m.ExifProfile.RemoveGps();
+            if (asynchronous) await Image.EditMetadataAsync(source, Path.Combine(directory, ".", "source.png"), edit);
+            else Image.EditMetadata(source, source, edit);
+            await Assert.That(File.GetLastWriteTimeUtc(source)).IsEqualTo(stamp);
+            if (asynchronous) await Image.EditMetadataAsync(source, copy, edit);
+            else Image.EditMetadata(source, copy, edit);
+            await Sequence.AssertEqual(bytes, File.ReadAllBytes(copy));
+            byte[] result = Image.EditMetadata(bytes, edit);
+            await Assert.That(ReferenceEquals(result, bytes)).IsFalse();
+            await Sequence.AssertEqual(bytes, result);
         }
         finally { Directory.Delete(directory, true); }
     }

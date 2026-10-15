@@ -19,6 +19,9 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
 abstract record EncoderOptions : System.IEquatable<EncoderOptions>
     property ImageFormat Format { get; }
     property MetadataKinds Metadata { get; init; }
+enum ExifGpsAltitudeReference
+    AboveSeaLevel = 0
+    BelowSeaLevel = 1
 enum ExifOrientation
     Unknown = 0
     TopLeft = 1
@@ -30,39 +33,45 @@ enum ExifOrientation
     RightBottom = 7
     LeftBottom = 8
 sealed class ExifProfile
+    method System.Boolean RemoveGps()
     method System.Boolean RemoveValue(ExifTag tag)
+    method System.Boolean TryGetGpsLocation(out GpsLocation location)
     method System.Boolean TryGetValue<T>(ExifTag<T> tag, out T? value)
-    method System.Void KeepOnly(params ExifTag[] tags)
-    method System.Void RemoveGps()
+    method System.Void KeepOnly(params System.ReadOnlySpan<ExifTag> tags)
+    method System.Void SetGpsLocation(GpsLocation location)
     method System.Void SetValue<T>(ExifTag<T> tag, T value)
 readonly struct ExifRational : System.IEquatable<ExifRational>
     ctor(System.UInt32 numerator, System.UInt32 denominator)
     method System.Double ToDouble()
     property System.UInt32 Denominator { get; }
     property System.UInt32 Numerator { get; }
+enum ExifResolutionUnit
+    None = 1
+    Inch = 2
+    Centimeter = 3
 abstract class ExifTag
+    property static ExifTag<ExifGpsAltitudeReference> GpsAltitudeRef { get; }
     property static ExifTag<ExifOrientation> Orientation { get; }
     property static ExifTag<ExifRational> ExposureTime { get; }
     property static ExifTag<ExifRational> FNumber { get; }
     property static ExifTag<ExifRational> FocalLength { get; }
-    property static ExifTag<ExifRational> GPSAltitude { get; }
+    property static ExifTag<ExifRational> GpsAltitude { get; }
     property static ExifTag<ExifRational> XResolution { get; }
     property static ExifTag<ExifRational> YResolution { get; }
-    property static ExifTag<ExifRational[]> GPSLatitude { get; }
-    property static ExifTag<ExifRational[]> GPSLongitude { get; }
-    property static ExifTag<ExifRational[]> GPSTimeStamp { get; }
-    property static ExifTag<System.Byte> GPSAltitudeRef { get; }
+    property static ExifTag<ExifRational[]> GpsLatitude { get; }
+    property static ExifTag<ExifRational[]> GpsLongitude { get; }
+    property static ExifTag<ExifRational[]> GpsTimeStamp { get; }
+    property static ExifTag<ExifResolutionUnit> ResolutionUnit { get; }
     property static ExifTag<System.DateTime> DateTime { get; }
     property static ExifTag<System.DateTime> DateTimeDigitized { get; }
     property static ExifTag<System.DateTime> DateTimeOriginal { get; }
     property static ExifTag<System.String> CameraOwnerName { get; }
-    property static ExifTag<System.String> GPSDateStamp { get; }
-    property static ExifTag<System.String> GPSLatitudeRef { get; }
-    property static ExifTag<System.String> GPSLongitudeRef { get; }
+    property static ExifTag<System.String> GpsDateStamp { get; }
+    property static ExifTag<System.String> GpsLatitudeRef { get; }
+    property static ExifTag<System.String> GpsLongitudeRef { get; }
     property static ExifTag<System.String> Make { get; }
     property static ExifTag<System.String> Model { get; }
     property static ExifTag<System.UInt16> IsoSpeed { get; }
-    property static ExifTag<System.UInt16> ResolutionUnit { get; }
 sealed class ExifTag<T> : ExifTag
 sealed record PictureSharp.Formats.Bmp.BmpEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PictureSharp.Formats.Bmp.BmpEncoderOptions>
     ctor()
@@ -282,6 +291,11 @@ enum PictureSharp.Formats.WebP.WebPPreset
     Drawing = 3
     Icon = 4
     Text = 5
+readonly struct GpsLocation : System.IEquatable<GpsLocation>
+    ctor(System.Double latitude, System.Double longitude, System.Double? altitude = default)
+    property System.Double Latitude { get; }
+    property System.Double Longitude { get; }
+    property System.Double? Altitude { get; }
 sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height)
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
@@ -444,8 +458,10 @@ static class ImageIOExtensions
     method [OverloadPriority(1)] static Image Load(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method [OverloadPriority(1)] static ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data)
     method [OverloadPriority(1)] static ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options)
-    method [OverloadPriority(1)] static ImageMetadata ReadMetadata(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method [OverloadPriority(1)] static System.Byte[] EditMetadata(System.ReadOnlyMemory<System.Byte> data, System.Action<ImageMetadata> edit, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [OverloadPriority(1)] static ImageMetadata ReadMetadata(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
+    method [OverloadPriority(1)] static ImageMetadata ReadMetadata(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method [OverloadPriority(1)] static System.Byte[] EditMetadata(System.ReadOnlyMemory<System.Byte> data, System.Action<ImageMetadata> edit, DecoderOptions? options = null)
+    method [OverloadPriority(1)] static System.Byte[] EditMetadata(System.ReadOnlyMemory<System.Byte> data, System.Action<ImageMetadata> edit, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static Image Load(System.IO.Stream stream, DecoderOptions? options = null)
     method static Image Load(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static Image Load(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options = null)
@@ -465,12 +481,18 @@ static class ImageIOExtensions
     method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options)
     method static ImageInfo Identify(System.String path)
     method static ImageInfo Identify(System.String path, DecoderOptions? options)
-    method static ImageMetadata ReadMetadata(System.IO.Stream stream, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static ImageMetadata ReadMetadata(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static ImageMetadata ReadMetadata(System.String path, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Byte[] EditMetadata(System.ReadOnlySpan<System.Byte> data, System.Action<ImageMetadata> edit, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task EditMetadataAsync(System.IO.Stream source, System.IO.Stream destination, System.Action<ImageMetadata> edit, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task EditMetadataAsync(System.String sourcePath, System.String destinationPath, System.Action<ImageMetadata> edit, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static ImageMetadata ReadMetadata(System.IO.Stream stream, DecoderOptions? options = null)
+    method static ImageMetadata ReadMetadata(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static ImageMetadata ReadMetadata(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options = null)
+    method static ImageMetadata ReadMetadata(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static ImageMetadata ReadMetadata(System.String path, DecoderOptions? options = null)
+    method static ImageMetadata ReadMetadata(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static System.Byte[] EditMetadata(System.ReadOnlySpan<System.Byte> data, System.Action<ImageMetadata> edit, DecoderOptions? options = null)
+    method static System.Byte[] EditMetadata(System.ReadOnlySpan<System.Byte> data, System.Action<ImageMetadata> edit, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static System.Threading.Tasks.Task EditMetadataAsync(System.IO.Stream source, System.IO.Stream destination, System.Action<ImageMetadata> edit, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task EditMetadataAsync(System.IO.Stream source, System.IO.Stream destination, System.Action<ImageMetadata> edit, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task EditMetadataAsync(System.String sourcePath, System.String destinationPath, System.Action<ImageMetadata> edit, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task EditMetadataAsync(System.String sourcePath, System.String destinationPath, System.Action<ImageMetadata> edit, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
@@ -483,10 +505,14 @@ static class ImageIOExtensions
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
     method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<ImageMetadata> ReadMetadataAsync(System.IO.Stream stream, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<ImageMetadata> ReadMetadataAsync(System.String path, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void EditMetadata(System.IO.Stream source, System.IO.Stream destination, System.Action<ImageMetadata> edit, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void EditMetadata(System.String sourcePath, System.String destinationPath, System.Action<ImageMetadata> edit, DecoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageMetadata> ReadMetadataAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageMetadata> ReadMetadataAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageMetadata> ReadMetadataAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<ImageMetadata> ReadMetadataAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Void EditMetadata(System.IO.Stream source, System.IO.Stream destination, System.Action<ImageMetadata> edit, DecoderOptions? options = null)
+    method static System.Void EditMetadata(System.IO.Stream source, System.IO.Stream destination, System.Action<ImageMetadata> edit, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static System.Void EditMetadata(System.String sourcePath, System.String destinationPath, System.Action<ImageMetadata> edit, DecoderOptions? options = null)
+    method static System.Void EditMetadata(System.String sourcePath, System.String destinationPath, System.Action<ImageMetadata> edit, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
 sealed record ImageInfo : System.IEquatable<ImageInfo>
     ctor()
     property ExifOrientation Orientation { get; init; }

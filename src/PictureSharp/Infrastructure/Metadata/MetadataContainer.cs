@@ -74,10 +74,4 @@ internal static class MetadataContainer
         if (output.Length > Array.MaxLength) throw new NotSupportedException("The edited container exceeds the managed buffer limit.");
         return output.ToArray();
     }
-
-    public static bool Same(ImageMetadata a, ImageMetadata b) =>
-        Same(a.ExifData, b.ExifData) && Same(a.XmpData, b.XmpData) && Same(a.IccData, b.IccData)
-        && a.HorizontalResolution == b.HorizontalResolution && a.VerticalResolution == b.VerticalResolution;
-
-    private static bool Same(byte[]? a, byte[]? b) => (a is null) == (b is null) && (a is null || a.AsSpan().SequenceEqual(b));
 }

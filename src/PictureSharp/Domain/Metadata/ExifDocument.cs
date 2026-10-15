@@ -173,10 +173,10 @@ internal sealed partial class ExifDocument
         return removed;
     }
 
-    public byte[]? KeepOnly(ExifTag[] tags)
+    public byte[]? KeepOnly(ReadOnlySpan<ExifTag> tags)
     {
         var selected = new ExifDocument([], _big);
-        foreach (ExifTag tag in tags.Distinct())
+        foreach (ExifTag tag in tags) // Repeated tags overwrite the same entry.
             if (Find(tag) is { } entry)
             {
                 if (entry.Type != tag.Type) throw new NotSupportedException("Cannot retain a tag with an unsupported EXIF type.");

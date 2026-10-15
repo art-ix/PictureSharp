@@ -40,12 +40,90 @@ public class ExifProfileTests
         await Assert.That(x.ToDouble()).IsEqualTo(expected.GetProperty("dpi")[0].GetDouble());
         await Assert.That(profile.TryGetValue(ExifTag.YResolution, out var y)).IsTrue();
         await Assert.That(y.ToDouble()).IsEqualTo(expected.GetProperty("dpi")[1].GetDouble());
-        await Assert.That(profile.TryGetValue(ExifTag.GPSLatitude, out var latitude)).IsTrue();
+        await Assert.That(profile.TryGetValue(ExifTag.GpsLatitude, out var latitude)).IsTrue();
         await Assert.That(latitude!.Select(v => v.ToDouble())).IsEquivalentTo(expected.GetProperty("latitude").EnumerateArray().Select(v => v.GetDouble()), CollectionOrdering.Matching);
-        await Assert.That(profile.TryGetValue(ExifTag.GPSLongitude, out var longitude)).IsTrue();
+        await Assert.That(profile.TryGetValue(ExifTag.GpsLongitude, out var longitude)).IsTrue();
         await Assert.That(longitude!.Select(v => v.ToDouble())).IsEquivalentTo(expected.GetProperty("longitude").EnumerateArray().Select(v => v.GetDouble()), CollectionOrdering.Matching);
-        await Assert.That(profile.TryGetValue(ExifTag.GPSAltitude, out var altitude)).IsTrue();
+        await Assert.That(profile.TryGetValue(ExifTag.GpsAltitude, out var altitude)).IsTrue();
         await Assert.That(altitude.ToDouble()).IsEqualTo(expected.GetProperty("altitude").GetDouble());
+        await Assert.That(profile.TryGetValue(ExifTag.ResolutionUnit, out var unit)).IsTrue();
+        await Assert.That(unit).IsEqualTo(ExifResolutionUnit.Inch);
+        await Assert.That(profile.TryGetValue(ExifTag.GpsAltitudeRef, out var altitudeRef)).IsTrue();
+        await Assert.That(altitudeRef).IsEqualTo(ExifGpsAltitudeReference.AboveSeaLevel);
+        static double Degrees(JsonElement dms) => dms[0].GetDouble() + (dms[1].GetDouble() / 60) + (dms[2].GetDouble() / 3600);
+        await Assert.That(profile.TryGetGpsLocation(out GpsLocation location)).IsTrue();
+        await Assert.That(location.Latitude).IsEqualTo(Degrees(expected.GetProperty("latitude")));
+        await Assert.That(location.Longitude).IsEqualTo(Degrees(expected.GetProperty("longitude")));
+        await Assert.That(location.Altitude).IsEqualTo(expected.GetProperty("altitude").GetDouble());
+    }
+
+    [Test]
+    [Arguments(0.0, 0.0, null)]
+    [Arguments(52.2297, 21.0122, 100.25)]
+    [Arguments(-33.8688, -151.2093, -12.5)]
+    [Arguments(90.0, 180.0, 0.0)]
+    [Arguments(-90.0, -180.0, null)]
+    [Arguments(10.99999999999, -0.000000001, 8848.86)]
+    public async Task GpsLocation_RoundTripsThroughDegreesMinutesSeconds(double latitude, double longitude, double? altitude)
+    {
+        foreach (string name in new[] { "little", "big" })
+        {
+            var metadata = new ImageMetadata { Exif = Corpus.Read($"metadata/{name}.exif") };
+            ExifProfile profile = metadata.ExifProfile;
+            profile.SetValue(ExifTag.GpsTimeStamp, [new(12, 1), new(30, 1), new(15, 1)]);
+            profile.SetGpsLocation(new(latitude, longitude, altitude));
+            await Assert.That(profile.TryGetGpsLocation(out GpsLocation read)).IsTrue();
+            await Assert.That(Math.Abs(read.Latitude - latitude)).IsLessThan(1e-7);
+            await Assert.That(Math.Abs(read.Longitude - longitude)).IsLessThan(1e-7);
+            await Assert.That(read.Altitude.HasValue).IsEqualTo(altitude.HasValue);
+            if (altitude is { } meters) await Assert.That(Math.Abs(read.Altitude!.Value - meters)).IsLessThan(1e-3);
+            else await Assert.That(profile.TryGetValue(ExifTag.GpsAltitudeRef, out _)).IsFalse();
+            profile.TryGetValue(ExifTag.GpsLatitudeRef, out var north);
+            profile.TryGetValue(ExifTag.GpsLongitudeRef, out var east);
+            await Assert.That(north).IsEqualTo(latitude < 0 ? "S" : "N");
+            await Assert.That(east).IsEqualTo(longitude < 0 ? "W" : "E");
+            profile.TryGetValue(ExifTag.GpsLatitude, out var dms);
+            await Assert.That(dms![1].Numerator < 60 && dms[2].Numerator < 600_000).IsTrue();
+            await Assert.That(profile.TryGetValue(ExifTag.GpsTimeStamp, out _)).IsTrue();
+            await Assert.That(profile.TryGetValue(ExifTag.Model, out _)).IsTrue();
+        }
+    }
+
+    [Test]
+    public async Task GpsLocation_RequiresBothCoordinatesAndValidatesRanges()
+    {
+        var metadata = new ImageMetadata();
+        ExifProfile profile = metadata.ExifProfile;
+        await Assert.That(profile.TryGetGpsLocation(out _)).IsFalse();
+        await Assert.That(profile.RemoveGps()).IsFalse();
+        profile.SetValue(ExifTag.GpsLatitudeRef, "N");
+        profile.SetValue(ExifTag.GpsLatitude, [new(52, 1), new(0, 1), new(0, 1)]);
+        await Assert.That(profile.TryGetGpsLocation(out _)).IsFalse();
+        profile.SetValue(ExifTag.GpsLongitude, [new(200, 1), new(0, 1), new(0, 1)]);
+        profile.SetValue(ExifTag.GpsLongitudeRef, "E");
+        await Assert.That(profile.TryGetGpsLocation(out _)).IsFalse();
+        await Assert.That(profile.RemoveGps()).IsTrue();
+        await Assert.That(profile.RemoveGps()).IsFalse();
+        Assert.Throws<ArgumentOutOfRangeException>(() => new GpsLocation(90.5, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new GpsLocation(0, -180.5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new GpsLocation(double.NaN, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new GpsLocation(0, 0, double.PositiveInfinity));
+        byte[]? before = metadata.Exif;
+        Assert.Throws<ArgumentOutOfRangeException>(() => profile.SetGpsLocation(new(0, 0, 5e6)));
+        await Sequence.AssertEqual(before, metadata.Exif);
+    }
+
+    [Test]
+    public async Task EnumTags_RejectUndefinedValues()
+    {
+        var metadata = new ImageMetadata();
+        Assert.Throws<ArgumentOutOfRangeException>(() => metadata.ExifProfile.SetValue(ExifTag.ResolutionUnit, (ExifResolutionUnit)4));
+        Assert.Throws<ArgumentOutOfRangeException>(() => metadata.ExifProfile.SetValue(ExifTag.GpsAltitudeRef, (ExifGpsAltitudeReference)2));
+        await Assert.That(metadata.IsEmpty).IsTrue();
+        metadata.ExifProfile.SetValue(ExifTag.ResolutionUnit, ExifResolutionUnit.Centimeter);
+        metadata.ExifProfile.SetValue(ExifTag.GpsAltitudeRef, ExifGpsAltitudeReference.BelowSeaLevel);
+        await Assert.That(metadata.ExifProfile.TryGetValue(ExifTag.ResolutionUnit, out var unit) && unit == ExifResolutionUnit.Centimeter).IsTrue();
+        await Assert.That(metadata.ExifProfile.TryGetValue(ExifTag.GpsAltitudeRef, out var reference) && reference == ExifGpsAltitudeReference.BelowSeaLevel).IsTrue();
     }
 
     [Test]
@@ -61,8 +139,8 @@ public class ExifProfileTests
         await Assert.That(metadata.Exif!.AsSpan().IndexOf("opaque-value-preserve-offset"u8)).IsEqualTo(opaque);
         await Assert.That(profile.TryGetValue(ExifTag.Model, out var model)).IsTrue();
         await Assert.That(model).IsEqualTo("New Model");
-        profile.RemoveGps();
-        await Assert.That(profile.TryGetValue(ExifTag.GPSLatitude, out _)).IsFalse();
+        await Assert.That(profile.RemoveGps()).IsTrue();
+        await Assert.That(profile.TryGetValue(ExifTag.GpsLatitude, out _)).IsFalse();
         await Assert.That(metadata.Exif!.AsSpan().IndexOf("secret-gps-processing"u8)).IsEqualTo(-1);
         await Assert.That(metadata.Exif!.AsSpan().IndexOf("opaque-value-preserve-offset"u8)).IsEqualTo(opaque);
         await Assert.That(metadata.Exif!.AsSpan().IndexOf("opaque-maker-note"u8) >= 0).IsTrue();
@@ -92,10 +170,10 @@ public class ExifProfileTests
         await Assert.That(profile.TryGetValue(ExifTag.Orientation, out var orientation)).IsTrue();
         await Assert.That(orientation).IsEqualTo(ExifOrientation.TopLeft);
         metadata.Exif = Corpus.Read("metadata/big.exif");
-        profile.SetValue(ExifTag.GPSLatitude, [new(1, 1), new(2, 1), new(3, 1)]);
-        profile.TryGetValue(ExifTag.GPSLatitude, out var latitude);
+        profile.SetValue(ExifTag.GpsLatitude, [new(1, 1), new(2, 1), new(3, 1)]);
+        profile.TryGetValue(ExifTag.GpsLatitude, out var latitude);
         latitude![0] = new(99, 1);
-        profile.TryGetValue(ExifTag.GPSLatitude, out var reread);
+        profile.TryGetValue(ExifTag.GpsLatitude, out var reread);
         await Assert.That(reread![0]).IsEqualTo(new ExifRational(1, 1));
         ImageMetadata clone = metadata.Clone();
         clone.ExifProfile.SetValue(ExifTag.Model, "Clone");
@@ -182,7 +260,7 @@ public class ExifProfileTests
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(62), 1);
         Entry(64, 2, 5, 3, 38);
         var metadata = new ImageMetadata { Exif = bytes };
-        await Assert.That(metadata.ExifProfile.TryGetValue(ExifTag.GPSLatitude, out _)).IsTrue();
+        await Assert.That(metadata.ExifProfile.TryGetValue(ExifTag.GpsLatitude, out _)).IsTrue();
         await Assert.ThrowsExactlyAsync<NotSupportedException>(() => Task.Run(() => metadata.ExifProfile.RemoveGps()));
         await Sequence.AssertEqual(bytes, metadata.Exif);
     }

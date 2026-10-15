@@ -34,7 +34,7 @@ Three full-sweep aggregates exceeded +5%, driven by run-to-run variation. They w
 
 No repeatable regression above **5%** was observed. The largest remaining unflagged full-matrix aggregate was +4.43%. Do not interpret these laptop measurements as a guaranteed speedup.
 
-Full sweep times, allocation medians and confirmation values are in [architecture-benchmarks.csv](architecture-benchmarks.csv). The original 80-case data is retained in that table; paired confirmations are separate columns rather than overwriting outliers.
+Full sweep times, allocation medians and confirmation values are in [architecture-benchmarks.csv](measurements/architecture-benchmarks.csv). The original 80-case data is retained in that table; paired confirmations are separate columns rather than overwriting outliers.
 
 Reproduce the current-tree probe:
 

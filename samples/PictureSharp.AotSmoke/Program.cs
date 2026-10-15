@@ -33,15 +33,15 @@ foreach (ImageFormat format in new[] { ImageFormat.Jpeg, ImageFormat.Png, ImageF
         metadata.ExifProfile.SetValue(ExifTag.Model, "AOT camera");
         metadata.ExifProfile.SetValue(ExifTag.DateTimeOriginal, new DateTime(2026, 10, 15, 12, 0, 0));
         metadata.ExifProfile.SetValue(ExifTag.ExposureTime, new ExifRational(1, 125));
-        metadata.ExifProfile.SetValue(ExifTag.GPSLatitudeRef, "N");
-        metadata.ExifProfile.SetValue(ExifTag.GPSLatitude, [new(52, 1), new(14, 1), new(0, 1)]);
+        metadata.ExifProfile.SetValue(ExifTag.GpsLatitudeRef, "N");
+        metadata.ExifProfile.SetValue(ExifTag.GpsLatitude, [new(52, 1), new(14, 1), new(0, 1)]);
         metadata.ExifProfile.RemoveGps();
     });
     var metadataRead = Image.ReadMetadata(metadataEdited);
     if (!metadataRead.ExifProfile.TryGetValue(ExifTag.Model, out var model) || model != "AOT camera"
         || !metadataRead.ExifProfile.TryGetValue(ExifTag.DateTimeOriginal, out _)
         || !metadataRead.ExifProfile.TryGetValue(ExifTag.ExposureTime, out _)
-        || metadataRead.ExifProfile.TryGetValue(ExifTag.GPSLatitude, out _)) throw new InvalidOperationException("Metadata editing failed.");
+        || metadataRead.ExifProfile.TryGetValue(ExifTag.GpsLatitude, out _)) throw new InvalidOperationException("Metadata editing failed.");
     using var metadataInput = new MemoryStream(metadataEdited);
     using var metadataOutput = new MemoryStream();
     await Image.EditMetadataAsync(metadataInput, metadataOutput, metadata => metadata.ExifProfile.KeepOnly(ExifTag.Model));

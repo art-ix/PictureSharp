@@ -186,10 +186,10 @@ prostokąty; APNG Auto=RGBA, bez indexed; WebP współdzieli okno klatek kluczow
 Build Release 0 ostrzeżeń/błędów; **4651/4651 pełnych testów**, **152/152 Oracle** bez pominięć, **113/113 fallback SIMD**;
 paczka z notices/LICENSE, konsument z trimmingiem i Native AOT linux-x64 oraz przykładami sekwencji poprawny. API snapshot
 przejrzany; README quick start kompiluje się z jednym using. Pomiary 10/100/1000 klatek i raport ograniczonej pamięci:
-`docs/performance.md`, `docs/sequence-memory.tsv`. Macierz 80 przypadków przed/po (2 przebiegi na wersję, ABBA): mediana
+`docs/performance.md`, `docs/measurements/sequence-memory.tsv`. Macierz 80 przypadków przed/po (2 przebiegi na wersję, ABBA): mediana
 +0,09%, alokacje maks. +0,49%; 2 podejrzane przypadki sprawdzone naprzemiennie (+1,62% / −0,91%), brak potwierdzonej
-regresji >5%; `docs/sequences-benchmarks.csv`. Nowych SIMD nie dodano. Rzeczywisty ARM64 i zdalny CI nieuruchamiane.
-VERSION 0.6.0; README, instrukcja instalacji i PackageReleaseNotes zaktualizowane. Notatki: `docs/release-0.6.0.md`.
+regresji >5%; `docs/measurements/sequences-benchmarks.csv`. Nowych SIMD nie dodano. Rzeczywisty ARM64 i zdalny CI nieuruchamiane.
+VERSION 0.6.0; README, instrukcja instalacji i PackageReleaseNotes zaktualizowane. Notatki: `docs/releases/release-0.6.0.md`.
 Publikacja przez workflow Release, po bramce Validate (managed, Oracle i package-consumer).
 
 ## 0.6.1 — metadane
@@ -217,7 +217,7 @@ Build Release bez ostrzeżeń; 4708/4708 pełnych testów (0 pominiętych), w ty
 Migawka API zawiera wyłącznie dodatki, konsument C# 14, trimming i Native AOT linux-x64 poprawne. Macierz 80 przypadków
 względem 0.6.0: mediana czasu +0,74%, maks. wzrost alokacji +0,66%; pięć podejrzanych wyników potwierdzonych
 naprzemiennie w jednym procesie, żadnej powtarzalnej regresji >5%. Pomiary nowego API i dane surowe w
-`docs/performance.md`. VERSION 0.6.1, notatki `docs/release-0.6.1.md`; przygotowany lokalny commit na polecenie użytkownika, bez pusha i publikacji. ARM64 wymaga osobnego wykonania;
+`docs/performance.md`. VERSION 0.6.1, notatki `docs/releases/release-0.6.1.md`; przygotowany lokalny commit na polecenie użytkownika, bez pusha i publikacji. ARM64 wymaga osobnego wykonania;
 nie dodano nowych ścieżek SIMD.
 
 ## 0.6.2 — zarządzanie kolorem i światło liniowe

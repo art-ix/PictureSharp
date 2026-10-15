@@ -9,12 +9,12 @@ public abstract class ExifTag
     internal ushort Type { get; }
     /// <summary>Image orientation.</summary>
     public static ExifTag<ExifOrientation> Orientation { get; } = new(0x0112, 0, 3);
-    /// <summary>Horizontal resolution in ResolutionUnit units.</summary>
+    /// <summary>Horizontal resolution in <see cref="ResolutionUnit"/> units.</summary>
     public static ExifTag<ExifRational> XResolution { get; } = new(0x011a, 0, 5);
-    /// <summary>Vertical resolution in ResolutionUnit units.</summary>
+    /// <summary>Vertical resolution in <see cref="ResolutionUnit"/> units.</summary>
     public static ExifTag<ExifRational> YResolution { get; } = new(0x011b, 0, 5);
-    /// <summary>Resolution unit: 1 unspecified, 2 inches, 3 centimeters.</summary>
-    public static ExifTag<ushort> ResolutionUnit { get; } = new(0x0128, 0, 3);
+    /// <summary>Unit of <see cref="XResolution"/> and <see cref="YResolution"/>.</summary>
+    public static ExifTag<ExifResolutionUnit> ResolutionUnit { get; } = new(0x0128, 0, 3);
     /// <summary>Camera manufacturer.</summary>
     public static ExifTag<string> Make { get; } = new(0x010f, 0, 2);
     /// <summary>Camera model.</summary>
@@ -36,19 +36,19 @@ public abstract class ExifTag
     /// <summary>Camera owner name.</summary>
     public static ExifTag<string> CameraOwnerName { get; } = new(0xa430, 1, 2);
     /// <summary>Latitude hemisphere: N or S.</summary>
-    public static ExifTag<string> GPSLatitudeRef { get; } = new(0x0001, 2, 2);
-    /// <summary>Latitude in degrees, minutes and seconds.</summary>
-    public static ExifTag<ExifRational[]> GPSLatitude { get; } = new(0x0002, 2, 5);
+    public static ExifTag<string> GpsLatitudeRef { get; } = new(0x0001, 2, 2);
+    /// <summary>Latitude in degrees, minutes and seconds. See also <see cref="ExifProfile.TryGetGpsLocation"/>.</summary>
+    public static ExifTag<ExifRational[]> GpsLatitude { get; } = new(0x0002, 2, 5);
     /// <summary>Longitude hemisphere: E or W.</summary>
-    public static ExifTag<string> GPSLongitudeRef { get; } = new(0x0003, 2, 2);
-    /// <summary>Longitude in degrees, minutes and seconds.</summary>
-    public static ExifTag<ExifRational[]> GPSLongitude { get; } = new(0x0004, 2, 5);
-    /// <summary>Altitude reference: 0 above or 1 below sea level.</summary>
-    public static ExifTag<byte> GPSAltitudeRef { get; } = new(0x0005, 2, 1);
+    public static ExifTag<string> GpsLongitudeRef { get; } = new(0x0003, 2, 2);
+    /// <summary>Longitude in degrees, minutes and seconds. See also <see cref="ExifProfile.TryGetGpsLocation"/>.</summary>
+    public static ExifTag<ExifRational[]> GpsLongitude { get; } = new(0x0004, 2, 5);
+    /// <summary>Whether <see cref="GpsAltitude"/> is above or below sea level.</summary>
+    public static ExifTag<ExifGpsAltitudeReference> GpsAltitudeRef { get; } = new(0x0005, 2, 1);
     /// <summary>Altitude in meters.</summary>
-    public static ExifTag<ExifRational> GPSAltitude { get; } = new(0x0006, 2, 5);
+    public static ExifTag<ExifRational> GpsAltitude { get; } = new(0x0006, 2, 5);
     /// <summary>UTC GPS time in hours, minutes and seconds.</summary>
-    public static ExifTag<ExifRational[]> GPSTimeStamp { get; } = new(0x0007, 2, 5);
+    public static ExifTag<ExifRational[]> GpsTimeStamp { get; } = new(0x0007, 2, 5);
     /// <summary>UTC GPS date in yyyy:MM:dd format.</summary>
-    public static ExifTag<string> GPSDateStamp { get; } = new(0x001d, 2, 2);
+    public static ExifTag<string> GpsDateStamp { get; } = new(0x001d, 2, 2);
 }

@@ -104,10 +104,21 @@ public class ConsumerCompilationTests
                     if (metadata.ExifProfile.TryGetValue(ExifTag.Model, out var model)) Console.WriteLine(model.Length);
                     metadata.ExifProfile.SetValue(ExifTag.DateTimeOriginal, new DateTime(2026, 1, 1));
                     metadata.ExifProfile.SetValue(ExifTag.ExposureTime, new ExifRational(1, 125));
-                    metadata.ExifProfile.SetValue(ExifTag.GPSLatitude, [new(52, 1), new(14, 1), new(0, 1)]);
+                    metadata.ExifProfile.SetValue(ExifTag.GpsLatitude, [new(52, 1), new(14, 1), new(0, 1)]);
                     metadata.ExifProfile.KeepOnly(ExifTag.Model, ExifTag.DateTimeOriginal);
                     _ = Image.EditMetadata(bytes, m => m.ExifProfile.RemoveGps());
                     _ = Image.EditMetadata(span, m => m.Clear());
+                    metadata.ExifProfile.SetValue(ExifTag.ResolutionUnit, ExifResolutionUnit.Inch);
+                    metadata.ExifProfile.SetGpsLocation(new GpsLocation(52.2297, 21.0122, altitude: 100));
+                    if (metadata.ExifProfile.TryGetGpsLocation(out var location)) Console.WriteLine(location.Latitude);
+                }
+
+                public static async System.Threading.Tasks.Task CheckAsync(string path, System.Threading.CancellationToken token)
+                {
+                    ImageMetadata metadata = await Image.ReadMetadataAsync(path, token);
+                    await Image.EditMetadataAsync(path, path, m => m.ExifProfile.RemoveGps(), token);
+                    Image.EditMetadata(path, path, m => m.Clear(), null, token);
+                    Console.WriteLine(metadata.IsEmpty);
                 }
             }
             """;
@@ -120,6 +131,7 @@ public class ConsumerCompilationTests
         await Assert.That(FirstParameter(model, tree, "Image.ReadMetadata(bytes)")).IsEqualTo("System.ReadOnlyMemory<byte>");
         await Assert.That(FirstParameter(model, tree, "Image.ReadMetadata(span)")).IsEqualTo("System.ReadOnlySpan<byte>");
         await Assert.That(FirstParameter(model, tree, "Image.EditMetadata(bytes, m => m.ExifProfile.RemoveGps())")).IsEqualTo("System.ReadOnlyMemory<byte>");
+        await Assert.That(FirstParameter(model, tree, "metadata.ExifProfile.KeepOnly(ExifTag.Model, ExifTag.DateTimeOriginal)")).IsEqualTo("System.ReadOnlySpan<PictureSharp.ExifTag>");
     }
 
     [Test]

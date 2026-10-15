@@ -83,7 +83,7 @@ metadata.RemoveBlocks(MetadataKinds.Xmp | MetadataKinds.Icc);
 
 ## Typed EXIF
 
-Typed profiles and metadata-only editing are included in source version 0.6.1, prepared locally; they are not part of the published 0.6.0 package.
+Typed profiles and metadata-only editing are available since 0.6.1.
 
 `ExifProfile` is a live view of the same EXIF bytes exposed by `Exif`. It is always available; reading an empty
 profile does not create a block. Assigning a raw block, setting `Orientation`, clearing metadata or editing the
@@ -112,11 +112,11 @@ The initial supported tags are:
 | `Make`, `Model`, `CameraOwnerName` | ASCII `string` |
 | `DateTime`, `DateTimeOriginal`, `DateTimeDigitized` | `DateTime` with `Kind = Unspecified` |
 | `XResolution`, `YResolution`, `ExposureTime`, `FNumber`, `FocalLength` | `ExifRational` |
-| `ResolutionUnit` | `ushort`: 1 unspecified, 2 inches, 3 centimeters |
+| `ResolutionUnit` | `ExifResolutionUnit`: `None`, `Inch`, `Centimeter` |
 | `IsoSpeed` | `ushort`: the legacy 16-bit ISO sensitivity tag |
-| `GPSLatitudeRef`, `GPSLongitudeRef`, `GPSDateStamp` | ASCII `string`; hemisphere N/S or E/W |
-| `GPSLatitude`, `GPSLongitude`, `GPSTimeStamp` | Three `ExifRational` values: degrees/minutes/seconds or hours/minutes/seconds |
-| `GPSAltitudeRef`, `GPSAltitude` | `byte` (0 above, 1 below sea level), `ExifRational` meters |
+| `GpsLatitudeRef`, `GpsLongitudeRef`, `GpsDateStamp` | ASCII `string`; hemisphere N/S or E/W |
+| `GpsLatitude`, `GpsLongitude`, `GpsTimeStamp` | Three `ExifRational` values: degrees/minutes/seconds or hours/minutes/seconds |
+| `GpsAltitudeRef`, `GpsAltitude` | `ExifGpsAltitudeReference` (`AboveSeaLevel`, `BelowSeaLevel`), `ExifRational` meters |
 
 `ExifRational` preserves an exact unsigned numerator and denominator; `ToDouble()` is a convenience conversion.
 A zero denominator is rejected on write. EXIF dates in this API do not include offsets or fractional seconds;
@@ -128,6 +128,26 @@ Edits preserve unknown entries, MakerNotes payload bytes and their original abso
 structures are rejected rather than guessed. `KeepOnly` deliberately rebuilds a small profile containing only
 the requested supported tags; it discards thumbnails, unknown fields and MakerNotes. A failed edit leaves the
 previous raw block intact. As with the other model APIs, concurrent mutation is unsupported.
+
+### GPS position
+
+`TryGetGpsLocation` and `SetGpsLocation` convert between the raw degree/minute/second and hemisphere tags and a
+`GpsLocation` in signed decimal degrees, with an optional altitude in meters:
+
+```csharp
+using PictureSharp;
+
+var metadata = new ImageMetadata();
+metadata.ExifProfile.SetGpsLocation(new GpsLocation(-33.8688, 151.2093, altitude: 58));
+if (metadata.ExifProfile.TryGetGpsLocation(out GpsLocation location))
+    Console.WriteLine($"{location.Latitude:F4}, {location.Longitude:F4}, {location.Altitude} m");
+bool removed = metadata.ExifProfile.RemoveGps(); // true: the GPS directory existed
+```
+
+`GpsLocation` accepts latitude in [−90, 90] and longitude in [−180, 180]. Writing stores whole degrees and minutes
+and seconds rounded to 1/10000″ (about 3 mm), and altitude to millimeters; a `null` altitude removes the altitude
+tags. Other GPS tags, such as the time stamp, are kept. Reading requires both coordinates and both hemisphere
+references; a missing altitude reference means above sea level. Incomplete or out-of-range values return false.
 
 ## Editing a file without recompression
 
@@ -158,6 +178,11 @@ Image.EditMetadata("photo.jpg", "edited.jpg", m =>
 await Image.EditMetadataAsync("photo.jpg", "photo.jpg", m => m.Clear());
 ```
 
+The overloads follow `Load`: synchronous methods take `(…, DecoderOptions? options = null)` or
+`(…, DecoderOptions? options, CancellationToken)`, asynchronous methods `(…, CancellationToken = default)` or
+`(…, DecoderOptions? options, CancellationToken = default)`. Memory overloads return a new array and never modify
+the input; byte arrays bind to the `ReadOnlyMemory<byte>` overload without copying.
+
 Changing orientation or ICC metadata can change how a viewer displays the unchanged encoded pixels.
 `RemoveGps` applies to standard EXIF GPS directories; it does not inspect private MakerNotes or XMP.
 `Clear()` removes ICC/EXIF/XMP, preserving resolution and unrelated container information such as JPEG IPTC or
@@ -167,7 +192,9 @@ Path output is prepared in a separate temporary file in the destination director
 replaced after writing, flushing and a final cancellation check; errors before that point leave it intact. The
 operation does not preserve filesystem attributes of a replaced destination. Streams need not be seekable and
 remain open. Separate input/output streams are required; a write error or cancellation while copying the result
-may leave partial output. Memory input returns a new byte array. Inputs and the prepared output are buffered;
+may leave partial output; use the path overloads when atomic replacement matters. Memory input returns a new byte
+array. An edit that changes no block and no resolution leaves an in-place file untouched (no write, same
+timestamps); a different destination receives an identical copy. Inputs and the prepared output are buffered;
 this API avoids pixel buffers, but is not an incremental streaming editor.
 
 The existing `DecoderOptions` select the configuration and cap encoded input bytes, total decompressed metadata,
@@ -177,8 +204,9 @@ Cancellation covers I/O and bounded CPU work outside the user callback; callback
 `Identify` keeps its existing lightweight behavior and does not start decompressing PNG metadata.
 
 Container validation does not validate the compressed image bitstream by decoding it. Metadata-only PNG operations
-always validate chunk CRCs. JPEG EXIF and standard XMP each need to fit in one APP1 segment; larger replacements
-and extended JPEG XMP are unsupported. JPEG MPF/MPO is rejected because its file offsets would need a separate rewrite. ICC uses up to 255 APP2 segments. Other formats and format plugins without
+always validate chunk CRCs. JPEG EXIF and standard XMP each need to fit in one APP1 segment and ICC in 255 APP2
+segments; larger replacements throw `ArgumentException`, as in `Save`. Extended JPEG XMP in the input is
+unsupported. JPEG MPF/MPO is rejected because its file offsets would need a separate rewrite. Other formats and format plugins without
 an internal metadata adapter throw `NotSupportedException`.
 
 Changing `HorizontalResolution`/`VerticalResolution` through the edit callback updates JPEG JFIF or PNG pHYs.

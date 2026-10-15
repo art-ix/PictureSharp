@@ -22,8 +22,8 @@ differs from `acTL` (batch decoding tolerates it). Late metadata/GIF loop extens
 all values into a writer whose header is already fixed. `TargetSize` and `ApplyExifOrientation` are unsupported on
 frame readers. Format-specific color/timing limits remain unchanged.
 
-See [animation](animation.md#sequential-reading-and-writing-060), [architecture](architecture.md), and
-[10/100/1000-frame measurements](performance.md#sequential-animation-memory-060). No native dependencies,
+See [animation](../animation.md#sequential-reading-and-writing-060), [architecture](../architecture.md), and
+[10/100/1000-frame measurements](../performance.md#sequential-animation-memory-060). No native dependencies,
 new SIMD kernels or external corpus downloads were introduced. Actual ARM64 execution remains a separate check.
 
 Local validation: Release build with zero warnings, **4651/4651 full tests**, **152/152 Oracle** with no skips,

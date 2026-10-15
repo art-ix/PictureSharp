@@ -6,5 +6,6 @@ namespace PictureSharp.Application.Abstractions;
 internal interface IImageMetadataCodec
 {
     ImageMetadata Read(ReadOnlyMemory<byte> data, DecodeContext context);
-    byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata metadata, DecodeContext context);
+    // original is the result of Read for data; the caller has already checked that metadata differs from it.
+    byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, DecodeContext context);
 }
