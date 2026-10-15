@@ -146,6 +146,7 @@ internal sealed partial class PngDecoder : ISequentialImageDecoder
                 (Metadata.HorizontalResolution, Metadata.VerticalResolution) = (dx, dy);
             }
 
+            Png.ColorDescription.ApplyTo(Metadata);
             Metadata.IccData = Png.Icc;
             Metadata.ExifData = Png.Exif;
             Metadata.XmpData = Png.Xmp;
@@ -304,19 +305,26 @@ internal sealed partial class PngDecoder : ISequentialImageDecoder
                 }
 
                 string name = Encoding.ASCII.GetString(type);
-                bool keepChunk = name is "PLTE" or "tRNS" or "pHYs" or "acTL" or "fcTL" ||
+                uint code = PngColorDescription.TypeOf(type);
+                bool colorChunk = !SeenImageData && !options.IgnoreMetadata && Png.ColorDescription.Wants(code);
+                bool keepChunk = name is "PLTE" or "tRNS" or "pHYs" or "acTL" or "fcTL" || colorChunk ||
                     (!options.IgnoreMetadata && ((name == "eXIf" && Png.Exif is null) ||
                         (name == "iCCP" && Png.Icc is null) || (name == "iTXt" && Png.Xmp is null)));
                 if (keepChunk && name == "eXIf") _ = options.AddMetadata(ImageFormat.Png, Png.MetadataBytes, Length);
                 if (name == "PLTE" && Length > 768) throw Error("Invalid PLTE chunk.");
-                int keepBytes = name switch { "tRNS" => 256, "pHYs" => 9, "acTL" => 8, "fcTL" => 26, _ => int.MaxValue };
+                // Color chunks keep one byte more than valid, so oversized bodies stay detectable.
+                int keepBytes = name switch { "tRNS" => 256, "pHYs" => 9, "acTL" => 8, "fcTL" => 26, "gAMA" => 5, "cHRM" => 33, "sRGB" => 2, _ => int.MaxValue };
                 if (!await ReadBodyAsync(keepChunk ? _body : null, 0, cancellationToken, keepBytes).ConfigureAwait(false))
                 {
                     EndAfterTruncation();
                     break;
                 }
 
-                if (HandleChunk(name, keepChunk ? _body.Span : []) && !stopAtImageData)
+                if (colorChunk)
+                {
+                    Png.ColorDescription.Read(code, _body.Span);
+                }
+                else if (HandleChunk(name, keepChunk ? _body.Span : []) && !stopAtImageData)
                 {
                     return;
                 }

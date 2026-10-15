@@ -1,11 +1,53 @@
 using System.Drawing;
+using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Algorithms.Processing;
+using PictureSharp.Application.ColorManagement;
+using PictureSharp.Domain.Frames;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Processing;
 
 public readonly ref partial struct ImageProcessingContext
 {
+    /// <summary>
+    /// Converts every frame to sRGB from the image's ICC profile or PNG color description (<see cref="ImageMetadata.Gamma"/>,
+    /// <see cref="ImageMetadata.Chromaticities"/>), then removes them, so the result is not converted again. An ICC
+    /// profile takes precedence, then <see cref="ImageMetadata.SrgbRenderingIntent"/> (already sRGB), then gamma and
+    /// chromaticities; an image without any is already sRGB and is left unchanged.
+    /// </summary>
+    /// <remarks>
+    /// RGB and Gray matrix/TRC profiles of ICC v2 and v4 are supported, with the relative colorimetric intent and
+    /// without black-point compensation; colors outside sRGB are clipped and alpha is kept.
+    /// </remarks>
+    /// <exception cref="NotSupportedException">The profile is LUT-based, CMYK, Lab or otherwise not matrix/TRC.</exception>
+    /// <exception cref="ImageFormatException">The ICC profile is malformed.</exception>
+    public ImageProcessingContext ConvertToSrgb()
+    {
+        ImageMetadata metadata = Target.Metadata;
+        if (ColorDescriptionResolver.ToSrgb(metadata, Target.SourceFormat) is { } conversion)
+        {
+            // New buffers are committed together, so a canceled conversion leaves pixels and profile consistent.
+            _state.ReplaceFrames(conversion, static (frame, conversion, token) =>
+            {
+                ReadOnlySpan<Rgba32> source = frame.GetPixelSpan();
+                Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(source.Length);
+                const int band = 1 << 16;
+                for (int start = 0; start < source.Length; start += band)
+                {
+                    token.ThrowIfCancellationRequested();
+                    int length = Math.Min(band, source.Length - start);
+                    conversion.Convert(source.Slice(start, length), pixels.AsSpan(start, length));
+                }
+
+                return new FrameReplacement(frame.Width, frame.Height, pixels);
+            });
+        }
+
+        metadata.IccProfile = null;
+        metadata.ClearColorDescription();
+        return this;
+    }
+
     /// <summary>Converts to grayscale (BT.601 luma, as Pillow's "L" mode); alpha is kept.</summary>
     public ImageProcessingContext Grayscale() => ForEachPixelSpan(ColorOps.Grayscale);
 

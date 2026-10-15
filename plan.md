@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja kodu: 0.6.1 (lokalnie; ostatnia opublikowana: 0.6.0). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG oraz sekwencyjne animacje ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** 0.6.1 jest zaimplementowana, zweryfikowana i przygotowana jako wersja lokalna; kolejnym etapem implementacji jest 0.6.2. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja kodu: 0.6.2 (przygotowana do publikacji; ostatnia opublikowana: 0.6.1). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane oraz zarządzanie kolorem ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Kolejnym etapem implementacji jest 0.6.3. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
@@ -51,8 +51,8 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.5.6 | API skupione na `Image`, `ImageConfiguration`, wtyczki formatów i procesory ramek | Ukończona — opublikowana |
 | 0.5.7 | Porządki w testach: duplikaty, mniejsze macierze, kategoria `Slow`, migracja na TUnit | Ukończona — wydanie 0.5.7 |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Ukończona — wydanie 0.6.0 |
-| 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Ukończona — wersja 0.6.1 lokalnie |
-| 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
+| 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Ukończona — wydanie 0.6.1 |
+| 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Ukończona — wersja 0.6.2 przygotowana do publikacji |
 | 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Planowana |
 | 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Planowana |
 | 0.7.0 | Integracja ICO i sześciu obszarów, stabilizacja API i wydanie | Planowana |
@@ -240,6 +240,40 @@ DoD:
 - Wektory i obrazy kontrolne porównane z niezależnym silnikiem kolorów (np. LittleCMS tylko jako wyrocznia); przed implementacją zapisana tolerancja błędu i konfiguracja referencji.
 - Testy sRGB, profili szerokogamutowych matrix/TRC, szarości, błędnych/nieobsługiwanych profili, krzywych i punktu bieli.
 - Testy krawędzi z alfą, gradientów i mieszania potwierdzają obliczenia liniowe; tryb domyślny nadal zgodny z dotychczasowymi referencjami.
+
+Referencja i tolerancja (ustalone 2026-10-15 przed implementacją; `tests/assets/color_reference.py`,
+`tests/assets/corpus/color/color_reference.json`):
+- Wyrocznia: LittleCMS 2.14 przez Pillow 10.2.0 `ImageCms`, intent relative colorimetric, bez BPC, flagi 0, cel
+  wbudowany sRGB LittleCMS (D65 → D50 Bradford), tryby 8-bit RGB→RGB i L→RGB. Profile testowe są syntetyczne
+  (v2/v4, `curv` gamma/tabela/tożsamość, `para` typy 0–4, P3, Adobe RGB, ProPhoto, Rec.2020, sRGB, Gray).
+- Tolerancja: RGB matrix/TRC |różnica| ≤ 1 na kanał 8-bit, Gray/TRC ≤ 2, odsetek różniących się kanałów ≤ 7%.
+  Kalibracja LittleCMS względem dokładnego modelu double: RGB maks. 1 (≤ 2,2% kanałów), Gray maks. 2 przy czerni
+  (16-bitowa ścieżka z odwróconą krzywą sRGB).
+- Polityka PNG: iCCP > sRGB > cHRM/gAMA (jak libpng i przeglądarki); same gAMA = prymarne sRGB z krzywą potęgową,
+  same cHRM = krzywa sRGB. Chunki koloru po pierwszym IDAT i gAMA = 0 są ignorowane. Brak opisu koloru = sRGB.
+  Po konwersji profil i opis koloru są usuwane (sRGB domyślne), więc nie ma podwójnej konwersji.
+- Światło liniowe: referencja to Pillow `F` (resampling 32bpc) na liniowych, premultiplikowanych kanałach oraz
+  model source-over w double; tolerancja ≤ 1 na kanał.
+
+Weryfikacja 2026-10-15: `ConvertToSrgb()`, `DecoderOptions.ColorConversion = ToSrgb` (z `IgnoreMetadata` →
+`ArgumentException`, frame readers → `NotSupportedException`), parser ICC v2/v4 matrix/TRC (RGB, Gray; `curv`,
+`para` 0–4), nieobsługiwane → `NotSupportedException`, uszkodzone → `ImageFormatException` (fuzzing 2000 przypadków).
+`ImageMetadata.Gamma/Chromaticities/SrgbRenderingIntent` z PNG gAMA/cHRM/sRGB (oba dekodery, enkoder, EditMetadata;
+JPEG/WebP odrzucają zmianę). `ResizeOptions.LinearLight`, `DrawImageOptions { Opacity, LinearLight }`; tryb
+domyślny bez zmian (referencje Pillow zielone). Wszystkie 13 profili w tolerancji względem LittleCMS, 7 przypadków
+PNG, 9 przypadków światła liniowego ≤ 1. Build Release bez ostrzeżeń, 4970/4970 testów, 155/155 Oracle, 113/113
+scalar, 56/56 testów koloru bez intrinsics, package consumer (trim + AOT) OK. Pomiar lokalny: resize liniowy ≈ 1,5×
+czasu domyślnego, `ConvertToSrgb` 3000×2250 ≈ 38 ms. Bez nowych ścieżek SIMD; macierz regresji wydajności i ARM64
+nie były uruchamiane.
+
+Przygotowanie wydania (2026-10-15): review kodu (10 ustaleń, wszystkie poprawione): IgnoreMetadata pomija też
+gAMA/cHRM/sRGB, `ConvertToSrgb` atomowe (ReplaceFrames), `IcoFile.LoadAll` obsługuje `ColorConversion`, rozmiar
+profilu większy od danych przycinany jak w LittleCMS, zakres `Gamma` jak gAMA, zdegenerowane `CieChromaticities`
+odrzucane w konstruktorze, wspólny `PngColorDescription`, wagi resamplingu bez dodatkowych alokacji, `DrawImage`
+liniowe bez zbędnych konwersji. VERSION 0.6.2, `docs/releases/release-0.6.2.md`, PackageReleaseNotes. Build Release
+bez ostrzeżeń, 4974/4974, Oracle 155/155, scalar 113/113, kolor bez intrinsics 60/60, package consumer 0.6.2 (trim +
+AOT, AotSmoke z nowym API). Macierz 80 przypadków względem v0.6.1: mediana +0,28%, alokacje maks. +0,27%; dziewięć
+przypadków >5% potwierdzonych naprzemiennie w osobnych ALC: od −1,79% do +2,28%, bez regresji >5%. ARM64 osobno.
 
 ## 0.6.3 — operacje graficzne
 

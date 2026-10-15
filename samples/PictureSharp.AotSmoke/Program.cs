@@ -95,6 +95,17 @@ try
     if (resized.FrameCount != 2 || resized.Width != 1) throw new InvalidOperationException("Sequential resize failed.");
 }
 finally { File.Delete(resizedPath); }
+using (var tagged = new Image(4, 4, new Rgba32(128, 64, 32)))
+{
+    tagged.Metadata.Gamma = 1 / 1.8f;
+    tagged.Metadata.Chromaticities = CieChromaticities.Srgb;
+    using Image converted = Image.Load(tagged.Encode(new PngEncoderOptions()), new DecoderOptions { ColorConversion = ColorConversionMode.ToSrgb });
+    if (converted.Metadata.HasColorDescription || converted[0, 0] == tagged[0, 0]) throw new InvalidOperationException("Color conversion failed.");
+    converted.Mutate(x => x
+        .Resize(new ResizeOptions { Size = new(2, 2), LinearLight = true })
+        .DrawImage(source, AnchorPosition.Center, new DrawImageOptions { Opacity = 0.5f, LinearLight = true }));
+    if (converted.Width != 2) throw new InvalidOperationException("Linear-light processing failed.");
+}
 using Image jpegThumbnail = Image.Load(source.Encode(new JpegEncoderOptions()), new DecoderOptions { TargetSize = new(2, 2) });
 if (jpegThumbnail.Width != 2) throw new InvalidOperationException("JPEG reduction failed.");
 ImageConfiguration builtIn = ImageConfiguration.Default;
@@ -131,7 +142,7 @@ if (!source.Metadata.TrySetOrientation(ExifOrientation.TopLeft)) throw new Inval
 processed.Frames.AddClone(source.Frames[0]);
 using Image transferred = processed.Frames.ExportFrame(1);
 if (transferred.Size != source.Size) throw new InvalidOperationException("Frame transfer failed.");
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, JPEG thumbnails, configurations, a format plugin and a frame processor.");
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, JPEG thumbnails, configurations, a format plugin and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>

@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -36,6 +37,38 @@ internal static class Compositor
                 Rgba32 s = srcRow[x];
                 s.A = alphaMap[s.A];
                 dstRow[x] = Over(dstRow[x], s);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Like <see cref="DrawOver"/>, but blends linear-light sRGB with premultiplied alpha in float precision:
+    /// out = src + dst × (1 − src alpha), with the source alpha scaled by <paramref name="opacity"/> unrounded.
+    /// </summary>
+    public static void DrawOverLinear(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity)
+    {
+        int x0 = Math.Max(0, at.X);
+        int y0 = Math.Max(0, at.Y);
+        int x1 = (int)Math.Min(dst.Width, (long)at.X + srcWidth);
+        int y1 = (int)Math.Min(dst.Height, (long)at.Y + srcHeight);
+        if (x0 >= x1 || y0 >= y1)
+        {
+            return;
+        }
+
+        int n = x1 - x0;
+        for (int y = y0; y < y1; y++)
+        {
+            Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, n);
+            ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), n);
+            for (int x = 0; x < n; x++)
+            {
+                // Like the default blend, a transparent source pixel leaves the destination untouched.
+                if (srcRow[x].A != 0)
+                {
+                    Vector4 s = Resizer.ToLinearPremultiplied(srcRow[x]) * opacity;
+                    dstRow[x] = Resizer.FromLinearPremultiplied(s + (Resizer.ToLinearPremultiplied(dstRow[x]) * (1f - s.W)));
+                }
             }
         }
     }

@@ -83,6 +83,7 @@ internal sealed partial class PngDecoder : IImageDecoder
             (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution) = (dx, dy);
         }
 
+        png.ColorDescription.ApplyTo(image.Metadata);
         if (!options.IgnoreMetadata)
         {
             image.Metadata.IccData = png.Icc;

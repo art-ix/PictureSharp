@@ -37,9 +37,18 @@ internal sealed class IconService(IIcoCodec codec, IImageInput input, IImageOutp
     public IcoImageCollection LoadAll(ReadOnlyMemory<byte> data, DecoderOptions? options, CancellationToken cancellationToken)
     {
         options ??= DecoderOptions.Default;
+        options.CheckColorConversion();
         IcoImageCollection result = codec.LoadAll(data, new DecodeContext(options, cancellationToken));
         try
         {
+            if (options.ColorConversion == ColorConversionMode.ToSrgb)
+            {
+                foreach (Image image in result)
+                {
+                    ImageProcessingService.Mutate(image, static x => x.ConvertToSrgb(), cancellationToken);
+                }
+            }
+
             if (options.ApplyExifOrientation)
             {
                 foreach (Image image in result)

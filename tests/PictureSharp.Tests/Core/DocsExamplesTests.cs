@@ -34,6 +34,8 @@ public sealed class DocsExamplesTests : IDisposable
         }
 
         File.Copy(P("input.png"), P("unknown.bin"));
+        File.Copy(Corpus.PathOf("color/png_gama_chrm.png"), P("wide-gamut.png"));
+        File.Copy(Corpus.PathOf("src/photo.png"), P("photo.png"));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
@@ -73,6 +75,33 @@ public sealed class DocsExamplesTests : IDisposable
         await IcoFile.SaveAsync(variants, P("legacy.ico"), new() { Encoding = IcoEncoding.Dib });
         using IcoImageCollection legacy = IcoFile.LoadAll(P("legacy.ico"));
         await Assert.That(legacy[1].ToPixelData()).IsEquivalentTo(large.ToPixelData(), CollectionOrdering.Matching);
+    }
+
+    // ------------------------------------------------------------ color-management.md
+
+    [Test]
+    public async Task ColorManagement_ConversionEditingAndLinearLight()
+    {
+        using Image photo = Image.Load(P("wide-gamut.png"), new DecoderOptions { ColorConversion = ColorConversionMode.ToSrgb });
+
+        using Image other = Image.Load(P("wide-gamut.png"));
+        other.Mutate(x => x.ConvertToSrgb().Resize(800, 0));
+        await Assert.That(photo.Metadata.HasColorDescription).IsFalse();
+        await Assert.That(other.Metadata.Gamma).IsNull();
+
+        byte[] tagged = Image.EditMetadata(File.ReadAllBytes(P("input.png")), m =>
+        {
+            m.ClearColorDescription();
+            m.SrgbRenderingIntent = RenderingIntent.Perceptual;
+        });
+        await Assert.That(Image.ReadMetadata(tagged).SrgbRenderingIntent).IsEqualTo(RenderingIntent.Perceptual);
+
+        using Image image = Image.Load(P("photo.png"));
+        using Image logo = Image.Load(P("logo.png"));
+        image.Mutate(x => x
+            .Resize(new ResizeOptions { Size = new(800, 0), LinearLight = true })
+            .DrawImage(logo, AnchorPosition.BottomRight, new DrawImageOptions { Opacity = 0.8f, LinearLight = true }));
+        await Assert.That(image.Width).IsEqualTo(800);
     }
 
     // ------------------------------------------------------------ limits-and-cancellation.md

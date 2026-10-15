@@ -44,6 +44,7 @@ internal sealed partial class PngDecoder
         public long MetadataBytes;
         public float? DpiX;
         public float? DpiY;
+        public readonly PngColorDescription ColorDescription = new();
         public bool StrictChecksums;
         public PngAnimation? Animation;
         public readonly List<(int Offset, int Length)> Idat = [];
@@ -143,6 +144,12 @@ internal sealed partial class PngDecoder
                         png.DpiX = (float)(BinaryPrimitives.ReadUInt32BigEndian(body) * 0.0254);
                         png.DpiY = (float)(BinaryPrimitives.ReadUInt32BigEndian(body[4..]) * 0.0254);
                     }
+                }
+                // Color-space chunks count only before the image data and, like the ICC profile they may back up,
+                // only when metadata is read.
+                else if (!seenIdat && !options.IgnoreMetadata && png.ColorDescription.Wants(PngColorDescription.TypeOf(type)))
+                {
+                    png.ColorDescription.Read(PngColorDescription.TypeOf(type), body);
                 }
                 // Like libpng, the first iCCP and eXIf are kept and duplicates ignored. Identify reports only the EXIF
                 // orientation, so it does not decompress the profile or XMP.

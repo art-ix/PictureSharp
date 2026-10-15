@@ -26,6 +26,57 @@ public sealed class ImageMetadata
         set => field = CheckResolution(value);
     } = 96f;
 
+    /// <summary>
+    /// Gamma of the encoded values (PNG <c>gAMA</c>), e.g. 0.45455 for a 1/2.2 encoding: linear light is the encoded
+    /// value raised to 1/<see cref="Gamma"/>. Used to convert colors only without an ICC profile and
+    /// <see cref="SrgbRenderingIntent"/>. The range is that of <c>gAMA</c>: 0.00001 to 21474.83647. Default: null.
+    /// </summary>
+    public float? Gamma
+    {
+        get;
+        set => field = value is null or (>= 0.00001f and <= 21474.83647f)
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(Gamma), value, "Gamma must be between 0.00001 and 21474.83647, as in PNG gAMA.");
+    }
+
+    /// <summary>
+    /// White point and primaries (PNG <c>cHRM</c>). Used to convert colors only without an ICC profile and
+    /// <see cref="SrgbRenderingIntent"/>. Default: null.
+    /// </summary>
+    public CieChromaticities? Chromaticities
+    {
+        get;
+        set => field = value is null || value.Value.WhiteY > 0
+            ? value
+            : throw new ArgumentException("Uninitialized chromaticities.", nameof(Chromaticities));
+    }
+
+    /// <summary>
+    /// Set when the image declares the sRGB color space (PNG <c>sRGB</c> chunk) with this rendering intent; such an
+    /// image needs no conversion unless it also has an ICC profile, which takes precedence. Default: null.
+    /// </summary>
+    public RenderingIntent? SrgbRenderingIntent
+    {
+        get;
+        set => field = value is null || Enum.IsDefined(value.Value)
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(SrgbRenderingIntent), value, "Unknown rendering intent.");
+    }
+
+    /// <summary>Whether <see cref="Gamma"/>, <see cref="Chromaticities"/> or <see cref="SrgbRenderingIntent"/> is set.</summary>
+    public bool HasColorDescription => Gamma is not null || Chromaticities is not null || SrgbRenderingIntent is not null;
+
+    internal bool SameColorDescription(ImageMetadata other) =>
+        Gamma == other.Gamma && Chromaticities == other.Chromaticities && SrgbRenderingIntent == other.SrgbRenderingIntent;
+
+    /// <summary>Removes <see cref="Gamma"/>, <see cref="Chromaticities"/> and <see cref="SrgbRenderingIntent"/>.</summary>
+    public void ClearColorDescription()
+    {
+        Gamma = null;
+        Chromaticities = null;
+        SrgbRenderingIntent = null;
+    }
+
     /// <summary>Raw ICC snapshot. Both get and set copy the block; the profile is preserved without applying it.</summary>
     public byte[]? IccProfile { get => (byte[]?)_icc?.Clone(); set => _icc = (byte[]?)value?.Clone(); }
 
@@ -52,7 +103,7 @@ public sealed class ImageMetadata
     /// <summary>Whether no ICC, EXIF or XMP block is present.</summary>
     public bool IsEmpty => _icc is null && _exif is null && _xmp is null;
 
-    /// <summary>Removes the ICC, EXIF and XMP blocks; the resolution is kept.</summary>
+    /// <summary>Removes the ICC, EXIF and XMP blocks; the resolution and color description are kept.</summary>
     public void Clear()
     {
         _icc = null;
@@ -65,6 +116,9 @@ public sealed class ImageMetadata
     {
         HorizontalResolution = HorizontalResolution,
         VerticalResolution = VerticalResolution,
+        Gamma = Gamma,
+        Chromaticities = Chromaticities,
+        SrgbRenderingIntent = SrgbRenderingIntent,
         _icc = (byte[]?)_icc?.Clone(),
         _exif = (byte[]?)_exif?.Clone(),
         _xmp = (byte[]?)_xmp?.Clone(),

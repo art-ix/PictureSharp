@@ -1,5 +1,20 @@
+readonly struct CieChromaticities : System.IEquatable<CieChromaticities>
+    ctor(System.Single whiteX, System.Single whiteY, System.Single redX, System.Single redY, System.Single greenX, System.Single greenY, System.Single blueX, System.Single blueY)
+    property System.Single BlueX { get; }
+    property System.Single BlueY { get; }
+    property System.Single GreenX { get; }
+    property System.Single GreenY { get; }
+    property System.Single RedX { get; }
+    property System.Single RedY { get; }
+    property System.Single WhiteX { get; }
+    property System.Single WhiteY { get; }
+    property static CieChromaticities Srgb { get; }
+enum ColorConversionMode
+    None = 0
+    ToSrgb = 1
 sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     ctor()
+    property ColorConversionMode ColorConversion { get; init; }
     property ImageConfiguration? Configuration { get; init; }
     property PictureSharp.Formats.Ico.IcoDecoderOptions Ico { get; init; }
     property PictureSharp.Formats.Png.PngDecoderOptions Png { get; init; }
@@ -540,16 +555,21 @@ sealed class ImageMetadata
     method System.Int32 CopyBlockTo(MetadataKinds kind, System.Span<System.Byte> destination)
     method System.Int32 GetBlockLength(MetadataKinds kind)
     method System.Void Clear()
+    method System.Void ClearColorDescription()
     method System.Void RemoveBlocks(MetadataKinds kinds)
     method System.Void SetBlock(MetadataKinds kind, System.ReadOnlySpan<System.Byte> data)
+    property CieChromaticities? Chromaticities { get; set; }
     property ExifOrientation Orientation { get; set; }
     property ExifProfile ExifProfile { get; }
+    property RenderingIntent? SrgbRenderingIntent { get; set; }
+    property System.Boolean HasColorDescription { get; }
     property System.Boolean IsEmpty { get; }
     property System.Byte[]? Exif { get; set; }
     property System.Byte[]? IccProfile { get; set; }
     property System.Byte[]? Xmp { get; set; }
     property System.Single HorizontalResolution { get; set; }
     property System.Single VerticalResolution { get; set; }
+    property System.Single? Gamma { get; set; }
 static class ImageProcessingExtensions
     method [Extension] static Image Clone(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation)
     method [Extension] static Image Clone(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
@@ -583,6 +603,11 @@ enum PictureSharp.Processing.AnchorPosition
     TopRight = 6
     BottomLeft = 7
     BottomRight = 8
+sealed record PictureSharp.Processing.DrawImageOptions : System.IEquatable<PictureSharp.Processing.DrawImageOptions>
+    ctor()
+    property System.Boolean LinearLight { get; init; }
+    property System.Single Opacity { get; init; }
+    property static PictureSharp.Processing.DrawImageOptions Default { get; }
 enum PictureSharp.Processing.FlipMode
     None = 0
     Horizontal = 1
@@ -598,10 +623,13 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext BoxBlur(System.Single radius)
     method PictureSharp.Processing.ImageProcessingContext Brightness(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Contrast(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext ConvertToSrgb()
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Drawing.Rectangle rectangle)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 width, System.Int32 height, PictureSharp.Processing.AnchorPosition position = Center)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 x, System.Int32 y, System.Int32 width, System.Int32 height)
+    method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, PictureSharp.Processing.DrawImageOptions options)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, System.Single opacity = 1)
+    method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, PictureSharp.Processing.DrawImageOptions options)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, System.Single opacity = 1)
     method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color)
     method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color, System.Drawing.Rectangle region)
@@ -648,12 +676,18 @@ sealed record PictureSharp.Processing.ResizeOptions : System.IEquatable<PictureS
     property PictureSharp.Processing.ResizeMode Mode { get; init; }
     property Rgba32 PadColor { get; init; }
     property System.Boolean AllowUpscale { get; init; }
+    property System.Boolean LinearLight { get; init; }
     property required System.Drawing.Size Size { get; init; }
 enum PictureSharp.Processing.RotateMode
     None = 0
     Rotate90 = 90
     Rotate180 = 180
     Rotate270 = 270
+enum RenderingIntent
+    Perceptual = 0
+    RelativeColorimetric = 1
+    Saturation = 2
+    AbsoluteColorimetric = 3
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32>
     ctor(System.Byte r, System.Byte g, System.Byte b, System.Byte a = 255)
     field System.Byte A

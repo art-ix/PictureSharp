@@ -37,6 +37,8 @@ internal sealed class WebPMetadataCodec : IImageMetadataCodec
         var chunks = Parse(data.Span, context.CancellationToken, out int end);
         if (metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution)
             throw new NotSupportedException("WebP has no container resolution field; edit EXIF resolution tags instead.");
+        if (!metadata.SameColorDescription(original))
+            throw new NotSupportedException("WebP stores colors only as an ICC profile; gamma, chromaticities and sRGB intent are PNG chunks.");
         WebPContainer container = WebPContainer.Parse(data.Span, context.Options);
         using var output = new PooledBufferStream();
         output.Write(data.Span[..12]);

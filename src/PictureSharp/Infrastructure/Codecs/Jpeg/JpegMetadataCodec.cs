@@ -52,6 +52,8 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
     public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, DecodeContext context)
     {
         var segments = Parse(data.Span, context.CancellationToken);
+        if (!metadata.SameColorDescription(original))
+            throw new NotSupportedException("JPEG stores colors only as an ICC profile; gamma, chromaticities and sRGB intent are PNG chunks.");
         bool resolution = metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution;
         using var output = new PooledBufferStream();
         output.Write(new byte[] { 0xff, 0xd8 });

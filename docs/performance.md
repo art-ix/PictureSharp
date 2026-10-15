@@ -708,3 +708,25 @@ resize +0.48%, large WebP lossless decode −0.29%, large PCX decode −0.92%. N
 was confirmed. The existing codecs and processing algorithms were not changed. This is a lightweight probe,
 not a full BenchmarkDotNet study. [Raw matrix](measurements/metadata-regression.csv),
 [alternating confirmations](measurements/metadata-regression-confirmation.json).
+
+## Color management and linear light (0.6.2)
+
+A local probe on a 3000×2250 RGB image (CPUs 0–7, best of seven runs after warm-up, `Clone` per run):
+
+| Operation | Default | Linear light | Ratio |
+| --- | ---: | ---: | ---: |
+| Resize to 800×600 (Lanczos3) | 15.7 ms | 26.6 ms | 1.69 |
+| Resize to 6000×4500 (Lanczos3) | 58.1 ms | 87.3 ms | 1.50 |
+| `ConvertToSrgb()` (Display P3 matrix/TRC) | — | 38.1 ms | — |
+
+Linear light works in `Vector4` float buffers with the same weights and passes as the default fixed-point path;
+`ConvertToSrgb()` writes new buffers so a canceled conversion commits nothing. These numbers are a lightweight
+probe, not a BenchmarkDotNet study.
+
+The frozen 80-case complete-operation matrix was compared with release 0.6.1 (`v0.6.1`), one sweep per version,
+seven samples of at least 120 ms, CPUs 0–7. Median time change: +0.28%; largest allocation increase: +0.27%.
+Nine cases above +5% were checked in separate AssemblyLoadContexts in one process with alternating order, 15 samples
+per version of at least 180 ms. Confirmed changes ranged from −1.79% (GIF decode) to +2.28% (single-threaded WebP
+lossless decode). No repeatable regression above 5% was confirmed. Default resize weights are computed by the same
+code, now shared with the float passes, without extra allocations.
+[Raw matrix](measurements/color-regression.csv), [alternating confirmations](measurements/color-regression-confirmation.json).

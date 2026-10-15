@@ -10,13 +10,15 @@ namespace PictureSharp.Infrastructure.Codecs.Png;
 internal sealed class PngMetadataCodec : IImageMetadataCodec
 {
     private readonly record struct Chunk(int Start, int Length, int Body, int Size, uint Type, MetadataKinds Kind);
-    private const uint Ihdr = 0x49484452, Idat = 0x49444154, Iend = 0x49454e44, Phys = 0x70485973, Srgb = 0x73524742;
+    private const uint Ihdr = 0x49484452, Idat = 0x49444154, Iend = 0x49454e44, Phys = 0x70485973;
+    private const uint Gama = PngColorDescription.Gama, Chrm = PngColorDescription.Chrm, Srgb = PngColorDescription.Srgb;
     private static ReadOnlySpan<byte> XmpKeyword => "XML:com.adobe.xmp\0"u8;
 
     public ImageMetadata Read(ReadOnlyMemory<byte> data, DecodeContext context)
     {
         List<Chunk> chunks = Parse(data.Span, context.CancellationToken);
         var metadata = new ImageMetadata();
+        ReadColorDescription(data.Span, chunks, metadata);
         foreach (Chunk chunk in chunks)
         {
             ReadOnlySpan<byte> value = data.Span.Slice(chunk.Body, chunk.Size);
@@ -63,14 +65,24 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
     {
         List<Chunk> chunks = Parse(data.Span, context.CancellationToken);
         bool resolution = metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution;
+        bool color = metadata.Gamma != original.Gamma || metadata.Chromaticities != original.Chromaticities
+            || metadata.SrgbRenderingIntent != original.SrgbRenderingIntent;
         using var output = new PooledBufferStream();
         output.Write(data.Span[..8]);
         foreach (Chunk chunk in chunks)
         {
             if (chunk.Kind != MetadataKinds.None || resolution && chunk.Type == Phys
+                || (color && chunk.Type is Gama or Chrm or Srgb)
                 || metadata.IccData is { Length: > 0 } && chunk.Type == Srgb) continue;
             MetadataContainer.Write(output, data.Span.Slice(chunk.Start, chunk.Length), context.CancellationToken);
             if (chunk.Type != Ihdr) continue;
+            if (color)
+            {
+                if (metadata.SrgbRenderingIntent is { } intent && metadata.IccData is not { Length: > 0 })
+                    MetadataContainer.PngChunk(output, "sRGB"u8, [(byte)intent], context.CancellationToken);
+                if (metadata.Gamma is { } gamma) MetadataContainer.PngChunk(output, "gAMA"u8, PngColorChunks.Gamma(gamma), context.CancellationToken);
+                if (metadata.Chromaticities is { } c) MetadataContainer.PngChunk(output, "cHRM"u8, PngColorChunks.Chromaticities(c), context.CancellationToken);
+            }
             if (metadata.IccData is { Length: > 0 } icc)
             {
                 using Deflater compressed = Deflater.CompressZlibPooled(icc, 6, 1, context.CancellationToken);
@@ -91,6 +103,19 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
             }
         }
         return MetadataContainer.ToArray(output);
+    }
+
+    /// <summary>Reads gAMA, cHRM and sRGB like the decoder: the first of each before the image data.</summary>
+    private static void ReadColorDescription(ReadOnlySpan<byte> data, List<Chunk> chunks, ImageMetadata metadata)
+    {
+        var description = new PngColorDescription();
+        foreach (Chunk chunk in chunks)
+        {
+            if (chunk.Type == Idat) break;
+            if (description.Wants(chunk.Type)) description.Read(chunk.Type, data.Slice(chunk.Body, chunk.Size));
+        }
+
+        description.ApplyTo(metadata);
     }
 
     private static byte[] Inflate(ReadOnlySpan<byte> value, DecodeContext context)

@@ -77,7 +77,17 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
 
     private static void WriteMetadata(ChunkWriter writer, ImageMetadata meta, Layout layout, PngEncoderOptions options)
     {
-        if (MetadataSelection.Select(meta.IccData, options.Metadata, MetadataKinds.Icc) is { } icc)
+        // The color description follows the ICC selection. PNG forbids sRGB together with iCCP; gAMA and cHRM may
+        // accompany either as fallbacks for older decoders.
+        byte[]? icc = MetadataSelection.Select(meta.IccData, options.Metadata, MetadataKinds.Icc);
+        if ((options.Metadata & MetadataKinds.Icc) != 0)
+        {
+            if (icc is null && meta.SrgbRenderingIntent is { } intent) writer.Write("sRGB", [(byte)intent]);
+            if (meta.Gamma is { } gamma) writer.Write("gAMA", PngColorChunks.Gamma(gamma));
+            if (meta.Chromaticities is { } chromaticities) writer.Write("cHRM", PngColorChunks.Chromaticities(chromaticities));
+        }
+
+        if (icc is not null)
         {
             byte[] name = "ICC Profile\0\0"u8.ToArray();
             byte[] compressed = Deflater.CompressZlib(icc, 9);

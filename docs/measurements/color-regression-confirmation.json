@@ -1,0 +1,65 @@
+[
+  {
+    "File": "photo.png",
+    "Operation": "WebPLossyDecode",
+    "BaselineNs": 685647.9087452472,
+    "CurrentNs": 680909.8113207547,
+    "TimeChangePercent": -0.6910394335138181
+  },
+  {
+    "File": "photo.png",
+    "Operation": "BmpDecode",
+    "BaselineNs": 46638.80829015544,
+    "CurrentNs": 46689.499611096704,
+    "TimeChangePercent": 0.10868914279691388
+  },
+  {
+    "File": "photo.png",
+    "Operation": "ResizeBicubicDouble",
+    "BaselineNs": 468455.5844155844,
+    "CurrentNs": 467039.1191709844,
+    "TimeChangePercent": -0.3023691661968475
+  },
+  {
+    "File": "graphic.png",
+    "Operation": "WebPLosslessDecode",
+    "BaselineNs": 60641.42809026608,
+    "CurrentNs": 61468.58996244452,
+    "TimeChangePercent": 1.3640210961839427
+  },
+  {
+    "File": "graphic.png",
+    "Operation": "WebPLosslessDecode1T",
+    "BaselineNs": 59600.29781601588,
+    "CurrentNs": 60956.89129698612,
+    "TimeChangePercent": 2.2761521849404165
+  },
+  {
+    "File": "graphic.png",
+    "Operation": "PngDecode",
+    "BaselineNs": 104667.96511627907,
+    "CurrentNs": 104777.53201396973,
+    "TimeChangePercent": 0.10468045076537091
+  },
+  {
+    "File": "graphic.png",
+    "Operation": "JpegEncode",
+    "BaselineNs": 335772.9981378026,
+    "CurrentNs": 334489.98144712433,
+    "TimeChangePercent": -0.3821083582640217
+  },
+  {
+    "File": "graphic.png",
+    "Operation": "BmpDecode",
+    "BaselineNs": 96400.64239828693,
+    "CurrentNs": 96222.073757349,
+    "TimeChangePercent": -0.1852359450055907
+  },
+  {
+    "File": "graphic.png",
+    "Operation": "GifDecode",
+    "BaselineNs": 124481.3969571231,
+    "CurrentNs": 122256.89069925323,
+    "TimeChangePercent": -1.78701903436711
+  }
+]

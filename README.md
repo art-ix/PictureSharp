@@ -47,7 +47,7 @@ The public API may still change between 0.x releases.
 - [Getting started](https://github.com/art-ix/PictureSharp/blob/main/docs/getting-started.md)
 - [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md) · [Limits and cancellation](https://github.com/art-ix/PictureSharp/blob/main/docs/limits-and-cancellation.md)
 - [Image processing](https://github.com/art-ix/PictureSharp/blob/main/docs/image-processing.md) · [Encoder options](https://github.com/art-ix/PictureSharp/blob/main/docs/encoder-options.md) · [Pixels and interop](https://github.com/art-ix/PictureSharp/blob/main/docs/pixels-and-interop.md)
-- [Animation](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md) · [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md) · [ICO icons](https://github.com/art-ix/PictureSharp/blob/main/docs/ico.md)
+- [Animation](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md) · [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md) · [Color management](https://github.com/art-ix/PictureSharp/blob/main/docs/color-management.md) · [ICO icons](https://github.com/art-ix/PictureSharp/blob/main/docs/ico.md)
 - [Extending PictureSharp](https://github.com/art-ix/PictureSharp/blob/main/docs/extending-picturesharp.md) · [Architecture](https://github.com/art-ix/PictureSharp/blob/main/docs/architecture.md) · [Performance](https://github.com/art-ix/PictureSharp/blob/main/docs/performance.md)
 - [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md) · [Development](https://github.com/art-ix/PictureSharp/blob/main/docs/development.md) · [Release notes](https://github.com/art-ix/PictureSharp/tree/main/docs/releases)
 

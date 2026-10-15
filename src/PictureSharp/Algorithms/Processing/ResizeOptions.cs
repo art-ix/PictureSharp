@@ -36,4 +36,12 @@ public sealed record ResizeOptions
     /// their size (<see cref="ResizeMode.Crop"/> only crops, <see cref="ResizeMode.Pad"/> only pads). Default: true.
     /// </summary>
     public bool AllowUpscale { get; init; } = true;
+
+    /// <summary>
+    /// Whether to resample in linear-light sRGB (premultiplied alpha, float precision) instead of on the encoded
+    /// values like Pillow. Linear light keeps the brightness of fine detail and thin lines when shrinking, at roughly
+    /// 1.5–1.7 times the cost; it assumes sRGB pixels, so convert other color spaces first with <c>ConvertToSrgb()</c>.
+    /// <see cref="ResamplingFilter.Nearest"/> is unaffected. Default: false.
+    /// </summary>
+    public bool LinearLight { get; init; }
 }

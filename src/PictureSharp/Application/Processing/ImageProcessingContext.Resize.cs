@@ -44,7 +44,7 @@ public readonly ref partial struct ImageProcessingContext
 
     /// <summary>
     /// Resizes as described by <paramref name="options"/>. Resampling runs on premultiplied alpha and matches Pillow's
-    /// <c>Image.resize</c> pixel for pixel.
+    /// <c>Image.resize</c> pixel for pixel, unless <see cref="ResizeOptions.LinearLight"/> is set.
     /// </summary>
     public ImageProcessingContext Resize(ResizeOptions options)
     {
@@ -116,7 +116,7 @@ public readonly ref partial struct ImageProcessingContext
         {
             var (cropOnly, resample, srcWidth, srcHeight, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset) = state;
             Rgba32[] pixels = cropOnly is { } rect ? Geometry.Crop(frame, rect)
-                : resample ? Resizer.Resize(frame.Pixels, srcWidth, srcHeight, w, h, options.Filter, x0, y0, x1, y1, token)
+                : resample ? Resizer.Resize(frame.Pixels, srcWidth, srcHeight, w, h, options.Filter, x0, y0, x1, y1, token, options.LinearLight)
                 : frame.Pixels;
             if (pad)
             {

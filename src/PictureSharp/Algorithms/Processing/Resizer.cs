@@ -24,8 +24,9 @@ internal static partial class Resizer
     /// of a <paramref name="srcWidth"/>×<paramref name="srcHeight"/> image to <paramref name="width"/>×<paramref name="height"/>.
     /// The box is in source pixels and may be fractional, like Pillow's <c>box</c> argument.
     /// </summary>
+    /// <remarks>With <paramref name="linearLight"/>, resampling runs in linear-light sRGB with premultiplied alpha in float buffers.</remarks>
     public static Rgba32[] Resize(Rgba32[] src, int srcWidth, int srcHeight, int width, int height,
-        ResamplingFilter filter, float x0, float y0, float x1, float y1, CancellationToken cancellationToken = default)
+        ResamplingFilter filter, float x0, float y0, float x1, float y1, CancellationToken cancellationToken = default, bool linearLight = false)
     {
         var dst = GC.AllocateUninitializedArray<Rgba32>(checked(width * height));
         if (width == srcWidth && height == srcHeight && x0 == 0 && y0 == 0 && x1 == srcWidth && y1 == srcHeight)
@@ -34,7 +35,12 @@ internal static partial class Resizer
         }
         else if (filter == ResamplingFilter.Nearest)
         {
+            // Nearest neighbor copies pixels, so linear light would not change it.
             ScaleNearest(src, srcWidth, srcHeight, dst, width, height, x0, y0, x1, y1, cancellationToken);
+        }
+        else if (linearLight)
+        {
+            ResampleLinear(src, srcWidth, srcHeight, dst, width, height, filter, x0, y0, x1, y1, cancellationToken);
         }
         else
         {
@@ -271,57 +277,20 @@ internal static partial class Resizer
     // port: Pillow src/libImaging/Resample.c precompute_coeffs + normalize_coeffs_8bpc
     private static (int Ksize, int[] Bounds, int[] Kk) PrecomputeCoeffs(int inSize, float in0, float in1, int outSize, ResamplingFilter filter)
     {
-        double filterSupport = filter switch
-        {
-            ResamplingFilter.Box => 0.5,
-            ResamplingFilter.Bilinear or ResamplingFilter.Hamming => 1.0,
-            ResamplingFilter.Bicubic => 2.0,
-            _ => 3.0,
-        };
-
-        double scale = (double)(in1 - in0) / outSize;
-        double filterscale = scale < 1.0 ? 1.0 : scale;
-        double support = filterSupport * filterscale;
-        int ksize = ((int)Math.Ceiling(support) * 2) + 1;
-        if ((long)outSize * ksize > Array.MaxLength)
-        {
-            throw new OutOfMemoryException("Resampling coefficients do not fit in memory.");
-        }
-
+        WeightGeometry geometry = WeightGeometry.Create(in0, in1, outSize, filter);
+        int ksize = geometry.Ksize;
         var bounds = new int[outSize * 2];
         var kk = new int[outSize * ksize];
         double[] k = ArrayPool<double>.Shared.Rent(ksize);
         try
         {
-            double ss = 1.0 / filterscale;
             for (int xx = 0; xx < outSize; xx++)
             {
-                double center = in0 + ((xx + 0.5) * scale);
-                double ww = 0.0;
-                int xmin = (int)(center - support + 0.5);
-                if (xmin < 0)
-                {
-                    xmin = 0;
-                }
-
-                int xmax = (int)(center + support + 0.5);
-                if (xmax > inSize)
-                {
-                    xmax = inSize;
-                }
-
-                xmax -= xmin;
-                for (int x = 0; x < xmax; x++)
-                {
-                    double w = Filter(filter, (x + xmin - center + 0.5) * ss);
-                    k[x] = w;
-                    ww += w;
-                }
-
+                (int xmin, int xmax) = geometry.Row(xx, in0, inSize, filter, k);
                 Span<int> row = kk.AsSpan(xx * ksize, ksize);
                 for (int x = 0; x < xmax; x++)
                 {
-                    double v = ww != 0.0 ? k[x] / ww : k[x];
+                    double v = k[x];
                     row[x] = v < 0 ? (int)(-0.5 + (v * (1 << PrecisionBits))) : (int)(0.5 + (v * (1 << PrecisionBits)));
                 }
 
@@ -335,6 +304,81 @@ internal static partial class Resizer
         }
 
         return (ksize, bounds, kk);
+    }
+
+    /// <summary>Unquantized normalized weights for the float passes: output <c>i</c> reads <c>bounds[2i+1]</c> inputs from <c>bounds[2i]</c>.</summary>
+    private static (int Ksize, int[] Bounds, double[] Weights) PrecomputeWeights(int inSize, float in0, float in1, int outSize, ResamplingFilter filter)
+    {
+        WeightGeometry geometry = WeightGeometry.Create(in0, in1, outSize, filter);
+        int ksize = geometry.Ksize;
+        var bounds = new int[outSize * 2];
+        var weights = new double[outSize * ksize];
+        for (int xx = 0; xx < outSize; xx++)
+        {
+            (bounds[xx * 2], bounds[(xx * 2) + 1]) = geometry.Row(xx, in0, inSize, filter, weights.AsSpan(xx * ksize, ksize));
+        }
+
+        return (ksize, bounds, weights);
+    }
+
+    /// <summary>The filter support and scale shared by every output position of one axis.</summary>
+    // port: Pillow src/libImaging/Resample.c precompute_coeffs
+    private readonly record struct WeightGeometry(double Scale, double Support, double InverseFilterScale, int Ksize)
+    {
+        public static WeightGeometry Create(float in0, float in1, int outSize, ResamplingFilter filter)
+        {
+            double filterSupport = filter switch
+            {
+                ResamplingFilter.Box => 0.5,
+                ResamplingFilter.Bilinear or ResamplingFilter.Hamming => 1.0,
+                ResamplingFilter.Bicubic => 2.0,
+                _ => 3.0,
+            };
+
+            double scale = (double)(in1 - in0) / outSize;
+            double filterscale = scale < 1.0 ? 1.0 : scale;
+            double support = filterSupport * filterscale;
+            int ksize = ((int)Math.Ceiling(support) * 2) + 1;
+            if ((long)outSize * ksize > Array.MaxLength)
+            {
+                throw new OutOfMemoryException("Resampling coefficients do not fit in memory.");
+            }
+
+            return new(scale, support, 1.0 / filterscale, ksize);
+        }
+
+        /// <summary>Writes the normalized weights of output <paramref name="xx"/> to <paramref name="k"/>; returns the first input and the tap count.</summary>
+        public (int Min, int Count) Row(int xx, float in0, int inSize, ResamplingFilter filter, Span<double> k)
+        {
+            double center = in0 + ((xx + 0.5) * Scale);
+            double ww = 0.0;
+            int xmin = (int)(center - Support + 0.5);
+            if (xmin < 0)
+            {
+                xmin = 0;
+            }
+
+            int xmax = (int)(center + Support + 0.5);
+            if (xmax > inSize)
+            {
+                xmax = inSize;
+            }
+
+            xmax -= xmin;
+            for (int x = 0; x < xmax; x++)
+            {
+                double w = Filter(filter, (x + xmin - center + 0.5) * InverseFilterScale);
+                k[x] = w;
+                ww += w;
+            }
+
+            for (int x = 0; x < xmax; x++)
+            {
+                k[x] = ww != 0.0 ? k[x] / ww : k[x];
+            }
+
+            return (xmin, xmax);
+        }
     }
 
     private static double Filter(ResamplingFilter filter, double x) => filter switch

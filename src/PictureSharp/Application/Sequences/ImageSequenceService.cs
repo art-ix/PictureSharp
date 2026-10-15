@@ -60,6 +60,8 @@ internal sealed partial class ImageSequenceService(IImageInput input, IImageOutp
     private static DecoderOptions Validate(DecoderOptions? options)
     {
         options ??= DecoderOptions.Default;
+        if (options.ColorConversion != ColorConversionMode.None)
+            throw new NotSupportedException("Frame readers do not convert colors. Load the image with ColorConversion, or copy the profile and color description from the reader's Metadata to CloneCurrent() before ConvertToSrgb().");
         if (options.TargetSize is not null || options.ApplyExifOrientation)
         {
             throw new NotSupportedException("Frame readers return frames at their stored size; TargetSize and ApplyExifOrientation are not supported.");

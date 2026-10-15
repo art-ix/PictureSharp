@@ -12,6 +12,7 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
     public Image Decode(ReadOnlyMemory<byte> data, DecoderOptions options, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        options.CheckColorConversion();
         InputLimits.CheckLength(data.Length, options.MaxInputBytes);
         IImageDecoder decoder = codecs.GetDecoderFor(data.Span);
         DecodedImage result;
@@ -33,6 +34,11 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
         Image image = result.Image;
         try
         {
+            if (options.ColorConversion == ColorConversionMode.ToSrgb)
+            {
+                ImageProcessingService.Mutate(image, static x => x.ConvertToSrgb(), cancellationToken);
+            }
+
             ApplyTargetSize(result, options, cancellationToken);
             if (options.ApplyExifOrientation)
             {

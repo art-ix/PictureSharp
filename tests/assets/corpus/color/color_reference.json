@@ -1,0 +1,297 @@
+{
+  "oracle": {
+    "engine": "LittleCMS 2.14 via Pillow 10.2.0 ImageCms",
+    "destination": "ImageCms.createProfile('sRGB') (LittleCMS built-in sRGB, D65 adapted to D50 with Bradford)",
+    "intent": "relative colorimetric",
+    "black_point_compensation": false,
+    "flags": 0,
+    "modes": "8-bit RGB -> RGB, 8-bit L -> RGB"
+  },
+  "tolerance": {
+    "rgb_max_abs": 1,
+    "gray_max_abs": 2,
+    "max_mismatch_fraction": 0.07
+  },
+  "calibration_against_exact_model": {
+    "display_p3_v4_para3": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0053
+    },
+    "adobe_rgb_v2_gamma": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0219
+    },
+    "prophoto_v2_gamma18": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.004
+    },
+    "rec2020_v4_table": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0071
+    },
+    "srgb_v2_table": {
+      "max_abs": 0,
+      "mismatch_fraction": 0.0
+    },
+    "linear_srgb_v4_identity": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0003
+    },
+    "p3_v4_para0": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0077
+    },
+    "adobe_v4_para1": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0033
+    },
+    "srgb_v4_para2": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0008
+    },
+    "rec2020_v4_para4": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0086
+    },
+    "gray_v2_gamma22": {
+      "max_abs": 1,
+      "mismatch_fraction": 0.0391
+    },
+    "gray_v4_para3": {
+      "max_abs": 0,
+      "mismatch_fraction": 0.0
+    },
+    "gray_v2_table": {
+      "max_abs": 2,
+      "mismatch_fraction": 0.0625
+    }
+  },
+  "profiles": {
+    "display_p3_v4_para3": {
+      "profile": "display_p3_v4_para3.icc",
+      "input": "input_rgb.png",
+      "reference": "display_p3_v4_para3.ref.png",
+      "version": 4
+    },
+    "adobe_rgb_v2_gamma": {
+      "profile": "adobe_rgb_v2_gamma.icc",
+      "input": "input_rgb.png",
+      "reference": "adobe_rgb_v2_gamma.ref.png",
+      "version": 2
+    },
+    "prophoto_v2_gamma18": {
+      "profile": "prophoto_v2_gamma18.icc",
+      "input": "input_rgb.png",
+      "reference": "prophoto_v2_gamma18.ref.png",
+      "version": 2
+    },
+    "rec2020_v4_table": {
+      "profile": "rec2020_v4_table.icc",
+      "input": "input_rgb.png",
+      "reference": "rec2020_v4_table.ref.png",
+      "version": 4
+    },
+    "srgb_v2_table": {
+      "profile": "srgb_v2_table.icc",
+      "input": "input_rgb.png",
+      "reference": "srgb_v2_table.ref.png",
+      "version": 2
+    },
+    "linear_srgb_v4_identity": {
+      "profile": "linear_srgb_v4_identity.icc",
+      "input": "input_rgb.png",
+      "reference": "linear_srgb_v4_identity.ref.png",
+      "version": 4
+    },
+    "p3_v4_para0": {
+      "profile": "p3_v4_para0.icc",
+      "input": "input_rgb.png",
+      "reference": "p3_v4_para0.ref.png",
+      "version": 4
+    },
+    "adobe_v4_para1": {
+      "profile": "adobe_v4_para1.icc",
+      "input": "input_rgb.png",
+      "reference": "adobe_v4_para1.ref.png",
+      "version": 4
+    },
+    "srgb_v4_para2": {
+      "profile": "srgb_v4_para2.icc",
+      "input": "input_rgb.png",
+      "reference": "srgb_v4_para2.ref.png",
+      "version": 4
+    },
+    "rec2020_v4_para4": {
+      "profile": "rec2020_v4_para4.icc",
+      "input": "input_rgb.png",
+      "reference": "rec2020_v4_para4.ref.png",
+      "version": 4
+    },
+    "gray_v2_gamma22": {
+      "profile": "gray_v2_gamma22.icc",
+      "input": "input_gray.png",
+      "reference": "gray_v2_gamma22.ref.png",
+      "version": 2
+    },
+    "gray_v4_para3": {
+      "profile": "gray_v4_para3.icc",
+      "input": "input_gray.png",
+      "reference": "gray_v4_para3.ref.png",
+      "version": 4
+    },
+    "gray_v2_table": {
+      "profile": "gray_v2_table.icc",
+      "input": "input_gray.png",
+      "reference": "gray_v2_table.ref.png",
+      "version": 2
+    }
+  },
+  "png": {
+    "png_gama_only": {
+      "file": "png_gama_only.png",
+      "reference": "png_gama_only.ref.png"
+    },
+    "png_gama_chrm": {
+      "file": "png_gama_chrm.png",
+      "reference": "png_gama_chrm.ref.png"
+    },
+    "png_chrm_only": {
+      "file": "png_chrm_only.png",
+      "reference": "png_chrm_only.ref.png"
+    },
+    "png_srgb_overrides_gama": {
+      "file": "png_srgb_overrides_gama.png",
+      "reference": null
+    },
+    "png_iccp_overrides_all": {
+      "file": "png_iccp_overrides_all.png",
+      "reference": "display_p3_v4_para3.ref.png"
+    },
+    "png_gama_after_idat_ignored": {
+      "file": "png_gama_after_idat_ignored.png",
+      "reference": null
+    },
+    "png_gama_zero_ignored": {
+      "file": "png_gama_zero_ignored.png",
+      "reference": null
+    }
+  },
+  "invalid": {
+    "truncated": {
+      "file": "corrupt_truncated.icc",
+      "expected": "ImageFormatException"
+    },
+    "size_too_small": {
+      "file": "corrupt_size_too_small.icc",
+      "expected": "ImageFormatException"
+    },
+    "bad_signature": {
+      "file": "corrupt_bad_signature.icc",
+      "expected": "ImageFormatException"
+    },
+    "tag_count_overflow": {
+      "file": "corrupt_tag_count_overflow.icc",
+      "expected": "ImageFormatException"
+    },
+    "tag_offset_outside": {
+      "file": "corrupt_tag_offset_outside.icc",
+      "expected": "ImageFormatException"
+    },
+    "cmyk": {
+      "file": "unsupported_cmyk.icc",
+      "expected": "NotSupportedException"
+    },
+    "lab_pcs": {
+      "file": "unsupported_lab_pcs.icc",
+      "expected": "NotSupportedException"
+    },
+    "device_link": {
+      "file": "unsupported_device_link.icc",
+      "expected": "NotSupportedException"
+    },
+    "lut_only": {
+      "file": "unsupported_lut_only.icc",
+      "expected": "NotSupportedException"
+    },
+    "para_type5": {
+      "file": "unsupported_para_type5.icc",
+      "expected": "NotSupportedException"
+    },
+    "unknown_curve_type": {
+      "file": "unsupported_unknown_curve_type.icc",
+      "expected": "NotSupportedException"
+    }
+  },
+  "linear_light": {
+    "oracle": "Pillow 'F' mode resampling (32-bit float) of premultiplied linear-light channels; source-over in double precision",
+    "max_abs": 1,
+    "cases": {
+      "photo_alpha_down": {
+        "op": "resize",
+        "input": "photo_alpha.png",
+        "width": 67,
+        "height": 53,
+        "filter": "lanczos",
+        "reference": "linear_photo_alpha_down.png"
+      },
+      "photo_alpha_up": {
+        "op": "resize",
+        "input": "photo_alpha.png",
+        "width": 311,
+        "height": 243,
+        "filter": "bicubic",
+        "reference": "linear_photo_alpha_up.png"
+      },
+      "graphic_alpha_down": {
+        "op": "resize",
+        "input": "graphic_alpha.png",
+        "width": 40,
+        "height": 30,
+        "filter": "bilinear",
+        "reference": "linear_graphic_alpha_down.png"
+      },
+      "odd_alpha_box": {
+        "op": "resize",
+        "input": "odd_alpha.png",
+        "width": 30,
+        "height": 77,
+        "filter": "box",
+        "reference": "linear_odd_alpha_box.png"
+      },
+      "photo_hamming": {
+        "op": "resize",
+        "input": "photo.png",
+        "width": 100,
+        "height": 75,
+        "filter": "hamming",
+        "reference": "linear_photo_hamming.png"
+      },
+      "checker_half": {
+        "op": "resize",
+        "input": "checker",
+        "width": 8,
+        "height": 8,
+        "filter": "box",
+        "reference": "linear_checker_half.png"
+      },
+      "graphic_over_photo": {
+        "op": "composite",
+        "input": "photo.png",
+        "overlay": "graphic_alpha.png",
+        "x": 30,
+        "y": 20,
+        "opacity": 1.0,
+        "reference": "linear_graphic_over_photo.png"
+      },
+      "odd_over_photo_alpha": {
+        "op": "composite",
+        "input": "photo_alpha.png",
+        "overlay": "odd_alpha.png",
+        "x": -10,
+        "y": 70,
+        "opacity": 0.6,
+        "reference": "linear_odd_over_photo_alpha.png"
+      }
+    }
+  }
+}

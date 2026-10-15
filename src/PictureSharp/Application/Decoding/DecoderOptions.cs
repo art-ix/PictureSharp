@@ -77,6 +77,21 @@ public sealed record DecoderOptions
         init => field = double.IsFinite(value) && value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(TargetReducingGap), value, "The gap must be at least 1.");
     } = 2;
 
+    /// <summary>
+    /// Converts decoded pixels to sRGB from their ICC profile (RGB and Gray matrix/TRC, ICC v2/v4) or PNG color
+    /// description, and removes it. Unsupported profiles throw <see cref="NotSupportedException"/>; malformed ones
+    /// <see cref="ImageFormatException"/>. Requires metadata, so it cannot be combined with <see cref="IgnoreMetadata"/>,
+    /// and frame readers do not support it. Default: <see cref="ColorConversionMode.None"/>.
+    /// </summary>
+    public ColorConversionMode ColorConversion { get; init => field = Check.Defined(value); }
+
+    /// <summary>Rejects <see cref="ColorConversion"/> together with <see cref="IgnoreMetadata"/>, which would skip the profile.</summary>
+    internal void CheckColorConversion()
+    {
+        if (ColorConversion != ColorConversionMode.None && IgnoreMetadata)
+            throw new ArgumentException("ColorConversion needs the ICC profile, which IgnoreMetadata skips.", "options");
+    }
+
     /// <summary>Do not read ICC/EXIF/XMP metadata.</summary>
     public bool IgnoreMetadata { get; init; }
 

@@ -112,7 +112,8 @@ internal sealed class ImageMetadataService(IImageInput input, IImageOutput outpu
 
     private static bool Same(ImageMetadata a, ImageMetadata b) =>
         Same(a.ExifData, b.ExifData) && Same(a.XmpData, b.XmpData) && Same(a.IccData, b.IccData)
-        && a.HorizontalResolution == b.HorizontalResolution && a.VerticalResolution == b.VerticalResolution;
+        && a.HorizontalResolution == b.HorizontalResolution && a.VerticalResolution == b.VerticalResolution
+        && a.SameColorDescription(b);
 
     private static bool Same(byte[]? a, byte[]? b) => (a is null) == (b is null) && (a is null || a.AsSpan().SequenceEqual(b));
 
