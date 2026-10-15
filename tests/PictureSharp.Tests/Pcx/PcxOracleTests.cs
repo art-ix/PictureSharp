@@ -14,25 +14,22 @@ public class PcxOracleTests
             out.write(Image.open(sys.argv[1]).convert("RGBA").tobytes())
         """;
 
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void EncodedFiles_MatchPillowExceptColoredMono()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task EncodedFiles_MatchPillowExceptColoredMono()
     {
-        if (!HasPillow())
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasPillow, "Pillow is not installed.");
 
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-pcx-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try
         {
-            AssertSame(directory, Solid(Rgba32.Black, Rgba32.White), new());
-            AssertSame(directory, Palette(4), new());
-            AssertSame(directory, Palette(8), new() { BitsPerPixel = 4 });
-            AssertSame(directory, Palette(30), new() { BitsPerPixel = 8 });
-            AssertSame(directory, GrayRamp(), new());
-            AssertSame(directory, Rgb(), new() { BitsPerPixel = 24 });
+            await AssertSame(directory, Solid(Rgba32.Black, Rgba32.White), new());
+            await AssertSame(directory, Palette(4), new());
+            await AssertSame(directory, Palette(8), new() { BitsPerPixel = 4 });
+            await AssertSame(directory, Palette(30), new() { BitsPerPixel = 8 });
+            await AssertSame(directory, GrayRamp(), new());
+            await AssertSame(directory, Rgb(), new() { BitsPerPixel = 24 });
 
             using Image colored = Palette(2);
             colored[0, 0] = new Rgba32(255, 0, 0);
@@ -41,9 +38,8 @@ public class PcxOracleTests
             string path = Path.Combine(directory, "colored.pcx");
             File.WriteAllBytes(path, pcx);
             using Image ours = Image.Load(pcx);
-            byte[] pillow = PillowRgbaBytes(path);
-            Assert.False(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(ours.GetPixelSpan())),
-                "Pillow ignores a 1-bit PCX palette and should not match a colored bilevel image.");
+            byte[] pillow = await PillowRgbaBytes(path);
+            await Assert.That(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(ours.GetPixelSpan()))).IsFalse().Because("Pillow ignores a 1-bit PCX palette and should not match a colored bilevel image.");
         }
         finally
         {
@@ -51,14 +47,11 @@ public class PcxOracleTests
         }
     }
 
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void MultirowBitAndRunBoundaries_MatchPillow()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task MultirowBitAndRunBoundaries_MatchPillow()
     {
-        if (!HasPillow())
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasPillow, "Pillow is not installed.");
 
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-pcx-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -84,7 +77,7 @@ public class PcxOracleTests
                     byte[] pcx = image.ToPcx(new() { BitsPerPixel = bits });
                     using (Image decoded = Image.Load(pcx))
                     {
-                        Assert.Equal(image.GetPixelSpan().ToArray(), decoded.GetPixelSpan().ToArray());
+                        await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
                     }
 
                     // Pillow 10.2 skips RGB plane compaction at widths 1 and 3 (even stride).
@@ -93,12 +86,12 @@ public class PcxOracleTests
                     {
                         using (image)
                         {
-                            AssertImageMagick(directory, image, pcx);
+                            await AssertImageMagick(directory, image, pcx);
                         }
                     }
                     else
                     {
-                        AssertSame(directory, image, new() { BitsPerPixel = bits });
+                        await AssertSame(directory, image, new() { BitsPerPixel = bits });
                     }
                 }
             }
@@ -109,14 +102,11 @@ public class PcxOracleTests
         }
     }
 
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void PaddedPlanes_MatchImageMagickWhenInstalled()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task PaddedPlanes_MatchImageMagickWhenInstalled()
     {
-        if (ReferenceTools.Run("convert", "-version", out _) != 0)
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasImageMagick, "ImageMagick is not installed.");
 
         byte[] pcx = new PcxBuilder
         {
@@ -137,9 +127,9 @@ public class PcxOracleTests
             string path = Path.Combine(directory, "padded.pcx");
             string raw = Path.Combine(directory, "padded.rgba");
             File.WriteAllBytes(path, pcx);
-            Assert.True(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0, error);
+            await Assert.That(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0).IsTrue().Because(error);
             using Image image = Image.Load(pcx);
-            Assert.Equal(File.ReadAllBytes(raw), MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray());
+            await Assert.That(MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray()).IsEquivalentTo(File.ReadAllBytes(raw), CollectionOrdering.Matching);
         }
         finally
         {
@@ -147,14 +137,11 @@ public class PcxOracleTests
         }
     }
 
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void Rgba_MatchesImageMagickWhenInstalled()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task Rgba_MatchesImageMagickWhenInstalled()
     {
-        if (ReferenceTools.Run("convert", "-version", out _) != 0)
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasImageMagick, "ImageMagick is not installed.");
 
         using var image = new Image(3, 2);
         image[0, 0] = new Rgba32(255, 0, 0, 128);
@@ -171,9 +158,9 @@ public class PcxOracleTests
             string path = Path.Combine(directory, "rgba.pcx");
             string raw = Path.Combine(directory, "rgba.raw");
             File.WriteAllBytes(path, pcx);
-            Assert.True(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0, error);
+            await Assert.That(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0).IsTrue().Because(error);
             byte[] expected = MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray();
-            Assert.Equal(expected, File.ReadAllBytes(raw));
+            await Assert.That(File.ReadAllBytes(raw)).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
         finally
         {
@@ -181,29 +168,26 @@ public class PcxOracleTests
         }
     }
 
-    private static void AssertImageMagick(string directory, Image image, byte[] pcx)
+    private static async Task AssertImageMagick(string directory, Image image, byte[] pcx)
     {
-        if (ReferenceTools.Run("convert", "-version", out _) != 0)
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasImageMagick, "ImageMagick is not installed.");
 
         string path = Path.Combine(directory, "image.pcx");
         string raw = Path.Combine(directory, "image.rgba");
         File.WriteAllBytes(path, pcx);
-        Assert.True(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0, error);
-        Assert.Equal(MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray(), File.ReadAllBytes(raw));
+        await Assert.That(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0).IsTrue().Because(error);
+        await Assert.That(File.ReadAllBytes(raw)).IsEquivalentTo(MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray(), CollectionOrdering.Matching);
     }
 
-    private static void AssertSame(string directory, Image image, PcxEncoderOptions options)
+    private static async Task AssertSame(string directory, Image image, PcxEncoderOptions options)
     {
         using (image)
         {
             byte[] pcx = image.ToPcx(options);
             string path = Path.Combine(directory, $"{options.BitsPerPixel}-{image.Width}.pcx");
             File.WriteAllBytes(path, pcx);
-            byte[] pillow = PillowRgbaBytes(path);
-            Assert.True(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(image.GetPixelSpan())), path);
+            byte[] pillow = await PillowRgbaBytes(path);
+            await Assert.That(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because(path);
         }
     }
 
@@ -251,9 +235,7 @@ public class PcxOracleTests
         return image;
     }
 
-    private static bool HasPillow() => ReferenceTools.Run("python3", "-I -c \"import PIL\"", out _) == 0;
-
-    private static byte[] PillowRgbaBytes(string path)
+    private static async Task<byte[]> PillowRgbaBytes(string path)
     {
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-pcx-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -262,7 +244,7 @@ public class PcxOracleTests
             string script = Path.Combine(directory, "rgba.py");
             string raw = Path.Combine(directory, "out.rgba");
             File.WriteAllText(script, PillowRgba);
-            Assert.True(ReferenceTools.Run("python3", $"-I \"{script}\" \"{path}\" \"{raw}\"", out string error) == 0, error);
+            await Assert.That(ReferenceTools.Run("python3", $"-I \"{script}\" \"{path}\" \"{raw}\"", out string error) == 0).IsTrue().Because(error);
             return File.ReadAllBytes(raw);
         }
         finally

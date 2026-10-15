@@ -1,6 +1,7 @@
 using PictureSharp.Algorithms.Compression;
 using PictureSharp.Formats.Png;
 using PictureSharp.Processing;
+using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Png;
 
@@ -37,14 +38,14 @@ public class PngParallelTests
         return data;
     }
 
-    public static TheoryData<string, int> Inputs => new()
+    public static TestCases<string, int> Inputs => new()
     {
         { "zeros", 300_000 }, { "period", 700_001 }, { "random", 400_000 }, { "image", 1_100_000 }, { "image", 262_144 },
     };
 
-    [Theory]
-    [MemberData(nameof(Inputs))]
-    public void ParallelDeflate_EqualsSequential(string kind, int length)
+    [Test]
+    [MethodDataSource(nameof(Inputs))]
+    public async Task ParallelDeflate_EqualsSequential(string kind, int length)
     {
         byte[] input = Input(kind, length);
         foreach (int level in new[] { 1, 6, 9 })
@@ -52,10 +53,10 @@ public class PngParallelTests
             byte[] sequential = Deflater.CompressZlib(input, level, 1);
             foreach (int threads in new[] { 2, 3, 16, -1 })
             {
-                Assert.Equal(sequential, Deflater.CompressZlib(input, level, threads));
+                await Assert.That(Deflater.CompressZlib(input, level, threads)).IsEquivalentTo(sequential, CollectionOrdering.Matching);
             }
 
-            Assert.Equal(input, Inflater.InflateZlib(sequential, 0, sequential.Length, input.Length, input.Length));
+            await Assert.That(Inflater.InflateZlib(sequential, 0, sequential.Length, input.Length, input.Length)).IsEquivalentTo(input, CollectionOrdering.Matching);
         }
     }
 
@@ -75,30 +76,30 @@ public class PngParallelTests
         return Image.LoadPixelData(pixels, width, height);
     }
 
-    [Theory]
-    [Trait("Category", "Slow")]
-    [InlineData(800, 500, false, false)]
-    [InlineData(700, 450, true, false)]
-    [InlineData(640, 480, true, true)]
-    public void ParallelPngEncode_EqualsSequential_AndDecodesBack(int width, int height, bool alpha, bool interlace)
+    [Test]
+    [Property("Category", "Slow")]
+    [Arguments(800, 500, false, false)]
+    [Arguments(700, 450, true, false)]
+    [Arguments(640, 480, true, true)]
+    public async Task ParallelPngEncode_EqualsSequential_AndDecodesBack(int width, int height, bool alpha, bool interlace)
     {
         using Image image = PhotoLike(width, height, alpha);
         foreach (PngFilterStrategy filter in Enum.GetValues<PngFilterStrategy>())
         {
             var options = new PngEncoderOptions { FilterStrategy = filter, Interlace = interlace, MaxDegreeOfParallelism = 1 };
             byte[] sequential = image.ToPng(options);
-            Assert.Equal(sequential, image.ToPng(options with { MaxDegreeOfParallelism = 3 }));
-            Assert.Equal(sequential, image.ToPng(options with { MaxDegreeOfParallelism = -1 }));
+            await Assert.That(image.ToPng(options with { MaxDegreeOfParallelism = 3 })).IsEquivalentTo(sequential, CollectionOrdering.Matching);
+            await Assert.That(image.ToPng(options with { MaxDegreeOfParallelism = -1 })).IsEquivalentTo(sequential, CollectionOrdering.Matching);
 
             using Image piped = Image.Load(sequential);
             using Image serial = Image.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
-            Assert.True(piped.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan()));
-            Assert.True(serial.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan()));
+            await Assert.That(piped.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan())).IsTrue();
+            await Assert.That(serial.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan())).IsTrue();
         }
     }
 
-    [Fact]
-    public void PipelinedDecode_DamagedData_OnlyThrowsImageFormatException()
+    [Test]
+    public async Task PipelinedDecode_DamagedData_OnlyThrowsImageFormatException()
     {
         using Image image = PhotoLike(900, 400, alpha: true);
         byte[] png = image.ToPng();
@@ -123,16 +124,16 @@ public class PngParallelTests
             {
                 using Image piped = Image.Load(damaged);
                 using Image serial = Image.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 });
-                Assert.True(piped.Frames[0].GetPixelSpan().SequenceEqual(serial.Frames[0].GetPixelSpan()));
+                await Assert.That(piped.Frames[0].GetPixelSpan().SequenceEqual(serial.Frames[0].GetPixelSpan())).IsTrue();
                 outcomes.Add("ok");
             }
             catch (ImageFormatException)
             {
-                Assert.Throws<ImageFormatException>(() => Image.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 }));
+                Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 }));
                 outcomes.Add("error");
             }
         }
 
-        Assert.Contains("error", outcomes);
+        await Assert.That(outcomes).Contains("error");
     }
 }

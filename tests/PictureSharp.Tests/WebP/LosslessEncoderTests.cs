@@ -5,32 +5,32 @@ namespace PictureSharp.Tests.WebP;
 
 public class LosslessEncoderTests
 {
-    public static TheoryData<string> Sources
+    public static TestCases<string> Sources
     {
         get
         {
-            var data = new TheoryData<string>();
+            var data = new TestCases<string>();
             foreach (string path in Directory.GetFiles(Corpus.PathOf("src"), "*.png").Order()) data.Add("src/" + Path.GetFileName(path));
             return data;
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Sources))]
-    public void Corpus_RoundTripsExactly(string source)
+    [Test]
+    [MethodDataSource(nameof(Sources))]
+    public async Task Corpus_RoundTripsExactly(string source)
     {
         using Image image = Image.Load(Corpus.PathOf(source));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true });
         using Image decoded = Image.Load(encoded.AsMemory());
-        Assert.Equal(image.ToPixelData(PixelFormat.Rgba32), decoded.ToPixelData(PixelFormat.Rgba32));
+        await Assert.That(decoded.ToPixelData(PixelFormat.Rgba32)).IsEquivalentTo(image.ToPixelData(PixelFormat.Rgba32), CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [MemberData(nameof(Sources))]
-    [Trait("Category", "Oracle")]
-    public void Corpus_OpensInDwebp_AndMeetsSizeTarget(string source)
+    [Test]
+    [MethodDataSource(nameof(Sources))]
+    [Property("Category", "Oracle")]
+    public async Task Corpus_OpensInDwebp_AndMeetsSizeTarget(string source)
     {
-        if (!ReferenceTools.HasDwebp || !ReferenceTools.HasCwebp) return;
+        Skip.Unless(ReferenceTools.HasDwebp && ReferenceTools.HasCwebp, "cwebp 1.6.0 and dwebp are not available.");
         using Image image = Image.Load(Corpus.PathOf(source));
         string output = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.webp");
         string reference = output + ".ref.webp";
@@ -38,29 +38,29 @@ public class LosslessEncoderTests
         {
             byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true });
             File.WriteAllBytes(output, encoded);
-            Assert.Equal(image.ToPixelData(PixelFormat.Rgba32), ReferenceTools.DwebpRgba(output));
-            Assert.Equal(0, ReferenceTools.Run("cwebp", $"-quiet -lossless -exact -q 75 -m 4 \"{Corpus.PathOf(source)}\" -o \"{reference}\"", out _));
+            await Assert.That(ReferenceTools.DwebpRgba(output)).IsEquivalentTo(image.ToPixelData(PixelFormat.Rgba32), CollectionOrdering.Matching);
+            await Assert.That(ReferenceTools.Run("cwebp", $"-quiet -lossless -exact -q 75 -m 4 \"{Corpus.PathOf(source)}\" -o \"{reference}\"", out _)).IsEqualTo(0);
             long expected = new FileInfo(reference).Length;
-            Assert.True(encoded.Length <= expected * 1.01, $"{source}: managed {encoded.Length}, cwebp {expected}, ratio {(double)encoded.Length / expected:F4}");
+            await Assert.That(encoded.Length <= expected * 1.01).IsTrue().Because($"{source}: managed {encoded.Length}, cwebp {expected}, ratio {(double)encoded.Length / expected:F4}");
         }
         finally { File.Delete(output); File.Delete(reference); }
     }
 
-    public static TheoryData<string, string> ByteExactCases()
+    public static TestCases<string, string> ByteExactCases()
     {
-        var data = new TheoryData<string, string>();
+        var data = new TestCases<string, string>();
         string[] configs = ["-m 0 -q 75", "-m 2 -q 50", "-m 4 -q 75", "-m 4 -q 100", "-m 5 -q 90", "-m 6 -q 100", "-m 4 -q 75 -near_lossless 60", "-m 4 -q 75 -exact"];
         foreach (string source in Directory.GetFiles(Corpus.PathOf("src"), "*.png").Order())
             foreach (string config in configs) data.Add("src/" + Path.GetFileName(source), config);
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(ByteExactCases))]
-    [Trait("Category", "Oracle")]
-    public void Corpus_MatchesCwebpBitstream(string source, string cwebpArguments)
+    [Test]
+    [MethodDataSource(nameof(ByteExactCases))]
+    [Property("Category", "Oracle")]
+    public async Task Corpus_MatchesCwebpBitstream(string source, string cwebpArguments)
     {
-        if (!ReferenceTools.HasCwebp) return;
+        Skip.Unless(ReferenceTools.HasCwebp, "cwebp 1.6.0 is not available.");
         string[] args = cwebpArguments.Split(' ');
         int Value(string name, int fallback) => Array.IndexOf(args, name) is int i and >= 0 ? int.Parse(args[i + 1]) : fallback;
         var options = new WebPEncoderOptions
@@ -75,8 +75,8 @@ public class LosslessEncoderTests
         string reference = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.webp");
         try
         {
-            Assert.Equal(0, ReferenceTools.Run("cwebp", $"-quiet -lossless {cwebpArguments} \"{Corpus.PathOf(source)}\" -o \"{reference}\"", out _));
-            Assert.Equal(Vp8LChunk(File.ReadAllBytes(reference)), Vp8LChunk(image.ToWebP(options)));
+            await Assert.That(ReferenceTools.Run("cwebp", $"-quiet -lossless {cwebpArguments} \"{Corpus.PathOf(source)}\" -o \"{reference}\"", out _)).IsEqualTo(0);
+            await Assert.That(Vp8LChunk(image.ToWebP(options))).IsEquivalentTo(Vp8LChunk(File.ReadAllBytes(reference)), CollectionOrdering.Matching);
         }
         finally { File.Delete(reference); }
     }

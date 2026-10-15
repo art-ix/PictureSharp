@@ -7,7 +7,7 @@ Use the .NET 10 SDK or a compatible later SDK:
 ```bash
 dotnet build -c Release
 dotnet test -c Release
-dotnet test -c Release --filter Category=Oracle      # comparisons with external tools; skipped when missing
+dotnet test -c Release --treenode-filter "/*/*/*/*[Category=Oracle]"   # comparisons with external tools; skipped when missing
 ```
 
 The library version comes from the [VERSION](../VERSION) file, read by `Directory.Build.props`. Contributor rules (no dependencies, no `unsafe`, porting conventions) are in [AGENTS.md](../AGENTS.md), and the implementation phases with their completion criteria in [plan.md](../plan.md).
@@ -17,7 +17,7 @@ The library version comes from the [VERSION](../VERSION) file, read by `Director
 | Path | Contents |
 | --- | --- |
 | `src/PictureSharp/` | Layered library: `Domain/`, `Application/`, `Infrastructure/`, `Algorithms/`, `Primitives/`, `PublicApi/`, `Composition/`; see [architecture](architecture.md) |
-| `tests/PictureSharp.Tests/` | xUnit tests |
+| `tests/PictureSharp.Tests/` | TUnit tests on Microsoft.Testing.Platform |
 | `tests/assets/` | Corpus, reference hashes, oracle scripts, public API snapshot |
 | `benchmarks/` | BenchmarkDotNet |
 | `samples/PictureSharp.Cli/` | [Command-line sample](cli.md) |
@@ -31,7 +31,7 @@ New WebP ports and encoder comparisons use **libwebp 1.6.0**. Build its pinned s
 
 ```bash
 ./scripts/build-webp-reference.sh
-dotnet test -c Release --filter Category=Oracle
+dotnet test -c Release --treenode-filter "/*/*/*/*[Category=Oracle]"
 ```
 
 Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `PICTURESHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.

@@ -5,110 +5,109 @@ namespace PictureSharp.Tests.WebP;
 
 public class LossyDecoderTests
 {
-    public static TheoryData<string> LossyFiles => Corpus.Files("webp/lossy/");
+    public static TestCases<string> LossyFiles => Corpus.Files("webp/lossy/");
 
-    public static TheoryData<string> AlphaFiles => Corpus.Files("webp/alpha/");
+    public static TestCases<string> AlphaFiles => Corpus.Files("webp/alpha/");
 
-    public static TheoryData<string> AnimatedFiles => Corpus.Files("webp/anim/");
+    public static TestCases<string> AnimatedFiles => Corpus.Files("webp/anim/");
 
-    public static TheoryData<string> MetadataFiles => Corpus.Files("webp/meta/");
+    public static TestCases<string> MetadataFiles => Corpus.Files("webp/meta/");
 
-    [Theory]
-    [MemberData(nameof(LossyFiles))]
-    public void Lossy_IsBitExactWithDwebp(string file)
+    [Test]
+    [MethodDataSource(nameof(LossyFiles))]
+    public async Task Lossy_IsBitExactWithDwebp(string file)
     {
         using Image image = Image.Load(Corpus.PathOf(file));
-        Assert.Equal(Corpus.References[file].HasAlpha, image.HasAlpha);
-        Assert.Equal(!image.HasAlpha || image.IsOpaque(), image.IsOpaque());
-        LosslessDecoderTests.AssertMatchesReference(file, image);
+        await Assert.That(image.HasAlpha).IsEqualTo(Corpus.References[file].HasAlpha);
+        await Assert.That(image.IsOpaque()).IsEqualTo(!image.HasAlpha || image.IsOpaque());
+        await LosslessDecoderTests.AssertMatchesReference(file, image);
     }
 
-    [Theory]
-    [MemberData(nameof(AlphaFiles))]
-    public void LossyWithAlpha_IsBitExactWithDwebp(string file)
+    [Test]
+    [MethodDataSource(nameof(AlphaFiles))]
+    public async Task LossyWithAlpha_IsBitExactWithDwebp(string file)
     {
         using Image image = Image.Load(Corpus.PathOf(file));
-        Assert.True(image.HasAlpha);
-        LosslessDecoderTests.AssertMatchesReference(file, image);
+        await Assert.That(image.HasAlpha).IsTrue();
+        await LosslessDecoderTests.AssertMatchesReference(file, image);
     }
 
-    [Theory]
-    [MemberData(nameof(MetadataFiles))]
-    public void WithMetadata_IsBitExactWithDwebp(string file)
+    [Test]
+    [MethodDataSource(nameof(MetadataFiles))]
+    public async Task WithMetadata_IsBitExactWithDwebp(string file)
     {
         using Image image = Image.Load(Corpus.PathOf(file));
-        LosslessDecoderTests.AssertMatchesReference(file, image);
-        Assert.False(image.Metadata.IsEmpty);
+        await LosslessDecoderTests.AssertMatchesReference(file, image);
+        await Assert.That(image.Metadata.IsEmpty).IsFalse();
     }
 
-    [Fact]
-    public void Metadata_IccAndXmp()
+    [Test]
+    public async Task Metadata_IccAndXmp()
     {
         using Image image = Image.Load(Corpus.PathOf("webp/meta/alpha_icc_xmp.webp"));
-        Assert.Equal(File.ReadAllBytes(Corpus.PathOf("webp/meta/icc.bin")), image.Metadata.IccProfile);
-        Assert.Equal(File.ReadAllBytes(Corpus.PathOf("webp/meta/xmp.bin")), image.Metadata.Xmp);
+        await Assert.That(image.Metadata.IccProfile).IsEquivalentTo(File.ReadAllBytes(Corpus.PathOf("webp/meta/icc.bin")), CollectionOrdering.Matching);
+        await Assert.That(image.Metadata.Xmp).IsEquivalentTo(File.ReadAllBytes(Corpus.PathOf("webp/meta/xmp.bin")), CollectionOrdering.Matching);
         Assert.Null(image.Metadata.Exif);
     }
 
-    [Theory]
-    [MemberData(nameof(AnimatedFiles))]
-    public void Animation_FramesMatchWebPAnimDecoder(string file)
+    [Test]
+    [MethodDataSource(nameof(AnimatedFiles))]
+    public async Task Animation_FramesMatchWebPAnimDecoder(string file)
     {
         ReferenceEntry r = Corpus.References[file];
         using Image image = Image.Load(Corpus.PathOf(file));
-        Assert.True(image.IsAnimated);
-        Assert.Equal(r.Loop, image.LoopCount);
-        LosslessDecoderTests.AssertMatchesReference(file, image);
+        await Assert.That(image.IsAnimated).IsTrue();
+        await Assert.That(image.LoopCount).IsEqualTo(r.Loop);
+        await LosslessDecoderTests.AssertMatchesReference(file, image);
         for (int i = 0; i < r.Frames.Count; i++)
         {
-            Assert.Equal(r.Frames[i].Duration, image.Frames[i].Duration.TotalMilliseconds);
+            await Assert.That(image.Frames[i].Duration.TotalMilliseconds).IsEqualTo(r.Frames[i].Duration);
         }
 
         if (r.Background is { } bg)
         {
             Rgba32 c = image.AnimationBackgroundColor;
-            Assert.Equal(bg, new[] { (int)c.R, c.G, c.B, c.A });
+            await Assert.That(new[] { (int)c.R, c.G, c.B, c.A }).IsEquivalentTo(bg, CollectionOrdering.Matching);
         }
     }
 
-    [Theory]
-    [InlineData("webp/anim/alpha_lossy.webp")]
-    [InlineData("webp/anim/alpha_lossless.webp")]
-    public void Animation_FirstFrameOnly(string file)
+    [Test]
+    [Arguments("webp/anim/alpha_lossy.webp")]
+    [Arguments("webp/anim/alpha_lossless.webp")]
+    public async Task Animation_FirstFrameOnly(string file)
     {
         using Image image = Image.Load(Corpus.PathOf(file), new DecoderOptions { FirstFrameOnly = true });
-        Assert.Equal(1, image.FrameCount);
-        Assert.Equal(Corpus.References[file].Frames[0].Sha256,
-            Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan())));
+        await Assert.That(image.FrameCount).IsEqualTo(1);
+        await Assert.That(Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan()))).IsEqualTo(Corpus.References[file].Frames[0].Sha256);
     }
 
-    [Fact]
-    public void Options_NoFancyUpsampling_AndBypassFiltering_StillDecode()
+    [Test]
+    public async Task Options_NoFancyUpsampling_AndBypassFiltering_StillDecode()
     {
         string file = Corpus.PathOf("webp/lossy/photo_q75.webp");
         using Image fancy = Image.Load(file);
         using Image simple = Image.Load(file, new DecoderOptions { WebP = new() { FancyUpsampling = false }});
         using Image unfiltered = Image.Load(file, new DecoderOptions { WebP = new() { BypassFiltering = true }});
-        Assert.NotEqual(fancy.ToPixelData(), simple.ToPixelData());
-        Assert.NotEqual(fancy.ToPixelData(), unfiltered.ToPixelData());
+        await Assert.That(simple.ToPixelData()).IsNotEquivalentTo(fancy.ToPixelData(), CollectionOrdering.Matching);
+        await Assert.That(unfiltered.ToPixelData()).IsNotEquivalentTo(fancy.ToPixelData(), CollectionOrdering.Matching);
         // Point-sampled and fancy upsampling only differ in chroma: luma-heavy differences stay small.
         byte[] a = fancy.ToPixelData(PixelFormat.Gray8);
         byte[] b = simple.ToPixelData(PixelFormat.Gray8);
         double mean = a.Zip(b, (x, y) => Math.Abs(x - y)).Average();
-        Assert.True(mean < 3, $"mean luma difference {mean}");
+        await Assert.That(mean < 3).IsTrue().Because($"mean luma difference {mean}");
     }
 
-    [Theory]
-    [InlineData("webp/lossy/photo_q75.webp")]
-    [InlineData("webp/alpha/photo_alpha_a_default.webp")]
-    [InlineData("webp/anim/opaque_lossy.webp")]
+    [Test]
+    [Arguments("webp/lossy/photo_q75.webp")]
+    [Arguments("webp/alpha/photo_alpha_a_default.webp")]
+    [Arguments("webp/anim/opaque_lossy.webp")]
     public void Truncated_ThrowsFormatException(string file)
     {
         byte[] data = Corpus.Read(file);
         for (int cut = 1; cut < data.Length - 30; cut += Math.Max(1, data.Length / 40))
         {
             byte[] truncated = data[..^cut];
-            Assert.Throws<ImageFormatException>(() => Image.Load(truncated));
+            Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(truncated));
         }
     }
 }

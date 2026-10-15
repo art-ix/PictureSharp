@@ -11,9 +11,9 @@ public class CodecContractTests
 {
     public static IEnumerable<object[]> Formats() => new CodecResolver(CodecRegistry.BuiltIn()).Formats.Select(f => new object[] { f.Name });
 
-    [Theory]
-    [MemberData(nameof(Formats))]
-    public void EveryCodec_ReportsCanonicalResult_AndHonorsLimitsAndCancellation(string name)
+    [Test]
+    [MethodDataSource(nameof(Formats))]
+    public async Task EveryCodec_ReportsCanonicalResult_AndHonorsLimitsAndCancellation(string name)
     {
         var codecs = new CodecResolver(CodecRegistry.BuiltIn());
         ImageFormat format = codecs.Formats.Single(f => f.Name == name);
@@ -23,103 +23,103 @@ public class CodecContractTests
         using var output = new MemoryStream();
         encoder.Encode(source, output, encoder.CreateDefaultOptions(), default);
         byte[] bytes = output.ToArray();
-        Assert.Same(format, codecs.Detect(bytes));
+        await Assert.That(codecs.Detect(bytes)).IsSameReferenceAs(format);
         ImageInfo info = decoder.Identify(bytes, DecoderOptions.Default);
         var context = new DecodeContext(DecoderOptions.Default);
         DecodedImage decoded = decoder.Decode(bytes, context);
         using Image image = decoded.Image;
-        Assert.Equal(source.Size, image.Size);
-        Assert.Equal(source.Size, decoded.StoredSize);
-        Assert.Equal(1, decoded.Scale);
-        Assert.Equal(info.Width, image.Width);
-        Assert.Equal(info.Height, image.Height);
-        Assert.Same(format, image.SourceFormat);
-        Assert.Equal(6, context.Budget.Pixels);
-        Assert.Equal(1, context.Budget.Frames);
-        Assert.Throws<ImageFormatException>(() => decoder.Decode(bytes, new(new DecoderOptions { MaxPixels = 5 })));
-        Assert.Throws<ImageFormatException>(() => decoder.Decode(bytes, new(new DecoderOptions { MaxInputBytes = bytes.Length - 1 })));
+        await Assert.That(image.Size).IsEqualTo(source.Size);
+        await Assert.That(decoded.StoredSize).IsEqualTo(source.Size);
+        await Assert.That(decoded.Scale).IsEqualTo(1);
+        await Assert.That(image.Width).IsEqualTo(info.Width);
+        await Assert.That(image.Height).IsEqualTo(info.Height);
+        await Assert.That(image.SourceFormat).IsSameReferenceAs(format);
+        await Assert.That(context.Budget.Pixels).IsEqualTo(6);
+        await Assert.That(context.Budget.Frames).IsEqualTo(1);
+        Assert.ThrowsExactly<ImageFormatException>(() => decoder.Decode(bytes, new(new DecoderOptions { MaxPixels = 5 })));
+        Assert.ThrowsExactly<ImageFormatException>(() => decoder.Decode(bytes, new(new DecoderOptions { MaxInputBytes = bytes.Length - 1 })));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        Assert.ThrowsAny<OperationCanceledException>(() => decoder.Decode(bytes, new(DecoderOptions.Default, cts.Token)));
+        Assert.Throws<OperationCanceledException>(() => decoder.Decode(bytes, new(DecoderOptions.Default, cts.Token)));
     }
 
-    [Fact]
-    public void Budgets_AggregateNestedOperations_AndAvoidOverflow()
+    [Test]
+    public async Task Budgets_AggregateNestedOperations_AndAvoidOverflow()
     {
         var root = new DecodeContext(new DecoderOptions { MaxPixels = 10, MaxFrames = 2, MaxInputBytes = 8, MaxMetadataBytes = 5 });
         root.Budget.ReserveImage(ImageFormat.Png, 2, 2);
         DecodeContext child = root.Child();
-        Assert.Same(root.Budget, child.Budget);
+        await Assert.That(child.Budget).IsSameReferenceAs(root.Budget);
         child.Budget.ReserveImage(ImageFormat.Png, 2, 2);
-        Assert.Throws<ImageFormatException>(() => root.Budget.ReserveImage(ImageFormat.Png, 1, 1));
+        Assert.ThrowsExactly<ImageFormatException>(() => root.Budget.ReserveImage(ImageFormat.Png, 1, 1));
         root.Budget.ReserveMetadata(ImageFormat.Png, 3);
-        Assert.Equal(2, root.Child().Options.MaxMetadataBytes);
-        Assert.Throws<ImageFormatException>(() => child.Budget.ReserveMetadata(ImageFormat.Png, 3));
+        await Assert.That(root.Child().Options.MaxMetadataBytes).IsEqualTo(2);
+        Assert.ThrowsExactly<ImageFormatException>(() => child.Budget.ReserveMetadata(ImageFormat.Png, 3));
         root.Budget.ReserveInput(7);
-        Assert.Throws<ImageFormatException>(() => child.Budget.ReserveInput(long.MaxValue));
+        Assert.ThrowsExactly<ImageFormatException>(() => child.Budget.ReserveInput(long.MaxValue));
         var huge = new DecodeBudget(new DecoderOptions { MaxPixels = long.MaxValue, MaxMetadataBytes = long.MaxValue });
-        Assert.Throws<ImageFormatException>(() => huge.ReserveImage(ImageFormat.Png, long.MaxValue, long.MaxValue));
+        Assert.ThrowsExactly<ImageFormatException>(() => huge.ReserveImage(ImageFormat.Png, long.MaxValue, long.MaxValue));
         huge.ReserveMetadata(ImageFormat.Png, long.MaxValue);
-        Assert.Throws<ImageFormatException>(() => huge.ReserveMetadata(ImageFormat.Png, 1));
-        Assert.Equal(8, root.Budget.Pixels);
+        Assert.ThrowsExactly<ImageFormatException>(() => huge.ReserveMetadata(ImageFormat.Png, 1));
+        await Assert.That(root.Budget.Pixels).IsEqualTo(8);
     }
 
-    [Fact]
-    public void ImmutableOptions_AreIndependentAcrossOperations()
+    [Test]
+    public async Task ImmutableOptions_AreIndependentAcrossOperations()
     {
         var options = new DecoderOptions { Png = new() { StrictChecksums = true } };
         DecoderOptions changed = options with { Png = options.Png with { StrictChecksums = false } };
-        Assert.True(options.Png.StrictChecksums);
-        Assert.False(changed.Png.StrictChecksums);
+        await Assert.That(options.Png.StrictChecksums).IsTrue();
+        await Assert.That(changed.Png.StrictChecksums).IsFalse();
         var a = new DecodeContext(options);
         var b = new DecodeContext(options);
         a.Budget.ReserveImage(ImageFormat.Png, 1, 1);
-        Assert.Equal(0, b.Budget.Pixels);
-        Assert.Throws<ArgumentNullException>(() => new DecoderOptions { Png = null! });
+        await Assert.That(b.Budget.Pixels).IsEqualTo(0);
+        Assert.ThrowsExactly<ArgumentNullException>(() => new DecoderOptions { Png = null! });
     }
 
-    [Fact]
-    public void DecodeService_NormalizesOnlyCorruptInput_AndChecksCancellationBeforeDispatch()
+    [Test]
+    public async Task DecodeService_NormalizesOnlyCorruptInput_AndChecksCancellationBeforeDispatch()
     {
         var port = new StubCodec { Failure = new IndexOutOfRangeException() };
         var service = new ImageDecodeService(port);
-        ImageFormatException corrupt = Assert.Throws<ImageFormatException>(() => service.Decode(new byte[1], DecoderOptions.Default));
-        Assert.Same(port.Failure, corrupt.InnerException);
+        ImageFormatException corrupt = Assert.ThrowsExactly<ImageFormatException>(() => service.Decode(new byte[1], DecoderOptions.Default));
+        await Assert.That(corrupt.InnerException).IsSameReferenceAs(port.Failure);
         port.Failure = new IOException("read failure");
-        Assert.Same(port.Failure, Assert.Throws<IOException>(() => service.Decode(new byte[1], DecoderOptions.Default)));
+        await Assert.That(Assert.ThrowsExactly<IOException>(() => service.Decode(new byte[1], DecoderOptions.Default))).IsSameReferenceAs(port.Failure);
         port.Failure = new NotSupportedException();
-        Assert.Same(port.Failure, Assert.Throws<NotSupportedException>(() => service.Decode(new byte[1], DecoderOptions.Default)));
+        await Assert.That(Assert.ThrowsExactly<NotSupportedException>(() => service.Decode(new byte[1], DecoderOptions.Default))).IsSameReferenceAs(port.Failure);
         int calls = port.Calls;
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        Assert.Throws<OperationCanceledException>(() => service.Decode(new byte[1], DecoderOptions.Default, cts.Token));
-        Assert.Equal(calls, port.Calls);
+        Assert.ThrowsExactly<OperationCanceledException>(() => service.Decode(new byte[1], DecoderOptions.Default, cts.Token));
+        await Assert.That(port.Calls).IsEqualTo(calls);
     }
 
-    [Fact]
+    [Test]
     public void DecodeService_DisposesTheResult_WhenPostprocessingIsCanceled()
     {
         using var cts = new CancellationTokenSource();
         var image = new Image(2, 2);
         var port = new StubCodec { Result = image, AfterDecode = cts.Cancel };
-        Assert.Throws<OperationCanceledException>(() => new ImageDecodeService(port).Decode(new byte[1],
+        Assert.ThrowsExactly<OperationCanceledException>(() => new ImageDecodeService(port).Decode(new byte[1],
             new DecoderOptions { ApplyExifOrientation = true }, cts.Token));
-        Assert.Throws<ObjectDisposedException>(() => _ = image.Width);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = image.Width);
     }
 
-    [Fact]
-    public void EncodeService_PreservesIoErrors_AndHonorsCancellationBeforeDispatch()
+    [Test]
+    public async Task EncodeService_PreservesIoErrors_AndHonorsCancellationBeforeDispatch()
     {
         var port = new StubCodec { Failure = new IOException("write failure") };
         var service = new ImageEncodeService(port);
         using var image = new Image(1, 1);
         using var output = new MemoryStream();
-        Assert.Same(port.Failure, Assert.Throws<IOException>(() => service.Encode(image, output, new PngEncoderOptions())));
+        await Assert.That(Assert.ThrowsExactly<IOException>(() => service.Encode(image, output, new PngEncoderOptions()))).IsSameReferenceAs(port.Failure);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         int calls = port.Calls;
-        Assert.Throws<OperationCanceledException>(() => service.Encode(image, output, new PngEncoderOptions(), cts.Token));
-        Assert.Equal(calls, port.Calls);
+        Assert.ThrowsExactly<OperationCanceledException>(() => service.Encode(image, output, new PngEncoderOptions(), cts.Token));
+        await Assert.That(port.Calls).IsEqualTo(calls);
     }
 
     private sealed class StubCodec : ICodecResolver, IImageDecoder, IImageEncoder

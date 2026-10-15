@@ -10,56 +10,56 @@ namespace PictureSharp.Tests.WebP;
 /// <summary>SIMD paths of the lossless transforms and scanline filters must match the scalar code on every input.</summary>
 public class LosslessSimdTests
 {
-    [Fact]
-    public void AddGreen_MatchesScalar() =>
-        AssertPixels(static (src, simd) =>
+    [Test]
+    public async Task AddGreen_MatchesScalar() =>
+        await AssertPixels(static (src, simd) =>
         {
             LosslessTransforms.AddGreenToBlueAndRedScalar(src);
             LosslessTransforms.AddGreenToBlueAndRed(simd);
         });
 
-    [Fact]
-    public void SubtractGreen_MatchesScalar() =>
-        AssertPixels(static (src, simd) =>
+    [Test]
+    public async Task SubtractGreen_MatchesScalar() =>
+        await AssertPixels(static (src, simd) =>
         {
             LosslessTransforms.SubtractGreenFromBlueAndRedScalar(src);
             LosslessTransforms.SubtractGreenFromBlueAndRed(simd);
         });
 
-    [Fact]
-    public void TransformColor_MatchesScalar()
+    [Test]
+    public async Task TransformColor_MatchesScalar()
     {
         var rng = new Random(3);
-        foreach (sbyte greenToRed in Sweep)
-            foreach (sbyte greenToBlue in Anchors)
-                foreach (sbyte redToBlue in Anchors)
+        foreach (sbyte greenToRed in Sweep.ToArray())
+            foreach (sbyte greenToBlue in Anchors.ToArray())
+                foreach (sbyte redToBlue in Anchors.ToArray())
                 {
                     uint[] scalar = RandomPixels(rng, 24);
                     uint[] simd = (uint[])scalar.Clone();
                     LosslessTransforms.TransformColorScalar(greenToRed, greenToBlue, redToBlue, scalar);
                     LosslessTransforms.TransformColor(greenToRed, greenToBlue, redToBlue, simd);
-                    Assert.Equal(scalar, simd);
+                    await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
                 }
     }
 
-    [Fact]
-    public void TransformColorInverse_MatchesScalar()
+    [Test]
+    public async Task TransformColorInverse_MatchesScalar()
     {
         var rng = new Random(4);
-        foreach (sbyte greenToRed in Sweep)
-            foreach (sbyte greenToBlue in Anchors)
-                foreach (sbyte redToBlue in Anchors)
+        foreach (sbyte greenToRed in Sweep.ToArray())
+            foreach (sbyte greenToBlue in Anchors.ToArray())
+                foreach (sbyte redToBlue in Anchors.ToArray())
                 {
                     uint[] scalar = RandomPixels(rng, 24);
                     uint[] simd = (uint[])scalar.Clone();
                     LosslessTransforms.TransformColorInverseScalar(greenToRed, greenToBlue, redToBlue, scalar);
                     LosslessTransforms.TransformColorInverse(greenToRed, greenToBlue, redToBlue, simd);
-                    Assert.Equal(scalar, simd);
+                    await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
                 }
     }
 
-    [Fact]
-    public void PredictorInverse_MatchesScalar()
+    [Test]
+    public async Task PredictorInverse_MatchesScalar()
     {
         var rng = new Random(5);
         int[] widths = [1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 511, 512, 513];
@@ -70,35 +70,35 @@ public class LosslessSimdTests
                 {
                     for (int mode = 0; mode < 16; mode++)
                     {
-                        AssertPredictor(rng, width, height, bits, mode);
+                        await AssertPredictor(rng, width, height, bits, mode);
                     }
 
-                    AssertPredictor(rng, width, height, bits, mode: -1);
+                    await AssertPredictor(rng, width, height, bits, mode: -1);
                 }
 
-        AssertPredictor(rng, 320, 6, 3, mode: -1);
+        await AssertPredictor(rng, 320, 6, 3, mode: -1);
         foreach (int bits in Enumerable.Range(2, 8))
         {
-            AssertPredictor(rng, 67, (1 << bits) + 1, bits, mode: -1);
+            await AssertPredictor(rng, 67, (1 << bits) + 1, bits, mode: -1);
         }
     }
 
-    [Theory]
-    [InlineData(5, 3, 0, 1, 2, 255, 0)]
-    [InlineData(6, 3, 2, 0, 0, 255, 1)]
-    [InlineData(7, 3, 0, 2, 0, 255, 1)]
-    [InlineData(13, 0, 3, 2, 0, 0, 0)] // Negative even difference.
-    [InlineData(13, 0, 2, 2, 0, 0, 1)] // Negative odd difference truncates toward zero.
-    [InlineData(13, 254, 0, 255, 0, 1, 0)] // Saturation precedes wrapping addition.
-    [InlineData(13, 0, 255, 0, 0, 255, 255)]
-    [InlineData(10, 3, 0, 1, 2, 255, 0)] // Nested odd averages round down, then residual wraps.
-    [InlineData(11, 255, 128, 1, 0, 0, 1)] // Equal distances choose top, although top differs from left.
-    [InlineData(11, 200, 0, 10, 0, 0, 200)]
-    [InlineData(11, 10, 0, 200, 0, 0, 200)]
-    [InlineData(12, 250, 0, 20, 0, 1, 0)] // Clamp to 255 before adding the residual modulo 256.
-    [InlineData(12, 0, 255, 0, 0, 255, 255)]
-    [InlineData(12, 100, 50, 80, 0, 200, 74)]
-    public void PredictorInverse_DirectedArithmetic(int mode, byte left, byte topLeft, byte top, byte topRight, byte residual, byte expected)
+    [Test]
+    [Arguments(5, 3, 0, 1, 2, 255, 0)]
+    [Arguments(6, 3, 2, 0, 0, 255, 1)]
+    [Arguments(7, 3, 0, 2, 0, 255, 1)]
+    [Arguments(13, 0, 3, 2, 0, 0, 0)] // Negative even difference.
+    [Arguments(13, 0, 2, 2, 0, 0, 1)] // Negative odd difference truncates toward zero.
+    [Arguments(13, 254, 0, 255, 0, 1, 0)] // Saturation precedes wrapping addition.
+    [Arguments(13, 0, 255, 0, 0, 255, 255)]
+    [Arguments(10, 3, 0, 1, 2, 255, 0)] // Nested odd averages round down, then residual wraps.
+    [Arguments(11, 255, 128, 1, 0, 0, 1)] // Equal distances choose top, although top differs from left.
+    [Arguments(11, 200, 0, 10, 0, 0, 200)]
+    [Arguments(11, 10, 0, 200, 0, 0, 200)]
+    [Arguments(12, 250, 0, 20, 0, 1, 0)] // Clamp to 255 before adding the residual modulo 256.
+    [Arguments(12, 0, 255, 0, 0, 255, 255)]
+    [Arguments(12, 100, 50, 80, 0, 200, 74)]
+    public async Task PredictorInverse_DirectedArithmetic(int mode, byte left, byte topLeft, byte top, byte topRight, byte residual, byte expected)
     {
         const int width = 33;
         foreach (int bits in new[] { 2, 3, 5 })
@@ -125,40 +125,40 @@ public class LosslessSimdTests
                     encoded[i] = LosslessTransforms.SubPixels(desired[i], LosslessTransforms.Predict(mode, desired, i, width));
                 }
 
-                Assert.Equal(Repeat(residual), encoded[width + x]);
+                await Assert.That(encoded[width + x]).IsEqualTo(Repeat(residual));
                 uint[] modes = new uint[Vp8LDecoder.SubSampleSize(width, bits) * Vp8LDecoder.SubSampleSize(2, bits)];
                 Array.Fill(modes, WebPConstants.ArgbBlack | (uint)(mode << 8));
                 var transform = new Vp8LTransform { XSize = width, YSize = 2, Bits = bits, Data = modes };
                 LosslessTransforms.PredictorInverseTransform(transform, encoded);
-                Assert.Equal(desired, encoded);
+                await Assert.That(encoded).IsEquivalentTo(desired, CollectionOrdering.Matching);
             }
 
         static uint Repeat(byte value) => value * 0x01010101u;
     }
 
-    [Fact]
-    public void ColorTransforms_ShortLengthsMatchScalar()
+    [Test]
+    public async Task ColorTransforms_ShortLengthsMatchScalar()
     {
         var rng = new Random(11);
         foreach (int length in new[] { 0, 1, 3, 4, 5, 6, 7, 9, 12, 15, 17, 31 })
-            foreach (sbyte greenToRed in Anchors)
-                foreach (sbyte greenToBlue in Anchors)
-                    foreach (sbyte redToBlue in Anchors)
+            foreach (sbyte greenToRed in Anchors.ToArray())
+                foreach (sbyte greenToBlue in Anchors.ToArray())
+                    foreach (sbyte redToBlue in Anchors.ToArray())
                     {
                         uint[] pixels = RandomPixels(rng, length);
                         uint[] forwardScalar = (uint[])pixels.Clone(), forwardSimd = (uint[])pixels.Clone();
                         LosslessTransforms.TransformColorScalar(greenToRed, greenToBlue, redToBlue, forwardScalar);
                         LosslessTransforms.TransformColor(greenToRed, greenToBlue, redToBlue, forwardSimd);
-                        Assert.Equal(forwardScalar, forwardSimd);
+                        await Assert.That(forwardSimd).IsEquivalentTo(forwardScalar, CollectionOrdering.Matching);
                         uint[] inverseScalar = (uint[])pixels.Clone(), inverseSimd = (uint[])pixels.Clone();
                         LosslessTransforms.TransformColorInverseScalar(greenToRed, greenToBlue, redToBlue, inverseScalar);
                         LosslessTransforms.TransformColorInverse(greenToRed, greenToBlue, redToBlue, inverseSimd);
-                        Assert.Equal(inverseScalar, inverseSimd);
+                        await Assert.That(inverseSimd).IsEquivalentTo(inverseScalar, CollectionOrdering.Matching);
                     }
     }
 
-    [Fact]
-    public void ArgbToRgba_MatchesScalar()
+    [Test]
+    public async Task ArgbToRgba_MatchesScalar()
     {
         var rng = new Random(6);
         for (int length = 0; length <= 40; length++)
@@ -167,12 +167,12 @@ public class LosslessSimdTests
             Rgba32[] scalar = new Rgba32[length], simd = new Rgba32[length];
             WebPDecoder.ArgbToRgbaScalar(argb, scalar);
             WebPDecoder.ArgbToRgba(argb, simd);
-            Assert.Equal(scalar, simd);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void PngUnfilter_MatchesScalar()
+    [Test]
+    public async Task PngUnfilter_MatchesScalar()
     {
         var rng = new Random(7);
         foreach (int bpp in new[] { 1, 2, 3, 4, 6, 8 })
@@ -191,12 +191,12 @@ public class LosslessSimdTests
                     byte[] simd = (byte[])scalar.Clone();
                     PngDecoder.UnfilterScalar(scalar, 0, width, height, bpp * 8);
                     PngDecoder.Unfilter(simd, 0, width, height, bpp * 8);
-                    Assert.Equal(scalar, simd);
+                    await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
                 }
     }
 
-    [Fact]
-    public void AlphaUnfilter_MatchesScalar()
+    [Test]
+    public async Task AlphaUnfilter_MatchesScalar()
     {
         var rng = new Random(8);
         foreach (AlphaFilterType filter in new[] { AlphaFilterType.None, AlphaFilterType.Horizontal, AlphaFilterType.Vertical, AlphaFilterType.Gradient })
@@ -207,12 +207,12 @@ public class LosslessSimdTests
                 byte[] simd = (byte[])scalar.Clone();
                 AlphaDecoder.UnfilterScalar(filter, scalar, width, 4);
                 AlphaDecoder.Unfilter(filter, simd, width, 4);
-                Assert.Equal(scalar, simd);
+                await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
             }
     }
 
-    [Fact]
-    public void PrefixSumBytes_MatchesScalar()
+    [Test]
+    public async Task PrefixSumBytes_MatchesScalar()
     {
         var rng = new Random(9);
         for (int length = 0; length <= 80; length++)
@@ -224,11 +224,11 @@ public class LosslessSimdTests
             ScanlineSimd.PrefixSumBytesScalar(scalar, seed);
             byte[] simd = (byte[])original.Clone();
             ScanlineSimd.PrefixSumBytes(simd, seed);
-            Assert.Equal(scalar, simd);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
         }
     }
 
-    private static void AssertPredictor(Random rng, int width, int height, int bits, int mode)
+    private static async Task AssertPredictor(Random rng, int width, int height, int bits, int mode)
     {
         int tilesPerRow = Vp8LDecoder.SubSampleSize(width, bits);
         int tiles = tilesPerRow * Vp8LDecoder.SubSampleSize(height, bits);
@@ -244,10 +244,10 @@ public class LosslessSimdTests
         var transform = new Vp8LTransform { Bits = bits, XSize = width, YSize = height, Data = modes };
         LosslessTransforms.PredictorInverseTransformScalar(transform, scalar);
         LosslessTransforms.PredictorInverseTransform(transform, simd);
-        Assert.Equal(scalar, simd);
+        await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
     }
 
-    private static void AssertPixels(Action<uint[], uint[]> apply)
+    private static async Task AssertPixels(Action<uint[], uint[]> apply)
     {
         var rng = new Random(2);
         for (int length = 0; length <= 40; length++)
@@ -255,7 +255,7 @@ public class LosslessSimdTests
             uint[] scalar = RandomPixels(rng, length);
             uint[] simd = (uint[])scalar.Clone();
             apply(scalar, simd);
-            Assert.Equal(scalar, simd);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
         }
     }
 

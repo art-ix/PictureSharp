@@ -5,11 +5,11 @@ namespace PictureSharp.Tests.WebP;
 
 public class LossyEncoderTests
 {
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void CorpusEncoding_MatchesCwebp160()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task CorpusEncoding_MatchesCwebp160()
     {
-        if (!ReferenceTools.HasCwebp) return;
+        Skip.Unless(ReferenceTools.HasCwebp, "cwebp 1.6.0 is not available.");
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-lossy-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try
@@ -23,7 +23,7 @@ public class LossyEncoderTests
                         using var image = Image.Load(source);
                         var options = new WebPEncoderOptions { Quality = quality, Method = method, Metadata = MetadataKinds.None };
                         byte[] actual = image.ToWebP(options);
-                        Assert.True(ReferenceTools.Run("cwebp", $"-quiet -q {quality} -m {method} \"{source}\" -o \"{expectedPath}\"", out string output) == 0, output);
+                        await Assert.That(ReferenceTools.Run("cwebp", $"-quiet -q {quality} -m {method} \"{source}\" -o \"{expectedPath}\"", out string output) == 0).IsTrue().Because(output);
                         byte[] expected = File.ReadAllBytes(expectedPath);
                         File.WriteAllBytes(actualPath, actual);
                         Assert.NotNull(ReferenceTools.DwebpRgba(actualPath));
@@ -41,7 +41,7 @@ public class LossyEncoderTests
                             }
                         }
                     }
-            Assert.True(failures.Count == 0, string.Join("\n", failures));
+            await Assert.That(failures.Count == 0).IsTrue().Because(string.Join("\n", failures));
         }
         finally { Directory.Delete(directory, true); }
     }

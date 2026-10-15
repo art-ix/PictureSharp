@@ -20,22 +20,22 @@ public class ResourceLimitTests
             .Select(p => Path.GetRelativePath(Corpus.CorpusDir, p).Replace('\\', '/'))
             .Order(StringComparer.Ordinal);
 
-    [Fact]
-    public void Defaults_AreDocumentedValues()
+    [Test]
+    public async Task Defaults_AreDocumentedValues()
     {
-        Assert.Equal(Array.MaxLength, DecoderOptions.Default.MaxInputBytes);
-        Assert.Equal(64L << 20, DecoderOptions.Default.MaxMetadataBytes);
-        Assert.Equal(65536, DecoderOptions.Default.MaxFrames);
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxInputBytes = 0 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxMetadataBytes = -1 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxFrames = 0 });
-        Assert.Equal(0, new DecoderOptions { MaxMetadataBytes = 0 }.MaxMetadataBytes);
+        await Assert.That(DecoderOptions.Default.MaxInputBytes).IsEqualTo(Array.MaxLength);
+        await Assert.That(DecoderOptions.Default.MaxMetadataBytes).IsEqualTo(64L << 20);
+        await Assert.That(DecoderOptions.Default.MaxFrames).IsEqualTo(65536);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxInputBytes = 0 });
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxMetadataBytes = -1 });
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxFrames = 0 });
+        await Assert.That(new DecoderOptions { MaxMetadataBytes = 0 }.MaxMetadataBytes).IsEqualTo(0);
     }
 
     // ------------------------------------------------------------------ MaxInputBytes
 
-    [Theory]
-    [MemberData(nameof(Corpus.Representatives), MemberType = typeof(Corpus))]
+    [Test]
+    [MethodDataSource(typeof(Corpus), nameof(Corpus.Representatives))]
     public void MaxInputBytes_BoundaryOnEveryPath(string file)
     {
         byte[] data = Corpus.Read(file);
@@ -54,17 +54,17 @@ public class ResourceLimitTests
         Image.Load(new MemoryStream(data), exact).Dispose();
         Image.Identify(new NonSeekableStream(data), exact);
 
-        Assert.Throws<ImageFormatException>(() => Image.Load(data, below));
-        Assert.Throws<ImageFormatException>(() => Image.Load(data.AsSpan(), below));
-        Assert.Throws<ImageFormatException>(() => Image.Load(path, below));
-        Assert.Throws<ImageFormatException>(() => Image.Load(new MemoryStream(data), below));
-        Assert.Throws<ImageFormatException>(() => Image.Load(new NonSeekableStream(data), below));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(data, below));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(path, below));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(new NonSeekableStream(data), below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data.AsSpan(), below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(path, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(new MemoryStream(data), below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(new NonSeekableStream(data), below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(data, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(path, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(new NonSeekableStream(data), below));
     }
 
-    [Fact]
+    [Test]
     public async Task MaxInputBytes_AsyncPaths()
     {
         byte[] data = Corpus.Read("png/rgba8.png");
@@ -74,38 +74,38 @@ public class ResourceLimitTests
 
         (await Image.LoadAsync(new NonSeekableStream(data), exact)).Dispose();
         (await Image.LoadAsync(path, exact)).Dispose();
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.LoadAsync(new NonSeekableStream(data), below));
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.LoadAsync(path, below));
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.IdentifyAsync(new NonSeekableStream(data), below));
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.IdentifyAsync(path, below));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.LoadAsync(new NonSeekableStream(data), below));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.LoadAsync(path, below));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.IdentifyAsync(new NonSeekableStream(data), below));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.IdentifyAsync(path, below));
     }
 
-    [Fact]
-    public void MaxInputBytes_StopsReadingEndlessStreams()
+    [Test]
+    public async Task MaxInputBytes_StopsReadingEndlessStreams()
     {
         const int limit = 1 << 20;
         var options = new DecoderOptions { MaxInputBytes = limit };
         var stream = new EndlessStream();
-        Assert.Throws<ImageFormatException>(() => Image.Load(stream, options));
-        Assert.InRange(stream.BytesRead, limit + 1, limit + (64 * 1024));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(stream, options));
+        await Assert.That(stream.BytesRead).IsBetween((long)(limit + 1), (long)(limit + (64 * 1024)));
 
         // A seekable stream that understates its length is still cut off at the limit.
         var lying = new EndlessStream(seekable: true, declaredLength: 100);
-        Assert.Throws<ImageFormatException>(() => Image.Load(lying, options));
-        Assert.InRange(lying.BytesRead, limit + 1, limit + 1);
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(lying, options));
+        await Assert.That(lying.BytesRead).IsBetween((long)(limit + 1), (long)(limit + 1));
     }
 
-    [Fact]
+    [Test]
     public async Task MaxInputBytes_StopsReadingEndlessStreamsAsync()
     {
         const int limit = 1 << 20;
         var stream = new EndlessStream();
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.LoadAsync(stream, new DecoderOptions { MaxInputBytes = limit }));
-        Assert.InRange(stream.BytesRead, limit + 1, limit + (64 * 1024));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.LoadAsync(stream, new DecoderOptions { MaxInputBytes = limit }));
+        await Assert.That(stream.BytesRead).IsBetween((long)(limit + 1), (long)(limit + (64 * 1024)));
     }
 
-    [Fact]
-    public void DeclaredLength_DoesNotDecideTheResult()
+    [Test]
+    public async Task DeclaredLength_DoesNotDecideTheResult()
     {
         byte[] data = Corpus.Read("png/rgba8.png");
         using Image expected = Image.Load(data);
@@ -113,37 +113,37 @@ public class ResourceLimitTests
         // An understated length only sizes the first buffer: all bytes are read.
         using (Image image = Image.Load(new DeclaredLengthStream(data, 10)))
         {
-            Assert.Equal(expected.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
+            await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(expected.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
         }
 
         // An overstated length is rejected up front when it exceeds the limit, before anything is read...
         var stream = new DeclaredLengthStream(data, data.Length * 10L);
-        Assert.Throws<ImageFormatException>(() => Image.Load(stream, new DecoderOptions { MaxInputBytes = data.Length * 2 }));
-        Assert.Equal(0, stream.BytesRead);
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(stream, new DecoderOptions { MaxInputBytes = data.Length * 2 }));
+        await Assert.That(stream.BytesRead).IsEqualTo(0);
 
         // ...and otherwise only reserves capacity.
         using Image overstated = Image.Load(new DeclaredLengthStream(data, data.Length * 10L));
-        Assert.Equal(expected.Size, overstated.Size);
+        await Assert.That(overstated.Size).IsEqualTo(expected.Size);
     }
 
-    [Fact]
+    [Test]
     public void MaxInputBytes_IcoFile()
     {
         using Image icon = Image.LoadPixelData(new Rgba32[16 * 16], 16, 16);
         byte[] data = icon.ToIco();
         var below = new DecoderOptions { MaxInputBytes = data.Length - 1 };
-        Assert.Throws<ImageFormatException>(() => IcoFile.LoadAll(data, below));
-        Assert.Throws<ImageFormatException>(() => IcoFile.LoadAll(new NonSeekableStream(data), below));
-        Assert.Throws<ImageFormatException>(() => IcoFile.Identify(new NonSeekableStream(data), below));
-        Assert.Throws<ImageFormatException>(() => IcoFile.IdentifySelected(data, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => IcoFile.LoadAll(data, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => IcoFile.LoadAll(new NonSeekableStream(data), below));
+        Assert.ThrowsExactly<ImageFormatException>(() => IcoFile.Identify(new NonSeekableStream(data), below));
+        Assert.ThrowsExactly<ImageFormatException>(() => IcoFile.IdentifySelected(data, below));
         IcoFile.LoadAll(new NonSeekableStream(data), new DecoderOptions { MaxInputBytes = data.Length }).Dispose();
     }
 
     // ------------------------------------------------------------------ MaxFrames
 
-    public static TheoryData<string> AnimatedFiles()
+    public static TestCases<string> AnimatedFiles()
     {
-        var files = new TheoryData<string>();
+        var files = new TestCases<string>();
         foreach (string file in CorpusPaths())
         {
             try
@@ -161,19 +161,19 @@ public class ResourceLimitTests
         return files;
     }
 
-    [Theory]
-    [MemberData(nameof(AnimatedFiles))]
-    public void MaxFrames_Boundary(string file)
+    [Test]
+    [MethodDataSource(nameof(AnimatedFiles))]
+    public async Task MaxFrames_Boundary(string file)
     {
         byte[] data = Corpus.Read(file);
         int frames = Image.Identify(data).FrameCount;
         var exact = new DecoderOptions { MaxFrames = frames };
         var below = new DecoderOptions { MaxFrames = frames - 1 };
 
-        Assert.Equal(frames, Image.Identify(data, exact).FrameCount);
-        Assert.Throws<ImageFormatException>(() => Image.Identify(data, below));
-        Assert.Throws<ImageFormatException>(() => Image.Load(data, below));
-        Assert.Throws<ImageFormatException>(() => Image.Load(data, below with { FirstFrameOnly = true }));
+        await Assert.That(Image.Identify(data, exact).FrameCount).IsEqualTo(frames);
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(data, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, below));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, below with { FirstFrameOnly = true }));
         try
         {
             Image.Load(data, exact).Dispose();
@@ -181,15 +181,15 @@ public class ResourceLimitTests
         catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
         {
             // Some corpus animations are deliberately broken; the limit itself must not be the cause.
-            Assert.DoesNotContain("MaxFrames", ex.Message);
+            await Assert.That(ex.Message).DoesNotContain("MaxFrames");
         }
     }
 
-    [Theory]
-    [InlineData("gif")]
-    [InlineData("png")]
-    [InlineData("webp")]
-    public void MaxFrames_ManyTinyFrames(string extension)
+    [Test]
+    [Arguments("gif")]
+    [Arguments("png")]
+    [Arguments("webp")]
+    public async Task MaxFrames_ManyTinyFrames(string extension)
     {
         using Image animation = Animation(frames: 300);
         byte[] data = extension switch
@@ -199,10 +199,10 @@ public class ResourceLimitTests
             _ => animation.ToWebP(new() { Lossless = true }),
         };
 
-        Assert.Equal(300, Image.Identify(data).FrameCount);
+        await Assert.That(Image.Identify(data).FrameCount).IsEqualTo(300);
         Image.Load(data, new DecoderOptions { MaxFrames = 300 }).Dispose();
-        ImageFormatException error = Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxFrames = 299 }));
-        Assert.Contains("MaxFrames", error.Message);
+        ImageFormatException error = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxFrames = 299 }));
+        await Assert.That(error.Message).Contains("MaxFrames");
     }
 
     private static Image Animation(int frames)
@@ -221,49 +221,49 @@ public class ResourceLimitTests
 
     // ------------------------------------------------------------------ MaxMetadataBytes
 
-    public static TheoryData<string> MetadataFormats() => ["png", "jpeg", "webp", "gif", "bmp"];
+    public static TestCases<string> MetadataFormats() => ["png", "jpeg", "webp", "gif", "bmp"];
 
-    [Theory]
-    [MemberData(nameof(MetadataFormats))]
-    public void MaxMetadataBytes_Boundary(string format)
+    [Test]
+    [MethodDataSource(nameof(MetadataFormats))]
+    public async Task MaxMetadataBytes_Boundary(string format)
     {
         byte[] data = WithMetadata(format, 3000);
         using Image full = Image.Load(data);
         ImageMetadata m = full.Metadata;
         long total = (m.IccProfile?.Length ?? 0) + (m.Exif?.Length ?? 0) + (m.Xmp?.Length ?? 0);
-        Assert.True(total >= 3000, $"{format} kept {total} metadata bytes");
+        await Assert.That(total >= 3000).IsTrue().Because($"{format} kept {total} metadata bytes");
 
         Image.Load(data, new DecoderOptions { MaxMetadataBytes = total }).Dispose();
-        ImageFormatException error = Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxMetadataBytes = total - 1 }));
-        Assert.Contains("MaxMetadataBytes", error.Message);
+        ImageFormatException error = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxMetadataBytes = total - 1 }));
+        await Assert.That(error.Message).Contains("MaxMetadataBytes");
 
         // Ignored metadata is neither read nor counted.
         using Image ignored = Image.Load(data, new DecoderOptions { MaxMetadataBytes = 0, IgnoreMetadata = true });
-        Assert.True(ignored.Metadata.IsEmpty);
+        await Assert.That(ignored.Metadata.IsEmpty).IsTrue();
     }
 
-    [Fact]
-    public void PngCompressedProfile_IsLimitedAfterDecompression()
+    [Test]
+    public async Task PngCompressedProfile_IsLimitedAfterDecompression()
     {
         // 100 MiB of zeros deflate to about 100 KiB: the default limit must stop the inflation.
         byte[] bomb = Deflater.CompressZlib(new byte[100 << 20], 9);
-        Assert.True(bomb.Length < 1 << 20);
+        await Assert.That(bomb.Length < 1 << 20).IsTrue();
         byte[] png = InsertChunk(SmallPng(), "iCCP", [.. "bomb"u8, 0, 0, .. bomb]);
 
-        ImageFormatException error = Assert.Throws<ImageFormatException>(() => Image.Load(png));
-        Assert.Contains("MaxMetadataBytes", error.Message);
+        ImageFormatException error = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(png));
+        await Assert.That(error.Message).Contains("MaxMetadataBytes");
         using Image ignored = Image.Load(png, new DecoderOptions { IgnoreMetadata = true });
         Assert.Null(ignored.Metadata.IccProfile);
 
         // Identify reports no profile, so it does not inflate it.
-        Assert.Equal(2, Image.Identify(png).Width);
+        await Assert.That(Image.Identify(png).Width).IsEqualTo(2);
 
         using Image allowed = Image.Load(png, new DecoderOptions { MaxMetadataBytes = 100 << 20 });
-        Assert.Equal(100 << 20, allowed.Metadata.IccProfile!.Length);
+        await Assert.That(allowed.Metadata.IccProfile!.Length).IsEqualTo(100 << 20);
     }
 
-    [Fact]
-    public void PngCompressedXmp_IsLimitedAfterDecompression()
+    [Test]
+    public async Task PngCompressedXmp_IsLimitedAfterDecompression()
     {
         byte[] xmp = Encoding.ASCII.GetBytes(new string('x', 5000));
         byte[] compressed = Deflater.CompressZlib(xmp, 9);
@@ -271,30 +271,30 @@ public class ResourceLimitTests
 
         using (Image image = Image.Load(png, new DecoderOptions { MaxMetadataBytes = 5000 }))
         {
-            Assert.Equal(xmp, image.Metadata.Xmp);
+            await Assert.That(image.Metadata.Xmp).IsEquivalentTo(xmp, CollectionOrdering.Matching);
         }
 
-        Assert.Throws<ImageFormatException>(() => Image.Load(png, new DecoderOptions { MaxMetadataBytes = 4999 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(png, new DecoderOptions { MaxMetadataBytes = 4999 }));
     }
 
-    [Fact]
-    public void PngDuplicateProfiles_KeepTheFirstAndInflateOnce()
+    [Test]
+    public async Task PngDuplicateProfiles_KeepTheFirstAndInflateOnce()
     {
         byte[] first = Deflater.CompressZlib(new byte[1000], 9);
         byte[] second = Deflater.CompressZlib(Enumerable.Repeat((byte)1, 2000).ToArray(), 9);
         byte[] png = InsertChunk(InsertChunk(SmallPng(), "iCCP", [.. "b"u8, 0, 0, .. second]), "iCCP", [.. "a"u8, 0, 0, .. first]);
         using Image image = Image.Load(png, new DecoderOptions { MaxMetadataBytes = 1000 });
-        Assert.Equal(new byte[1000], image.Metadata.IccProfile);
+        await Assert.That(image.Metadata.IccProfile).IsEquivalentTo(new byte[1000], CollectionOrdering.Matching);
     }
 
-    [Fact]
+    [Test]
     public void JpegProfileSegments_AreCountedAsTheyAreRead()
     {
         using Image source = Image.LoadPixelData(new Rgba32[64], 8, 8);
         source.Metadata.IccProfile = Enumerable.Range(0, 200_000).Select(static i => (byte)i).ToArray();
         byte[] jpeg = source.ToJpeg();
         Image.Load(jpeg, new DecoderOptions { MaxMetadataBytes = 200_000 }).Dispose();
-        Assert.Throws<ImageFormatException>(() => Image.Load(jpeg, new DecoderOptions { MaxMetadataBytes = 100_000 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(jpeg, new DecoderOptions { MaxMetadataBytes = 100_000 }));
     }
 
     private static byte[] WithMetadata(string format, int size)

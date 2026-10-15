@@ -23,9 +23,9 @@ public static class Corpus
     public static byte[] Read(string relative) => File.ReadAllBytes(PathOf(relative));
 
     /// <summary>Corpus files whose relative path starts with <paramref name="prefix"/>, as xUnit theory data.</summary>
-    public static TheoryData<string> Files(string prefix)
+    public static TestCases<string> Files(string prefix)
     {
-        var data = new TheoryData<string>();
+        var data = new TestCases<string>();
         foreach (string key in References.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).Order(StringComparer.Ordinal))
         {
             data.Add(key);
@@ -38,7 +38,7 @@ public static class Corpus
     /// A few files per format and container variant, for format-independent paths (entry points, limits,
     /// cancellation) where running the whole corpus adds time but no coverage.
     /// </summary>
-    public static TheoryData<string> Representatives() =>
+    public static TestCases<string> Representatives() =>
     [
         "bmp/im_pal8_rle.bmp", "bmp/im_rgba32_v5.bmp",
         "gif/im_interlace.gif", "gif/pil_anim_dispose2.gif",

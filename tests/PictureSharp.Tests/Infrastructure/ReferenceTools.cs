@@ -30,6 +30,16 @@ public static class ReferenceTools
     /// <summary>Whether gif2webp and anim_dump 1.6.0 (built with giflib) are available.</summary>
     public static bool HasGifTools => GifToolsAvailable.Value;
 
+    private static readonly Lazy<bool> PillowAvailable = new(() => Run("python3", "-I -c \"import PIL\"", out _) == 0);
+
+    /// <summary>Whether python3 can import Pillow.</summary>
+    public static bool HasPillow => PillowAvailable.Value;
+
+    private static readonly Lazy<bool> ImageMagickAvailable = new(() => Run("convert", "-version", out _) == 0);
+
+    /// <summary>Whether ImageMagick's convert is installed.</summary>
+    public static bool HasImageMagick => ImageMagickAvailable.Value;
+
     /// <summary>Composited RGBA frames of a GIF or animated WebP file from anim_dump; null when it rejects the file.</summary>
     public static List<byte[]>? AnimDump(string path)
     {

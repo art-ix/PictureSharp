@@ -15,22 +15,22 @@ public class PcxDecoderTests
         return image.GetPixelSpan().ToArray();
     }
 
-    [Fact]
-    public void Detect_RecognizesPcx()
+    [Test]
+    public async Task Detect_RecognizesPcx()
     {
         byte[] pcx = new PcxBuilder { Rows = [[1]], BytesPerLine = 1, VgaPalette = PcxBuilder.Vga(Red) }.Build();
-        Assert.Equal(ImageFormat.Pcx, Image.DetectFormat(pcx));
-        Assert.Equal(ImageFormat.Pcx, ImageFormat.FromExtension("scan.PCX"));
-        Assert.Equal(ImageFormat.Pcx, ImageFormat.FromMimeType("image/x-pcx"));
-        Assert.True(ImageFormat.Pcx.CanDecode);
-        Assert.True(ImageFormat.Pcx.CanEncode);
+        await Assert.That(Image.DetectFormat(pcx)).IsEqualTo(ImageFormat.Pcx);
+        await Assert.That(ImageFormat.FromExtension("scan.PCX")).IsEqualTo(ImageFormat.Pcx);
+        await Assert.That(ImageFormat.FromMimeType("image/x-pcx")).IsEqualTo(ImageFormat.Pcx);
+        await Assert.That(ImageFormat.Pcx.CanDecode).IsTrue();
+        await Assert.That(ImageFormat.Pcx.CanEncode).IsTrue();
         Assert.Null(Image.DetectFormat([0x0A, 6, 1, 8]));
         Assert.Null(Image.DetectFormat([0x0A, 5, 2, 8]));
         Assert.Null(Image.DetectFormat([0x0A, 5, 1, 3]));
     }
 
-    [Fact]
-    public void Mono_EmptyPalette_IsBlackAndWhite()
+    [Test]
+    public async Task Mono_EmptyPalette_IsBlackAndWhite()
     {
         // Width 9 so the second byte holds the last pixel. Bits: 1010 0001 1000 0000.
         byte[] pcx = new PcxBuilder
@@ -41,13 +41,11 @@ public class PcxDecoderTests
             Version = 2,
             Rows = [[0xA1, 0x80]],
         }.Build();
-        Assert.Equal(
-            [White, Rgba32.Black, White, Rgba32.Black, Rgba32.Black, Rgba32.Black, Rgba32.Black, White, White],
-            Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([White, Rgba32.Black, White, Rgba32.Black, Rgba32.Black, Rgba32.Black, Rgba32.Black, White, White], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Mono_HeaderPalette_KeepsColors()
+    [Test]
+    public async Task Mono_HeaderPalette_KeepsColors()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -58,14 +56,14 @@ public class PcxDecoderTests
             EgaPalette = PcxBuilder.Rgb(Red, Blue),
             Rows = [[0x80]],
         }.Build();
-        Assert.Equal([Blue, Red], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([Blue, Red], CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [InlineData(2)]
-    [InlineData(3)]
-    [InlineData(4)]
-    public void Planar_UnpacksLeastSignificantPlaneFirst(int planes)
+    [Test]
+    [Arguments(2)]
+    [Arguments(3)]
+    [Arguments(4)]
+    public async Task Planar_UnpacksLeastSignificantPlaneFirst(int planes)
     {
         var palette = new Rgba32[16];
         for (int i = 0; i < 16; i++)
@@ -90,11 +88,11 @@ public class PcxDecoderTests
             Rows = [[.. row.SelectMany(plane => plane)]],
         }.Build();
         int all = (1 << planes) - 1;
-        Assert.Equal([palette[all], palette[1]], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([palette[all], palette[1]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Packed2_ReadsMostSignificantBitsFirst()
+    [Test]
+    public async Task Packed2_ReadsMostSignificantBitsFirst()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -104,11 +102,11 @@ public class PcxDecoderTests
             EgaPalette = PcxBuilder.Rgb(Pal4),
             Rows = [[0x1B, 0x40]],
         }.Build();
-        Assert.Equal([Pal4[0], Pal4[1], Pal4[2], Pal4[3], Pal4[1]], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([Pal4[0], Pal4[1], Pal4[2], Pal4[3], Pal4[1]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Packed4_ReadsNibbles()
+    [Test]
+    public async Task Packed4_ReadsNibbles()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -118,11 +116,11 @@ public class PcxDecoderTests
             EgaPalette = PcxBuilder.Rgb(Pal4),
             Rows = [[0x12, 0x30]],
         }.Build();
-        Assert.Equal([Pal4[1], Pal4[2], Pal4[3]], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([Pal4[1], Pal4[2], Pal4[3]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Indexed_UsesTrailingVgaPalette()
+    [Test]
+    public async Task Indexed_UsesTrailingVgaPalette()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -132,13 +130,13 @@ public class PcxDecoderTests
             Rows = [[2, 0, 1]],
             VgaPalette = PcxBuilder.Vga(Red, Green, Blue),
         }.Build();
-        Assert.Equal([Blue, Red, Green], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([Blue, Red, Green], CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    public void Indexed_PaletteMarkerInsideRaster_IsNotATrailer(int encoding)
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    public async Task Indexed_PaletteMarkerInsideRaster_IsNotATrailer(int encoding)
     {
         var row = new byte[770];
         for (int x = 0; x < row.Length; x++)
@@ -147,15 +145,15 @@ public class PcxDecoderTests
         }
 
         byte[] pcx = new PcxBuilder { Width = row.Length, Encoding = encoding, Rows = [row] }.Build();
-        Assert.Equal(12, pcx[^769]);
+        await Assert.That((int)(pcx[^769])).IsEqualTo(12);
         Rgba32[] expected = row.Select(value => new Rgba32(value, value, value)).ToArray();
-        Assert.Equal(expected, Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    public void Indexed_RasterMarkerDoesNotOverrideActualPalette(int encoding)
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    public async Task Indexed_RasterMarkerDoesNotOverrideActualPalette(int encoding)
     {
         var row = new byte[770];
         for (int x = 0; x < row.Length; x++)
@@ -165,18 +163,18 @@ public class PcxDecoderTests
 
         Rgba32[] colors = Enumerable.Range(0, 256).Select(i => new Rgba32((byte)i, (byte)(255 - i), 42)).ToArray();
         byte[] pcx = new PcxBuilder { Width = row.Length, Encoding = encoding, Rows = [row], VgaPalette = PcxBuilder.Vga(colors) }.Build();
-        Assert.Equal(row.Select(index => colors[index]).ToArray(), Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo(row.Select(index => colors[index]).ToArray(), CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Indexed_MissingPalette_IsGrayscale()
+    [Test]
+    public async Task Indexed_MissingPalette_IsGrayscale()
     {
         byte[] pcx = new PcxBuilder { Width = 3, BytesPerLine = 3, Rows = [[0, 128, 255]] }.Build();
-        Assert.Equal([new Rgba32(0, 0, 0), new Rgba32(128, 128, 128), new Rgba32(255, 255, 255)], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([new Rgba32(0, 0, 0), new Rgba32(128, 128, 128), new Rgba32(255, 255, 255)], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Rgb_ReadsPlanes()
+    [Test]
+    public async Task Rgb_ReadsPlanes()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -185,11 +183,11 @@ public class PcxDecoderTests
             Planes = 3,
             Rows = [[10, 11, 20, 21, 30, 31]],
         }.Build();
-        Assert.Equal([new Rgba32(10, 20, 30), new Rgba32(11, 21, 31)], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([new Rgba32(10, 20, 30), new Rgba32(11, 21, 31)], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Rgba_ReadsStraightAlpha()
+    [Test]
+    public async Task Rgba_ReadsStraightAlpha()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -199,15 +197,15 @@ public class PcxDecoderTests
             Rows = [[1, 2, 3, 4, 5, 6, 7, 8]],
         }.Build();
         using Image image = Image.Load(pcx);
-        Assert.True(image.HasAlpha);
-        Assert.Equal([new Rgba32(1, 3, 5, 7), new Rgba32(2, 4, 6, 8)], image.GetPixelSpan().ToArray());
+        await Assert.That(image.HasAlpha).IsTrue();
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo([new Rgba32(1, 3, 5, 7), new Rgba32(2, 4, 6, 8)], CollectionOrdering.Matching);
         ImageInfo info = Image.Identify(pcx);
-        Assert.True(info.HasAlpha);
-        Assert.Equal(ImageFormat.Pcx, info.Format);
+        await Assert.That(info.HasAlpha).IsTrue();
+        await Assert.That(info.Format).IsEqualTo(ImageFormat.Pcx);
     }
 
-    [Fact]
-    public void Origin_DoesNotChangeTheSize()
+    [Test]
+    public async Task Origin_DoesNotChangeTheSize()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -219,12 +217,12 @@ public class PcxDecoderTests
             VgaPalette = PcxBuilder.Vga(Red, Green, Blue, White),
         }.Build();
         using Image image = Image.Load(pcx);
-        Assert.Equal((2, 2), (image.Width, image.Height));
-        Assert.Equal([Green, Blue, White, Red], image.GetPixelSpan().ToArray());
+        await Assert.That((image.Width, image.Height)).IsEqualTo((2, 2));
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo([Green, Blue, White, Red], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Uncompressed_ReadsRawScanlines()
+    [Test]
+    public async Task Uncompressed_ReadsRawScanlines()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -233,11 +231,11 @@ public class PcxDecoderTests
             Rows = [[9, 8]],
             VgaPalette = PcxBuilder.Vga(Red, Green, Blue, White, new(1, 1, 1), new(2, 2, 2), new(3, 3, 3), new(4, 4, 4), new(5, 5, 5), new(9, 9, 9)),
         }.Build();
-        Assert.Equal([new Rgba32(9, 9, 9), new Rgba32(5, 5, 5)], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([new Rgba32(9, 9, 9), new Rgba32(5, 5, 5)], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Run_MayCrossPlanes()
+    [Test]
+    public async Task Run_MayCrossPlanes()
     {
         // One run of two 0x80 bytes covers both 1-byte planes. Both pixels' high bits are set.
         byte[] pcx = new PcxBuilder
@@ -250,11 +248,11 @@ public class PcxDecoderTests
             EgaPalette = PcxBuilder.Rgb(Red, Green, Blue, White),
             Data = [0xC2, 0x80],
         }.Build();
-        Assert.Equal([White], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([White], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Run_OfZero_WritesNothing()
+    [Test]
+    public async Task Run_OfZero_WritesNothing()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -264,11 +262,11 @@ public class PcxDecoderTests
             Data = [0xC0, 0x11, 4],
             VgaPalette = PcxBuilder.Vga(Red, Green, Blue, White, new(4, 4, 4)),
         }.Build();
-        Assert.Equal([new Rgba32(4, 4, 4)], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([new Rgba32(4, 4, 4)], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void LiteralAboveMarker_IsARunOfOne()
+    [Test]
+    public async Task LiteralAboveMarker_IsARunOfOne()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -276,72 +274,75 @@ public class PcxDecoderTests
             BytesPerLine = 1,
             Data = [0xC1, 0xC5],
         }.Build();
-        Assert.Equal([new Rgba32(0xC5, 0xC5, 0xC5)], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([new Rgba32(0xC5, 0xC5, 0xC5)], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Dpi_RequiresBothAxes()
+    [Test]
+    public async Task Dpi_RequiresBothAxes()
     {
         byte[] both = new PcxBuilder { Width = 1, BytesPerLine = 1, Rows = [[0]], HorizontalDpi = 72, VerticalDpi = 144 }.Build();
         byte[] one = new PcxBuilder { Width = 1, BytesPerLine = 1, Rows = [[0]], HorizontalDpi = 72 }.Build();
         using Image image = Image.Load(both);
-        Assert.Equal((72f, 144f), (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution));
+        await Assert.That((image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution)).IsEqualTo((72f, 144f));
         using Image missing = Image.Load(one);
-        Assert.Equal((96f, 96f), (missing.Metadata.HorizontalResolution, missing.Metadata.VerticalResolution));
+        await Assert.That((missing.Metadata.HorizontalResolution, missing.Metadata.VerticalResolution)).IsEqualTo((96f, 96f));
     }
 
-    [Fact]
-    public void Identify_DoesNotNeedPixelData()
+    [Test]
+    public async Task Identify_DoesNotNeedPixelData()
     {
         byte[] pcx = new PcxBuilder { Width = 6, Height = 4, Bits = 8, Planes = 3, HorizontalDpi = 300, VerticalDpi = 300 }.Build();
         ImageInfo info = Image.Identify(pcx);
-        Assert.Equal((6, 4, false), (info.Width, info.Height, info.HasAlpha));
-        Assert.Equal((300f, 300f), (info.HorizontalResolution, info.VerticalResolution));
-        Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
+        await Assert.That((info.Width, info.Height, info.HasAlpha)).IsEqualTo((6, 4, false));
+        await Assert.That((info.HorizontalResolution, info.VerticalResolution)).IsEqualTo((300f, 300f));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(pcx));
     }
 
-    [Fact]
-    public void Stride_RejectsValuesBelowTheMinimumAndHonorsPadding()
+    [Test]
+    public async Task Stride_RejectsValuesBelowTheMinimumAndHonorsPadding()
     {
         byte[] tooSmall = new PcxBuilder { Width = 3, Bits = 8, Planes = 1, BytesPerLine = 2, Rows = [[1, 2]] }.Build();
         byte[] paddedRgb = new PcxBuilder { Width = 1, Bits = 8, Planes = 3, BytesPerLine = 8, Rows = [[7, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0]] }.Build();
         byte[] padded = new PcxBuilder { Width = 1, Bits = 8, Planes = 1, BytesPerLine = 4, Rows = [[7, 0, 0, 0]] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(tooSmall));
-        Assert.Equal([new Rgba32(7, 8, 9)], Pixels(paddedRgb));
-        Assert.Equal([new Rgba32(7, 7, 7)], Pixels(padded));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(tooSmall));
+        await Assert.That(Pixels(paddedRgb)).IsEquivalentTo([new Rgba32(7, 8, 9)], CollectionOrdering.Matching);
+        await Assert.That(Pixels(padded)).IsEquivalentTo([new Rgba32(7, 7, 7)], CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(62)]
-    [InlineData(63)]
-    [InlineData(64)]
-    [InlineData(65)]
-    [InlineData(126)]
-    [InlineData(127)]
-    public void MaximallyCompressedRows_AreNotRejectedAsTruncated(int width)
+    [Test]
+    [Arguments(1)]
+    [Arguments(62)]
+    [Arguments(63)]
+    [Arguments(64)]
+    [Arguments(65)]
+    [Arguments(126)]
+    [Arguments(127)]
+    public async Task MaximallyCompressedRows_AreNotRejectedAsTruncated(int width)
     {
         var row = new byte[width];
         row.AsSpan().Fill(42);
         byte[] pcx = new PcxBuilder { Width = width, Height = 3, BytesPerLine = width, Rows = [row, row, row] }.Build();
-        Assert.All(Pixels(pcx), pixel => Assert.Equal(new Rgba32(42, 42, 42), pixel));
+        foreach (var pixel in Pixels(pcx))
+        {
+            await Assert.That(pixel).IsEqualTo(new Rgba32(42, 42, 42));
+        }
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    public void TruncatedLargeImage_IsRejectedBeforePixelAllocation(int encoding)
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    public async Task TruncatedLargeImage_IsRejectedBeforePixelAllocation(int encoding)
     {
         byte[] pcx = new PcxBuilder { Width = 4096, Height = 4096, Encoding = encoding }.Build();
         long before = GC.GetAllocatedBytesForCurrentThread();
-        ImageFormatException error = Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
+        ImageFormatException error = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(pcx));
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.Contains("truncated", error.Message);
-        Assert.True(allocated < 65536, $"Allocated {allocated} bytes for a header without image data.");
+        await Assert.That(error.Message).Contains("truncated");
+        await Assert.That(allocated < 65536).IsTrue().Because($"Allocated {allocated} bytes for a header without image data.");
     }
 
-    [Fact]
-    public void Indexed_PaletteMarkerInsideHeader_IsNotATrailer()
+    [Test]
+    public async Task Indexed_PaletteMarkerInsideHeader_IsNotATrailer()
     {
         byte[] pcx = new PcxBuilder
         {
@@ -350,14 +351,17 @@ public class PcxDecoderTests
             EgaPalette = PcxBuilder.Rgb(new Rgba32(0, 12, 0)),
             Rows = [new byte[658]],
         }.Build();
-        Assert.Equal(12, pcx[^769]);
-        Assert.All(Pixels(pcx), pixel => Assert.Equal(Rgba32.Black, pixel));
+        await Assert.That((int)(pcx[^769])).IsEqualTo(12);
+        foreach (var pixel in Pixels(pcx))
+        {
+            await Assert.That(pixel).IsEqualTo(Rgba32.Black);
+        }
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(3)]
-    public void Mono_VersionWithoutPalette_IgnoresHeaderColors(int version)
+    [Test]
+    [Arguments(0)]
+    [Arguments(3)]
+    public async Task Mono_VersionWithoutPalette_IgnoresHeaderColors(int version)
     {
         byte[] pcx = new PcxBuilder
         {
@@ -367,49 +371,49 @@ public class PcxDecoderTests
             EgaPalette = PcxBuilder.Rgb(Red, Blue),
             Rows = [[0x80, 0]],
         }.Build();
-        Assert.Equal([White, Rgba32.Black], Pixels(pcx));
+        await Assert.That(Pixels(pcx)).IsEquivalentTo([White, Rgba32.Black], CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(3)]
+    [Test]
+    [Arguments(0)]
+    [Arguments(3)]
     public void Color_VersionWithoutPalette_IsNotSupported(int version)
     {
         byte[] pcx = new PcxBuilder { Width = 2, Bits = 1, Planes = 4, Version = version, Rows = [new byte[8]] }.Build();
-        Assert.Throws<NotSupportedException>(() => Image.Load(pcx));
-        Assert.Throws<NotSupportedException>(() => Image.Identify(pcx));
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Load(pcx));
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Identify(pcx));
     }
 
-    [Fact]
+    [Test]
     public void VersionOne_IsInvalid()
     {
         byte[] pcx = new PcxBuilder { Version = 1, Rows = [[0, 0]] }.Build();
         Assert.Null(Image.DetectFormat(pcx));
-        Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(pcx));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(pcx));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(pcx));
     }
 
-    [Fact]
+    [Test]
     public void RunPastScanline_AndTruncation_AreCorrupt()
     {
         byte[] overrun = new PcxBuilder { Width = 1, Bits = 8, Planes = 1, BytesPerLine = 1, Data = [0xC2, 1] }.Build();
         byte[] truncated = new PcxBuilder { Width = 2, Bits = 8, Planes = 1, Data = [1] }.Build();
         byte[] shortPalette = new PcxBuilder { Width = 1, BytesPerLine = 1, Rows = [[0]], Trailing = [0x0C, 1, 2, 3] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(overrun));
-        Assert.Throws<ImageFormatException>(() => Image.Load(truncated));
-        Assert.Throws<ImageFormatException>(() => Image.Load(shortPalette));
-        Assert.Throws<ImageFormatException>(() => Image.Load(overrun[..10]));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(overrun));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(truncated));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(shortPalette));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(overrun[..10]));
     }
 
-    [Fact]
-    public void MaxPixels_IsCheckedBeforeDecoding()
+    [Test]
+    public async Task MaxPixels_IsCheckedBeforeDecoding()
     {
         byte[] pcx = new PcxBuilder { Width = 100, Height = 100, Bits = 8, Planes = 3 }.Build();
-        ImageFormatException ex = Assert.Throws<ImageFormatException>(() => Image.Load(pcx, new DecoderOptions { MaxPixels = 10 }));
-        Assert.Contains("MaxPixels", ex.Message);
+        ImageFormatException ex = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(pcx, new DecoderOptions { MaxPixels = 10 }));
+        await Assert.That(ex.Message).Contains("MaxPixels");
     }
 
-    [Fact]
+    [Test]
     public void HugeImage_DoesNotOverflowThePixelBuffer()
     {
         var header = new byte[128];
@@ -421,23 +425,23 @@ public class PcxDecoderTests
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(10), 65535);
         header[65] = 1;
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(66), 8192);
-        Assert.Throws<ImageFormatException>(() => Image.Load(header, new DecoderOptions { MaxPixels = long.MaxValue }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(header, new DecoderOptions { MaxPixels = long.MaxValue }));
     }
 
-    [Fact]
+    [Test]
     public void UnsupportedPlaneCount_IsNotSupported()
     {
         byte[] pcx = new PcxBuilder { Width = 1, Bits = 8, Planes = 2, Rows = [[1, 2]] }.Build();
-        Assert.Throws<NotSupportedException>(() => Image.Load(pcx));
-        Assert.Throws<NotSupportedException>(() => Image.Identify(pcx));
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Load(pcx));
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Identify(pcx));
     }
 
-    [Fact]
+    [Test]
     public void InvertedWindow_IsCorrupt()
     {
         byte[] pcx = new PcxBuilder { Width = 2, Height = 1 }.Build();
         pcx[8] = 0;
         pcx[9] = 0;
-        Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(pcx));
     }
 }

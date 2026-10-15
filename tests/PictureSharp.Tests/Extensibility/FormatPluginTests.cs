@@ -1,6 +1,5 @@
 using PictureSharp.Formats;
 using PictureSharp.Formats.Png;
-using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Extensibility;
 
@@ -27,122 +26,122 @@ public class FormatPluginTests
         return output.ToArray();
     }
 
-    [Fact]
-    public void AddedFormat_IsDetectedAfterBuiltIns_AndDecodes()
+    [Test]
+    public async Task AddedFormat_IsDetectedAfterBuiltIns_AndDecodes()
     {
         using Image source = Sample();
         byte[] ppm = EncodePpm(source, new PpmEncoderOptions { Comment = "written by a plugin" });
         var options = new DecoderOptions { Configuration = WithPpm };
 
-        Assert.Same(PpmFormat.Format, WithPpm.Formats[^1]);
-        Assert.True(WithPpm.CanDecode(PpmFormat.Format) && WithPpm.CanEncode(PpmFormat.Format));
-        Assert.Same(PpmFormat.Format, WithPpm.FromExtension("photo.pnm"));
-        Assert.Same(PpmFormat.Format, WithPpm.FromMimeType("IMAGE/X-PORTABLE-PIXMAP"));
+        await Assert.That(WithPpm.Formats[^1]).IsSameReferenceAs(PpmFormat.Format);
+        await Assert.That(WithPpm.CanDecode(PpmFormat.Format) && WithPpm.CanEncode(PpmFormat.Format)).IsTrue();
+        await Assert.That(WithPpm.FromExtension("photo.pnm")).IsSameReferenceAs(PpmFormat.Format);
+        await Assert.That(WithPpm.FromMimeType("IMAGE/X-PORTABLE-PIXMAP")).IsSameReferenceAs(PpmFormat.Format);
 
         using Image image = Image.Load(ppm, options);
-        Assert.Same(PpmFormat.Format, image.SourceFormat);
-        Assert.Equal(source.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
+        await Assert.That(image.SourceFormat).IsSameReferenceAs(PpmFormat.Format);
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
         using Image fromStream = Image.Load(new MemoryStream(ppm), options);
-        Assert.Equal(source.Size, fromStream.Size);
+        await Assert.That(fromStream.Size).IsEqualTo(source.Size);
         ImageInfo info = Image.Identify(ppm, options);
-        Assert.Equal((PpmFormat.Format, 5, 3), (info.Format, info.Width, info.Height));
+        await Assert.That((info.Format, info.Width, info.Height)).IsEqualTo((PpmFormat.Format, 5, 3));
 
         // Not part of the default configuration.
-        Assert.Throws<ImageFormatException>(() => Image.Load(ppm));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(ppm));
     }
 
-    [Fact]
-    public void PluginOutput_GetsTargetSizeLikeBuiltInFormats()
+    [Test]
+    public async Task PluginOutput_GetsTargetSizeLikeBuiltInFormats()
     {
         using Image source = Sample(8, 4);
         var resize = new DecoderOptions { TargetSize = new(2, 2), Configuration = WithPpm };
         using Image fromPpm = Image.Load(EncodePpm(source), resize);
         using Image fromPng = Image.Load(source.ToPng(), resize);
-        Assert.Equal(fromPng.Size, fromPpm.Size);
-        Assert.Equal(new System.Drawing.Size(2, 1), fromPpm.Size);
+        await Assert.That(fromPpm.Size).IsEqualTo(fromPng.Size);
+        await Assert.That(fromPpm.Size).IsEqualTo(new System.Drawing.Size(2, 1));
     }
 
-    [Fact]
-    public void PluginDecodes_AreLimitedAndNormalized()
+    [Test]
+    public async Task PluginDecodes_AreLimitedAndNormalized()
     {
         using Image source = Sample();
         byte[] ppm = EncodePpm(source);
 
         var reserved = new DecoderOptions { Configuration = WithPpm, MaxPixels = 10 };
-        Assert.Throws<ImageFormatException>(() => Image.Load(ppm, reserved));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(ppm, reserved));
 
         // A plugin that forgets to reserve pixels is still held to the limits after decoding.
         ImageConfiguration careless = ImageConfiguration.Default.ToBuilder().AddFormat(new PpmFormat(reservePixels: false)).Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(ppm, new DecoderOptions { Configuration = careless, MaxPixels = 10 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(ppm, new DecoderOptions { Configuration = careless, MaxPixels = 10 }));
 
         var options = new DecoderOptions { Configuration = WithPpm };
-        var truncated = Assert.Throws<ImageFormatException>(() => Image.Load(ppm[..^4], options));
-        Assert.Same(PpmFormat.Format, truncated.Format);
-        Assert.IsType<ArgumentOutOfRangeException>(truncated.InnerException);
-        Assert.Throws<ImageFormatException>(() => Image.Load("P6 x 1 255 "u8.ToArray(), options));
-        Assert.Throws<NotSupportedException>(() => Image.Load("P6 1 1 65535 \0\0\0\0\0\0"u8.ToArray(), options));
-        Assert.Throws<OperationCanceledException>(() => Image.Load(ppm, options, new CancellationToken(canceled: true)));
+        var truncated = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(ppm[..^4], options));
+        await Assert.That(truncated.Format).IsSameReferenceAs(PpmFormat.Format);
+        await Assert.That(truncated.InnerException).IsTypeOf<ArgumentOutOfRangeException>();
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load("P6 x 1 255 "u8.ToArray(), options));
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Load("P6 1 1 65535 \0\0\0\0\0\0"u8.ToArray(), options));
+        Assert.ThrowsExactly<OperationCanceledException>(() => Image.Load(ppm, options, new CancellationToken(canceled: true)));
     }
 
-    [Fact]
+    [Test]
     public void FailingSignatureCheck_DoesNotEscapeDetection()
     {
         ImageConfiguration naive = ImageConfiguration.Default.ToBuilder().AddFormat(new NaiveSignatureFormat()).Build();
         var options = new DecoderOptions { Configuration = naive };
-        Assert.Throws<ImageFormatException>(() => Image.Load(new byte[] { 1, 2 }, options));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(new byte[] { 1, 2 }, options));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(new byte[] { 1, 2 }, options));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(new byte[] { 1, 2 }, options));
     }
 
-    [Fact]
-    public void ContainerPlugin_DecodesEmbeddedImages_WithSharedLimits()
+    [Test]
+    public async Task ContainerPlugin_DecodesEmbeddedImages_WithSharedLimits()
     {
         using Image source = Sample();
         byte[] wrapped = WrapFormat.Wrap(source.ToPng());
         ImageConfiguration withWrap = ImageConfiguration.Default.ToBuilder().AddFormat(new WrapFormat()).Build();
 
         using Image image = Image.Load(wrapped, new DecoderOptions { Configuration = withWrap });
-        Assert.Same(WrapFormat.Format, image.SourceFormat);
-        Assert.Equal(source.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
-        Assert.False(withWrap.CanEncode(WrapFormat.Format));
+        await Assert.That(image.SourceFormat).IsSameReferenceAs(WrapFormat.Format);
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(withWrap.CanEncode(WrapFormat.Format)).IsFalse();
 
-        Assert.Throws<ImageFormatException>(() => Image.Load(wrapped, new DecoderOptions { Configuration = withWrap, MaxPixels = 10 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(wrapped, new DecoderOptions { Configuration = withWrap, MaxPixels = 10 }));
         ImageConfiguration withoutPng = withWrap.ToBuilder().RemoveFormat(ImageFormat.Png).Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(wrapped, new DecoderOptions { Configuration = withoutPng }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(wrapped, new DecoderOptions { Configuration = withoutPng }));
     }
 
-    [Fact]
-    public void ReplaceFormat_SwapsCodecs_AndKeepsDetectionOrder()
+    [Test]
+    public async Task ReplaceFormat_SwapsCodecs_AndKeepsDetectionOrder()
     {
         using Image source = Sample();
         ImageConfiguration replaced = ImageConfiguration.Default.ToBuilder().ReplaceFormat(new StubFormat(ImageFormat.Png)).Build();
-        Assert.Equal(ImageConfiguration.Default.Formats, replaced.Formats);
+        await Assert.That(replaced.Formats).IsEquivalentTo(ImageConfiguration.Default.Formats, CollectionOrdering.Matching);
         using Image image = Image.Load(source.ToPng(), new DecoderOptions { Configuration = replaced });
-        Assert.Equal((1, 1, ImageFormat.Png), (image.Width, image.Height, image.SourceFormat));
-        Assert.False(replaced.CanEncode(ImageFormat.Png));
-        Assert.Throws<ArgumentException>(() => ImageConfiguration.Default.ToBuilder().ReplaceFormat(new PpmFormat()));
+        await Assert.That((image.Width, image.Height, image.SourceFormat)).IsEqualTo((1, 1, ImageFormat.Png));
+        await Assert.That(replaced.CanEncode(ImageFormat.Png)).IsFalse();
+        Assert.ThrowsExactly<ArgumentException>(() => ImageConfiguration.Default.ToBuilder().ReplaceFormat(new PpmFormat()));
     }
 
-    [Fact]
-    public void AddFormat_RejectsInvalidOrConflictingModules()
+    [Test]
+    public async Task AddFormat_RejectsInvalidOrConflictingModules()
     {
         ImageConfigurationBuilder builder = ImageConfiguration.Default.ToBuilder().AddFormat(new PpmFormat());
-        Assert.Throws<ArgumentNullException>(() => builder.AddFormat(null!));
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new PpmFormat()));
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new StubFormat(ImageFormat.Create("png", "image/x-other", ".other"))));
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new StubFormat(ImageFormat.Create("Other", "Image/PNG", ".other"))));
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new StubFormat(ImageFormat.Create("Other", "image/x-other", ".other", ".jpg"))));
+        Assert.ThrowsExactly<ArgumentNullException>(() => builder.AddFormat(null!));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new PpmFormat()));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new StubFormat(ImageFormat.Create("png", "image/x-other", ".other"))));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new StubFormat(ImageFormat.Create("Other", "Image/PNG", ".other"))));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new StubFormat(ImageFormat.Create("Other", "image/x-other", ".other", ".jpg"))));
         ImageFormat fresh = ImageFormat.Create("Fresh", "image/x-fresh", ".fresh");
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, headerSize: 0)));
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, headerSize: 4097)));
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, decoder: false)));
-        Assert.Throws<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, encoder: new PpmFormat().Encoder)));
-        Assert.Equal(8, builder.Formats.Count);
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, headerSize: 0)));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, headerSize: 4097)));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, decoder: false)));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.AddFormat(new StubFormat(fresh, encoder: new PpmFormat().Encoder)));
+        await Assert.That(builder.Formats.Count).IsEqualTo(8);
         builder.AddFormat(new StubFormat(fresh));
-        Assert.Same(fresh, builder.Build().Formats[^1]);
+        await Assert.That(builder.Build().Formats[^1]).IsSameReferenceAs(fresh);
     }
 
-    [Fact]
-    public void Registration_SnapshotsModuleMembers()
+    [Test]
+    public async Task Registration_SnapshotsModuleMembers()
     {
         var module = new PpmFormat();
         ImageConfiguration configuration = ImageConfiguration.Default.ToBuilder().AddFormat(module).Build();
@@ -150,44 +149,44 @@ public class FormatPluginTests
         module.Encoder = null;
         using Image source = Sample();
         using Image image = Image.Load(EncodePpm(source), new DecoderOptions { Configuration = configuration });
-        Assert.True(configuration.CanEncode(PpmFormat.Format));
+        await Assert.That(configuration.CanEncode(PpmFormat.Format)).IsTrue();
     }
 
-    [Fact]
-    public void TypedEncoder_RejectsOptionsOfAnotherFormat()
+    [Test]
+    public async Task TypedEncoder_RejectsOptionsOfAnotherFormat()
     {
         using Image source = Sample();
         IImageFormatEncoder encoder = new PpmFormat().Encoder!;
-        Assert.IsType<PpmEncoderOptions>(encoder.CreateDefaultOptions());
-        Assert.Throws<ArgumentException>(() => encoder.Encode(source, Stream.Null, new PngEncoderOptions(), default));
+        await Assert.That(encoder.CreateDefaultOptions()).IsTypeOf<PpmEncoderOptions>();
+        Assert.ThrowsExactly<ArgumentException>(() => encoder.Encode(source, Stream.Null, new PngEncoderOptions(), default));
     }
 
-    [Fact]
-    public void ImageFormatCreate_ValidatesAndNormalizes()
+    [Test]
+    public async Task ImageFormatCreate_ValidatesAndNormalizes()
     {
         ImageFormat format = ImageFormat.Create(" TGA ", "Image/X-TGA", ".TGA", ".vda");
-        Assert.Equal(("TGA", "image/x-tga"), (format.Name, format.MimeType));
-        Assert.Equal([".tga", ".vda"], format.FileExtensions);
-        Assert.NotSame(format, ImageFormat.Create("TGA", "image/x-tga", ".tga"));
+        await Assert.That((format.Name, format.MimeType)).IsEqualTo(("TGA", "image/x-tga"));
+        await Assert.That(format.FileExtensions).IsEquivalentTo([".tga", ".vda"], CollectionOrdering.Matching);
+        await Assert.That(ImageFormat.Create("TGA", "image/x-tga", ".tga")).IsNotSameReferenceAs(format);
 
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create(" ", "image/x", ".x"));
-        Assert.Throws<ArgumentNullException>(() => ImageFormat.Create(null!, "image/x", ".x"));
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create("X", "image", ".x"));
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create("X", "image/", ".x"));
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create("X", "image/x"));
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create("X", "image/x", "x"));
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create("X", "image/x", "."));
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create("X", "image/x", ".a/b"));
-        Assert.Throws<ArgumentException>(() => ImageFormat.Create("X", "image/x", ".x", ".X"));
-        Assert.Throws<ArgumentNullException>(() => ImageFormat.Create("X", "image/x", ".x", null!));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create(" ", "image/x", ".x"));
+        Assert.ThrowsExactly<ArgumentNullException>(() => ImageFormat.Create(null!, "image/x", ".x"));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create("X", "image", ".x"));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create("X", "image/", ".x"));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create("X", "image/x"));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create("X", "image/x", "x"));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create("X", "image/x", "."));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create("X", "image/x", ".a/b"));
+        Assert.ThrowsExactly<ArgumentException>(() => ImageFormat.Create("X", "image/x", ".x", ".X"));
+        Assert.ThrowsExactly<ArgumentNullException>(() => ImageFormat.Create("X", "image/x", ".x", null!));
     }
 }
 
 /// <summary>Registers a plugin in the process-wide default, so it must not run alongside other tests.</summary>
-[Collection(nameof(SerialCollection))]
+[NotInParallel]
 public class FormatPluginDefaultTests
 {
-    [Fact]
+    [Test]
     public async Task PluginInDefault_WorksThroughImageShortcuts()
     {
         ImageConfiguration original = ImageConfiguration.Default;
@@ -197,29 +196,29 @@ public class FormatPluginDefaultTests
         try
         {
             ImageConfiguration.Default = original.ToBuilder().AddFormat(new PpmFormat()).Build();
-            Assert.Contains(PpmFormat.Format, ImageFormat.All);
-            Assert.Same(PpmFormat.Format, ImageFormat.FromExtension("x.ppm"));
-            Assert.True(PpmFormat.Format.CanDecode && PpmFormat.Format.CanEncode);
+            await Assert.That(ImageFormat.All).Contains(PpmFormat.Format);
+            await Assert.That(ImageFormat.FromExtension("x.ppm")).IsSameReferenceAs(PpmFormat.Format);
+            await Assert.That(PpmFormat.Format.CanDecode && PpmFormat.Format.CanEncode).IsTrue();
 
             string path = Path.Combine(directory, "a.ppm");
             source.Save(path);
-            Assert.Same(PpmFormat.Format, Image.DetectFormat(path));
-            Assert.Equal(4, Image.Identify(path).Width);
+            await Assert.That(Image.DetectFormat(path)).IsSameReferenceAs(PpmFormat.Format);
+            await Assert.That(Image.Identify(path).Width).IsEqualTo(4);
             using (Image loaded = Image.Load(path))
             {
-                Assert.Equal(source.GetPixelSpan().ToArray(), loaded.GetPixelSpan().ToArray());
+                await Assert.That(loaded.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
             }
 
             source.SaveAsPpm(Path.Combine(directory, "b.ppm"), new PpmEncoderOptions { Comment = "shortcut" });
             using (Image loaded = await Image.LoadAsync(Path.Combine(directory, "b.ppm")))
             {
-                Assert.Same(PpmFormat.Format, loaded.SourceFormat);
+                await Assert.That(loaded.SourceFormat).IsSameReferenceAs(PpmFormat.Format);
             }
 
-            Assert.Equal(source.ToPpm(), source.Encode(PpmFormat.Format));
+            await Assert.That(source.Encode(PpmFormat.Format)).IsEquivalentTo(source.ToPpm(), CollectionOrdering.Matching);
             using var stream = new MemoryStream();
             await source.SaveAsync(stream, PpmFormat.Format);
-            Assert.Same(PpmFormat.Format, Image.DetectFormat(stream.ToArray()));
+            await Assert.That(Image.DetectFormat(stream.ToArray())).IsSameReferenceAs(PpmFormat.Format);
         }
         finally
         {
@@ -227,6 +226,6 @@ public class FormatPluginDefaultTests
             Directory.Delete(directory, recursive: true);
         }
 
-        Assert.Throws<NotSupportedException>(() => source.Encode(PpmFormat.Format));
+        Assert.ThrowsExactly<NotSupportedException>(() => source.Encode(PpmFormat.Format));
     }
 }

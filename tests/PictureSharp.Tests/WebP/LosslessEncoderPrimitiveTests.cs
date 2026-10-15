@@ -6,28 +6,28 @@ namespace PictureSharp.Tests.WebP;
 public class LosslessEncoderPrimitiveTests
 {
     // Scalar libwebp v1.6.0 VP8LFastLog2 / VP8LFastSLog2, including approximation boundaries.
-    [Theory]
-    [InlineData(0, 0L, 0L)]
-    [InlineData(1, 0L, 0L)]
-    [InlineData(2, 8388608L, 16777216L)]
-    [InlineData(255, 67061497L, 17100681785L)]
-    [InlineData(256, 67108864L, 17179869184L)]
-    [InlineData(4095, 100615929L, 412203762300L)]
-    [InlineData(4096, 100663296L, 412316860416L)]
-    [InlineData(65535, 134217451L, 8795940669900L)]
-    [InlineData(65536, 134217728L, 8796093022208L)]
-    [InlineData(16777216, 201326592L, 3377699720527872L)]
-    [InlineData(100000000, 222930821L, 22293082073757512L)]
-    public void FixedPointEntropy_MatchesLibwebp160(uint value, long logarithm, long weightedLogarithm)
+    [Test]
+    [Arguments(0, 0L, 0L)]
+    [Arguments(1, 0L, 0L)]
+    [Arguments(2, 8388608L, 16777216L)]
+    [Arguments(255, 67061497L, 17100681785L)]
+    [Arguments(256, 67108864L, 17179869184L)]
+    [Arguments(4095, 100615929L, 412203762300L)]
+    [Arguments(4096, 100663296L, 412316860416L)]
+    [Arguments(65535, 134217451L, 8795940669900L)]
+    [Arguments(65536, 134217728L, 8796093022208L)]
+    [Arguments(16777216, 201326592L, 3377699720527872L)]
+    [Arguments(100000000, 222930821L, 22293082073757512L)]
+    public async Task FixedPointEntropy_MatchesLibwebp160(uint value, long logarithm, long weightedLogarithm)
     {
-        Assert.Equal(logarithm, Vp8LEntropy.Log(value));
-        Assert.Equal(weightedLogarithm, Vp8LEntropy.SLog(value));
+        await Assert.That(Vp8LEntropy.Log(value)).IsEqualTo(logarithm);
+        await Assert.That(Vp8LEntropy.SLog(value)).IsEqualTo(weightedLogarithm);
     }
 
-    [Theory]
-    [InlineData(7)]
-    [InlineData(15)]
-    public void SkewedHistogram_ProducesCompleteLengthLimitedTree(int limit)
+    [Test]
+    [Arguments(7)]
+    [Arguments(15)]
+    public async Task SkewedHistogram_ProducesCompleteLengthLimitedTree(int limit)
     {
         uint[] histogram = new uint[40];
         histogram[0] = histogram[1] = 1;
@@ -36,23 +36,23 @@ public class LosslessEncoderPrimitiveTests
         int kraftSum = 0;
         for (int i = 0; i < histogram.Length; i++)
         {
-            if (histogram[i] != 0) Assert.InRange(encoder.Lengths[i], (byte)1, (byte)limit);
+            if (histogram[i] != 0) await Assert.That(encoder.Lengths[i]).IsBetween((byte)1, (byte)limit);
             if (encoder.Lengths[i] != 0) kraftSum += 1 << (limit - encoder.Lengths[i]);
         }
-        Assert.Equal(1 << limit, kraftSum);
+        await Assert.That(kraftSum).IsEqualTo(1 << limit);
         Assert.NotNull(HuffmanTableBuilder.Build(8, encoder.Lengths.Select(x => (int)x).ToArray()));
     }
 
-    [Fact]
-    public void TwoSymbolEntropy_DoesNotOverflowAtLargeImageSizes()
+    [Test]
+    public async Task TwoSymbolEntropy_DoesNotOverflowAtLargeImageSizes()
     {
         long entropy = Vp8LEntropy.Bits([50000000u, 50000000u]);
-        Assert.InRange(entropy, 99999999L * Vp8LEntropy.One, 100000001L * Vp8LEntropy.One);
+        await Assert.That(entropy).IsBetween(99999999L * Vp8LEntropy.One, 100000001L * Vp8LEntropy.One);
     }
 
     // Combined with the prepared terms of y must equal CombinedShannonEntropy, also after AddToCombined updates.
-    [Fact]
-    public void PreparedCombinedEntropy_MatchesDirect()
+    [Test]
+    public async Task PreparedCombinedEntropy_MatchesDirect()
     {
         var rng = new Random(21);
         uint[] y = RandomHistogram(rng, 256, 0);
@@ -61,30 +61,30 @@ public class LosslessEncoderPrimitiveTests
         for (int i = 0; i < 300; i++)
         {
             uint[] x = RandomHistogram(rng, 256, i % 5);
-            Assert.Equal(Vp8LEntropy.Combined(x, y), Vp8LEntropy.Combined(x, y, sLogY, sumY, total));
+            await Assert.That(Vp8LEntropy.Combined(x, y, sLogY, sumY, total)).IsEqualTo(Vp8LEntropy.Combined(x, y));
             Vp8LEntropy.AddToCombined(x, y, sLogY, ref sumY, ref total);
             long[] fresh = new long[256];
-            Assert.Equal(Vp8LEntropy.PrepareCombined(y, fresh, out uint freshSum), total);
-            Assert.Equal(freshSum, sumY);
-            Assert.Equal(fresh, sLogY);
+            await Assert.That(total).IsEqualTo(Vp8LEntropy.PrepareCombined(y, fresh, out uint freshSum));
+            await Assert.That(sumY).IsEqualTo(freshSum);
+            await Assert.That(sLogY).IsEquivalentTo(fresh, CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void PopulationCost_MatchesReference()
+    [Test]
+    public async Task PopulationCost_MatchesReference()
     {
         var rng = new Random(22);
         foreach (int length in new[] { 1, 2, 3, 8, 9, 15, 40, 256, 280, 300, 1304 })
             for (int i = 0; i < 60; i++)
             {
                 uint[] x = RandomHistogram(rng, length, i % 5), y = RandomHistogram(rng, length, (i / 5) % 5);
-                Assert.Equal(ReferencePopulationCost(x, y), Vp8LHistogram.PopulationCost(x, y));
-                Assert.Equal(ReferencePopulationCost(x, new uint[length]), Vp8LHistogram.PopulationCost(x));
+                await Assert.That(Vp8LHistogram.PopulationCost(x, y)).IsEqualTo(ReferencePopulationCost(x, y));
+                await Assert.That(Vp8LHistogram.PopulationCost(x)).IsEqualTo(ReferencePopulationCost(x, new uint[length]));
             }
     }
 
-    [Fact]
-    public void BitWriter_MatchesBitByBitReference()
+    [Test]
+    public async Task BitWriter_MatchesBitByBitReference()
     {
         var rng = new Random(23);
         for (int round = 0; round < 20; round++)
@@ -112,10 +112,10 @@ public class LosslessEncoderPrimitiveTests
             }
             writer.Append(other);
             expected.AddRange(otherBits);
-            Assert.Equal(expected.Count, writer.BitCount);
+            await Assert.That(writer.BitCount).IsEqualTo(expected.Count);
             byte[] packed = new byte[(expected.Count + 7) / 8];
             for (int b = 0; b < expected.Count; b++) if (expected[b]) packed[b >> 3] |= (byte)(1 << (b & 7));
-            Assert.Equal(packed, writer.ToArray());
+            await Assert.That(writer.ToArray()).IsEquivalentTo(packed, CollectionOrdering.Matching);
         }
     }
 

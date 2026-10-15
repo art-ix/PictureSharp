@@ -6,50 +6,50 @@ namespace PictureSharp.Tests.WebP;
 
 public class LosslessDecoderTests
 {
-    public static TheoryData<string> LosslessFiles => Corpus.Files("webp/lossless/");
+    public static TestCases<string> LosslessFiles => Corpus.Files("webp/lossless/");
 
-    internal static void AssertMatchesReference(string file, Image image)
+    internal static async Task AssertMatchesReference(string file, Image image)
     {
         ReferenceEntry r = Corpus.References[file];
-        Assert.Equal(r.Width, image.Width);
-        Assert.Equal(r.Height, image.Height);
-        Assert.Equal(r.Frames.Count, image.FrameCount);
+        await Assert.That(image.Width).IsEqualTo(r.Width);
+        await Assert.That(image.Height).IsEqualTo(r.Height);
+        await Assert.That(image.FrameCount).IsEqualTo(r.Frames.Count);
         for (int i = 0; i < r.Frames.Count; i++)
         {
             string actual = Corpus.Sha256(MemoryMarshal.AsBytes(image.Frames[i].GetPixelSpan()));
-            Assert.True(r.Frames[i].Sha256 == actual, $"{file}: frame {i} differs from the {r.Decoder} reference");
+            await Assert.That(r.Frames[i].Sha256 == actual).IsTrue().Because($"{file}: frame {i} differs from the {r.Decoder} reference");
         }
     }
 
-    [Theory]
-    [MemberData(nameof(LosslessFiles))]
-    public void Decode_IsBitExactWithDwebp(string file)
+    [Test]
+    [MethodDataSource(nameof(LosslessFiles))]
+    public async Task Decode_IsBitExactWithDwebp(string file)
     {
         using Image image = Image.Load(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.WebP, image.SourceFormat);
-        Assert.Equal(Corpus.References[file].HasAlpha, image.HasAlpha);
-        AssertMatchesReference(file, image);
+        await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.WebP);
+        await Assert.That(image.HasAlpha).IsEqualTo(Corpus.References[file].HasAlpha);
+        await AssertMatchesReference(file, image);
     }
 
-    [Fact]
-    public void Decode_ReadsMetadata()
+    [Test]
+    public async Task Decode_ReadsMetadata()
     {
         using Image image = Image.Load(Corpus.PathOf("webp/meta/lossless_exif.webp"));
         Assert.NotNull(image.Metadata.Exif);
-        Assert.Equal(ExifOrientation.RightTop, image.Metadata.Orientation);
-        AssertMatchesReference("webp/meta/lossless_exif.webp", image);
+        await Assert.That(image.Metadata.Orientation).IsEqualTo(ExifOrientation.RightTop);
+        await AssertMatchesReference("webp/meta/lossless_exif.webp", image);
     }
 
-    [Fact]
-    public void Decode_ApplyExifOrientation_RotatesImage()
+    [Test]
+    public async Task Decode_ApplyExifOrientation_RotatesImage()
     {
         using Image image = Image.Load(Corpus.PathOf("webp/meta/lossless_exif.webp"), new DecoderOptions { ApplyExifOrientation = true });
         ReferenceEntry r = Corpus.References["webp/meta/lossless_exif.webp"];
-        Assert.Equal((r.Height, r.Width), (image.Width, image.Height));
-        Assert.Equal(ExifOrientation.TopLeft, image.Metadata.Orientation);
+        await Assert.That((image.Width, image.Height)).IsEqualTo((r.Height, r.Width));
+        await Assert.That(image.Metadata.Orientation).IsEqualTo(ExifOrientation.TopLeft);
     }
 
-    public static TheoryData<string, int> Truncations => new()
+    public static TestCases<string, int> Truncations => new()
     {
         { "webp/lossless/photo_ll_z6.webp", 20 },
         { "webp/lossless/photo_ll_z6.webp", 200 },
@@ -57,8 +57,8 @@ public class LosslessDecoderTests
         { "webp/lossless/photo_alpha_ll_exact.webp", 2 },
     };
 
-    [Theory]
-    [MemberData(nameof(Truncations))]
+    [Test]
+    [MethodDataSource(nameof(Truncations))]
     public void Decode_TruncatedOrPatchedFile_ThrowsFormatException(string file, int cut)
     {
         byte[] data = Corpus.Read(file);
@@ -66,6 +66,6 @@ public class LosslessDecoderTests
         byte[] truncated = data[..^cut];
         BitConverter.GetBytes(truncated.Length - 8).CopyTo(truncated, 4);
         BitConverter.GetBytes(truncated.Length - 20).CopyTo(truncated, 16);
-        Assert.Throws<ImageFormatException>(() => Image.Load(truncated));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(truncated));
     }
 }

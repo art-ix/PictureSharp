@@ -8,7 +8,7 @@ namespace PictureSharp.Tests.Bmp;
 /// ImageMagick where Pillow cannot read them or is known to be wrong (tests/assets/bmp_reference.py);
 /// files in q/ and b/ may be rejected, but only with the documented exceptions. Produces no cases when the suite is missing.
 /// </summary>
-[Trait("Category", "External")]
+[Property("Category", "External")]
 public class BmpSuiteTests
 {
     private static readonly Lazy<Dictionary<string, Dictionary<string, string>>?> Reference = new(LoadReference);
@@ -37,9 +37,9 @@ public class BmpSuiteTests
         return JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(json[..(json.LastIndexOf('}') + 1)]);
     }
 
-    public static TheoryData<string> Files()
+    public static TestCases<string> Files()
     {
-        var data = new TheoryData<string>();
+        var data = new TestCases<string>();
         if (Reference.Value is { } r)
         {
             foreach (string name in r.Keys)
@@ -55,9 +55,9 @@ public class BmpSuiteTests
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(Files))]
-    public void BmpSuite_MatchesOracle(string name)
+    [Test]
+    [MethodDataSource(nameof(Files))]
+    public async Task BmpSuite_MatchesOracle(string name)
     {
         if (name.Length == 0)
         {
@@ -73,7 +73,7 @@ public class BmpSuiteTests
         catch (Exception ex) when (!name.StartsWith("g/", StringComparison.Ordinal))
         {
             // Questionable and bad files may be rejected, but only with the documented exceptions.
-            Assert.True(ex is ImageFormatException or NotSupportedException, ex.ToString());
+            await Assert.That(ex is ImageFormatException or NotSupportedException).IsTrue().Because(ex.ToString());
             return;
         }
 
@@ -84,8 +84,8 @@ public class BmpSuiteTests
                 Dictionary<string, string> r = Reference.Value![name];
                 string oracle = PillowBugs.ContainsKey(name) || r["pillow"] == "error" ? "imagemagick" : "pillow";
                 string expected = r[oracle];
-                Assert.NotEqual("error", expected);
-                Assert.True(expected == Corpus.Sha256(image.ToPixelData()), $"{name} differs from {oracle}");
+                await Assert.That(expected).IsNotEqualTo("error");
+                await Assert.That(expected == Corpus.Sha256(image.ToPixelData())).IsTrue().Because($"{name} differs from {oracle}");
             }
         }
     }

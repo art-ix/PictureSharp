@@ -19,69 +19,69 @@ public class CancellationTests
 {
     private static readonly CancellationToken Canceled = new(canceled: true);
 
-    public static TheoryData<string> Formats() => ["webp", "webp-lossless", "png", "jpeg", "gif", "bmp", "pcx", "ico"];
+    public static TestCases<string> Formats() => ["webp", "webp-lossless", "png", "jpeg", "gif", "bmp", "pcx", "ico"];
 
     // ------------------------------------------------------------------ before the start
 
-    [Theory]
-    [MemberData(nameof(Corpus.Representatives), MemberType = typeof(Corpus))]
+    [Test]
+    [MethodDataSource(typeof(Corpus), nameof(Corpus.Representatives))]
     public void CanceledToken_StopsEveryLoad(string file)
     {
         byte[] data = Corpus.Read(file);
-        Assert.Throws<OperationCanceledException>(() => Image.Load(data, null, Canceled));
-        Assert.Throws<OperationCanceledException>(() => Image.Load(new NonSeekableStream(data), null, Canceled));
-        Assert.Throws<OperationCanceledException>(() => Image.Load(Corpus.PathOf(file), null, Canceled));
+        Assert.ThrowsExactly<OperationCanceledException>(() => Image.Load(data, null, Canceled));
+        Assert.ThrowsExactly<OperationCanceledException>(() => Image.Load(new NonSeekableStream(data), null, Canceled));
+        Assert.ThrowsExactly<OperationCanceledException>(() => Image.Load(Corpus.PathOf(file), null, Canceled));
     }
 
-    [Fact]
+    [Test]
     public async Task CanceledToken_StopsAsyncPaths()
     {
         string path = Corpus.PathOf("png/rgba8.png");
         using Image image = Image.Load(path);
         string output = Path.Combine(Path.GetTempPath(), $"picturesharp-cancel-{Guid.NewGuid():N}.png");
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Image.LoadAsync(path, Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Image.LoadAsync(new NonSeekableStream(File.ReadAllBytes(path)), Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Image.IdentifyAsync(path, Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => image.SaveAsync(output, Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => image.SaveAsync(new MemoryStream(), ImageFormat.Png, Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => IcoFile.SaveAsync([image], new MemoryStream(), null, Canceled));
-        Assert.False(File.Exists(output));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Image.LoadAsync(path, Canceled));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Image.LoadAsync(new NonSeekableStream(File.ReadAllBytes(path)), Canceled));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Image.IdentifyAsync(path, Canceled));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => image.SaveAsync(output, Canceled));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => image.SaveAsync(new MemoryStream(), ImageFormat.Png, Canceled));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => IcoFile.SaveAsync([image], new MemoryStream(), null, Canceled));
+        await Assert.That(File.Exists(output)).IsFalse();
     }
 
-    [Theory]
-    [MemberData(nameof(Formats))]
-    public void CanceledToken_StopsEverySave(string format)
+    [Test]
+    [MethodDataSource(nameof(Formats))]
+    public async Task CanceledToken_StopsEverySave(string format)
     {
         using Image image = Pattern(32, 32);
         EncoderOptions options = Options(format);
         var stream = new MemoryStream();
-        Assert.Throws<OperationCanceledException>(() => image.Save(stream, options, Canceled));
-        Assert.Equal(0, stream.Length);
-        Assert.Throws<OperationCanceledException>(() => image.Encode(options, Canceled));
+        Assert.ThrowsExactly<OperationCanceledException>(() => image.Save(stream, options, Canceled));
+        await Assert.That(stream.Length).IsEqualTo(0);
+        Assert.ThrowsExactly<OperationCanceledException>(() => image.Encode(options, Canceled));
 
         string path = Path.Combine(Path.GetTempPath(), $"picturesharp-cancel-{Guid.NewGuid():N}");
-        Assert.Throws<OperationCanceledException>(() => image.Save(path, options, Canceled));
-        Assert.False(File.Exists(path));
+        Assert.ThrowsExactly<OperationCanceledException>(() => image.Save(path, options, Canceled));
+        await Assert.That(File.Exists(path)).IsFalse();
     }
 
-    [Fact]
-    public void CanceledToken_StopsProcessingBeforeAnyChange()
+    [Test]
+    public async Task CanceledToken_StopsProcessingBeforeAnyChange()
     {
         using Image image = Pattern(16, 16);
         Rgba32[] before = image.GetPixelSpan().ToArray();
-        Assert.Throws<OperationCanceledException>(() => image.Mutate(x => x.Grayscale(), Canceled));
-        Assert.Equal(before, image.GetPixelSpan().ToArray());
-        Assert.Throws<OperationCanceledException>(() => image.Clone(x => x.Resize(8, 8), Canceled));
-        Assert.Throws<OperationCanceledException>(() => IcoFile.LoadAll(image.ToIco(), null, Canceled));
+        Assert.ThrowsExactly<OperationCanceledException>(() => image.Mutate(x => x.Grayscale(), Canceled));
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
+        Assert.ThrowsExactly<OperationCanceledException>(() => image.Clone(x => x.Resize(8, 8), Canceled));
+        Assert.ThrowsExactly<OperationCanceledException>(() => IcoFile.LoadAll(image.ToIco(), null, Canceled));
     }
 
-    [Fact]
-    public void Mutate_StopsBetweenOperations_AndKeepsFinishedOnes()
+    [Test]
+    public async Task Mutate_StopsBetweenOperations_AndKeepsFinishedOnes()
     {
         using Image image = Pattern(16, 16);
         using var source = new CancellationTokenSource();
         bool reachedThird = false;
-        Assert.Throws<OperationCanceledException>(() => image.Mutate(x =>
+        Assert.ThrowsExactly<OperationCanceledException>(() => image.Mutate(x =>
         {
             x.Resize(8, 8);
             x.Apply(_ => source.Cancel());
@@ -89,39 +89,39 @@ public class CancellationTests
             x.Grayscale();
         }, source.Token));
 
-        Assert.True(reachedThird);
-        Assert.Equal(new System.Drawing.Size(8, 8), image.Size);
-        Assert.NotEqual(image.GetPixelSpan()[1].R, image.GetPixelSpan()[1].G);
+        await Assert.That(reachedThird).IsTrue();
+        await Assert.That(image.Size).IsEqualTo(new System.Drawing.Size(8, 8));
+        await Assert.That(image.GetPixelSpan()[1].G).IsNotEqualTo(image.GetPixelSpan()[1].R);
     }
 
-    [Fact]
-    public void Mutate_ExposesTheTokenToCustomOperations()
+    [Test]
+    public async Task Mutate_ExposesTheTokenToCustomOperations()
     {
         using Image image = Pattern(4, 4);
         using var source = new CancellationTokenSource();
         CancellationToken seen = default;
         image.Mutate(x => seen = x.CancellationToken, source.Token);
-        Assert.Equal(source.Token, seen);
+        await Assert.That(seen).IsEqualTo(source.Token);
         image.Mutate(x => seen = x.CancellationToken);
-        Assert.False(seen.CanBeCanceled);
+        await Assert.That(seen.CanBeCanceled).IsFalse();
     }
 
-    [Fact]
-    public void Clone_DisposesThePartialCopyAndKeepsTheSource()
+    [Test]
+    public async Task Clone_DisposesThePartialCopyAndKeepsTheSource()
     {
         using Image image = Animated(8, 8, frames: 3);
         Rgba32[] before = image.Frames[2].GetPixelSpan().ToArray();
         using var source = new CancellationTokenSource();
         int frames = 0;
-        Assert.Throws<OperationCanceledException>(() => image.Clone(x => x.Apply(_ =>
+        Assert.ThrowsExactly<OperationCanceledException>(() => image.Clone(x => x.Apply(_ =>
         {
             if (++frames == 2)
             {
                 source.Cancel();
             }
         }).Invert(), source.Token));
-        Assert.Equal(2, frames);
-        Assert.Equal(before, image.Frames[2].GetPixelSpan().ToArray());
+        await Assert.That(frames).IsEqualTo(2);
+        await Assert.That(image.Frames[2].GetPixelSpan().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
 
     internal static EncoderOptions Options(string format) => format switch
@@ -177,8 +177,8 @@ public class CancellationTests
 /// Work canceled while in flight. Runs alone: the timing must not compete with other tests, and the large images would
 /// otherwise drain the shared array pool that the allocation tests measure.
 /// </summary>
-[Collection(nameof(SerialCollection))]
-[Trait("Category", "Slow")]
+[NotInParallel]
+[Property("Category", "Slow")]
 public class CancellationInFlightTests
 {
     private static EncoderOptions Options(string format) => CancellationTests.Options(format);
@@ -190,15 +190,15 @@ public class CancellationInFlightTests
 
     // ------------------------------------------------------------------ during the work
 
-    [Theory]
-    [InlineData("webp")]
-    [InlineData("webp-lossless")]
-    [InlineData("png")]
-    [InlineData("jpeg")]
-    [InlineData("jpeg-progressive")]
-    [InlineData("gif")]
-    [InlineData("bmp")]
-    public void Decode_StopsPromptlyWhenCanceled(string format)
+    [Test]
+    [Arguments("webp")]
+    [Arguments("webp-lossless")]
+    [Arguments("png")]
+    [Arguments("jpeg")]
+    [Arguments("jpeg-progressive")]
+    [Arguments("gif")]
+    [Arguments("bmp")]
+    public async Task Decode_StopsPromptlyWhenCanceled(string format)
     {
         int size = format is "gif" or "bmp" ? 4096 : 3072;
         using Image source = Noise(size, size);
@@ -208,41 +208,41 @@ public class CancellationInFlightTests
             "png" => source.Encode(new PngEncoderOptions { CompressionLevel = 1 }),
             _ => source.Encode(Options(format)),
         };
-        AssertCancelsPromptly(token => Image.Load(data, null, token).Dispose());
+        await AssertCancelsPromptly(token => Image.Load(data, null, token).Dispose());
     }
 
-    [Theory]
-    [InlineData("webp")]
-    [InlineData("webp-lossless")]
-    [InlineData("png")]
-    [InlineData("jpeg")]
-    [InlineData("gif")]
-    public void Encode_StopsPromptlyWhenCanceled(string format)
+    [Test]
+    [Arguments("webp")]
+    [Arguments("webp-lossless")]
+    [Arguments("png")]
+    [Arguments("jpeg")]
+    [Arguments("gif")]
+    public async Task Encode_StopsPromptlyWhenCanceled(string format)
     {
         int size = format is "webp-lossless" or "gif" ? 1024 : 2048;
         using Image source = Noise(size, size);
         EncoderOptions options = format == "png" ? new PngEncoderOptions { CompressionLevel = 9 } : Options(format);
-        AssertCancelsPromptly(token => source.Encode(options, token));
+        await AssertCancelsPromptly(token => source.Encode(options, token));
     }
 
-    [Fact]
-    public void Animation_StopsBetweenFrames()
+    [Test]
+    public async Task Animation_StopsBetweenFrames()
     {
         using Image source = Animated(512, 512, frames: 12, noise: true);
         byte[] webp = source.ToWebP();
-        AssertCancelsPromptly(token => source.Encode(new WebPEncoderOptions(), token));
-        AssertCancelsPromptly(token => Image.Load(webp, null, token).Dispose());
+        await AssertCancelsPromptly(token => source.Encode(new WebPEncoderOptions(), token));
+        await AssertCancelsPromptly(token => Image.Load(webp, null, token).Dispose());
     }
 
-    [Theory]
-    [InlineData("resize")]
-    [InlineData("blur")]
-    [InlineData("rotate")]
-    [InlineData("sharpen")]
-    public void Processing_StopsPromptlyWhenCanceled(string operation)
+    [Test]
+    [Arguments("resize")]
+    [Arguments("blur")]
+    [Arguments("rotate")]
+    [Arguments("sharpen")]
+    public async Task Processing_StopsPromptlyWhenCanceled(string operation)
     {
         using Image source = Noise(3072, 3072);
-        AssertCancelsPromptly(token => source.Clone(x => _ = operation switch
+        await AssertCancelsPromptly(token => source.Clone(x => _ = operation switch
         {
             "resize" => x.Resize(3000, 2900, ResamplingFilter.Lanczos3),
             "blur" => x.GaussianBlur(12f),
@@ -255,7 +255,7 @@ public class CancellationInFlightTests
     /// Measures the uncanceled duration, then cancels a second run at a quarter of it: the run must end with
     /// <see cref="OperationCanceledException"/> well before it would have finished.
     /// </summary>
-    private static void AssertCancelsPromptly(Action<CancellationToken> work)
+    private static async Task AssertCancelsPromptly(Action<CancellationToken> work)
     {
         var watch = Stopwatch.StartNew();
         work(CancellationToken.None);
@@ -272,11 +272,19 @@ public class CancellationInFlightTests
         Thread.Sleep(full / 4);
         watch.Restart();
         source.Cancel();
-        Exception? error = Record.Exception(() => run.GetAwaiter().GetResult());
+        Exception? error = null;
+        try
+        {
+            run.GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+        }
+
         TimeSpan latency = watch.Elapsed;
 
-        Assert.IsAssignableFrom<OperationCanceledException>(error);
-        Assert.True(latency < TimeSpan.FromMilliseconds(250) + (full / 2),
-            $"Stopped {latency.TotalMilliseconds:F0} ms after cancellation; the full run took {full.TotalMilliseconds:F0} ms.");
+        await Assert.That(error).IsAssignableTo<OperationCanceledException>();
+        await Assert.That(latency < TimeSpan.FromMilliseconds(250) + (full / 2)).IsTrue().Because($"Stopped {latency.TotalMilliseconds:F0} ms after cancellation; the full run took {full.TotalMilliseconds:F0} ms.");
     }
 }

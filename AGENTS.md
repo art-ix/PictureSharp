@@ -29,7 +29,7 @@ Follow `.editorconfig`. Enable nullable annotations, `TreatWarningsAsErrors` and
 | Path | Purpose |
 | --- | --- |
 | `src/PictureSharp/` | Library: `Image`, codecs, compression, processing and internal helpers |
-| `tests/PictureSharp.Tests/` | xUnit tests |
+| `tests/PictureSharp.Tests/` | TUnit tests |
 | `tests/assets/` | Corpus, reference data and generation scripts |
 | `benchmarks/` | BenchmarkDotNet |
 | `docs/` | User guides; examples checked by `DocsExamplesTests` |
@@ -59,10 +59,10 @@ The script fetches and verifies the pinned tag/commit, then builds `cwebp`, `dwe
 ```bash
 dotnet build -c Release
 dotnet test -c Release
-dotnet test -c Release --filter Category=Oracle
+dotnet test -c Release --treenode-filter "/*/*/*/*[Category=Oracle]"
 ```
 
-Oracle tests compare with external tools and skip when those tools are missing. `Category=Slow` marks fuzzing, thread-count and in-flight cancellation tests; CI runs them, and a quick local loop may exclude them with `--filter "Category!=Slow&Category!=Oracle"`. Close a phase only when its tests pass and its DoD is met.
+Tests use TUnit on Microsoft.Testing.Platform (`global.json` selects it for `dotnet test`), so filters use `--treenode-filter` and `[Property("Category", …)]`. Oracle tests compare with external tools and report as skipped (`Skip.Unless`) when those tools are missing. `Category=Slow` marks fuzzing, thread-count and in-flight cancellation tests; CI runs them, and a quick local loop may exclude them with `--treenode-filter "/*/*/*/*[(Category!=Slow)&(Category!=Oracle)]"`. Collections compare with `IsEquivalentTo(expected, CollectionOrdering.Matching)` (`IsEqualTo` compares array references), and tests that replace process-wide state or measure time or allocations use `[NotInParallel]`. Close a phase only when its tests pass and its DoD is met.
 
 - Commit the synthetic corpus in `tests/assets/corpus/`, including variants from `cwebp`, `img2webp`, `webpmux`, ImageMagick and Pillow. Regenerate with:
 

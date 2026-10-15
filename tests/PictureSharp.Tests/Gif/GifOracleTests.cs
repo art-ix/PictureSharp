@@ -35,14 +35,11 @@ public class GifOracleTests
         yield return ("many_colors", QuantizationTests.ManyColors());
     }
 
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void EncodedGifs_DecodeIdenticallyInAnimDumpAndPillow()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task EncodedGifs_DecodeIdenticallyInAnimDumpAndPillow()
     {
-        if (!ReferenceTools.HasGifTools)
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasGifTools, "gif2webp and anim_dump 1.6.0 are not available.");
 
         bool pillow = ReferenceTools.Run("python3", "-I -c \"import numpy, PIL\"", out _) == 0;
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-gif-{Guid.NewGuid():N}");
@@ -65,17 +62,17 @@ public class GifOracleTests
 
                         List<byte[]>? dumped = ReferenceTools.AnimDump(path);
                         Assert.NotNull(dumped);
-                        Assert.Equal(expected.Length, dumped.Count);
+                        await Assert.That(dumped.Count).IsEqualTo(expected.Length);
                         for (int i = 0; i < expected.Length; i++)
                         {
-                            Assert.True(expected[i].AsSpan().SequenceEqual(dumped[i]), $"{name} {options}: anim_dump frame {i} differs");
+                            await Assert.That(expected[i].AsSpan().SequenceEqual(dumped[i])).IsTrue().Because($"{name} {options}: anim_dump frame {i} differs");
                         }
 
                         if (pillow)
                         {
                             string raw = Path.Combine(directory, "pillow.rgba");
-                            Assert.True(ReferenceTools.Run("python3", $"-I \"{script}\" \"{path}\" \"{raw}\"", out string error) == 0, error);
-                            Assert.True(expected.SelectMany(f => f).SequenceEqual(File.ReadAllBytes(raw)), $"{name} {options}: Pillow frames differ");
+                            await Assert.That(ReferenceTools.Run("python3", $"-I \"{script}\" \"{path}\" \"{raw}\"", out string error) == 0).IsTrue().Because(error);
+                            await Assert.That(expected.SelectMany(f => f).SequenceEqual(File.ReadAllBytes(raw))).IsTrue().Because($"{name} {options}: Pillow frames differ");
                         }
                     }
                 }
@@ -87,14 +84,11 @@ public class GifOracleTests
         }
     }
 
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void Convert_MatchesGif2WebP()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task Convert_MatchesGif2WebP()
     {
-        if (!ReferenceTools.HasGifTools)
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasGifTools, "gif2webp and anim_dump 1.6.0 are not available.");
 
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-gif2webp-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -117,37 +111,37 @@ public class GifOracleTests
                 PictureSharp.Formats.WebP.WebPConverter.Convert(Corpus.PathOf(key), actualPath);
                 using Image expected = Image.Load(expectedPath);
                 using Image actual = Image.Load(actualPath);
-                Assert.Equal(expected.FrameCount, actual.FrameCount);
-                Assert.Equal(expected.LoopCount, actual.LoopCount);
-                Assert.Equal(expected.AnimationBackgroundColor, actual.AnimationBackgroundColor);
-                Assert.Equal(expected.Metadata.Xmp, actual.Metadata.Xmp);
+                await Assert.That(actual.FrameCount).IsEqualTo(expected.FrameCount);
+                await Assert.That(actual.LoopCount).IsEqualTo(expected.LoopCount);
+                await Assert.That(actual.AnimationBackgroundColor).IsEqualTo(expected.AnimationBackgroundColor);
+                await Sequence.AssertEqual(expected.Metadata.Xmp, actual.Metadata.Xmp);
                 for (int i = 0; i < expected.FrameCount; i++)
                 {
-                    Assert.True(expected.Frames[i].GetPixelSpan().SequenceEqual(actual.Frames[i].GetPixelSpan()), $"{key}: frame {i} differs");
-                    Assert.Equal(expected.Frames[i].Duration, actual.Frames[i].Duration);
+                    await Assert.That(expected.Frames[i].GetPixelSpan().SequenceEqual(actual.Frames[i].GetPixelSpan())).IsTrue().Because($"{key}: frame {i} differs");
+                    await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
                 }
 
-                Assert.Equal(0, ReferenceTools.Run("webpmux", $"-info \"{actualPath}\"", out string info));
+                await Assert.That(ReferenceTools.Run("webpmux", $"-info \"{actualPath}\"", out string info)).IsEqualTo(0);
                 if (actual.IsAnimated)
                 {
-                    Assert.Contains($"Number of frames: {actual.FrameCount}", info, StringComparison.Ordinal);
+                    await Assert.That(info).Contains($"Number of frames: {actual.FrameCount}", StringComparison.Ordinal);
                 }
 
                 // The lossless WebP converts back to the same GIF frames.
                 using Image gif = Image.Load(Corpus.PathOf(key));
                 using Image back = Image.Load(actual.ToGif());
-                Assert.Equal(actual.FrameCount, back.FrameCount);
-                Assert.Equal(actual.LoopCount, back.LoopCount);
+                await Assert.That(back.FrameCount).IsEqualTo(actual.FrameCount);
+                await Assert.That(back.LoopCount).IsEqualTo(actual.LoopCount);
                 for (int i = 0; i < back.FrameCount; i++)
                 {
-                    Assert.True(actual.Frames[i].GetPixelSpan().SequenceEqual(back.Frames[i].GetPixelSpan()), $"{key}: GIF frame {i} differs after WebP");
-                    Assert.Equal(actual.Frames[i].Duration, back.Frames[i].Duration);
+                    await Assert.That(actual.Frames[i].GetPixelSpan().SequenceEqual(back.Frames[i].GetPixelSpan())).IsTrue().Because($"{key}: GIF frame {i} differs after WebP");
+                    await Assert.That(back.Frames[i].Duration).IsEqualTo(actual.Frames[i].Duration);
                 }
 
                 compared++;
             }
 
-            Assert.True(compared >= 27, $"only {compared} files compared");
+            await Assert.That(compared >= 27).IsTrue().Because($"only {compared} files compared");
         }
         finally
         {
@@ -155,14 +149,11 @@ public class GifOracleTests
         }
     }
 
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void Gif2WebP_ReadsOurGifs()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task Gif2WebP_ReadsOurGifs()
     {
-        if (!ReferenceTools.HasGifTools)
-        {
-            return;
-        }
+        Skip.Unless(ReferenceTools.HasGifTools, "gif2webp and anim_dump 1.6.0 are not available.");
 
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-ourgif-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -173,14 +164,14 @@ public class GifOracleTests
                 using Image source = Image.Load(file);
                 string gifPath = Path.Combine(directory, "ours.gif"), webpPath = Path.Combine(directory, "ours.webp");
                 File.WriteAllBytes(gifPath, source.ToGif());
-                Assert.True(ReferenceTools.Run("gif2webp", $"-quiet \"{gifPath}\" -o \"{webpPath}\"", out string error) == 0, error);
+                await Assert.That(ReferenceTools.Run("gif2webp", $"-quiet \"{gifPath}\" -o \"{webpPath}\"", out string error) == 0).IsTrue().Because(error);
                 using Image gif = Image.Load(gifPath);
                 using Image webp = Image.Load(webpPath);
-                Assert.Equal(gif.FrameCount, webp.FrameCount);
-                Assert.Equal(gif.LoopCount, webp.LoopCount);
+                await Assert.That(webp.FrameCount).IsEqualTo(gif.FrameCount);
+                await Assert.That(webp.LoopCount).IsEqualTo(gif.LoopCount);
                 for (int i = 0; i < gif.FrameCount; i++)
                 {
-                    Assert.True(gif.Frames[i].GetPixelSpan().SequenceEqual(webp.Frames[i].GetPixelSpan()), $"{file}: frame {i} differs");
+                    await Assert.That(gif.Frames[i].GetPixelSpan().SequenceEqual(webp.Frames[i].GetPixelSpan())).IsTrue().Because($"{file}: frame {i} differs");
                 }
             }
         }

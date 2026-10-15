@@ -7,7 +7,7 @@ namespace PictureSharp.Tests.Png;
 /// PngSuite conformance (fetched by tests/assets/fetch-external.sh), using Pillow/ImageMagick via
 /// tests/assets/png_reference.py as the oracle. Produces no cases when the suite is missing.
 /// </summary>
-[Trait("Category", "External")]
+[Property("Category", "External")]
 public class PngSuiteTests
 {
     private static readonly Lazy<Dictionary<string, string>?> Reference = new(LoadReference);
@@ -30,9 +30,9 @@ public class PngSuiteTests
         return JsonSerializer.Deserialize<Dictionary<string, string>>(json[..(json.LastIndexOf('}') + 1)]);
     }
 
-    public static TheoryData<string> Files()
+    public static TestCases<string> Files()
     {
-        var data = new TheoryData<string>();
+        var data = new TestCases<string>();
         if (Reference.Value is { } r)
         {
             foreach (string name in r.Keys)
@@ -48,9 +48,9 @@ public class PngSuiteTests
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(Files))]
-    public void PngSuite_MatchesOracle(string name)
+    [Test]
+    [MethodDataSource(nameof(Files))]
+    public async Task PngSuite_MatchesOracle(string name)
     {
         if (name.Length == 0)
         {
@@ -61,12 +61,12 @@ public class PngSuiteTests
         string expected = Reference.Value![name];
         if (expected == "error")
         {
-            Exception ex = Assert.ThrowsAny<Exception>(() => Image.Load(path, new DecoderOptions { Png = new() { StrictChecksums = true }}));
-            Assert.True(ex is ImageFormatException or NotSupportedException, ex.ToString());
+            Exception ex = Assert.Throws<Exception>(() => Image.Load(path, new DecoderOptions { Png = new() { StrictChecksums = true }}));
+            await Assert.That(ex is ImageFormatException or NotSupportedException).IsTrue().Because(ex.ToString());
             return;
         }
 
         using Image image = Image.Load(path, new DecoderOptions { FirstFrameOnly = true });
-        Assert.Equal(expected, Corpus.Sha256(image.ToPixelData()));
+        await Assert.That(Corpus.Sha256(image.ToPixelData())).IsEqualTo(expected);
     }
 }

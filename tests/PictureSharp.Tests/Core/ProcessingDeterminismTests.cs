@@ -10,7 +10,7 @@ namespace PictureSharp.Tests.Core;
 /// </summary>
 public class ProcessingDeterminismTests
 {
-    public static TheoryData<string, string> Cases() => new()
+    public static TestCases<string, string> Cases() => new()
     {
         { "enhance_noise_color_-0.4", "729f704c605e2eaf0e9e61bf6d0e0ca04ffbfd3aecb5a05d866229c28f382a3d" },
         { "enhance_photo_color_-0.4", "391afe48ab9b1ece980b2f8517517917de67020c1f942beab768f0534ef6a450" },
@@ -19,9 +19,9 @@ public class ProcessingDeterminismTests
         { "rotate_photo_45_bilinear_False", "8ce835b43c0c22e0759ce32bc2af5c776959f8cc65ab7ec35ad930ad4e6e8d6a" },
     };
 
-    [Theory]
-    [MemberData(nameof(Cases))]
-    public void Result_IsIdenticalOnEveryArchitecture(string name, string expected)
+    [Test]
+    [MethodDataSource(nameof(Cases))]
+    public async Task Result_IsIdenticalOnEveryArchitecture(string name, string expected)
     {
         using Image source = name.Contains("_noise_", StringComparison.Ordinal)
             ? ProcessingOracleTests.Noise(41, 29, 1)
@@ -33,6 +33,6 @@ public class ProcessingDeterminismTests
             "rotate_noise_-12.5_bicubic_True" => source.Clone(x => x.Rotate(-12.5f, ResamplingFilter.Bicubic, expand: true)),
             _ => source.Clone(x => x.Rotate(45, ResamplingFilter.Bilinear, expand: false)),
         };
-        Assert.Equal(expected, Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan())));
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);
     }
 }

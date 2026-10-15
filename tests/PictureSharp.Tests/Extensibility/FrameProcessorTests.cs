@@ -58,42 +58,49 @@ public class FrameProcessorTests
         return image;
     }
 
-    [Fact]
-    public void StructProcessor_ChangesCanvasSize_AndWritesExpectedPixels()
+    [Test]
+    public async Task StructProcessor_ChangesCanvasSize_AndWritesExpectedPixels()
     {
         using Image image = Numbered(3, 2);
         image.Mutate(x => x.Transpose());
-        Assert.Equal(new Size(2, 3), image.Size);
+        await Assert.That(image.Size).IsEqualTo(new Size(2, 3));
         // Source rows (0 1 2) and (3 4 5) become columns.
-        Assert.Equal([0, 3, 1, 4, 2, 5], image.GetPixelSpan().ToArray().Select(p => (int)p.R));
+        await Assert.That(image.GetPixelSpan().ToArray().Select(p => (int)p.R)).IsEquivalentTo([0, 3, 1, 4, 2, 5], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Processor_ChainsWithBuiltInOperations_AndRunsOnEveryFrame()
+    [Test]
+    public async Task Processor_ChainsWithBuiltInOperations_AndRunsOnEveryFrame()
     {
         using Image first = Numbered(4, 2);
         using Image second = Numbered(4, 2, offset: 100);
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(70), first, second);
         animation.Mutate(x => x.Transpose().Flip(FlipMode.Horizontal).Transpose());
 
-        Assert.Equal(new Size(4, 2), animation.Size);
-        Assert.All(animation.Frames, frame => Assert.Equal(TimeSpan.FromMilliseconds(70), frame.Duration));
+        await Assert.That(animation.Size).IsEqualTo(new Size(4, 2));
+        foreach (var frame in animation.Frames)
+        {
+            await Assert.That(frame.Duration).IsEqualTo(TimeSpan.FromMilliseconds(70));
+        }
+
         // Transpose, horizontal flip and transpose again amount to a vertical flip.
-        Assert.Equal([4, 5, 6, 7, 0, 1, 2, 3], animation.Frames[0].GetPixelSpan().ToArray().Select(p => (int)p.R));
-        Assert.Equal(104, animation.Frames[1].GetPixelSpan()[0].R);
+        await Assert.That(animation.Frames[0].GetPixelSpan().ToArray().Select(p => (int)p.R)).IsEquivalentTo([4, 5, 6, 7, 0, 1, 2, 3], CollectionOrdering.Matching);
+        await Assert.That((int)(animation.Frames[1].GetPixelSpan()[0].R)).IsEqualTo(104);
     }
 
-    [Fact]
-    public void Destination_StartsTransparentBlack()
+    [Test]
+    public async Task Destination_StartsTransparentBlack()
     {
         using var image = new Image(2, 2, new Rgba32(9, 9, 9));
         image.Mutate(x => x.ApplyProcessor(new ScriptedProcessor(_ => new Size(3, 1))));
-        Assert.Equal(new Size(3, 1), image.Size);
-        Assert.All(image.GetPixelSpan().ToArray(), p => Assert.Equal(default, p));
+        await Assert.That(image.Size).IsEqualTo(new Size(3, 1));
+        foreach (var p in image.GetPixelSpan().ToArray())
+        {
+            await Assert.That(p).IsEqualTo(default);
+        }
     }
 
-    [Fact]
-    public void FailureOrCancellation_OnALaterFrame_KeepsEveryFrame()
+    [Test]
+    public async Task FailureOrCancellation_OnALaterFrame_KeepsEveryFrame()
     {
         using Image first = Numbered(4, 2);
         using Image second = Numbered(4, 2, offset: 50);
@@ -101,43 +108,43 @@ public class FrameProcessorTests
         Rgba32[][] before = [.. animation.Frames.Select(f => f.GetPixelSpan().ToArray())];
 
         var failing = new ScriptedProcessor(s => new Size(1, 1), frame => { if (frame == 1) throw new InvalidDataException("boom"); });
-        Assert.Throws<InvalidDataException>(() => animation.Mutate(x => x.ApplyProcessor(failing)));
-        AssertUnchanged();
+        Assert.ThrowsExactly<InvalidDataException>(() => animation.Mutate(x => x.ApplyProcessor(failing)));
+        await AssertUnchanged();
 
         using var cts = new CancellationTokenSource();
         var canceling = new ScriptedProcessor(s => new Size(1, 1), frame => { if (frame == 1) cts.Cancel(); });
-        Assert.ThrowsAny<OperationCanceledException>(() => animation.Mutate(x => x.ApplyProcessor(canceling), cts.Token));
-        AssertUnchanged();
+        Assert.Throws<OperationCanceledException>(() => animation.Mutate(x => x.ApplyProcessor(canceling), cts.Token));
+        await AssertUnchanged();
 
-        void AssertUnchanged()
+        async Task AssertUnchanged()
         {
-            Assert.Equal(new Size(4, 2), animation.Size);
+            await Assert.That(animation.Size).IsEqualTo(new Size(4, 2));
             for (int i = 0; i < before.Length; i++)
             {
-                Assert.Equal(before[i], animation.Frames[i].GetPixelSpan().ToArray());
+                await Assert.That(animation.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
             }
         }
     }
 
-    [Theory]
-    [InlineData(0, 1)]
-    [InlineData(1, 0)]
-    [InlineData(-1, 5)]
-    [InlineData(int.MaxValue, int.MaxValue)]
-    public void InvalidOutputSize_IsRejectedBeforeAnyWork(int width, int height)
+    [Test]
+    [Arguments(0, 1)]
+    [Arguments(1, 0)]
+    [Arguments(-1, 5)]
+    [Arguments(int.MaxValue, int.MaxValue)]
+    public async Task InvalidOutputSize_IsRejectedBeforeAnyWork(int width, int height)
     {
         using Image image = Numbered(2, 2);
         bool processed = false;
         var processor = new ScriptedProcessor(_ => new Size(width, height), _ => processed = true);
-        Assert.Throws<InvalidOperationException>(() => image.Mutate(x => x.ApplyProcessor(processor)));
-        Assert.False(processed);
-        Assert.Equal(new Size(2, 2), image.Size);
+        Assert.ThrowsExactly<InvalidOperationException>(() => image.Mutate(x => x.ApplyProcessor(processor)));
+        await Assert.That(processed).IsFalse();
+        await Assert.That(image.Size).IsEqualTo(new Size(2, 2));
     }
 
-    [Fact]
+    [Test]
     public void NullProcessor_IsRejected()
     {
         using Image image = Numbered(2, 2);
-        Assert.Throws<ArgumentNullException>(() => image.Mutate(x => x.ApplyProcessor<IFrameProcessor>(null!)));
+        Assert.ThrowsExactly<ArgumentNullException>(() => image.Mutate(x => x.ApplyProcessor<IFrameProcessor>(null!)));
     }
 }

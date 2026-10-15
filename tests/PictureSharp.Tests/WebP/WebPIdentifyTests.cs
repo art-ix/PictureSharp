@@ -5,27 +5,27 @@ namespace PictureSharp.Tests.WebP;
 
 public class WebPIdentifyTests
 {
-    public static TheoryData<string> WebPFiles => Corpus.Files("webp/");
+    public static TestCases<string> WebPFiles => Corpus.Files("webp/");
 
-    [Theory]
-    [MemberData(nameof(WebPFiles))]
-    public void Identify_MatchesReference(string file)
+    [Test]
+    [MethodDataSource(nameof(WebPFiles))]
+    public async Task Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.WebP, info.Format);
-        Assert.Equal(r.Width, info.Width);
-        Assert.Equal(r.Height, info.Height);
-        Assert.Equal(r.HasAlpha, info.HasAlpha);
-        Assert.Equal(r.Animated, info.IsAnimated);
-        Assert.Equal(r.Frames.Count, info.FrameCount);
-        Assert.Equal(r.Compression, info.WebPCompression.ToString());
+        await Assert.That(info.Format).IsEqualTo(ImageFormat.WebP);
+        await Assert.That(info.Width).IsEqualTo(r.Width);
+        await Assert.That(info.Height).IsEqualTo(r.Height);
+        await Assert.That(info.HasAlpha).IsEqualTo(r.HasAlpha);
+        await Assert.That(info.IsAnimated).IsEqualTo(r.Animated);
+        await Assert.That(info.FrameCount).IsEqualTo(r.Frames.Count);
+        await Assert.That(info.WebPCompression.ToString()).IsEqualTo(r.Compression);
     }
 
-    [Fact]
-    public void Identify_ReadsExifOrientation()
+    [Test]
+    public async Task Identify_ReadsExifOrientation()
     {
         ImageInfo info = Image.Identify(Corpus.PathOf("webp/meta/lossless_exif.webp"));
-        Assert.Equal(ExifOrientation.RightTop, info.Orientation);
+        await Assert.That(info.Orientation).IsEqualTo(ExifOrientation.RightTop);
     }
 }

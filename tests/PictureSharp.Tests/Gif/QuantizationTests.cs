@@ -14,9 +14,9 @@ public class QuantizationTests
             File.ReadAllText(Path.Combine(Corpus.Assets, "gif_quantize_reference.json")),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!);
 
-    public static TheoryData<string> Keys()
+    public static TestCases<string> Keys()
     {
-        var data = new TheoryData<string>();
+        var data = new TestCases<string>();
         foreach (string key in References.Value.Keys)
         {
             data.Add(key);
@@ -56,9 +56,9 @@ public class QuantizationTests
         return image;
     }
 
-    [Theory]
-    [MemberData(nameof(Keys))]
-    public void Quantize_MatchesPillow(string key)
+    [Test]
+    [MethodDataSource(nameof(Keys))]
+    public async Task Quantize_MatchesPillow(string key)
     {
         string[] parts = key.Split('/');
         int colors = int.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
@@ -81,7 +81,7 @@ public class QuantizationTests
 
         Reference expected = References.Value[key];
         int[] actualPalette = palette.SelectMany(c => new int[] { c.R, c.G, c.B }).ToArray();
-        Assert.Equal(expected.Palette, actualPalette);
-        Assert.Equal(expected.Sha256, Corpus.Sha256(indices));
+        await Assert.That(actualPalette).IsEquivalentTo(expected.Palette, CollectionOrdering.Matching);
+        await Assert.That(Corpus.Sha256(indices)).IsEqualTo(expected.Sha256);
     }
 }

@@ -6,8 +6,8 @@ namespace PictureSharp.Tests.Core;
 
 public class ConsumerCompilationTests
 {
-    [Fact]
-    public void CSharp14Consumer_CompilesSpansOptionsAndFluentApi_WithExpectedOverloads()
+    [Test]
+    public async Task CSharp14Consumer_CompilesSpansOptionsAndFluentApi_WithExpectedOverloads()
     {
         const string source = """
             using System;
@@ -78,12 +78,12 @@ public class ConsumerCompilationTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
         using var output = new MemoryStream();
         var result = compilation.Emit(output);
-        Assert.True(result.Success, string.Join(Environment.NewLine, result.Diagnostics));
+        await Assert.That(result.Success).IsTrue().Because(string.Join(Environment.NewLine, result.Diagnostics));
         SemanticModel model = compilation.GetSemanticModel(tree);
-        Assert.Equal("System.ReadOnlyMemory<byte>", FirstParameter(model, tree, "Image.Load(bytes, options)"));
-        Assert.Equal("System.ReadOnlyMemory<byte>", FirstParameter(model, tree, "Image.Load(bytes)"));
-        Assert.Equal("System.ReadOnlyMemory<byte>", FirstParameter(model, tree, "Image.Identify(bytes, null)"));
-        Assert.Equal("System.ReadOnlySpan<byte>", FirstParameter(model, tree, "Image.Load(span, options)"));
+        await Assert.That(FirstParameter(model, tree, "Image.Load(bytes, options)")).IsEqualTo("System.ReadOnlyMemory<byte>");
+        await Assert.That(FirstParameter(model, tree, "Image.Load(bytes)")).IsEqualTo("System.ReadOnlyMemory<byte>");
+        await Assert.That(FirstParameter(model, tree, "Image.Identify(bytes, null)")).IsEqualTo("System.ReadOnlyMemory<byte>");
+        await Assert.That(FirstParameter(model, tree, "Image.Load(span, options)")).IsEqualTo("System.ReadOnlySpan<byte>");
     }
 
     private static string FirstParameter(SemanticModel model, SyntaxTree tree, string invocation)

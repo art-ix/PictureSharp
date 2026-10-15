@@ -4,16 +4,16 @@ namespace PictureSharp.Tests.Pcx;
 
 public class PcxRleTests
 {
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(62)]
-    [InlineData(63)]
-    [InlineData(64)]
-    [InlineData(65)]
-    [InlineData(126)]
-    [InlineData(127)]
-    public void RepeatedBytes_SplitAt63AndEscapeHighLiterals(int length)
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    [Arguments(62)]
+    [Arguments(63)]
+    [Arguments(64)]
+    [Arguments(65)]
+    [Arguments(126)]
+    [Arguments(127)]
+    public async Task RepeatedBytes_SplitAt63AndEscapeHighLiterals(int length)
     {
         var source = new byte[length];
         var encoded = new byte[length * 2];
@@ -26,93 +26,93 @@ public class PcxRleTests
             int remainder = length % 63;
             for (int run = 0; run < fullRuns; run++)
             {
-                Assert.Equal(0xFF, encoded[run * 2]);
-                Assert.Equal((byte)value, encoded[(run * 2) + 1]);
+                await Assert.That((int)(encoded[run * 2])).IsEqualTo(0xFF);
+                await Assert.That(encoded[(run * 2) + 1]).IsEqualTo((byte)value);
             }
 
             int tailBytes = remainder == 0 ? 0 : remainder == 1 && value < 0xC0 ? 1 : 2;
-            Assert.Equal((fullRuns * 2) + tailBytes, written);
+            await Assert.That(written).IsEqualTo((fullRuns * 2) + tailBytes);
             if (remainder != 0)
             {
                 if (tailBytes == 1)
                 {
-                    Assert.Equal((byte)value, encoded[fullRuns * 2]);
+                    await Assert.That(encoded[fullRuns * 2]).IsEqualTo((byte)value);
                 }
                 else
                 {
-                    Assert.Equal((byte)(0xC0 | remainder), encoded[fullRuns * 2]);
-                    Assert.Equal((byte)value, encoded[(fullRuns * 2) + 1]);
+                    await Assert.That(encoded[fullRuns * 2]).IsEqualTo((byte)(0xC0 | remainder));
+                    await Assert.That(encoded[(fullRuns * 2) + 1]).IsEqualTo((byte)value);
                 }
             }
 
             int offset = 0;
             PcxRle.Decode(encoded.AsSpan(0, written), ref offset, decoded, compressed: true);
-            Assert.Equal(written, offset);
-            Assert.Equal(source, decoded);
+            await Assert.That(offset).IsEqualTo(written);
+            await Assert.That(decoded).IsEquivalentTo(source, CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void MixedLiteralsAndRuns_HaveExpectedEncoding()
+    [Test]
+    public async Task MixedLiteralsAndRuns_HaveExpectedEncoding()
     {
         byte[] source = [0, 1, 0xBF, 0xC0, 0xC1, 0xFF, 7, 7, 7, 8];
         var encoded = new byte[source.Length * 2];
         int written = PcxRle.Encode(source, encoded);
-        Assert.Equal(new byte[] { 0, 1, 0xBF, 0xC1, 0xC0, 0xC1, 0xC1, 0xC1, 0xFF, 0xC3, 7, 8 }, encoded[..written]);
+        await Assert.That(encoded[..written]).IsEquivalentTo(new byte[] { 0, 1, 0xBF, 0xC1, 0xC0, 0xC1, 0xC1, 0xC1, 0xFF, 0xC3, 7, 8 }, CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [InlineData(0xC0)]
-    [InlineData(0xC1)]
-    [InlineData(0xFF)]
+    [Test]
+    [Arguments(0xC0)]
+    [Arguments(0xC1)]
+    [Arguments(0xFF)]
     public void MissingRunValue_IsRejectedByTheRleDecoder(byte marker)
     {
         byte[] source = [marker];
         var row = new byte[1];
-        Assert.Throws<ImageFormatException>(() =>
+        Assert.ThrowsExactly<ImageFormatException>(() =>
         {
             int offset = 0;
             PcxRle.Decode(source, ref offset, row, compressed: true);
         });
     }
 
-    [Theory]
-    [InlineData(-1, false)]
-    [InlineData(-1, true)]
-    [InlineData(4, false)]
-    [InlineData(4, true)]
+    [Test]
+    [Arguments(-1, false)]
+    [Arguments(-1, true)]
+    [Arguments(4, false)]
+    [Arguments(4, true)]
     public void Decode_InvalidOffset_ThrowsFormatException(int offset, bool compressed)
     {
         byte[] source = [1, 2, 3];
         var row = new byte[1];
-        Assert.Throws<ImageFormatException>(() => PcxRle.Decode(source, ref offset, row, compressed));
+        Assert.ThrowsExactly<ImageFormatException>(() => PcxRle.Decode(source, ref offset, row, compressed));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
     public void Decode_LimitedSpan_DoesNotReadExcludedBytes(bool compressed)
     {
         byte[] source = [1, 2];
         var row = new byte[2];
-        Assert.Throws<ImageFormatException>(() =>
+        Assert.ThrowsExactly<ImageFormatException>(() =>
         {
             int offset = 0;
             PcxRle.Decode(source.AsSpan(0, 1), ref offset, row, compressed);
         });
     }
 
-    [Fact]
-    public void Decode_DoesNotConsumeTheNextScanline()
+    [Test]
+    public async Task Decode_DoesNotConsumeTheNextScanline()
     {
         byte[] source = [0xC3, 7, 0xC3, 8];
         var row = new byte[3];
         int offset = 0;
         PcxRle.Decode(source, ref offset, row, compressed: true);
-        Assert.Equal(2, offset);
-        Assert.Equal(new byte[] { 7, 7, 7 }, row);
+        await Assert.That(offset).IsEqualTo(2);
+        await Assert.That(row).IsEquivalentTo(new byte[] { 7, 7, 7 }, CollectionOrdering.Matching);
         PcxRle.Decode(source, ref offset, row, compressed: true);
-        Assert.Equal(4, offset);
-        Assert.Equal(new byte[] { 8, 8, 8 }, row);
+        await Assert.That(offset).IsEqualTo(4);
+        await Assert.That(row).IsEquivalentTo(new byte[] { 8, 8, 8 }, CollectionOrdering.Matching);
     }
 }

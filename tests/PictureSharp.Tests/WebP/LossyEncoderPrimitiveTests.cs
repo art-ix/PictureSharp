@@ -10,9 +10,9 @@ namespace PictureSharp.Tests.WebP;
 
 public class LossyEncoderPrimitiveTests
 {
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void ScalarPrimitives_MatchLibwebp160()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task ScalarPrimitives_MatchLibwebp160()
     {
         string root = Path.GetFullPath(Path.Combine(Corpus.Assets, "..", ".."));
         string reference = Path.Combine(root, "reference", "libwebp-1.6.0");
@@ -24,8 +24,8 @@ public class LossyEncoderPrimitiveTests
         {
             string oracle = Path.Combine(directory, "oracle"), data = Path.Combine(directory, "primitives.bin");
             string source = Path.Combine(Corpus.Assets, "vp8_encode_primitives_oracle.c");
-            Assert.True(ReferenceTools.Run("cc", $"-I\"{reference}\" \"{source}\" \"{build}/libwebp.a\" \"{build}/libsharpyuv.a\" -lm -lpthread -o \"{oracle}\"", out string error) == 0, error);
-            Assert.True(ReferenceTools.Run(oracle, $"\"{data}\"", out string oracleOutput) == 0, oracleOutput);
+            await Assert.That(ReferenceTools.Run("cc", $"-I\"{reference}\" \"{source}\" \"{build}/libwebp.a\" \"{build}/libsharpyuv.a\" -lm -lpthread -o \"{oracle}\"", out string error) == 0).IsTrue().Because(error);
+            await Assert.That(ReferenceTools.Run(oracle, $"\"{data}\"", out string oracleOutput) == 0).IsTrue().Because(oracleOutput);
             using var reader = new BinaryReader(File.OpenRead(data));
             int count = reader.ReadInt32();
             for (int test = 0; test < count; test++)
@@ -34,34 +34,34 @@ public class LossyEncoderPrimitiveTests
                 byte[] left = reader.ReadBytes(33), top = reader.ReadBytes(20), boundary = reader.ReadBytes(13);
                 short[] coefficients = new short[256], wht = new short[16];
                 for (int b = 0; b < 16; b++) Vp8EncoderDsp.FTransform(pixels.AsSpan(Vp8EncoderDsp.Scan[b]), prediction.AsSpan(Vp8EncoderDsp.Scan[b]), coefficients.AsSpan(b * 16));
-                Assert.Equal(ReadShorts(reader, 256), coefficients);
+                await Assert.That(coefficients).IsEquivalentTo(ReadShorts(reader, 256), CollectionOrdering.Matching);
                 Vp8EncoderDsp.FTransformWht(coefficients, wht);
-                Assert.Equal(ReadShorts(reader, 16), wht);
+                await Assert.That(wht).IsEquivalentTo(ReadShorts(reader, 16), CollectionOrdering.Matching);
                 for (int type = 0; type < 3; type++)
                 {
                     var matrix = new Vp8Matrix();
                     matrix.Expand(reader.ReadInt32(), reader.ReadInt32(), type);
                     short[] quantized = coefficients[..16], levels = new short[16];
-                    Assert.Equal(reader.ReadInt32() != 0, Vp8EncoderDsp.QuantizeBlock(quantized, levels, matrix));
-                    Assert.Equal(ReadShorts(reader, 16), quantized);
-                    Assert.Equal(ReadShorts(reader, 16), levels);
+                    await Assert.That(Vp8EncoderDsp.QuantizeBlock(quantized, levels, matrix)).IsEqualTo(reader.ReadInt32() != 0);
+                    await Assert.That(quantized).IsEquivalentTo(ReadShorts(reader, 16), CollectionOrdering.Matching);
+                    await Assert.That(levels).IsEquivalentTo(ReadShorts(reader, 16), CollectionOrdering.Matching);
                 }
                 byte[] predictions = new byte[1792];
                 Vp8EncoderDsp.PredLuma16(predictions, (test & 1) != 0 ? left : default, (test & 2) != 0 ? top : default);
                 Vp8EncoderDsp.PredChroma8(predictions, (test & 1) != 0 ? left : default, (test & 2) != 0 ? top : default);
                 Vp8EncoderDsp.PredLuma4(predictions, boundary);
-                Assert.Equal(reader.ReadBytes(1792), predictions);
-                Assert.Equal(reader.ReadInt32(), Vp8EncoderDsp.Sse(pixels, prediction, 16, 16));
-                Assert.Equal(reader.ReadInt32(), Vp8EncoderDsp.Disto(pixels, prediction, [38, 32, 20, 9, 32, 28, 17, 7, 20, 17, 10, 4, 9, 7, 4, 2], 16));
-                Assert.Equal((reader.ReadInt32(), reader.ReadInt32()), Vp8EncoderDsp.CollectHistogram(pixels, prediction, 0, 16));
+                await Assert.That(predictions).IsEquivalentTo(reader.ReadBytes(1792), CollectionOrdering.Matching);
+                await Assert.That(Vp8EncoderDsp.Sse(pixels, prediction, 16, 16)).IsEqualTo(reader.ReadInt32());
+                await Assert.That(Vp8EncoderDsp.Disto(pixels, prediction, [38, 32, 20, 9, 32, 28, 17, 7, 20, 17, 10, 4, 9, 7, 4, 2], 16)).IsEqualTo(reader.ReadInt32());
+                await Assert.That(Vp8EncoderDsp.CollectHistogram(pixels, prediction, 0, 16)).IsEqualTo((reader.ReadInt32(), reader.ReadInt32()));
                 using var writer = new Vp8BitWriter();
                 for (int i = 0; i < 512; i++) writer.Put((pixels[i] & 1) != 0, prediction[i]);
                 writer.PutBits(0xabcdef, 24); writer.PutSigned(-137, 8); writer.PutSigned(0, 8);
-                Assert.Equal(reader.ReadBytes(reader.ReadInt32()), writer.Finish());
+                await Assert.That(writer.Finish()).IsEquivalentTo(reader.ReadBytes(reader.ReadInt32()), CollectionOrdering.Matching);
                 for (int levels = 2; levels <= 256; levels *= 2)
                 {
                     byte[] alpha = (byte[])pixels.Clone(); AlphaEncoder.Quantize(alpha, levels);
-                    Assert.Equal(reader.ReadBytes(512), alpha);
+                    await Assert.That(alpha).IsEquivalentTo(reader.ReadBytes(512), CollectionOrdering.Matching);
                 }
             }
             count = reader.ReadInt32();
@@ -71,12 +71,12 @@ public class LossyEncoderPrimitiveTests
                 Rgba32[] pixels = MemoryMarshal.Cast<byte, Rgba32>(reader.ReadBytes(width * height * 4)).ToArray();
                 using var yuv = new RgbToYuv(width, height);
                 yuv.Convert(pixels, .5f * dithering);
-                AssertPlanes(reader, yuv, $"convert {test}: {width}x{height}, dither={dithering}");
+                await AssertPlanes(reader, yuv, $"convert {test}: {width}x{height}, dither={dithering}");
                 yuv.CleanupTransparent(pixels);
-                AssertPlanes(reader, yuv, $"cleanup {test}: {width}x{height}, dither={dithering}");
+                await AssertPlanes(reader, yuv, $"cleanup {test}: {width}x{height}, dither={dithering}");
             }
-            VerifyAnalysis(reader);
-            VerifyEntropy(reader);
+            await VerifyAnalysis(reader);
+            await VerifyEntropy(reader);
             count = reader.ReadInt32();
             for (int test = 0; test < count; test++)
             {
@@ -84,14 +84,14 @@ public class LossyEncoderPrimitiveTests
                 Rgba32[] pixels = MemoryMarshal.Cast<byte, Rgba32>(reader.ReadBytes(width * height * 4)).ToArray();
                 using var yuv = new RgbToYuv(width, height);
                 SharpYuv.Convert(pixels, yuv);
-                AssertPlanes(reader, yuv, $"SharpYuv {test}: {width}x{height}");
+                await AssertPlanes(reader, yuv, $"SharpYuv {test}: {width}x{height}");
             }
-            Assert.Equal(reader.BaseStream.Length, reader.BaseStream.Position);
+            await Assert.That(reader.BaseStream.Position).IsEqualTo(reader.BaseStream.Length);
         }
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void VerifyEntropy(BinaryReader reader)
+    private static async Task VerifyEntropy(BinaryReader reader)
     {
         var probabilities = new Vp8EncoderProba(); var direct = new Vp8EncoderProba();
         reader.ReadBytes(1056).CopyTo(probabilities.Coefficients, 0);
@@ -106,20 +106,20 @@ public class LossyEncoderPrimitiveTests
         {
             int type = reader.ReadInt32(), context = reader.ReadInt32(), first = type == 0 ? 1 : 0;
             short[] levels = ReadShorts(reader, 16);
-            Assert.Equal(reader.ReadInt32(), probabilities.ResidualCost(type, first, context, levels));
+            await Assert.That(probabilities.ResidualCost(type, first, context, levels)).IsEqualTo(reader.ReadInt32());
             tokenWriter.Write(type, first, context, levels); directWriter.Write(type, first, context, levels);
         }
-        foreach (uint statistic in probabilities.Statistics) Assert.Equal(reader.ReadUInt32(), statistic);
-        foreach (uint statistic in direct.Statistics) Assert.Equal(reader.ReadUInt32(), statistic);
-        Assert.Equal(reader.ReadUInt32(), tokens.Emit(null, probabilities.Coefficients));
+        foreach (uint statistic in probabilities.Statistics) await Assert.That(statistic).IsEqualTo(reader.ReadUInt32());
+        foreach (uint statistic in direct.Statistics) await Assert.That(statistic).IsEqualTo(reader.ReadUInt32());
+        await Assert.That(tokens.Emit(null, probabilities.Coefficients)).IsEqualTo(reader.ReadUInt32());
         byte[] expected = reader.ReadBytes(reader.ReadInt32());
-        Assert.Equal(expected, writer.Finish());
+        await Assert.That(writer.Finish()).IsEquivalentTo(expected, CollectionOrdering.Matching);
         using var fromTokens = new Vp8BitWriter();
         tokens.Emit(fromTokens, probabilities.Coefficients);
-        Assert.Equal(expected, fromTokens.Finish());
+        await Assert.That(fromTokens.Finish()).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
-    private static void VerifyAnalysis(BinaryReader reader)
+    private static async Task VerifyAnalysis(BinaryReader reader)
     {
         int count = reader.ReadInt32();
         for (int test = 0; test < count; test++)
@@ -127,9 +127,9 @@ public class LossyEncoderPrimitiveTests
             int width = reader.ReadInt32(), height = reader.ReadInt32();
             var options = new WebPEncoderOptions { Preset = (WebPPreset)reader.ReadInt32(), Method = reader.ReadInt32(), Quality = reader.ReadInt32(), Segments = reader.ReadInt32() };
             var config = new Vp8EncoderConfig(options);
-            Assert.Equal(reader.ReadInt32(), config.SnsStrength);
-            Assert.Equal(reader.ReadInt32(), config.FilterStrength);
-            Assert.Equal(reader.ReadInt32(), config.FilterSharpness);
+            await Assert.That(config.SnsStrength).IsEqualTo(reader.ReadInt32());
+            await Assert.That(config.FilterStrength).IsEqualTo(reader.ReadInt32());
+            await Assert.That(config.FilterSharpness).IsEqualTo(reader.ReadInt32());
             using var source = new RgbToYuv(width, height);
             reader.ReadBytes(width * height).CopyTo(source.Y, 0);
             reader.ReadBytes(source.UvWidth * source.UvHeight).CopyTo(source.U, 0);
@@ -137,37 +137,37 @@ public class LossyEncoderPrimitiveTests
             using var context = new Vp8EncoderContext(source, config);
             Vp8Analysis.Analyze(context);
             Vp8Quantization.SetSegmentParams(context, options.Quality);
-            Assert.Equal(reader.ReadInt32(), context.Alpha); Assert.Equal(reader.ReadInt32(), context.UvAlpha);
-            Assert.Equal(reader.ReadInt32(), context.SegmentCount); Assert.Equal(reader.ReadInt32(), context.BaseQuant);
-            Assert.Equal(reader.ReadInt32(), context.DeltaUvDc); Assert.Equal(reader.ReadInt32(), context.DeltaUvAc);
-            Assert.Equal(reader.ReadInt32(), context.FilterLevel);
+            await Assert.That(context.Alpha).IsEqualTo(reader.ReadInt32()); await Assert.That(context.UvAlpha).IsEqualTo(reader.ReadInt32());
+            await Assert.That(context.SegmentCount).IsEqualTo(reader.ReadInt32()); await Assert.That(context.BaseQuant).IsEqualTo(reader.ReadInt32());
+            await Assert.That(context.DeltaUvDc).IsEqualTo(reader.ReadInt32()); await Assert.That(context.DeltaUvAc).IsEqualTo(reader.ReadInt32());
+            await Assert.That(context.FilterLevel).IsEqualTo(reader.ReadInt32());
             for (int i = 0; i < context.MbCount; i++)
             {
-                Assert.Equal(reader.ReadByte(), context.Blocks[i].Type);
-                Assert.Equal(reader.ReadByte(), context.Blocks[i].UvMode);
-                Assert.Equal(reader.ReadByte(), context.Blocks[i].Segment);
-                Assert.Equal(reader.ReadByte(), context.Blocks[i].Alpha);
+                await Assert.That(context.Blocks[i].Type).IsEqualTo(reader.ReadByte());
+                await Assert.That(context.Blocks[i].UvMode).IsEqualTo(reader.ReadByte());
+                await Assert.That(context.Blocks[i].Segment).IsEqualTo(reader.ReadByte());
+                await Assert.That(context.Blocks[i].Alpha).IsEqualTo(reader.ReadByte());
             }
             int predSize = context.PredStride * (4 * context.MbHeight + 1);
-            Assert.Equal(reader.ReadBytes(predSize), context.Modes[..predSize]);
+            await Assert.That(context.Modes[..predSize]).IsEquivalentTo(reader.ReadBytes(predSize), CollectionOrdering.Matching);
             for (int i = 0; i < 4; i++)
             {
                 Vp8Segment segment = context.Segments[i];
-                Assert.Equal(reader.ReadInt32(), segment.Alpha); Assert.Equal(reader.ReadInt32(), segment.Beta);
-                Assert.Equal(reader.ReadInt32(), segment.Quant); Assert.Equal(reader.ReadInt32(), segment.FilterStrength);
+                await Assert.That(segment.Alpha).IsEqualTo(reader.ReadInt32()); await Assert.That(segment.Beta).IsEqualTo(reader.ReadInt32());
+                await Assert.That(segment.Quant).IsEqualTo(reader.ReadInt32()); await Assert.That(segment.FilterStrength).IsEqualTo(reader.ReadInt32());
                 if (i >= context.SegmentCount) continue;
-                Assert.Equal(reader.ReadInt32(), segment.LambdaI4); Assert.Equal(reader.ReadInt32(), segment.LambdaI16);
-                Assert.Equal(reader.ReadInt32(), segment.LambdaUv); Assert.Equal(reader.ReadInt32(), segment.LambdaMode);
-                Assert.Equal(reader.ReadInt32(), segment.LambdaTrellisI4); Assert.Equal(reader.ReadInt32(), segment.LambdaTrellisI16);
-                Assert.Equal(reader.ReadInt32(), segment.LambdaTrellisUv); Assert.Equal(reader.ReadInt32(), segment.TLambda);
-                Assert.Equal(reader.ReadInt32(), segment.MinDisto); Assert.Equal(reader.ReadInt32(), segment.I4Penalty);
-                AssertMatrix(reader, segment.Y1); AssertMatrix(reader, segment.Y2); AssertMatrix(reader, segment.Uv);
+                await Assert.That(segment.LambdaI4).IsEqualTo(reader.ReadInt32()); await Assert.That(segment.LambdaI16).IsEqualTo(reader.ReadInt32());
+                await Assert.That(segment.LambdaUv).IsEqualTo(reader.ReadInt32()); await Assert.That(segment.LambdaMode).IsEqualTo(reader.ReadInt32());
+                await Assert.That(segment.LambdaTrellisI4).IsEqualTo(reader.ReadInt32()); await Assert.That(segment.LambdaTrellisI16).IsEqualTo(reader.ReadInt32());
+                await Assert.That(segment.LambdaTrellisUv).IsEqualTo(reader.ReadInt32()); await Assert.That(segment.TLambda).IsEqualTo(reader.ReadInt32());
+                await Assert.That(segment.MinDisto).IsEqualTo(reader.ReadInt32()); await Assert.That(segment.I4Penalty).IsEqualTo(reader.ReadInt32());
+                await AssertMatrix(reader, segment.Y1); await AssertMatrix(reader, segment.Y2); await AssertMatrix(reader, segment.Uv);
             }
-            VerifyMacroblocks(reader, context, test);
+            await VerifyMacroblocks(reader, context, test);
         }
     }
 
-    private static void VerifyMacroblocks(BinaryReader reader, Vp8EncoderContext context, int test)
+    private static async Task VerifyMacroblocks(BinaryReader reader, Vp8EncoderContext context, int test)
     {
         var probabilities = new Vp8EncoderProba(); probabilities.CalculateLevelCosts();
         using var it = new Vp8EncoderIterator(context);
@@ -177,17 +177,17 @@ public class LossyEncoderPrimitiveTests
             Vp8ModeScore rd = default;
             Vp8ModeDecision.Decimate(it, probabilities, ref rd, context.Config.RdLevel);
             string label = $"test={test}, method={context.Config.Options.Method}, q={context.Config.Options.Quality}, mb={it.X},{it.Y}";
-            Assert.True(reader.ReadUInt32() == rd.Nz, $"nz: {label}");
-            Assert.Equal(reader.ReadInt64(), rd.D); Assert.Equal(reader.ReadInt64(), rd.SD);
-            Assert.Equal(reader.ReadInt64(), rd.R); Assert.Equal(reader.ReadInt64(), rd.H); Assert.Equal(reader.ReadInt64(), rd.Score);
-            Assert.Equal(reader.ReadByte(), it.Block.Type); Assert.Equal(reader.ReadByte(), it.Block.UvMode);
-            Assert.Equal(reader.ReadByte() != 0, it.Block.Skip);
-            for (int y = 0; y < 4; y++) Assert.Equal(reader.ReadBytes(4), context.Modes[(it.PredOffset + y * context.PredStride)..(it.PredOffset + y * context.PredStride + 4)]);
-            if (it.Block.Type == 1) Assert.Equal(ReadShorts(reader, 16), ((ReadOnlySpan<short>)rd.Dc).ToArray());
-            Assert.Equal(ReadShorts(reader, 256), ((ReadOnlySpan<short>)rd.Ac).ToArray());
-            Assert.Equal(ReadShorts(reader, 128), ((ReadOnlySpan<short>)rd.Uv).ToArray());
-            for (int y = 0; y < 16; y++) Assert.Equal(reader.ReadBytes(16), it.Output[(y * 32)..(y * 32 + 16)]);
-            for (int y = 0; y < 8; y++) Assert.Equal(reader.ReadBytes(16), it.Output[(y * 32 + 16)..(y * 32 + 32)]);
+            await Assert.That(reader.ReadUInt32() == rd.Nz).IsTrue().Because($"nz: {label}");
+            await Assert.That(rd.D).IsEqualTo(reader.ReadInt64()); await Assert.That(rd.SD).IsEqualTo(reader.ReadInt64());
+            await Assert.That(rd.R).IsEqualTo(reader.ReadInt64()); await Assert.That(rd.H).IsEqualTo(reader.ReadInt64()); await Assert.That(rd.Score).IsEqualTo(reader.ReadInt64());
+            await Assert.That(it.Block.Type).IsEqualTo(reader.ReadByte()); await Assert.That(it.Block.UvMode).IsEqualTo(reader.ReadByte());
+            await Assert.That(it.Block.Skip).IsEqualTo(reader.ReadByte() != 0);
+            for (int y = 0; y < 4; y++) await Assert.That(context.Modes[(it.PredOffset + y * context.PredStride)..(it.PredOffset + y * context.PredStride + 4)]).IsEquivalentTo(reader.ReadBytes(4), CollectionOrdering.Matching);
+            if (it.Block.Type == 1) await Assert.That(((ReadOnlySpan<short>)rd.Dc).ToArray()).IsEquivalentTo(ReadShorts(reader, 16), CollectionOrdering.Matching);
+            await Assert.That(((ReadOnlySpan<short>)rd.Ac).ToArray()).IsEquivalentTo(ReadShorts(reader, 256), CollectionOrdering.Matching);
+            await Assert.That(((ReadOnlySpan<short>)rd.Uv).ToArray()).IsEquivalentTo(ReadShorts(reader, 128), CollectionOrdering.Matching);
+            for (int y = 0; y < 16; y++) await Assert.That(it.Output[(y * 32)..(y * 32 + 16)]).IsEquivalentTo(reader.ReadBytes(16), CollectionOrdering.Matching);
+            for (int y = 0; y < 8; y++) await Assert.That(it.Output[(y * 32 + 16)..(y * 32 + 32)]).IsEquivalentTo(reader.ReadBytes(16), CollectionOrdering.Matching);
             uint dc = it.Block.Type == 1 ? rd.Nz & (1u << 24) : context.Nonzero[it.X + 1] & (1u << 24);
             context.Nonzero[it.X + 1] = rd.Nz | dc;
             if (it.Block.Type == 1) it.LeftNz[8] = (int)(rd.Nz >> 24) & 1;
@@ -195,22 +195,22 @@ public class LossyEncoderPrimitiveTests
         } while (it.Next());
     }
 
-    private static void AssertMatrix(BinaryReader reader, Vp8Matrix matrix)
+    private static async Task AssertMatrix(BinaryReader reader, Vp8Matrix matrix)
     {
         for (int i = 0; i < 16; i++)
         {
-            Assert.Equal(reader.ReadUInt32(), matrix.Q[i]); Assert.Equal(reader.ReadUInt32(), matrix.Iq[i]);
-            Assert.Equal(reader.ReadUInt32(), matrix.Bias[i]); Assert.Equal(reader.ReadUInt32(), matrix.ZeroThreshold[i]);
-            Assert.Equal(reader.ReadUInt32(), matrix.Sharpen[i]);
+            await Assert.That((uint)(matrix.Q[i])).IsEqualTo(reader.ReadUInt32()); await Assert.That((uint)(matrix.Iq[i])).IsEqualTo(reader.ReadUInt32());
+            await Assert.That(matrix.Bias[i]).IsEqualTo(reader.ReadUInt32()); await Assert.That(matrix.ZeroThreshold[i]).IsEqualTo(reader.ReadUInt32());
+            await Assert.That((uint)(matrix.Sharpen[i])).IsEqualTo(reader.ReadUInt32());
         }
     }
 
-    private static void AssertPlanes(BinaryReader reader, RgbToYuv yuv, string context)
+    private static async Task AssertPlanes(BinaryReader reader, RgbToYuv yuv, string context)
     {
         int size = yuv.Width * yuv.Height, uvSize = yuv.UvWidth * yuv.UvHeight;
-        Assert.True(reader.ReadBytes(size).AsSpan().SequenceEqual(yuv.Y.AsSpan(0, size)), $"Y: {context}");
-        Assert.True(reader.ReadBytes(uvSize).AsSpan().SequenceEqual(yuv.U.AsSpan(0, uvSize)), $"U: {context}");
-        Assert.True(reader.ReadBytes(uvSize).AsSpan().SequenceEqual(yuv.V.AsSpan(0, uvSize)), $"V: {context}");
+        await Assert.That(reader.ReadBytes(size).AsSpan().SequenceEqual(yuv.Y.AsSpan(0, size))).IsTrue().Because($"Y: {context}");
+        await Assert.That(reader.ReadBytes(uvSize).AsSpan().SequenceEqual(yuv.U.AsSpan(0, uvSize))).IsTrue().Because($"U: {context}");
+        await Assert.That(reader.ReadBytes(uvSize).AsSpan().SequenceEqual(yuv.V.AsSpan(0, uvSize))).IsTrue().Because($"V: {context}");
     }
 
     private static short[] ReadShorts(BinaryReader reader, int count)

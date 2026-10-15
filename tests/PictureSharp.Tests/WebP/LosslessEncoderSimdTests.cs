@@ -5,39 +5,39 @@ namespace PictureSharp.Tests.WebP;
 /// <summary>SIMD paths of the lossless encoder must match the scalar code on every input.</summary>
 public class LosslessEncoderSimdTests
 {
-    [Fact]
-    public void CollectColorRedTransforms_MatchesScalar()
+    [Test]
+    public async Task CollectColorRedTransforms_MatchesScalar()
     {
         var rng = new Random(11);
-        foreach (int greenToRed in Multipliers)
+        foreach (int greenToRed in Multipliers.ToArray())
             for (int length = 0; length <= 40; length++)
             {
                 uint[] pixels = RandomPixels(rng, length);
                 uint[] scalar = new uint[256], simd = new uint[256];
                 Vp8LForwardTransforms.CollectColorRedTransformsScalar(pixels, greenToRed, scalar);
                 Vp8LForwardTransforms.CollectColorRedTransforms(pixels, greenToRed, simd);
-                Assert.Equal(scalar, simd);
+                await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
             }
     }
 
-    [Fact]
-    public void CollectColorBlueTransforms_MatchesScalar()
+    [Test]
+    public async Task CollectColorBlueTransforms_MatchesScalar()
     {
         var rng = new Random(12);
-        foreach (int greenToBlue in Multipliers)
-            foreach (int redToBlue in Multipliers)
+        foreach (int greenToBlue in Multipliers.ToArray())
+            foreach (int redToBlue in Multipliers.ToArray())
                 foreach (int length in new[] { 0, 1, 3, 4, 7, 8, 9, 15, 16, 33 })
                 {
                     uint[] pixels = RandomPixels(rng, length);
                     uint[] scalar = new uint[256], simd = new uint[256];
                     Vp8LForwardTransforms.CollectColorBlueTransformsScalar(pixels, greenToBlue, redToBlue, scalar);
                     Vp8LForwardTransforms.CollectColorBlueTransforms(pixels, greenToBlue, redToBlue, simd);
-                    Assert.Equal(scalar, simd);
+                    await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
                 }
     }
 
-    [Fact]
-    public void PredictorSub_MatchesScalar()
+    [Test]
+    public async Task PredictorSub_MatchesScalar()
     {
         var rng = new Random(13);
         const int Width = 40;
@@ -50,19 +50,19 @@ public class LosslessEncoderSimdTests
                     uint[] scalar = new uint[end - start], simd = new uint[end - start];
                     Vp8LForwardTransforms.PredictBatchScalar(rows, 0, Width + 1, mode, start, end, scalar);
                     Vp8LForwardTransforms.PredictBatch(rows, 0, Width + 1, mode, start, end, simd);
-                    Assert.Equal(scalar, simd);
+                    await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
                 }
     }
 
-    [Fact]
-    public void NonZeroMask_MatchesScalar()
+    [Test]
+    public async Task NonZeroMask_MatchesScalar()
     {
         var rng = new Random(14);
         for (int i = 0; i < 200; i++)
         {
             uint[] counts = new uint[32];
             for (int j = 0; j < counts.Length; j++) counts[j] = rng.Next(3) == 0 ? (uint)rng.Next(1, 1 << 28) : 0;
-            Assert.Equal(Vp8LEntropy.NonZeroMask32Scalar(counts), Vp8LEntropy.NonZeroMask32(counts));
+            await Assert.That(Vp8LEntropy.NonZeroMask32(counts)).IsEqualTo(Vp8LEntropy.NonZeroMask32Scalar(counts));
         }
     }
 

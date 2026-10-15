@@ -1,19 +1,20 @@
 using System.IO.Compression;
 using PictureSharp.Algorithms.Compression;
 using PictureSharp.Processing;
+using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Compression;
 
 public class ZlibTests
 {
-    [Fact]
-    public void Crc32_KnownValues()
+    [Test]
+    public async Task Crc32_KnownValues()
     {
-        Assert.Equal(0xCBF43926u, Crc32.Compute("123456789"u8));
-        Assert.Equal(0u, Crc32.Compute([]));
+        await Assert.That(Crc32.Compute("123456789"u8)).IsEqualTo(0xCBF43926u);
+        await Assert.That(Crc32.Compute([])).IsEqualTo(0u);
         byte[] data = Enumerable.Range(0, 1000).Select(i => (byte)(i * 7)).ToArray();
-        Assert.Equal(Crc32.Compute(data), Crc32.Update(Crc32.Compute(data.AsSpan(0, 333)), data.AsSpan(333)));
-        Assert.Equal(Crc32Reference(data), Crc32.Compute(data));
+        await Assert.That(Crc32.Update(Crc32.Compute(data.AsSpan(0, 333)), data.AsSpan(333))).IsEqualTo(Crc32.Compute(data));
+        await Assert.That(Crc32.Compute(data)).IsEqualTo(Crc32Reference(data));
     }
 
     private static uint Crc32Reference(byte[] data)
@@ -31,11 +32,11 @@ public class ZlibTests
         return ~crc;
     }
 
-    [Fact]
-    public void Adler32_KnownValues()
+    [Test]
+    public async Task Adler32_KnownValues()
     {
-        Assert.Equal(0x11E60398u, Adler32.Compute("Wikipedia"u8));
-        Assert.Equal(1u, Adler32.Compute([]));
+        await Assert.That(Adler32.Compute("Wikipedia"u8)).IsEqualTo(0x11E60398u);
+        await Assert.That(Adler32.Compute([])).IsEqualTo(1u);
         var big = new byte[100_000];
         big.AsSpan().Fill(255);
         uint a = 1, b = 0;
@@ -45,10 +46,10 @@ public class ZlibTests
             b = (b + a) % 65521;
         }
 
-        Assert.Equal((b << 16) | a, Adler32.Compute(big));
+        await Assert.That(Adler32.Compute(big)).IsEqualTo((b << 16) | a);
     }
 
-    public static TheoryData<string> Samples => new() { "empty", "zeros", "random", "text", "image", "repetitive", "large", "ramp", "short" };
+    public static TestCases<string> Samples => new() { "empty", "zeros", "random", "text", "image", "repetitive", "large", "ramp", "short" };
 
     private static byte[] Sample(string name)
     {
@@ -90,22 +91,22 @@ public class ZlibTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Samples))]
-    public void Deflate_RoundTrip_AllLevels(string sample)
+    [Test]
+    [MethodDataSource(nameof(Samples))]
+    public async Task Deflate_RoundTrip_AllLevels(string sample)
     {
         byte[] data = Sample(sample);
         for (int level = 0; level <= 9; level++)
         {
             byte[] compressed = Deflater.CompressZlib(data, level);
             byte[] back = Inflater.InflateZlib(compressed, 0, compressed.Length, data.Length, long.MaxValue);
-            Assert.True(data.AsSpan().SequenceEqual(back), $"level {level}");
+            await Assert.That(data.AsSpan().SequenceEqual(back)).IsTrue().Because($"level {level}");
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Samples))]
-    public void Deflate_IsReadableByBclZLibStream(string sample)
+    [Test]
+    [MethodDataSource(nameof(Samples))]
+    public async Task Deflate_IsReadableByBclZLibStream(string sample)
     {
         byte[] data = Sample(sample);
         foreach (int level in new[] { 0, 1, 6, 9 })
@@ -114,13 +115,13 @@ public class ZlibTests
             using var zs = new ZLibStream(new MemoryStream(compressed), CompressionMode.Decompress);
             using var output = new MemoryStream();
             zs.CopyTo(output);
-            Assert.True(data.AsSpan().SequenceEqual(output.ToArray()), $"level {level}");
+            await Assert.That(data.AsSpan().SequenceEqual(output.ToArray())).IsTrue().Because($"level {level}");
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Samples))]
-    public void Inflate_ReadsBclZLibStream(string sample)
+    [Test]
+    [MethodDataSource(nameof(Samples))]
+    public async Task Inflate_ReadsBclZLibStream(string sample)
     {
         byte[] data = Sample(sample);
         foreach (CompressionLevel level in new[] { CompressionLevel.NoCompression, CompressionLevel.Fastest, CompressionLevel.Optimal, CompressionLevel.SmallestSize })
@@ -138,12 +139,12 @@ public class ZlibTests
             }
 
             byte[] back = Inflater.InflateZlib(compressed, 0, compressed.Length, 0, long.MaxValue);
-            Assert.True(data.AsSpan().SequenceEqual(back), level.ToString());
+            await Assert.That(data.AsSpan().SequenceEqual(back)).IsTrue().Because(level.ToString());
         }
     }
 
-    [Fact]
-    public void Deflate_RandomStructuredInputs_AreReadableByBclZLibStream()
+    [Test]
+    public async Task Deflate_RandomStructuredInputs_AreReadableByBclZLibStream()
     {
         var rng = new Random(2024);
         for (int iteration = 0; iteration < 300; iteration++)
@@ -187,13 +188,13 @@ public class ZlibTests
             using var zs = new ZLibStream(new MemoryStream(compressed), CompressionMode.Decompress);
             using var output = new MemoryStream();
             zs.CopyTo(output);
-            Assert.True(data.AsSpan().SequenceEqual(output.ToArray()), $"iteration {iteration}, level {level}");
-            Assert.True(data.AsSpan().SequenceEqual(Inflater.InflateZlib(compressed, 0, compressed.Length, 0, long.MaxValue)));
+            await Assert.That(data.AsSpan().SequenceEqual(output.ToArray())).IsTrue().Because($"iteration {iteration}, level {level}");
+            await Assert.That(data.AsSpan().SequenceEqual(Inflater.InflateZlib(compressed, 0, compressed.Length, 0, long.MaxValue))).IsTrue();
         }
     }
 
-    [Fact]
-    public void Deflate_CompressionIsCompetitiveWithZlib()
+    [Test]
+    public async Task Deflate_CompressionIsCompetitiveWithZlib()
     {
         byte[] data = Sample("text").Concat(Sample("image")).Concat(Sample("repetitive")).ToArray();
         byte[] ours = Deflater.CompressZlib(data, 6);
@@ -204,21 +205,21 @@ public class ZlibTests
         }
 
         double ratio = (double)ours.Length / ms.Length;
-        Assert.True(ratio < 1.05, $"ours {ours.Length} vs zlib {ms.Length} ({ratio:F3})");
+        await Assert.That(ratio < 1.05).IsTrue().Because($"ours {ours.Length} vs zlib {ms.Length} ({ratio:F3})");
     }
 
-    [Fact]
+    [Test]
     public void Inflate_RejectsCorruptStreams()
     {
         byte[] compressed = Deflater.CompressZlib(Sample("text"), 6);
-        Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib([0x78, 0x9c], 0, 2, 0, 1000));
-        Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib([0x00, 0x00, 1, 2], 0, 4, 0, 1000));
-        Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib(compressed, 0, compressed.Length / 2, 0, long.MaxValue));
-        Assert.Throws<OutputLimitExceededException>(() => Inflater.InflateZlib(compressed, 0, compressed.Length, 0, 1000));
+        Assert.ThrowsExactly<InvalidDataStreamException>(() => Inflater.InflateZlib([0x78, 0x9c], 0, 2, 0, 1000));
+        Assert.ThrowsExactly<InvalidDataStreamException>(() => Inflater.InflateZlib([0x00, 0x00, 1, 2], 0, 4, 0, 1000));
+        Assert.ThrowsExactly<InvalidDataStreamException>(() => Inflater.InflateZlib(compressed, 0, compressed.Length / 2, 0, long.MaxValue));
+        Assert.ThrowsExactly<OutputLimitExceededException>(() => Inflater.InflateZlib(compressed, 0, compressed.Length, 0, 1000));
 
         byte[] badChecksum = (byte[])compressed.Clone();
         badChecksum[^1] ^= 1;
-        Assert.Throws<InvalidDataStreamException>(() => Inflater.InflateZlib(badChecksum, 0, badChecksum.Length, 0, long.MaxValue));
+        Assert.ThrowsExactly<InvalidDataStreamException>(() => Inflater.InflateZlib(badChecksum, 0, badChecksum.Length, 0, long.MaxValue));
 
         var rng = new Random(7);
         for (int i = 0; i < 500; i++)

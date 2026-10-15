@@ -2,13 +2,12 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);CA1707</NoWarn>
+    <!-- TUnit0046 asks for Func<T> data sources for reference-type arguments; the tests never mutate their inputs. -->
+    <NoWarn>$(NoWarn);CA1707;TUnit0046</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="TUnit" Version="1.72.16" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
+    <Using Include="TUnit.Assertions.Enums" />
     <ProjectReference Include="..\..\src\PictureSharp\PictureSharp.csproj" />
   </ItemGroup>
 

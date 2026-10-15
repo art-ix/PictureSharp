@@ -6,12 +6,12 @@ namespace PictureSharp.Tests.WebP;
 /// Conformance against libwebp-test-data (fetched by tests/assets/fetch-external.sh) using dwebp
 /// as the oracle. Skipped (no data) when the corpus or dwebp is not available.
 /// </summary>
-[Trait("Category", "External")]
+[Property("Category", "External")]
 public class ExternalConformanceTests
 {
-    public static TheoryData<string> LibwebpTestData()
+    public static TestCases<string> LibwebpTestData()
     {
-        var data = new TheoryData<string>();
+        var data = new TestCases<string>();
         string dir = Path.Combine(ReferenceTools.ExternalDir, "libwebp-test-data");
         if (Directory.Exists(dir) && ReferenceTools.HasDwebp)
         {
@@ -28,9 +28,9 @@ public class ExternalConformanceTests
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(LibwebpTestData))]
-    public void LibwebpTestData_MatchesDwebp(string name)
+    [Test]
+    [MethodDataSource(nameof(LibwebpTestData))]
+    public async Task LibwebpTestData_MatchesDwebp(string name)
     {
         if (name.Length == 0)
         {
@@ -42,12 +42,12 @@ public class ExternalConformanceTests
         if (expected is null)
         {
             // dwebp rejects the file: we must reject it too, with a format exception.
-            Exception ex = Assert.ThrowsAny<Exception>(() => Image.Load(path));
-            Assert.True(ex is ImageFormatException or NotSupportedException, ex.ToString());
+            Exception ex = Assert.Throws<Exception>(() => Image.Load(path));
+            await Assert.That(ex is ImageFormatException or NotSupportedException).IsTrue().Because(ex.ToString());
             return;
         }
 
         using Image image = Image.Load(path, new DecoderOptions { FirstFrameOnly = true });
-        Assert.True(expected.AsSpan().SequenceEqual(image.ToPixelData()), $"{name} differs from dwebp");
+        await Assert.That(expected.AsSpan().SequenceEqual(image.ToPixelData())).IsTrue().Because($"{name} differs from dwebp");
     }
 }

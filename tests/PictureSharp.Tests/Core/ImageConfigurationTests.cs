@@ -9,19 +9,23 @@ public class ImageConfigurationTests
     private static readonly string BmpFile = "bmp/im_rgb24.bmp";
     private static readonly string PngFile = "png/odd_rgba.png";
 
-    [Fact]
-    public void Default_ContainsBuiltInFormats_InDetectionOrder()
+    [Test]
+    public async Task Default_ContainsBuiltInFormats_InDetectionOrder()
     {
         ImageConfiguration configuration = ImageConfiguration.Default;
-        Assert.Equal(["WebP", "PNG", "JPEG", "BMP", "GIF", "PCX", "ICO"], configuration.Formats.Select(f => f.Name));
-        Assert.All(configuration.Formats, f => Assert.True(configuration.CanDecode(f) && configuration.CanEncode(f)));
-        Assert.Same(ImageFormat.Png, configuration.FromExtension("photo.PNG"));
-        Assert.Same(ImageFormat.WebP, configuration.FromMimeType("image/webp"));
-        Assert.Equal("ImageConfiguration { Formats = WebP, PNG, JPEG, BMP, GIF, PCX, ICO }", configuration.ToString());
+        await Assert.That(configuration.Formats.Select(f => f.Name)).IsEquivalentTo(["WebP", "PNG", "JPEG", "BMP", "GIF", "PCX", "ICO"], CollectionOrdering.Matching);
+        foreach (var f in configuration.Formats)
+        {
+            await Assert.That(configuration.CanDecode(f) && configuration.CanEncode(f)).IsTrue();
+        }
+
+        await Assert.That(configuration.FromExtension("photo.PNG")).IsSameReferenceAs(ImageFormat.Png);
+        await Assert.That(configuration.FromMimeType("image/webp")).IsSameReferenceAs(ImageFormat.WebP);
+        await Assert.That(configuration.ToString()).IsEqualTo("ImageConfiguration { Formats = WebP, PNG, JPEG, BMP, GIF, PCX, ICO }");
     }
 
-    [Fact]
-    public void RestrictedConfiguration_DecodesOnlyItsFormats()
+    [Test]
+    public async Task RestrictedConfiguration_DecodesOnlyItsFormats()
     {
         ImageConfiguration uploads = ImageConfiguration.Default.ToBuilder().KeepOnly(ImageFormat.Png, ImageFormat.Jpeg).Build();
         var options = new DecoderOptions { Configuration = uploads };
@@ -29,98 +33,98 @@ public class ImageConfigurationTests
 
         using (Image png = Image.Load(Corpus.Read(PngFile), options))
         {
-            Assert.Same(ImageFormat.Png, png.SourceFormat);
+            await Assert.That(png.SourceFormat).IsSameReferenceAs(ImageFormat.Png);
         }
 
-        var error = Assert.Throws<ImageFormatException>(() => Image.Load(bmp, options));
-        Assert.Contains("expected PNG, JPEG", error.Message);
-        Assert.Throws<ImageFormatException>(() => Image.Load(Corpus.PathOf(BmpFile), options));
-        Assert.Throws<ImageFormatException>(() => Image.Load(bmp.AsSpan(), options, CancellationToken.None));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(bmp, options));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(new MemoryStream(bmp), options));
-        Assert.False(uploads.CanDecode(ImageFormat.Bmp));
+        var error = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(bmp, options));
+        await Assert.That(error.Message).Contains("expected PNG, JPEG");
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(Corpus.PathOf(BmpFile), options));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(bmp.AsSpan(), options, CancellationToken.None));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(bmp, options));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(new MemoryStream(bmp), options));
+        await Assert.That(uploads.CanDecode(ImageFormat.Bmp)).IsFalse();
         Assert.Null(uploads.FromExtension(".bmp"));
 
         // The default configuration is not affected.
         using Image fromDefault = Image.Load(bmp);
-        Assert.Same(ImageFormat.Bmp, fromDefault.SourceFormat);
+        await Assert.That(fromDefault.SourceFormat).IsSameReferenceAs(ImageFormat.Bmp);
     }
 
-    [Fact]
+    [Test]
     public async Task RestrictedConfiguration_AppliesToAsyncLoadAndIdentify()
     {
         ImageConfiguration onlyPng = ImageConfiguration.Default.ToBuilder().KeepOnly(ImageFormat.Png).Build();
         var options = new DecoderOptions { Configuration = onlyPng };
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.LoadAsync(Corpus.PathOf(BmpFile), options));
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.LoadAsync(new MemoryStream(Corpus.Read(BmpFile)), options));
-        await Assert.ThrowsAsync<ImageFormatException>(() => Image.IdentifyAsync(Corpus.PathOf(BmpFile), options));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.LoadAsync(Corpus.PathOf(BmpFile), options));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.LoadAsync(new MemoryStream(Corpus.Read(BmpFile)), options));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(() => Image.IdentifyAsync(Corpus.PathOf(BmpFile), options));
         ImageInfo info = await Image.IdentifyAsync(new MemoryStream(Corpus.Read(PngFile)), options);
-        Assert.Same(ImageFormat.Png, info.Format);
+        await Assert.That(info.Format).IsSameReferenceAs(ImageFormat.Png);
     }
 
-    [Fact]
-    public void Builder_KeepsDetectionOrder_AndLeavesSourceUnchanged()
+    [Test]
+    public async Task Builder_KeepsDetectionOrder_AndLeavesSourceUnchanged()
     {
         ImageConfiguration source = ImageConfiguration.Default;
         ImageConfigurationBuilder builder = source.ToBuilder().KeepOnly(ImageFormat.Jpeg, ImageFormat.Png, ImageFormat.Jpeg);
-        Assert.Equal([ImageFormat.Png, ImageFormat.Jpeg], builder.Formats);
+        await Assert.That(builder.Formats).IsEquivalentTo([ImageFormat.Png, ImageFormat.Jpeg], CollectionOrdering.Matching);
         ImageConfiguration built = builder.RemoveFormat(ImageFormat.Gif).Build();
-        Assert.Equal([ImageFormat.Png, ImageFormat.Jpeg], built.Formats);
-        Assert.Equal(7, source.Formats.Count);
+        await Assert.That(built.Formats).IsEquivalentTo([ImageFormat.Png, ImageFormat.Jpeg], CollectionOrdering.Matching);
+        await Assert.That(source.Formats.Count).IsEqualTo(7);
 
         // A built configuration is a snapshot of the builder.
         builder.RemoveFormat(ImageFormat.Png);
-        Assert.Equal([ImageFormat.Png, ImageFormat.Jpeg], built.Formats);
-        Assert.Equal([ImageFormat.Jpeg], builder.Build().Formats);
+        await Assert.That(built.Formats).IsEquivalentTo([ImageFormat.Png, ImageFormat.Jpeg], CollectionOrdering.Matching);
+        await Assert.That(builder.Build().Formats).IsEquivalentTo([ImageFormat.Jpeg], CollectionOrdering.Matching);
     }
 
-    [Fact]
+    [Test]
     public void Builder_RejectsInvalidRequests()
     {
         ImageConfigurationBuilder builder = ImageConfiguration.Default.ToBuilder();
-        Assert.Throws<ArgumentException>(() => builder.KeepOnly());
-        Assert.Throws<ArgumentNullException>(() => builder.KeepOnly(ImageFormat.Png, null!));
-        Assert.Throws<ArgumentNullException>(() => builder.RemoveFormat(null!));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.KeepOnly());
+        Assert.ThrowsExactly<ArgumentNullException>(() => builder.KeepOnly(ImageFormat.Png, null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => builder.RemoveFormat(null!));
         builder.RemoveFormat(ImageFormat.Pcx).RemoveFormat(ImageFormat.Pcx);
-        Assert.Throws<ArgumentException>(() => builder.KeepOnly(ImageFormat.Pcx));
+        Assert.ThrowsExactly<ArgumentException>(() => builder.KeepOnly(ImageFormat.Pcx));
         foreach (ImageFormat format in builder.Formats)
         {
             builder.RemoveFormat(format);
         }
 
-        Assert.Throws<InvalidOperationException>(builder.Build);
-        Assert.Throws<ArgumentNullException>(() => ImageConfiguration.Default.CanDecode(null!));
+        Assert.ThrowsExactly<InvalidOperationException>(() => builder.Build());
+        Assert.ThrowsExactly<ArgumentNullException>(() => ImageConfiguration.Default.CanDecode(null!));
     }
 
-    [Fact]
-    public void EmbeddedFormat_MissingFromConfiguration_IsNotSupported()
+    [Test]
+    public async Task EmbeddedFormat_MissingFromConfiguration_IsNotSupported()
     {
         using var source = new Image(3, 2, new Rgba32(10, 20, 30, 128));
         byte[] png = source.ToPng();
         byte[] bmp = new BmpBuilder { Width = 3, Height = 2, Bits = 0, Compression = 5, Data = png, ImageSize = (uint)png.Length }.Build();
         ImageConfiguration withoutPng = ImageConfiguration.Default.ToBuilder().RemoveFormat(ImageFormat.Png).Build();
 
-        Assert.Throws<NotSupportedException>(() => Image.Load(bmp, new DecoderOptions { Configuration = withoutPng }));
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Load(bmp, new DecoderOptions { Configuration = withoutPng }));
         using Image decoded = Image.Load(bmp);
-        Assert.Equal(source.GetPixelSpan().ToArray(), decoded.GetPixelSpan().ToArray());
+        await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void DecoderOptions_CopiesKeepConfiguration()
+    [Test]
+    public async Task DecoderOptions_CopiesKeepConfiguration()
     {
         ImageConfiguration onlyPng = ImageConfiguration.Default.ToBuilder().KeepOnly(ImageFormat.Png).Build();
         var options = new DecoderOptions { Configuration = onlyPng };
-        Assert.Same(onlyPng, (options with { MaxPixels = 10 }).Configuration);
+        await Assert.That((options with { MaxPixels = 10 }).Configuration).IsSameReferenceAs(onlyPng);
         Assert.Null(DecoderOptions.Default.Configuration);
     }
 }
 
 /// <summary>Replaces the process-wide default, so it must not run alongside other tests.</summary>
-[Collection(nameof(SerialCollection))]
+[NotInParallel]
 public class ImageConfigurationDefaultTests
 {
-    [Fact]
-    public void ReplacingDefault_ChangesLoadSaveAndLookup()
+    [Test]
+    public async Task ReplacingDefault_ChangesLoadSaveAndLookup()
     {
         ImageConfiguration original = ImageConfiguration.Default;
         byte[] bmp = Corpus.Read("bmp/im_rgb24.bmp");
@@ -128,19 +132,19 @@ public class ImageConfigurationDefaultTests
         try
         {
             ImageConfiguration.Default = original.ToBuilder().RemoveFormat(ImageFormat.Bmp).Build();
-            Assert.Throws<ImageFormatException>(() => Image.Load(bmp));
+            Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(bmp));
             Assert.Null(Image.DetectFormat(bmp));
-            Assert.DoesNotContain(ImageFormat.Bmp, ImageFormat.All);
+            await Assert.That(ImageFormat.All).DoesNotContain(ImageFormat.Bmp);
             Assert.Null(ImageFormat.FromExtension("x.bmp"));
-            Assert.False(ImageFormat.Bmp.CanDecode);
-            Assert.False(ImageFormat.Bmp.CanEncode);
-            Assert.True(ImageFormat.Png.CanEncode);
-            Assert.Throws<NotSupportedException>(() => image.Save(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.bmp")));
-            Assert.Throws<NotSupportedException>(() => image.Encode(ImageFormat.Bmp));
+            await Assert.That(ImageFormat.Bmp.CanDecode).IsFalse();
+            await Assert.That(ImageFormat.Bmp.CanEncode).IsFalse();
+            await Assert.That(ImageFormat.Png.CanEncode).IsTrue();
+            Assert.ThrowsExactly<NotSupportedException>(() => image.Save(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.bmp")));
+            Assert.ThrowsExactly<NotSupportedException>(() => image.Encode(ImageFormat.Bmp));
 
             // An explicit configuration still wins over the default.
             using Image explicitBmp = Image.Load(bmp, new DecoderOptions { Configuration = original });
-            Assert.Same(ImageFormat.Bmp, explicitBmp.SourceFormat);
+            await Assert.That(explicitBmp.SourceFormat).IsSameReferenceAs(ImageFormat.Bmp);
         }
         finally
         {
@@ -148,14 +152,14 @@ public class ImageConfigurationDefaultTests
         }
 
         using Image restored = Image.Load(bmp);
-        Assert.Same(ImageFormat.Bmp, restored.SourceFormat);
+        await Assert.That(restored.SourceFormat).IsSameReferenceAs(ImageFormat.Bmp);
     }
 
-    [Fact]
+    [Test]
     public void Default_RejectsNull() =>
-        Assert.Throws<ArgumentNullException>(() => ImageConfiguration.Default = null!);
+        Assert.ThrowsExactly<ArgumentNullException>(() => ImageConfiguration.Default = null!);
 
-    [Fact]
+    [Test]
     public async Task ReplacingDefault_WhileLoading_UsesCompleteSnapshots()
     {
         ImageConfiguration original = ImageConfiguration.Default;
@@ -171,12 +175,16 @@ public class ImageConfigurationDefaultTests
                 ImageConfiguration.Default = i % 2 == 0 ? narrowed : original;
             }
         });
+        int mismatches = 0;
         try
         {
             Parallel.For(0, 200, _ =>
             {
                 using Image image = Image.Load(png);
-                Assert.Equal(expectedPixels, image.GetPixelSpan().ToArray());
+                if (!image.GetPixelSpan().SequenceEqual(expectedPixels))
+                {
+                    Interlocked.Increment(ref mismatches);
+                }
             });
         }
         finally
@@ -185,5 +193,7 @@ public class ImageConfigurationDefaultTests
             await swapper;
             ImageConfiguration.Default = original;
         }
+
+        await Assert.That(mismatches).IsEqualTo(0);
     }
 }

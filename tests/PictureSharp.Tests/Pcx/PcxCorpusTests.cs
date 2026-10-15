@@ -5,52 +5,52 @@ namespace PictureSharp.Tests.Pcx;
 
 public class PcxCorpusTests
 {
-    public static TheoryData<string> PcxFiles => Corpus.Files("pcx/");
+    public static TestCases<string> PcxFiles => Corpus.Files("pcx/");
 
-    [Fact]
-    public void EveryCorpusFile_HasAReference()
+    [Test]
+    public async Task EveryCorpusFile_HasAReference()
     {
         string[] files = Directory.EnumerateFiles(Path.Combine(Corpus.CorpusDir, "pcx"), "*.pcx")
             .Select(file => Path.GetRelativePath(Corpus.CorpusDir, file).Replace('\\', '/'))
             .Order(StringComparer.Ordinal).ToArray();
-        Assert.NotEmpty(files);
-        Assert.Equal(files, Corpus.References.Keys.Where(file => file.StartsWith("pcx/", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal).ToArray());
+        await Assert.That(files).IsNotEmpty();
+        await Assert.That(Corpus.References.Keys.Where(file => file.StartsWith("pcx/", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal).ToArray()).IsEquivalentTo(files, CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [MemberData(nameof(PcxFiles))]
-    public void Decode_MatchesReference(string file)
+    [Test]
+    [MethodDataSource(nameof(PcxFiles))]
+    public async Task Decode_MatchesReference(string file)
     {
         ReferenceEntry reference = Corpus.References[file];
         using Image image = Image.Load(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Pcx, image.SourceFormat);
-        Assert.Equal((reference.Width, reference.Height), (image.Width, image.Height));
-        Assert.Equal(reference.HasAlpha, image.HasAlpha);
-        Assert.Equal(reference.Frames.Count, image.FrameCount);
-        Assert.Equal(reference.Frames[0].Sha256, Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())));
+        await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Pcx);
+        await Assert.That((image.Width, image.Height)).IsEqualTo((reference.Width, reference.Height));
+        await Assert.That(image.HasAlpha).IsEqualTo(reference.HasAlpha);
+        await Assert.That(image.FrameCount).IsEqualTo(reference.Frames.Count);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsEqualTo(reference.Frames[0].Sha256);
         if (reference.Dpi is { } dpi)
         {
-            Assert.Equal(dpi[0], image.Metadata.HorizontalResolution);
-            Assert.Equal(dpi[1], image.Metadata.VerticalResolution);
+            await Assert.That(image.Metadata.HorizontalResolution).IsEqualTo(dpi[0]);
+            await Assert.That(image.Metadata.VerticalResolution).IsEqualTo(dpi[1]);
         }
     }
 
-    [Theory]
-    [MemberData(nameof(PcxFiles))]
-    public void Identify_MatchesReference(string file)
+    [Test]
+    [MethodDataSource(nameof(PcxFiles))]
+    public async Task Identify_MatchesReference(string file)
     {
         ReferenceEntry reference = Corpus.References[file];
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Pcx, info.Format);
-        Assert.Equal((reference.Width, reference.Height), (info.Width, info.Height));
-        Assert.Equal(reference.HasAlpha, info.HasAlpha);
-        Assert.Equal(reference.Frames.Count, info.FrameCount);
-        Assert.Equal(reference.Animated, info.IsAnimated);
+        await Assert.That(info.Format).IsEqualTo(ImageFormat.Pcx);
+        await Assert.That((info.Width, info.Height)).IsEqualTo((reference.Width, reference.Height));
+        await Assert.That(info.HasAlpha).IsEqualTo(reference.HasAlpha);
+        await Assert.That(info.FrameCount).IsEqualTo(reference.Frames.Count);
+        await Assert.That(info.IsAnimated).IsEqualTo(reference.Animated);
         if (reference.Dpi is { } dpi)
         {
-            Assert.Equal(dpi[0], info.HorizontalResolution);
-            Assert.Equal(dpi[1], info.VerticalResolution);
+            await Assert.That(info.HorizontalResolution).IsEqualTo(dpi[0]);
+            await Assert.That(info.VerticalResolution).IsEqualTo(dpi[1]);
         }
     }
 }

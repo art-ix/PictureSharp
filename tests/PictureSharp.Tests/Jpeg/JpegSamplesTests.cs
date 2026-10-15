@@ -9,7 +9,7 @@ namespace PictureSharp.Tests.Jpeg;
 /// Real camera photos from samples/ (private, not committed) compared with Pillow at run time
 /// (tests/assets/jpeg_reference.py). Produces no cases when there are no samples or no Pillow.
 /// </summary>
-[Trait("Category", "Local")]
+[Property("Category", "Local")]
 public class JpegSamplesTests
 {
     private static readonly Dictionary<int, Dictionary<string, string>?> ScaledReferences = [];
@@ -34,9 +34,9 @@ public class JpegSamplesTests
         return JsonSerializer.Deserialize<Dictionary<string, string>>(json[..(json.LastIndexOf('}') + 1)]);
     }
 
-    public static TheoryData<string> Files()
+    public static TestCases<string> Files()
     {
-        var data = new TheoryData<string>();
+        var data = new TestCases<string>();
         foreach (string name in Reference.Value is { Count: > 0 } reference ? reference.Keys : (IEnumerable<string>)[""])
         {
             data.Add(name);
@@ -45,9 +45,9 @@ public class JpegSamplesTests
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(Files))]
-    public void Sample_IsBitExactWithPillow(string name)
+    [Test]
+    [MethodDataSource(nameof(Files))]
+    public async Task Sample_IsBitExactWithPillow(string name)
     {
         if (name.Length == 0)
         {
@@ -55,14 +55,14 @@ public class JpegSamplesTests
         }
 
         string expected = Reference.Value![name];
-        Assert.NotEqual("error", expected);
+        await Assert.That(expected).IsNotEqualTo("error");
         using Image image = Image.Load(Path.Combine(Corpus.SamplesDir, name));
-        Assert.True(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} differs from Pillow");
+        await Assert.That(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because($"{name} differs from Pillow");
     }
 
-    [Theory]
-    [MemberData(nameof(Files))]
-    public void Sample_ScaledDecode_IsBitExactWithPillow(string name)
+    [Test]
+    [MethodDataSource(nameof(Files))]
+    public async Task Sample_ScaledDecode_IsBitExactWithPillow(string name)
     {
         if (name.Length == 0)
         {
@@ -73,7 +73,7 @@ public class JpegSamplesTests
         {
             string expected = ScaledReference(scale)![name];
             using Image image = JpegDecoder.DecodeScaled(File.ReadAllBytes(Path.Combine(Corpus.SamplesDir, name)), DecoderOptions.Default, scale);
-            Assert.True(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} at 1/{scale} differs from Pillow");
+            await Assert.That(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because($"{name} at 1/{scale} differs from Pillow");
         }
     }
 

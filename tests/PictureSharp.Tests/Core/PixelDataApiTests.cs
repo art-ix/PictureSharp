@@ -1,11 +1,12 @@
 using System.Drawing;
 using PictureSharp.Processing;
+using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
 
 public class PixelDataApiTests
 {
-    public static TheoryData<PixelFormat, byte[], Rgba32> Layouts => new()
+    public static TestCases<PixelFormat, byte[], Rgba32> Layouts => new()
     {
         { PixelFormat.Rgba32, [100, 50, 20, 128], new(100, 50, 20, 128) },
         { PixelFormat.Bgra32, [20, 50, 100, 128], new(100, 50, 20, 128) },
@@ -17,9 +18,9 @@ public class PixelDataApiTests
         { PixelFormat.Bgra32Premultiplied, [10, 25, 50, 128], new(100, 50, 20, 128) },
     };
 
-    [Theory]
-    [MemberData(nameof(Layouts))]
-    public void Frame_ConvertsAllLayouts_WithPaddingAndExactBufferLength(PixelFormat format, byte[] encoded, Rgba32 decoded)
+    [Test]
+    [MethodDataSource(nameof(Layouts))]
+    public async Task Frame_ConvertsAllLayouts_WithPaddingAndExactBufferLength(PixelFormat format, byte[] encoded, Rgba32 decoded)
     {
         var frame = new ImageFrame(1, 2);
         frame.CopyPixelDataFrom([new Rgba32(100, 50, 20, 128), Rgba32.White]);
@@ -27,49 +28,61 @@ public class PixelDataApiTests
         int stride = rowBytes + 3;
         byte[] buffer = Enumerable.Repeat((byte)0xCD, stride + rowBytes).ToArray();
         frame.CopyPixelDataTo(buffer, format, stride);
-        Assert.Equal(encoded, buffer[..rowBytes]);
-        Assert.All(buffer[rowBytes..stride], value => Assert.Equal(0xCD, value));
-        Assert.All(buffer[stride..], value => Assert.Equal(255, value));
-        Assert.Equal(buffer[..rowBytes].Concat(buffer[stride..]).ToArray(), frame.ToPixelData(format));
+        await Assert.That(buffer[..rowBytes]).IsEquivalentTo(encoded, CollectionOrdering.Matching);
+        foreach (var value in buffer[rowBytes..stride])
+        {
+            await Assert.That((int)value).IsEqualTo(0xCD);
+        }
+
+        foreach (var value in buffer[stride..])
+        {
+            await Assert.That((int)value).IsEqualTo(255);
+        }
+
+        await Assert.That(frame.ToPixelData(format)).IsEquivalentTo(buffer[..rowBytes].Concat(buffer[stride..]).ToArray(), CollectionOrdering.Matching);
 
         var copy = new ImageFrame(1, 2);
         copy.CopyPixelDataFrom(buffer, format, stride);
-        Assert.Equal(decoded, copy[0, 0]);
-        Assert.Equal(Rgba32.White, copy[0, 1]);
-        Assert.Equal(decoded.A == 255, copy.IsOpaque());
-        Assert.Equal(new Size(1, 2), copy.Size);
-        Assert.Equal(new Rectangle(0, 0, 1, 2), copy.Bounds);
+        await Assert.That(copy[0, 0]).IsEqualTo(decoded);
+        await Assert.That(copy[0, 1]).IsEqualTo(Rgba32.White);
+        await Assert.That(copy.IsOpaque()).IsEqualTo(decoded.A == 255);
+        await Assert.That(copy.Size).IsEqualTo(new Size(1, 2));
+        await Assert.That(copy.Bounds).IsEqualTo(new Rectangle(0, 0, 1, 2));
 
         using var image = new Image(1, 2);
         image.CopyPixelDataFrom(buffer, format, stride);
-        Assert.Equal(copy.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(copy.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
         byte[] imageBuffer = Enumerable.Repeat((byte)0xCD, buffer.Length).ToArray();
         image.CopyPixelDataTo(imageBuffer, format, stride);
-        Assert.Equal(buffer, imageBuffer);
+        await Assert.That(imageBuffer).IsEquivalentTo(buffer, CollectionOrdering.Matching);
     }
 
-    [Theory]
-    [MemberData(nameof(Layouts))]
-    public void Frame_RejectsShortBuffersAndInvalidStride_BeforeWriting(PixelFormat format, byte[] encoded, Rgba32 _)
+    [Test]
+    [MethodDataSource(nameof(Layouts))]
+    public async Task Frame_RejectsShortBuffersAndInvalidStride_BeforeWriting(PixelFormat format, byte[] encoded, Rgba32 _)
     {
         var frame = new ImageFrame(1, 2);
         frame.GetPixelSpan().Fill(Rgba32.White);
         byte[] shortBuffer = new byte[encoded.Length * 2 - 1];
-        Assert.Equal("destination", Assert.Throws<ArgumentException>(() => frame.CopyPixelDataTo(shortBuffer, format)).ParamName);
-        Assert.Equal("source", Assert.Throws<ArgumentException>(() => frame.CopyPixelDataFrom(shortBuffer, format)).ParamName);
-        Assert.Equal("stride", Assert.Throws<ArgumentOutOfRangeException>(() => frame.CopyPixelDataFrom(new byte[20], format, -1)).ParamName);
-        Assert.Equal("stride", Assert.Throws<ArgumentOutOfRangeException>(() => frame.CopyPixelDataTo(new byte[20], format, -1)).ParamName);
+        await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => frame.CopyPixelDataTo(shortBuffer, format)).ParamName).IsEqualTo("destination");
+        await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => frame.CopyPixelDataFrom(shortBuffer, format)).ParamName).IsEqualTo("source");
+        await Assert.That(Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => frame.CopyPixelDataFrom(new byte[20], format, -1)).ParamName).IsEqualTo("stride");
+        await Assert.That(Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => frame.CopyPixelDataTo(new byte[20], format, -1)).ParamName).IsEqualTo("stride");
         if (encoded.Length > 1)
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => frame.CopyPixelDataTo(new byte[20], format, encoded.Length - 1));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => frame.CopyPixelDataTo(new byte[20], format, encoded.Length - 1));
         }
 
-        Assert.All(shortBuffer, value => Assert.Equal(0, value));
-        Assert.True(frame.IsOpaque());
+        foreach (var value in shortBuffer)
+        {
+            await Assert.That((int)value).IsEqualTo(0);
+        }
+
+        await Assert.That(frame.IsOpaque()).IsTrue();
     }
 
-    [Fact]
-    public void TypedCopies_IgnoreExtraPixels_RejectShortBuffers_AndTouchOnlyRootFrame()
+    [Test]
+    public async Task TypedCopies_IgnoreExtraPixels_RejectShortBuffers_AndTouchOnlyRootFrame()
     {
         using var image = new Image(2, 1);
         var second = new ImageFrame(2, 1);
@@ -77,78 +90,90 @@ public class PixelDataApiTests
         image.CopyPixelDataFrom([Rgba32.White, Rgba32.Black, new Rgba32(1, 2, 3)]);
         Rgba32[] destination = [default, default, new(9, 8, 7)];
         image.CopyPixelDataTo(destination);
-        Assert.Equal(new Rgba32[] { Rgba32.White, Rgba32.Black, new(9, 8, 7) }, destination);
-        Assert.All(second.GetPixelSpan().ToArray(), pixel => Assert.Equal(default, pixel));
-        Assert.True(image.Frames.RootFrame.IsOpaque());
-        Assert.False(image.IsOpaque());
-        Assert.Throws<ArgumentException>(() => image.CopyPixelDataFrom(new Rgba32[1]));
-        Assert.Throws<ArgumentException>(() => image.Frames.RootFrame.CopyPixelDataTo(new Rgba32[1]));
-        Assert.Equal(Rgba32.White, image[0, 0]);
+        await Assert.That(destination).IsEquivalentTo(new Rgba32[] { Rgba32.White, Rgba32.Black, new(9, 8, 7) }, CollectionOrdering.Matching);
+        foreach (var pixel in second.GetPixelSpan().ToArray())
+        {
+            await Assert.That(pixel).IsEqualTo(default);
+        }
+
+        await Assert.That(image.Frames.RootFrame.IsOpaque()).IsTrue();
+        await Assert.That(image.IsOpaque()).IsFalse();
+        Assert.ThrowsExactly<ArgumentException>(() => image.CopyPixelDataFrom(new Rgba32[1]));
+        Assert.ThrowsExactly<ArgumentException>(() => image.Frames.RootFrame.CopyPixelDataTo(new Rgba32[1]));
+        await Assert.That(image[0, 0]).IsEqualTo(Rgba32.White);
         image.CopyPixelDataFrom(new byte[] { 1, 2, 3, 255, 4, 5, 6, 255 }, PixelFormat.Rgba32);
-        Assert.All(second.GetPixelSpan().ToArray(), pixel => Assert.Equal(default, pixel));
+        foreach (var pixel in second.GetPixelSpan().ToArray())
+        {
+            await Assert.That(pixel).IsEqualTo(default);
+        }
     }
 
-    [Fact]
-    public void Views_AreWritableAndDetachWhenSameSizeFilterReplacesBuffer()
+    [Test]
+    public async Task Views_AreWritableAndDetachWhenSameSizeFilterReplacesBuffer()
     {
         using var image = new Image(3, 3, new Rgba32(100, 50, 20, 128));
         ImageFrame frame = image.Frames.RootFrame;
         Memory<Rgba32> memory = frame.GetPixelMemory();
         Span<byte> bytes = image.GetPixelByteSpan();
         bytes[0] = 40;
-        Assert.Equal(40, frame[0, 0].R);
+        byte red = frame[0, 0].R;
         image.GetPixelMemory().Span[0] = new(10, 20, 30, 40);
-        Assert.Equal(new byte[] { 10, 20, 30, 40 }, frame.GetPixelByteSpan()[..4].ToArray());
-        Assert.Equal(image.GetPixelSpan()[0], memory.Span[0]);
+        byte[] written = frame.GetPixelByteSpan()[..4].ToArray();
+        (Rgba32 viaMemory, Rgba32 viaImage) = (memory.Span[0], image.GetPixelSpan()[0]);
 
         image.Mutate(x => x.BoxBlur(1));
         Rgba32 filtered = frame[0, 0];
         memory.Span[0] = Rgba32.White;
         bytes[1] = 0;
-        Assert.Equal(filtered, frame[0, 0]);
-        Assert.Equal(new Size(3, 3), frame.Size);
-        Assert.Same(frame, image.Frames.RootFrame);
+
+        // The byte span cannot live across an await, so the checks follow the writes.
+        await Assert.That((int)red).IsEqualTo(40);
+        await Assert.That(written).IsEquivalentTo(new byte[] { 10, 20, 30, 40 }, CollectionOrdering.Matching);
+        await Assert.That(viaMemory).IsEqualTo(viaImage);
+        await Assert.That(frame[0, 0]).IsEqualTo(filtered);
+        await Assert.That(frame.Size).IsEqualTo(new Size(3, 3));
+        await Assert.That(image.Frames.RootFrame).IsSameReferenceAs(frame);
     }
 
-    [Fact]
-    public void CopyPixelDataFrom_AndFrameInsertion_UpdateHasAlpha()
+    [Test]
+    public async Task CopyPixelDataFrom_AndFrameInsertion_UpdateHasAlpha()
     {
         Rgba32 white = new(255, 255, 255);
         using (var image = new Image(2, 1, white))
         {
             image.CopyPixelDataFrom([10, 20, 30, 40, 50, 60], PixelFormat.Rgb24);
-            Assert.False(image.HasAlpha);
+            await Assert.That(image.HasAlpha).IsFalse();
             image.CopyPixelDataFrom([1, 2, 3, 4, 5, 6, 7, 8], PixelFormat.Rgba32);
-            Assert.True(image.HasAlpha);
+            await Assert.That(image.HasAlpha).IsTrue();
         }
 
         using (var image = new Image(2, 1, white))
         {
             image.CopyPixelDataFrom([white, white]);
-            Assert.True(image.HasAlpha);
+            await Assert.That(image.HasAlpha).IsTrue();
         }
 
         using var opaque = new Image(2, 1, white);
         opaque.Frames.Add(new ImageFrame(2, 1) { [0, 0] = white, [1, 0] = white });
-        Assert.False(opaque.HasAlpha);
+        await Assert.That(opaque.HasAlpha).IsFalse();
         using (var transparent = new Image(2, 1, white))
         {
             transparent.CopyPixelDataFrom([white, white]);
             opaque.Frames.Add(transparent, TimeSpan.FromMilliseconds(100));
         }
 
-        Assert.True(opaque.HasAlpha);
+        await Assert.That(opaque.HasAlpha).IsTrue();
         using var other = new Image(2, 1, white);
         other.Frames.Insert(0, new ImageFrame(2, 1));
-        Assert.True(other.HasAlpha);
+        await Assert.That(other.HasAlpha).IsTrue();
     }
 
-    [Fact]
-    public void CopyPixelDataTo_TypedDestinationTooSmall_ReportsRequiredSize()
+    [Test]
+    public async Task CopyPixelDataTo_TypedDestinationTooSmall_ReportsRequiredSize()
     {
         using var image = new Image(3, 2);
-        var error = Assert.Throws<ArgumentException>(() => image.CopyPixelDataTo(new Rgba32[5]));
-        Assert.Equal("destination", error.ParamName);
-        Assert.Contains("6 pixels required", error.Message);
+        var error = Assert.ThrowsExactly<ArgumentException>(() => image.CopyPixelDataTo(new Rgba32[5]));
+        await Assert.That(error.ParamName).IsEqualTo("destination");
+        await Assert.That(error.Message).Contains("6 pixels required");
     }
 }

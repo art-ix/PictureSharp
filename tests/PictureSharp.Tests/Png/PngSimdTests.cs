@@ -32,8 +32,8 @@ public class PngSimdTests
         return padded;
     }
 
-    [Fact]
-    public void EncoderFilters_MatchReference()
+    [Test]
+    public async Task EncoderFilters_MatchReference()
     {
         var rng = new Random(46);
         foreach (int bpp in Bpps)
@@ -71,25 +71,25 @@ public class PngSimdTests
 
                             var actual = new byte[length];
                             PngEncoder.ApplyFilter(f, paddedRow, paddedPrev, bpp, actual);
-                            Assert.Equal(filtered[f], actual);
+                            await Assert.That(actual).IsEquivalentTo(filtered[f], CollectionOrdering.Matching);
                             var scalar = new byte[length];
                             if (f != 0)
                             {
                                 PngEncoder.ApplyFilterScalar(f, paddedRow, paddedPrev, bpp, 0, scalar);
-                                Assert.Equal(filtered[f], scalar);
+                                await Assert.That(scalar).IsEquivalentTo(filtered[f], CollectionOrdering.Matching);
                             }
                         }
 
                         var scalarCosts = new long[5];
                         PngEncoder.FilterCostsScalar(paddedRow, paddedPrev, bpp, 0, scalarCosts);
-                        Assert.Equal(expectedCosts, scalarCosts);
+                        await Assert.That(scalarCosts).IsEquivalentTo(expectedCosts, CollectionOrdering.Matching);
                         int best = Array.IndexOf(expectedCosts, expectedCosts.Min());
-                        Assert.Equal(best, PngEncoder.SelectFilter(paddedRow, paddedPrev, bpp));
+                        await Assert.That(PngEncoder.SelectFilter(paddedRow, paddedPrev, bpp)).IsEqualTo(best);
                     }
     }
 
-    [Fact]
-    public void Unfilter_MatchesReference()
+    [Test]
+    public async Task Unfilter_MatchesReference()
     {
         var rng = new Random(47);
         foreach (int bpp in Bpps)
@@ -123,13 +123,13 @@ public class PngSimdTests
                 byte[] simd = (byte[])data.Clone();
                 PngDecoder.UnfilterScalar(scalar, 0, width, height, bpp * 8);
                 PngDecoder.Unfilter(simd, 0, width, height, bpp * 8);
-                Assert.Equal(expected, scalar);
-                Assert.Equal(expected, simd);
+                await Assert.That(scalar).IsEquivalentTo(expected, CollectionOrdering.Matching);
+                await Assert.That(simd).IsEquivalentTo(expected, CollectionOrdering.Matching);
             }
     }
 
-    [Fact]
-    public void ScanAlphaAndGray_MatchesScalar()
+    [Test]
+    public async Task ScanAlphaAndGray_MatchesScalar()
     {
         var rng = new Random(48);
         foreach (int length in new[] { 0, 1, 3, 4, 5, 15, 1023, 1024, 1030, 5000 })
@@ -155,7 +155,7 @@ public class PngSimdTests
 
                 bool alpha = pixels.Any(p => p.A != 255);
                 bool gray = pixels.All(p => p.R == p.G && p.G == p.B);
-                Assert.Equal((alpha, gray), PngEncoder.ScanAlphaAndGray(pixels));
+                await Assert.That(PngEncoder.ScanAlphaAndGray(pixels)).IsEqualTo((alpha, gray));
             }
         }
     }

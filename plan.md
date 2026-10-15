@@ -238,7 +238,7 @@ DoD: wszystkie wcześniejsze kryteria zamknięte, pełna wspólna bramka jakośc
 ```bash
 dotnet build -c Release
 dotnet test -c Release
-dotnet test -c Release --filter Category=Oracle
+dotnet test -c Release --treenode-filter "/*/*/*/*[Category=Oracle]"
 ```
 
 ## Wzmocnienie domeny i C# 14 — zakończone lokalnie (2026-10-15)

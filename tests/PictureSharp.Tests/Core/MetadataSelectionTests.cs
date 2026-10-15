@@ -4,16 +4,17 @@ using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Pcx;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
+using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
 
 public class MetadataSelectionTests
 {
-    public static TheoryData<EncoderOptions, MetadataKinds, int> Cases
+    public static TestCases<EncoderOptions, MetadataKinds, int> Cases
     {
         get
         {
-            var data = new TheoryData<EncoderOptions, MetadataKinds, int>();
+            var data = new TestCases<EncoderOptions, MetadataKinds, int>();
             EncoderOptions[] formats = [new BmpEncoderOptions(), new GifEncoderOptions(), new PcxEncoderOptions(), new PngEncoderOptions(), new JpegEncoderOptions(), new WebPEncoderOptions { Lossless = true }];
             foreach (EncoderOptions options in formats)
             {
@@ -30,9 +31,9 @@ public class MetadataSelectionTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Cases))]
-    public void Encoders_KeepOnlySupportedSelectedNonemptyMetadata(EncoderOptions options, MetadataKinds selection, int state)
+    [Test]
+    [MethodDataSource(nameof(Cases))]
+    public async Task Encoders_KeepOnlySupportedSelectedNonemptyMetadata(EncoderOptions options, MetadataKinds selection, int state)
     {
         using var image = new Image(2, 2, Rgba32.White);
         image.Metadata.IccProfile = state switch { 0 => null, 1 => [], _ => [1, 2, 3, 4, 5] };
@@ -43,8 +44,8 @@ public class MetadataSelectionTests
             : options.Format == ImageFormat.Gif ? MetadataKinds.Icc | MetadataKinds.Xmp
             : options.Format == ImageFormat.Pcx ? MetadataKinds.None : MetadataKinds.All;
         MetadataKinds expected = state == 2 ? selection & supported : MetadataKinds.None;
-        Assert.Equal((expected & MetadataKinds.Icc) != 0 ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
-        Assert.Equal((expected & MetadataKinds.Exif) != 0 ? image.Metadata.Exif : null, decoded.Metadata.Exif);
-        Assert.Equal((expected & MetadataKinds.Xmp) != 0 ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);
+        await Sequence.AssertEqual((expected & MetadataKinds.Icc) != 0 ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
+        await Sequence.AssertEqual((expected & MetadataKinds.Exif) != 0 ? image.Metadata.Exif : null, decoded.Metadata.Exif);
+        await Sequence.AssertEqual((expected & MetadataKinds.Xmp) != 0 ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);
     }
 }

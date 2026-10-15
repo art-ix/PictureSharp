@@ -39,7 +39,7 @@ jobs:
       - run: dotnet build -c Release
 
       # Oracle tests skip without the reference tools; Local and External need private or downloaded files.
-      - run: dotnet test -c Release --no-build --filter "Category!=Local&Category!=External"
+      - run: dotnet test -c Release --no-build --treenode-filter "/*/*/*/*[(Category!=Local)&(Category!=External)]"
 
       - run: dotnet pack src/PictureSharp/PictureSharp.csproj -c Release --no-build -o artifacts
 

@@ -8,7 +8,7 @@ namespace PictureSharp.Tests.Core;
 
 public class SequenceContractTests
 {
-    [Fact]
+    [Test]
     public async Task Reader_BorrowsFrames_AndEarlyBreakDisposesCodecAndOwnedStream()
     {
         var input = new MemoryStream();
@@ -18,152 +18,152 @@ public class SequenceContractTests
         ImageFrame? retained = null;
         await foreach (ImageFrame frame in reader.ReadFrames())
         {
-            Assert.Throws<ArgumentException>(() => image.Frames.Add(frame));
+            Assert.ThrowsExactly<ArgumentException>(() => image.Frames.Add(frame));
             retained = frame.Clone();
             break;
         }
-        Assert.Equal(1, reader.Reads);
-        Assert.Equal(1, reader.Disposals);
-        Assert.False(input.CanRead);
+        await Assert.That(reader.Reads).IsEqualTo(1);
+        await Assert.That(reader.Disposals).IsEqualTo(1);
+        await Assert.That(input.CanRead).IsFalse();
         image.Frames.Add(retained!);
-        Assert.Equal(2, image.FrameCount);
+        await Assert.That(image.FrameCount).IsEqualTo(2);
         await reader.DisposeAsync();
-        Assert.Equal(1, reader.Disposals);
+        await Assert.That(reader.Disposals).IsEqualTo(1);
     }
 
-    [Theory]
-    [InlineData(0, null)]
-    [InlineData(1, 2)]
-    [InlineData(2, 1)]
+    [Test]
+    [Arguments(0, null)]
+    [Arguments(1, 2)]
+    [Arguments(2, 1)]
     public async Task Reader_RejectsEmptyMissingAndExtraFrames_AndCleansUp(int actual, int? declared)
     {
         using var input = new MemoryStream();
         var frames = Enumerable.Range(0, actual).Select(_ => new ImageFrame(2, 2)).ToArray();
         var reader = new Reader(input, new(ImageFormat.Gif, 2, 2, declared), new(DecoderOptions.Default), true, frames);
-        await Assert.ThrowsAsync<ImageFormatException>(async () =>
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(async () =>
         {
             while (await reader.MoveNextAsync()) { }
         });
-        Assert.Equal(1, reader.Disposals);
-        Assert.True(input.CanRead);
-        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await reader.MoveNextAsync());
+        await Assert.That(reader.Disposals).IsEqualTo(1);
+        await Assert.That(input.CanRead).IsTrue();
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () => await reader.MoveNextAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task Reader_HonorsSharedBudgetsAndCanvas_AndRejectsConcurrentOperations()
     {
         using var input = new MemoryStream();
         var context = new DecodeContext(new DecoderOptions { MaxPixels = 7 });
         var reader = new Reader(input, new(ImageFormat.Gif, 2, 2), context, true, [new(2, 2), new(2, 2)]);
-        Assert.True(await reader.MoveNextAsync());
-        await Assert.ThrowsAsync<ImageFormatException>(async () => await reader.MoveNextAsync());
-        Assert.Equal(4, context.Budget.Pixels);
+        await Assert.That(await reader.MoveNextAsync()).IsTrue();
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(async () => await reader.MoveNextAsync());
+        await Assert.That(context.Budget.Pixels).IsEqualTo(4);
         var bad = new Reader(input, new(ImageFormat.Gif, 2, 2), new(DecoderOptions.Default), true, [new(1, 1)]);
-        await Assert.ThrowsAsync<ImageFormatException>(async () => await bad.MoveNextAsync());
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(async () => await bad.MoveNextAsync());
         var pending = new Reader(input, new(ImageFormat.Gif, 2, 2), new(DecoderOptions.Default), true, [])
         {
             Pending = new(TaskCreationOptions.RunContinuationsAsynchronously),
         };
         Task<bool> first = pending.MoveNextAsync().AsTask();
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pending.MoveNextAsync());
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () => await pending.MoveNextAsync());
         pending.Pending.SetResult(new ImageFrame(2, 2));
-        Assert.True(await first);
+        await Assert.That(await first).IsTrue();
         await pending.DisposeAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task Reader_CancellationAndIoFailure_ArePreservedAndDisposeState()
     {
         using var input = new MemoryStream();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         var reader = new Reader(input, new(ImageFormat.Png, 2, 2), new(DecoderOptions.Default), true, []);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await reader.MoveNextAsync(cts.Token));
-        Assert.Equal(0, reader.Reads);
-        Assert.Equal(1, reader.Disposals);
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await reader.MoveNextAsync(cts.Token));
+        await Assert.That(reader.Reads).IsEqualTo(0);
+        await Assert.That(reader.Disposals).IsEqualTo(1);
         var io = new IOException("input failed");
         var broken = new Reader(input, new(ImageFormat.Png, 2, 2), new(DecoderOptions.Default), true, []) { Failure = io };
-        Assert.Same(io, await Assert.ThrowsAsync<IOException>(async () => await broken.MoveNextAsync()));
-        Assert.Equal(1, broken.Disposals);
+        await Assert.That(await Assert.ThrowsExactlyAsync<IOException>(async () => await broken.MoveNextAsync())).IsSameReferenceAs(io);
+        await Assert.That(broken.Disposals).IsEqualTo(1);
     }
 
-    [Fact]
+    [Test]
     public async Task Writer_BorrowsFrames_CompletesOnce_AndDoesNotCompleteOnDispose()
     {
         using var output = new MemoryStream();
         using var image = new Image(2, 2);
         var writer = new Writer(output, new(ImageFormat.Gif, 2, 2, 1), new(DecoderOptions.Default), true);
         await writer.WriteAsync(image.Frames[0]);
-        Assert.True(image.Frames[0].IsOwned);
+        await Assert.That(image.Frames[0].IsOwned).IsTrue();
         await writer.CompleteAsync();
         await writer.CompleteAsync();
-        Assert.Equal(1, writer.Completions);
+        await Assert.That(writer.Completions).IsEqualTo(1);
         await writer.DisposeAsync();
-        Assert.True(output.CanWrite);
+        await Assert.That(output.CanWrite).IsTrue();
         var unfinished = new Writer(output, new(ImageFormat.Gif, 2, 2), new(DecoderOptions.Default), true);
         await unfinished.WriteAsync(image.Frames[0]);
         await unfinished.DisposeAsync();
-        Assert.Equal(0, unfinished.Completions);
+        await Assert.That(unfinished.Completions).IsEqualTo(0);
     }
 
-    [Fact]
+    [Test]
     public async Task Writer_RejectsCountsCanvasAndLimits_AndCleansUpAfterIoFailure()
     {
         using var output = new MemoryStream();
         var incomplete = new Writer(output, new(ImageFormat.Gif, 2, 2, 2), new(DecoderOptions.Default), true);
         await incomplete.WriteAsync(new(2, 2));
-        await Assert.ThrowsAsync<ImageFormatException>(async () => await incomplete.CompleteAsync());
-        Assert.Equal(0, incomplete.Completions);
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(async () => await incomplete.CompleteAsync());
+        await Assert.That(incomplete.Completions).IsEqualTo(0);
         var extra = new Writer(output, new(ImageFormat.Gif, 2, 2, 1), new(DecoderOptions.Default), true);
         await extra.WriteAsync(new(2, 2));
-        await Assert.ThrowsAsync<ImageFormatException>(async () => await extra.WriteAsync(new(2, 2)));
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(async () => await extra.WriteAsync(new(2, 2)));
         var canvas = new Writer(output, new(ImageFormat.Gif, 2, 2), new(DecoderOptions.Default), true);
-        await Assert.ThrowsAsync<ArgumentException>(async () => await canvas.WriteAsync(new(1, 1)));
+        await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await canvas.WriteAsync(new(1, 1)));
         var limited = new Writer(output, new(ImageFormat.Gif, 2, 2), new(new DecoderOptions { MaxPixels = 3 }), true);
-        await Assert.ThrowsAsync<ImageFormatException>(async () => await limited.WriteAsync(new(2, 2)));
-        Assert.Equal(0, limited.Writes);
+        await Assert.ThrowsExactlyAsync<ImageFormatException>(async () => await limited.WriteAsync(new(2, 2)));
+        await Assert.That(limited.Writes).IsEqualTo(0);
         var io = new IOException("output failed");
         var failing = new Writer(output, new(ImageFormat.Gif, 2, 2), new(DecoderOptions.Default), true) { Failure = io };
-        Assert.Same(io, await Assert.ThrowsAsync<IOException>(async () => await failing.WriteAsync(new(2, 2))));
-        Assert.Equal(1, failing.Disposals);
+        await Assert.That(await Assert.ThrowsExactlyAsync<IOException>(async () => await failing.WriteAsync(new(2, 2)))).IsSameReferenceAs(io);
+        await Assert.That(failing.Disposals).IsEqualTo(1);
     }
 
-    [Fact]
-    public void Factory_RejectsUnsupportedCapabilitiesBeforeOpeningOrReading()
+    [Test]
+    public async Task Factory_RejectsUnsupportedCapabilitiesBeforeOpeningOrReading()
     {
         var codec = new SequentialCodec();
         using var input = new NonSeekableStream([1, 2]);
         var context = new DecodeContext(DecoderOptions.Default);
-        Assert.Throws<NotSupportedException>(() => SequenceSessionFactory.OpenReader(codec, input, context));
-        Assert.Equal(0, input.BytesRead);
+        Assert.ThrowsExactly<NotSupportedException>(() => SequenceSessionFactory.OpenReader(codec, input, context));
+        await Assert.That(input.BytesRead).IsEqualTo(0);
         using var output = new MemoryStream();
-        Assert.Throws<NotSupportedException>(() => SequenceSessionFactory.OpenWriter(codec, output, new(ImageFormat.Png, 2, 2), context));
-        Assert.Equal(0, codec.Opens);
+        Assert.ThrowsExactly<NotSupportedException>(() => SequenceSessionFactory.OpenWriter(codec, output, new(ImageFormat.Png, 2, 2), context));
+        await Assert.That(codec.Opens).IsEqualTo(0);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
     public async Task BudgetedInput_StopsAfterLimitPlusProbe_DespiteShortReadsOrFalseLength(bool async)
     {
         using var input = new DeclaredLengthStream(new byte[20], 1);
         var context = new DecodeContext(new DecoderOptions { MaxInputBytes = 7 });
         using var bounded = new BudgetedReadStream(input, context, true);
         var buffer = new byte[30];
-        if (async) await Assert.ThrowsAsync<ImageFormatException>(async () => Assert.InRange(await bounded.ReadAsync(buffer), 0, buffer.Length));
-        else Assert.Throws<ImageFormatException>(() => bounded.Read(buffer));
-        Assert.Equal(8, input.BytesRead);
-        Assert.False(bounded.CanSeek);
+        if (async) await Assert.ThrowsExactlyAsync<ImageFormatException>(async () => _ = await bounded.ReadAsync(buffer));
+        else Assert.ThrowsExactly<ImageFormatException>(() => _ = bounded.Read(buffer));
+        await Assert.That(input.BytesRead).IsEqualTo(8);
+        await Assert.That(bounded.CanSeek).IsFalse();
         using var shortInput = new NonSeekableStream(new byte[7], 1);
         using var exact = new BudgetedReadStream(shortInput, new(new DecoderOptions { MaxInputBytes = 7 }), true);
-        for (int i = 0; i < 7; i++) Assert.Equal(1, await exact.ReadAsync(buffer));
-        Assert.Equal(0, await exact.ReadAsync(buffer));
+        for (int i = 0; i < 7; i++) await Assert.That(await exact.ReadAsync(buffer)).IsEqualTo(1);
+        await Assert.That(await exact.ReadAsync(buffer)).IsEqualTo(0);
         bounded.Dispose();
-        Assert.True(input.CanRead);
-        Assert.Throws<ObjectDisposedException>(() => bounded.Read(buffer));
+        await Assert.That(input.CanRead).IsTrue();
+        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = bounded.Read(buffer));
     }
 
-    [Fact]
+    [Test]
     public async Task Writer_CancellationBeforeWriteOrAfterFooter_CleansUpAndPreservesOwnership()
     {
         using var output = new MemoryStream();
@@ -171,15 +171,15 @@ public class SequenceContractTests
         using var cts = new CancellationTokenSource();
         var writer = new Writer(output, new(ImageFormat.Gif, 2, 2), new(DecoderOptions.Default), true);
         cts.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await writer.WriteAsync(image.Frames[0], cts.Token));
-        Assert.Equal(0, writer.Writes);
-        Assert.True(image.Frames[0].IsOwned);
-        Assert.Equal(1, writer.Disposals);
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await writer.WriteAsync(image.Frames[0], cts.Token));
+        await Assert.That(writer.Writes).IsEqualTo(0);
+        await Assert.That(image.Frames[0].IsOwned).IsTrue();
+        await Assert.That(writer.Disposals).IsEqualTo(1);
         using var finish = new CancellationTokenSource();
         var footer = new Writer(output, new(ImageFormat.Gif, 2, 2), new(DecoderOptions.Default, finish.Token), true) { AfterComplete = finish.Cancel };
         await footer.WriteAsync(image.Frames[0]);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await footer.CompleteAsync());
-        Assert.Equal(1, footer.Disposals);
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await footer.CompleteAsync());
+        await Assert.That(footer.Disposals).IsEqualTo(1);
     }
 
     private sealed class Reader(Stream input, FrameSequenceInfo info, DecodeContext context, bool leaveOpen, ImageFrame[] frames)

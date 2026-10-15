@@ -5,8 +5,8 @@ namespace PictureSharp.Tests.WebP;
 
 public class LosslessDecodePrimitiveTests
 {
-    [Fact]
-    public void BackwardReferences_MatchSequentialCopy()
+    [Test]
+    public async Task BackwardReferences_MatchSequentialCopy()
     {
         var random = new Random(44);
         foreach (int distance in new[] { 1, 2, 3, 4, 7, 8, 15, 32, 127 })
@@ -23,12 +23,12 @@ public class LosslessDecodePrimitiveTests
                     }
 
                     Vp8LDecoder.CopyBlock32b(actual, start, distance, length);
-                    Assert.Equal(expected, actual);
+                    await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
                 }
     }
 
-    [Fact]
-    public void BitReader_MixedReadsMatchIndividualBits()
+    [Test]
+    public async Task BitReader_MixedReadsMatchIndividualBits()
     {
         var random = new Random(45);
         foreach (int length in Enumerable.Range(1, 80).Append(4096))
@@ -49,9 +49,9 @@ public class LosslessDecodePrimitiveTests
                         expected |= (uint)((bytes[offset + (at >> 3)] >> (at & 7)) & 1) << bit;
                     }
 
-                    Assert.Equal(expected, reader.ReadBits(count));
-                    Assert.Equal(expected, isolated.ReadBits(count));
-                    Assert.False(reader.IsEndOfStream);
+                    await Assert.That(reader.ReadBits(count)).IsEqualTo(expected);
+                    await Assert.That(isolated.ReadBits(count)).IsEqualTo(expected);
+                    await Assert.That(reader.IsEndOfStream).IsFalse();
                     position += count;
                 }
 
@@ -59,10 +59,10 @@ public class LosslessDecodePrimitiveTests
                 // without consuming bytes past the supplied slice.
                 for (int i = 0; i < 4; i++)
                 {
-                    Assert.Equal(isolated.ReadBits(24), reader.ReadBits(24));
+                    await Assert.That(reader.ReadBits(24)).IsEqualTo(isolated.ReadBits(24));
                 }
 
-                Assert.True(reader.IsEndOfStream);
+                await Assert.That(reader.IsEndOfStream).IsTrue();
             }
     }
 }

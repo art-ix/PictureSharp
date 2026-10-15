@@ -8,41 +8,47 @@ public class FilterTests
 {
     private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
 
-    [Fact]
-    public void NeutralAmounts_AreNoOps()
+    [Test]
+    public async Task NeutralAmounts_AreNoOps()
     {
         using Image img = ProcessingOracleTests.Noise(9, 7, 3);
         Rgba32[] before = Pixels(img);
         img.Mutate(x => x.Brightness(1).Contrast(1).Saturate(1).BoxBlur(0).GaussianBlur(0).Rotate(0f).Rotate(360f));
-        Assert.Equal(before, Pixels(img));
+        await Assert.That(Pixels(img)).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Enhancers_ReachTheirDegenerateImages()
+    [Test]
+    public async Task Enhancers_ReachTheirDegenerateImages()
     {
         using Image img = ImageTests.Pattern(6, 5);
         using Image black = img.Clone(x => x.Brightness(0));
-        Assert.All(Pixels(black).Zip(Pixels(img)), p => Assert.Equal(new Rgba32(0, 0, 0, p.Second.A), p.First));
+        foreach (var p in Pixels(black).Zip(Pixels(img)))
+        {
+            await Assert.That(p.First).IsEqualTo(new Rgba32(0, 0, 0, p.Second.A));
+        }
 
         using Image gray = img.Clone(x => x.Saturate(0));
         using Image expected = img.Clone(x => x.Grayscale());
-        Assert.Equal(Pixels(expected), Pixels(gray));
+        await Assert.That(Pixels(gray)).IsEquivalentTo(Pixels(expected), CollectionOrdering.Matching);
 
         using Image flat = img.Clone(x => x.Contrast(0));
-        Assert.Single(Pixels(flat).Select(p => (p.R, p.G, p.B)).Distinct());
+        await Assert.That(Pixels(flat).Select(p => (p.R, p.G, p.B)).Distinct()).HasSingleItem();
     }
 
-    [Fact]
-    public void Blur_UniformOpaqueImage_StaysUniform_AndKeepsSize()
+    [Test]
+    public async Task Blur_UniformOpaqueImage_StaysUniform_AndKeepsSize()
     {
         using var img = new Image(23, 11, Color.FromArgb(255, 40, 120, 200));
         img.Mutate(x => x.GaussianBlur(3).BoxBlur(2.5f).UnsharpMask().Sharpen());
-        Assert.Equal(new Size(23, 11), img.Size);
-        Assert.All(Pixels(img), p => Assert.Equal(new Rgba32(40, 120, 200), p));
+        await Assert.That(img.Size).IsEqualTo(new Size(23, 11));
+        foreach (var p in Pixels(img))
+        {
+            await Assert.That(p).IsEqualTo(new Rgba32(40, 120, 200));
+        }
     }
 
-    [Fact]
-    public void Blur_DoesNotBleedColorFromTransparentPixels()
+    [Test]
+    public async Task Blur_DoesNotBleedColorFromTransparentPixels()
     {
         using var img = new Image(20, 6);
         for (int y = 0; y < 6; y++)
@@ -54,68 +60,75 @@ public class FilterTests
         }
 
         img.Mutate(x => x.GaussianBlur(2));
-        Assert.All(Pixels(img), p => Assert.True(p.A == 0 || p.R == 0, p.ToString()));
+        foreach (var p in Pixels(img))
+        {
+            await Assert.That(p.A == 0 || p.R == 0).IsTrue().Because(p.ToString());
+        }
     }
 
-    [Fact]
-    public void Filters_ApplyToEveryFrame()
+    [Test]
+    public async Task Filters_ApplyToEveryFrame()
     {
         using Image anim = ImageTests.Pattern(8, 8);
         using Image second = ImageTests.Pattern(8, 8);
         anim.Frames.Add(second, TimeSpan.FromMilliseconds(10));
         anim.Mutate(x => x.GaussianBlur(1).Rotate(30));
-        Assert.All(anim.Frames, f => Assert.Equal((anim.Width, anim.Height), (f.Width, f.Height)));
-        Assert.Equal(anim.Frames[0].GetPixelSpan().ToArray(), anim.Frames[1].GetPixelSpan().ToArray());
+        foreach (var f in anim.Frames)
+        {
+            await Assert.That((f.Width, f.Height)).IsEqualTo((anim.Width, anim.Height));
+        }
+
+        await Assert.That(anim.Frames[1].GetPixelSpan().ToArray()).IsEquivalentTo(anim.Frames[0].GetPixelSpan().ToArray(), CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Rotate_ByQuarterTurns_IsExact_AndExpandGrowsCanvas()
+    [Test]
+    public async Task Rotate_ByQuarterTurns_IsExact_AndExpandGrowsCanvas()
     {
         using Image img = ImageTests.Pattern(7, 4);
         using Image byAngle = img.Clone(x => x.Rotate(90f));
         using Image byMode = img.Clone(x => x.Rotate(RotateMode.Rotate90));
-        Assert.Equal(Pixels(byMode), Pixels(byAngle));
+        await Assert.That(Pixels(byAngle)).IsEquivalentTo(Pixels(byMode), CollectionOrdering.Matching);
         using Image ccw = img.Clone(x => x.Rotate(-90f));
         using Image byMode270 = img.Clone(x => x.Rotate(RotateMode.Rotate270));
-        Assert.Equal(Pixels(byMode270), Pixels(ccw));
+        await Assert.That(Pixels(ccw)).IsEquivalentTo(Pixels(byMode270), CollectionOrdering.Matching);
 
         using Image tilted = img.Clone(x => x.Rotate(45f));
-        Assert.True(tilted.Width > 7 && tilted.Height > 4);
-        Assert.True(tilted.HasAlpha);
-        Assert.Equal(Rgba32.Transparent, tilted[0, 0]);
+        await Assert.That(tilted.Width > 7 && tilted.Height > 4).IsTrue();
+        await Assert.That(tilted.HasAlpha).IsTrue();
+        await Assert.That(tilted[0, 0]).IsEqualTo(Rgba32.Transparent);
 
         using Image cut = img.Clone(x => x.Rotate(45f, ResamplingFilter.Nearest, Color.White, expand: false));
-        Assert.Equal(new Size(7, 4), cut.Size);
-        Assert.Equal(Rgba32.White, cut[6, 0]);   // clockwise: the top-right corner maps above the source
+        await Assert.That(cut.Size).IsEqualTo(new Size(7, 4));
+        await Assert.That(cut[6, 0]).IsEqualTo(Rgba32.White);   // clockwise: the top-right corner maps above the source
     }
 
-    [Fact]
-    public void Sepia_KeepsAlpha_AndTonesWhite()
+    [Test]
+    public async Task Sepia_KeepsAlpha_AndTonesWhite()
     {
         using var img = new Image(1, 1, Color.FromArgb(77, 255, 255, 255));
         img.Mutate(x => x.Sepia());
-        Assert.Equal(new Rgba32(255, 255, 239, 77), img[0, 0]);
+        await Assert.That(img[0, 0]).IsEqualTo(new Rgba32(255, 255, 239, 77));
     }
 
-    [Fact]
-    public void BoxAndHammingResize_Work()
+    [Test]
+    public async Task BoxAndHammingResize_Work()
     {
         using Image img = ProcessingOracleTests.Noise(40, 30, 4);
         using Image box = img.Clone(x => x.Resize(10, 0, ResamplingFilter.Box));
         using Image hamming = img.Clone(x => x.Resize(10, 0, ResamplingFilter.Hamming));
-        Assert.Equal(new Size(10, 8), box.Size);
-        Assert.Equal(new Size(10, 8), hamming.Size);
+        await Assert.That(box.Size).IsEqualTo(new Size(10, 8));
+        await Assert.That(hamming.Size).IsEqualTo(new Size(10, 8));
     }
 
-    [Fact]
+    [Test]
     public void InvalidArguments_Throw()
     {
         using Image img = ImageTests.Pattern(4, 4);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.GaussianBlur(-1)));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.BoxBlur(float.NaN)));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Brightness(float.PositiveInfinity)));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.UnsharpMask(1, -5)));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Rotate(10f, ResamplingFilter.Lanczos3)));
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Rotate(float.NaN)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.GaussianBlur(-1)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.BoxBlur(float.NaN)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Brightness(float.PositiveInfinity)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.UnsharpMask(1, -5)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Rotate(10f, ResamplingFilter.Lanczos3)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Rotate(float.NaN)));
     }
 }

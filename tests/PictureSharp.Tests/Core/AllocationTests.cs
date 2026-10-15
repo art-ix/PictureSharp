@@ -14,36 +14,36 @@ namespace PictureSharp.Tests.Core;
 /// a copied subframe per animation candidate, a growing MemoryStream). Single-threaded, so the
 /// current-thread counter sees every allocation.
 /// </summary>
-[Collection(nameof(SerialCollection))]
+[NotInParallel]
 public class AllocationTests
 {
-    [Fact]
-    public void LosslessWebPEncoding_PoolsHistograms()
+    [Test]
+    public async Task LosslessWebPEncoding_PoolsHistograms()
     {
         using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         var options = new WebPEncoderOptions { Lossless = true, MaxDegreeOfParallelism = 1 };
 
         // 256×192: 8.4 MB before pooling, about 1.4 MB with it.
-        Assert.InRange(Measure(() => image.ToWebP(options)), 0, 3L << 20);
+        await Assert.That(Measure(() => image.ToWebP(options))).IsBetween(0L, 3L << 20);
     }
 
-    [Fact]
-    public void AnimatedWebPEncoding_ReusesTheSubframe()
+    [Test]
+    public async Task AnimatedWebPEncoding_ReusesTheSubframe()
     {
         using Image animation = Pan();
         long lossless = Measure(() => animation.ToWebP(new WebPEncoderOptions { Lossless = true, MaxDegreeOfParallelism = 1 }));
         long lossy = Measure(() => animation.ToWebP(new WebPEncoderOptions { MaxDegreeOfParallelism = 1 }));
 
         // Eight 256×192 frames: each candidate used to copy its subframe and allocate per-tile histograms.
-        Assert.InRange(lossless, 0, 16L << 20);
-        Assert.InRange(lossy, 0, 4L << 20);
+        await Assert.That(lossless).IsBetween(0L, 16L << 20);
+        await Assert.That(lossy).IsBetween(0L, 4L << 20);
     }
 
-    [Theory]
-    [InlineData("bmp")]
-    [InlineData("pcx")]
-    [InlineData("png")]
-    public void EncodingToBytes_AllocatesAboutTheOutput(string extension)
+    [Test]
+    [Arguments("bmp")]
+    [Arguments("pcx")]
+    [Arguments("png")]
+    public async Task EncodingToBytes_AllocatesAboutTheOutput(string extension)
     {
         using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
@@ -57,28 +57,28 @@ public class AllocationTests
 
         // PNG also needs its filtered rows (3 MiB here); MemoryStream growth used to add about twice the output.
         long budget = (2L * length) + (extension == "png" ? 4L << 20 : 1L << 20);
-        Assert.InRange(allocated, length, budget);
+        await Assert.That(allocated).IsBetween((long)length, budget);
     }
 
-    [Fact]
-    public void GifEncoding_OfAStillImage_StaysBounded()
+    [Test]
+    public async Task GifEncoding_OfAStillImage_StaysBounded()
     {
         using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
         var options = new GifEncoderOptions();
 
         // 3 MiB of pixels; 61 MB before: canvas copies, the opaque pixel list and an unbounded color cache.
-        Assert.InRange(Measure(() => large.Encode(options)), 0, 8L << 20);
+        await Assert.That(Measure(() => large.Encode(options))).IsBetween(0L, 8L << 20);
     }
 
-    [Theory]
-    [InlineData("webp-lossless")]
-    [InlineData("webp-lossy")]
-    [InlineData("png")]
-    [InlineData("jpeg")]
-    [InlineData("jpeg-progressive")]
-    [InlineData("gif")]
-    public void Decoding_AllocatesAboutThePixels(string kind)
+    [Test]
+    [Arguments("webp-lossless")]
+    [Arguments("webp-lossy")]
+    [Arguments("png")]
+    [Arguments("jpeg")]
+    [Arguments("jpeg-progressive")]
+    [Arguments("gif")]
+    public async Task Decoding_AllocatesAboutThePixels(string kind)
     {
         using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
@@ -99,13 +99,13 @@ public class AllocationTests
             using Image decoded = Image.Load(data, options);
             return decoded;
         });
-        Assert.InRange(allocated, 3L << 20, (3L << 20) + (1L << 20));
+        await Assert.That(allocated).IsBetween(3L << 20, (3L << 20) + (1L << 20));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void JpegTargetSize_DoesNotAllocateTheFullImage(bool progressive)
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task JpegTargetSize_DoesNotAllocateTheFullImage(bool progressive)
     {
         using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
         using Image large = image.Clone(x => x.Resize(1024, 768));
@@ -113,17 +113,19 @@ public class AllocationTests
         var options = new DecoderOptions { MaxDegreeOfParallelism = 1, TargetSize = new(128, 128) };
 
         // A 1/4 decode is 256x192 (192 KiB of pixels) resized to 128x96; the full decode alone would be 3 MiB.
+        (int Width, int Height) size = default;
         long allocated = Measure(() =>
         {
             using Image decoded = Image.Load(data, options);
-            Assert.Equal((128, 96), (decoded.Width, decoded.Height));
+            size = (decoded.Width, decoded.Height);
             return decoded;
         });
-        Assert.InRange(allocated, 0, 512L << 10);
+        await Assert.That(size).IsEqualTo((128, 96));
+        await Assert.That(allocated).IsBetween(0L, 512L << 10);
     }
 
-    [Fact]
-    public void PooledBufferStream_JoinsSegments()
+    [Test]
+    public async Task PooledBufferStream_JoinsSegments()
     {
         var expected = new byte[3_000_000];
         new Random(5).NextBytes(expected);
@@ -134,11 +136,11 @@ public class AllocationTests
             stream.Write(expected, offset, Math.Min(size, expected.Length - offset));
         }
 
-        Assert.Equal(expected.Length, stream.Length);
-        Assert.Equal(expected, stream.ToArray());
+        await Assert.That(stream.Length).IsEqualTo(expected.Length);
+        await Assert.That(stream.ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
         using var copy = new MemoryStream();
         stream.WriteTo(copy);
-        Assert.Equal(expected, copy.ToArray());
+        await Assert.That(copy.ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     private static long Measure(Func<object> action)

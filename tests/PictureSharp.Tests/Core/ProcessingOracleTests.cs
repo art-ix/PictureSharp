@@ -58,9 +58,9 @@ public class ProcessingOracleTests
         return img;
     }
 
-    [Trait("Category", "Oracle")]
-    [Fact]
-    public void Resize_Composite_Grayscale_AutoOrient_MatchPillow()
+    [Property("Category", "Oracle")]
+    [Test]
+    public async Task Resize_Composite_Grayscale_AutoOrient_MatchPillow()
     {
         // Pillow 10.2.0 built for ARM64 rounds some float paths (enhance, rotate) differently from x64,
         // while our results are identical on both; ProcessingDeterminismTests pins those on every architecture.
@@ -270,8 +270,8 @@ public class ProcessingOracleTests
             string script = Path.Combine(Corpus.Assets, "processing_reference.py");
             if (ReferenceTools.Run("python3", $"-I \"{script}\" \"{dir}\"", out string output) != 0)
             {
-                Assert.True(ReferenceTools.Run("python3", "-I -c \"import PIL\"", out _) != 0, output);
-                return;  // Pillow not available
+                Skip.Unless(ReferenceTools.HasPillow, "Pillow is not installed.");
+                Assert.Fail(output);
             }
 
             var failures = new List<string>();
@@ -306,7 +306,7 @@ public class ProcessingOracleTests
                 }
             }
 
-            Assert.True(failures.Count == 0, $"{failures.Count}/{expected.Count} differ:\n" + string.Join('\n', failures.Take(40)));
+            await Assert.That(failures.Count == 0).IsTrue().Because($"{failures.Count}/{expected.Count} differ:\n" + string.Join('\n', failures.Take(40)));
         }
         finally
         {

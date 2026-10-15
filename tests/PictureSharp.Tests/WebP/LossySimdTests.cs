@@ -2,6 +2,7 @@ using PictureSharp.Algorithms.ColorConversion;
 using PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 using PictureSharp.Primitives.Numerics;
 using PictureSharp.Processing;
+using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
 
@@ -37,8 +38,8 @@ public class LossySimdTests
         return coefficients;
     }
 
-    [Fact]
-    public void FTransform_MatchesScalar()
+    [Test]
+    public async Task FTransform_MatchesScalar()
     {
         var rng = new Random(1);
         short[] expected = new short[16], actual = new short[16];
@@ -47,12 +48,12 @@ public class LossySimdTests
             byte[] source = RandomBlock(rng), prediction = RandomBlock(rng);
             Vp8EncoderDsp.FTransformScalar(source, prediction, expected);
             Vp8EncoderDsp.FTransform(source, prediction, actual);
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void TransformOne_MatchesScalar()
+    [Test]
+    public async Task TransformOne_MatchesScalar()
     {
         var rng = new Random(2);
         for (int i = 0; i < Iterations; i++)
@@ -62,12 +63,12 @@ public class LossySimdTests
             int offset = rng.Next(8);
             Vp8Dsp.TransformOneScalar(coefficients, expected, offset);
             Vp8Dsp.TransformOne(coefficients, actual, offset);
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void ITransform_MatchesScalar()
+    [Test]
+    public async Task ITransform_MatchesScalar()
     {
         var rng = new Random(3);
         for (int i = 0; i < Iterations; i++)
@@ -77,28 +78,28 @@ public class LossySimdTests
             byte[] expected = RandomBlock(rng, 4 * Bps), actual = (byte[])expected.Clone();
             Vp8EncoderDsp.ITransformScalar(prediction, coefficients, expected, 4);
             Vp8EncoderDsp.ITransform(prediction, coefficients, actual, 4);
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
-    [Theory]
-    [InlineData(16, 16)]
-    [InlineData(16, 8)]
-    [InlineData(4, 4)]
-    public void Sse_MatchesScalar(int width, int height)
+    [Test]
+    [Arguments(16, 16)]
+    [Arguments(16, 8)]
+    [Arguments(4, 4)]
+    public async Task Sse_MatchesScalar(int width, int height)
     {
         var rng = new Random(4 + width + height);
         for (int i = 0; i < Iterations; i++)
         {
             byte[] a = RandomBlock(rng), b = RandomBlock(rng);
-            Assert.Equal(Vp8EncoderDsp.SseScalar(a, b, width, height), Vp8EncoderDsp.Sse(a, b, width, height));
+            await Assert.That(Vp8EncoderDsp.Sse(a, b, width, height)).IsEqualTo(Vp8EncoderDsp.SseScalar(a, b, width, height));
         }
     }
 
-    [Theory]
-    [InlineData(4)]
-    [InlineData(16)]
-    public void Disto_MatchesScalar(int size)
+    [Test]
+    [Arguments(4)]
+    [Arguments(16)]
+    public async Task Disto_MatchesScalar(int size)
     {
         var rng = new Random(5 + size);
         ushort[] weights = new ushort[16];
@@ -106,12 +107,12 @@ public class LossySimdTests
         {
             byte[] a = RandomBlock(rng), b = RandomBlock(rng);
             for (int w = 0; w < 16; w++) weights[w] = (ushort)rng.Next(i % 2 == 0 ? 64 : 1024);
-            Assert.Equal(Vp8EncoderDsp.DistoScalar(a, b, weights, size), Vp8EncoderDsp.Disto(a, b, weights, size));
+            await Assert.That(Vp8EncoderDsp.Disto(a, b, weights, size)).IsEqualTo(Vp8EncoderDsp.DistoScalar(a, b, weights, size));
         }
     }
 
-    [Fact]
-    public void QuantizeBlock_MatchesScalar()
+    [Test]
+    public async Task QuantizeBlock_MatchesScalar()
     {
         var rng = new Random(6);
         for (int i = 0; i < Iterations; i++)
@@ -122,9 +123,9 @@ public class LossySimdTests
             short[] expected = new short[16], actual = new short[16];
             bool expectedNonZero = Vp8EncoderDsp.QuantizeBlockScalar(expectedInput, expected, matrix);
             bool actualNonZero = Vp8EncoderDsp.QuantizeBlock(actualInput, actual, matrix);
-            Assert.Equal(expectedNonZero, actualNonZero);
-            Assert.Equal(expected, actual);
-            Assert.Equal(expectedInput, actualInput);
+            await Assert.That(actualNonZero).IsEqualTo(expectedNonZero);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
+            await Assert.That(actualInput).IsEquivalentTo(expectedInput, CollectionOrdering.Matching);
         }
     }
 }
@@ -132,10 +133,10 @@ public class LossySimdTests
 /// <summary>The SIMD YUV to RGB conversion must give exactly the scalar pixels.</summary>
 public class YuvToRgbSimdTests
 {
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Convert_MatchesScalar(bool fancy)
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Convert_MatchesScalar(bool fancy)
     {
         var rng = new Random(fancy ? 7 : 8);
         foreach (int width in new[] { 1, 2, 15, 16, 17, 18, 31, 33, 34, 35, 64, 67 })
@@ -156,7 +157,7 @@ public class YuvToRgbSimdTests
                 var actual = new Rgba32[width * height];
                 PictureSharp.Algorithms.ColorConversion.YuvToRgb.Convert(frame, expected, fancy, allowSimd: false);
                 PictureSharp.Algorithms.ColorConversion.YuvToRgb.Convert(frame, actual, fancy, allowSimd: true);
-                Assert.Equal(expected, actual);
+                await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
             }
     }
 
@@ -196,7 +197,7 @@ public class LoopFilterSimdTests
 
     private static (int Thresh, int IThresh, int Hev) Thresholds(Random rng) => (rng.Next(0, 128), rng.Next(0, 64), rng.Next(0, 4));
 
-    public static TheoryData<string> LumaFilters() => new() { "V16", "H16", "V16i", "H16i" };
+    public static TestCases<string> LumaFilters() => new() { "V16", "H16", "V16i", "H16i" };
 
     private static (Luma Scalar, Luma Simd) LumaPair(string name) => name switch
     {
@@ -206,9 +207,9 @@ public class LoopFilterSimdTests
         _ => (Vp8Dsp.HFilter16iScalar, Vp8Dsp.HFilter16i),
     };
 
-    [Theory]
-    [MemberData(nameof(LumaFilters))]
-    public void LumaFilter_MatchesScalar(string name)
+    [Test]
+    [MethodDataSource(nameof(LumaFilters))]
+    public async Task LumaFilter_MatchesScalar(string name)
     {
         var (scalar, simd) = LumaPair(name);
         var rng = new Random(name.GetHashCode(StringComparison.Ordinal) & 0xffff);
@@ -218,11 +219,11 @@ public class LoopFilterSimdTests
             var (thresh, ithresh, hev) = Thresholds(rng);
             scalar(expected, Origin, Stride, thresh, ithresh, hev);
             simd(actual, Origin, Stride, thresh, ithresh, hev);
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
-    public static TheoryData<string> ChromaFilters() => new() { "V8", "H8", "V8i", "H8i" };
+    public static TestCases<string> ChromaFilters() => new() { "V8", "H8", "V8i", "H8i" };
 
     private static (Chroma Scalar, Chroma Simd) ChromaPair(string name) => name switch
     {
@@ -232,9 +233,9 @@ public class LoopFilterSimdTests
         _ => (Vp8Dsp.HFilter8iScalar, Vp8Dsp.HFilter8i),
     };
 
-    [Theory]
-    [MemberData(nameof(ChromaFilters))]
-    public void ChromaFilter_MatchesScalar(string name)
+    [Test]
+    [MethodDataSource(nameof(ChromaFilters))]
+    public async Task ChromaFilter_MatchesScalar(string name)
     {
         var (scalar, simd) = ChromaPair(name);
         var rng = new Random(name.GetHashCode(StringComparison.Ordinal) & 0xffff);
@@ -245,16 +246,16 @@ public class LoopFilterSimdTests
             var (thresh, ithresh, hev) = Thresholds(rng);
             scalar(expectedU, Origin, expectedV, Origin + 1, Stride, thresh, ithresh, hev);
             simd(actualU, Origin, actualV, Origin + 1, Stride, thresh, ithresh, hev);
-            Assert.Equal(expectedU, actualU);
-            Assert.Equal(expectedV, actualV);
+            await Assert.That(actualU).IsEquivalentTo(expectedU, CollectionOrdering.Matching);
+            await Assert.That(actualV).IsEquivalentTo(expectedV, CollectionOrdering.Matching);
         }
     }
 
-    public static TheoryData<string> SimpleFilters() => new() { "V", "H", "Vi", "Hi" };
+    public static TestCases<string> SimpleFilters() => new() { "V", "H", "Vi", "Hi" };
 
-    [Theory]
-    [MemberData(nameof(SimpleFilters))]
-    public void SimpleFilter_MatchesScalar(string name)
+    [Test]
+    [MethodDataSource(nameof(SimpleFilters))]
+    public async Task SimpleFilter_MatchesScalar(string name)
     {
         (Simple scalar, Simple simd) = name switch
         {
@@ -270,7 +271,7 @@ public class LoopFilterSimdTests
             int thresh = rng.Next(0, 128);
             scalar(expected, Origin, Stride, thresh);
             simd(actual, Origin, Stride, thresh);
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 }

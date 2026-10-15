@@ -7,8 +7,8 @@ namespace PictureSharp.Tests.Jpeg;
 /// <summary>Vector DCTs, quantization, coefficient masks and the bit writer equal their scalar definitions.</summary>
 public class JpegSimdTests
 {
-    [Fact]
-    public void ForwardDct_MatchesScalar()
+    [Test]
+    public async Task ForwardDct_MatchesScalar()
     {
         var rng = new Random(60);
         for (int trial = 0; trial < 2000; trial++)
@@ -19,12 +19,12 @@ public class JpegSimdTests
             int[] simd = (int[])samples.Clone();
             JpegFdct.TransformScalar(scalar);
             JpegFdct.Transform(simd);
-            Assert.Equal(scalar, simd);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void QuantizeZigzag_MatchesDivision()
+    [Test]
+    public async Task QuantizeZigzag_MatchesDivision()
     {
         var rng = new Random(61);
         for (int trial = 0; trial < 500; trial++)
@@ -37,13 +37,13 @@ public class JpegSimdTests
             JpegFdct.QuantizeZigzag(data, new JpegFdct.Divisors(table), zigzag);
             for (int k = 0; k < 64; k++)
             {
-                Assert.Equal(natural[JpegTables.NaturalOrder[k]], zigzag[k]);
+                await Assert.That(zigzag[k]).IsEqualTo(natural[JpegTables.NaturalOrder[k]]);
             }
         }
     }
 
-    [Fact]
-    public void InverseDct_MatchesScalar_IncludingOutOfRangeBlocks()
+    [Test]
+    public async Task InverseDct_MatchesScalar_IncludingOutOfRangeBlocks()
     {
         var rng = new Random(62);
         for (int trial = 0; trial < 4000; trial++)
@@ -69,12 +69,12 @@ public class JpegSimdTests
             var simd = new byte[(7 * stride) + 8];
             JpegIdct.TransformScalar(block, quant, scalar, stride);
             JpegIdct.Transform(block, quant, simd, stride);
-            Assert.Equal(scalar, simd);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void CoefficientMasks_MatchScalar()
+    [Test]
+    public async Task CoefficientMasks_MatchScalar()
     {
         var rng = new Random(63);
         for (int trial = 0; trial < 1000; trial++)
@@ -85,10 +85,10 @@ public class JpegSimdTests
                 block[rng.Next(64)] = short.MinValue + 1;
             }
 
-            Assert.Equal(JpegScanEncoder.NonZeroMaskScalar(block), JpegScanEncoder.NonZeroMask(block));
+            await Assert.That(JpegScanEncoder.NonZeroMask(block)).IsEqualTo(JpegScanEncoder.NonZeroMaskScalar(block));
             foreach (int threshold in new[] { 1, 2, 4, 8, 64 })
             {
-                Assert.Equal(JpegScanEncoder.AtLeastMaskScalar(block, threshold), JpegScanEncoder.AtLeastMask(block, threshold));
+                await Assert.That(JpegScanEncoder.AtLeastMask(block, threshold)).IsEqualTo(JpegScanEncoder.AtLeastMaskScalar(block, threshold));
             }
         }
     }
@@ -135,8 +135,8 @@ public class JpegSimdTests
         return output.ToArray();
     }
 
-    [Fact]
-    public void BitWriter_MatchesByteWiseReference()
+    [Test]
+    public async Task BitWriter_MatchesByteWiseReference()
     {
         var rng = new Random(64);
         for (int trial = 0; trial < 200; trial++)
@@ -163,16 +163,16 @@ public class JpegSimdTests
             }
 
             writer.Flush();
-            Assert.Equal(ReferenceBits(writes, restart), output.ToArray());
+            await Assert.That(output.ToArray()).IsEquivalentTo(ReferenceBits(writes, restart), CollectionOrdering.Matching);
         }
     }
 
-    [Theory]
-    [InlineData(JpegSubsampling.Ratio420, false)]
-    [InlineData(JpegSubsampling.Ratio422, false)]
-    [InlineData(JpegSubsampling.Ratio440, true)]
-    [InlineData(JpegSubsampling.Ratio444, true)]
-    public void Encode_DoesNotDependOnThreads_AndDecodesTheSameInParallel(JpegSubsampling subsampling, bool progressive)
+    [Test]
+    [Arguments(JpegSubsampling.Ratio420, false)]
+    [Arguments(JpegSubsampling.Ratio422, false)]
+    [Arguments(JpegSubsampling.Ratio440, true)]
+    [Arguments(JpegSubsampling.Ratio444, true)]
+    public async Task Encode_DoesNotDependOnThreads_AndDecodesTheSameInParallel(JpegSubsampling subsampling, bool progressive)
     {
         var rng = new Random(65);
         var pixels = new Rgba32[701 * 403];
@@ -185,11 +185,11 @@ public class JpegSimdTests
         using Image image = Image.LoadPixelData(pixels, 701, 403);
         var options = new JpegEncoderOptions { Subsampling = subsampling, Progressive = progressive, Quality = 90, MaxDegreeOfParallelism = 1 };
         byte[] sequential = image.ToJpeg(options);
-        Assert.Equal(sequential, image.ToJpeg(options with { MaxDegreeOfParallelism = 3 }));
-        Assert.Equal(sequential, image.ToJpeg(options with { MaxDegreeOfParallelism = -1 }));
+        await Assert.That(image.ToJpeg(options with { MaxDegreeOfParallelism = 3 })).IsEquivalentTo(sequential, CollectionOrdering.Matching);
+        await Assert.That(image.ToJpeg(options with { MaxDegreeOfParallelism = -1 })).IsEquivalentTo(sequential, CollectionOrdering.Matching);
 
         using Image serial = Image.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
         using Image parallel = Image.Load(sequential);
-        Assert.True(serial.Frames[0].GetPixelSpan().SequenceEqual(parallel.Frames[0].GetPixelSpan()));
+        await Assert.That(serial.Frames[0].GetPixelSpan().SequenceEqual(parallel.Frames[0].GetPixelSpan())).IsTrue();
     }
 }

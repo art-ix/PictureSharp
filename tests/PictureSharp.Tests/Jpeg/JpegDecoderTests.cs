@@ -12,64 +12,64 @@ public class JpegDecoderTests
 {
     private static readonly Rgba32 Gray = new(128, 128, 128, 255);
 
-    public static TheoryData<string> JpegFiles => Corpus.Files("jpeg/");
+    public static TestCases<string> JpegFiles => Corpus.Files("jpeg/");
 
-    [Theory]
-    [MemberData(nameof(JpegFiles))]
-    public void Decode_IsBitExactWithPillow(string file)
+    [Test]
+    [MethodDataSource(nameof(JpegFiles))]
+    public async Task Decode_IsBitExactWithPillow(string file)
     {
         ReferenceEntry r = Corpus.References[file];
         using Image image = Image.Load(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Jpeg, image.SourceFormat);
-        Assert.False(image.HasAlpha);
-        LosslessDecoderTests.AssertMatchesReference(file, image);
+        await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Jpeg);
+        await Assert.That(image.HasAlpha).IsFalse();
+        await LosslessDecoderTests.AssertMatchesReference(file, image);
         if (r.Dpi is { } dpi)
         {
-            Assert.Equal(dpi[0], image.Metadata.HorizontalResolution, 1);
-            Assert.Equal(dpi[1], image.Metadata.VerticalResolution, 1);
+            await Assert.That(Math.Round((double)image.Metadata.HorizontalResolution, 1)).IsEqualTo(Math.Round((double)(dpi[0]), 1));
+            await Assert.That(Math.Round((double)image.Metadata.VerticalResolution, 1)).IsEqualTo(Math.Round((double)(dpi[1]), 1));
         }
 
-        Assert.Equal(r.IccSha256, image.Metadata.IccProfile is { } icc ? Corpus.Sha256(icc) : null);
-        Assert.Equal(r.XmpSha256, image.Metadata.Xmp is { } xmp ? Corpus.Sha256(xmp) : null);
-        Assert.Equal(r.Orientation, (int)image.Metadata.Orientation);
+        await Assert.That(image.Metadata.IccProfile is { } icc ? Corpus.Sha256(icc) : null).IsEqualTo(r.IccSha256);
+        await Assert.That(image.Metadata.Xmp is { } xmp ? Corpus.Sha256(xmp) : null).IsEqualTo(r.XmpSha256);
+        await Assert.That((int)image.Metadata.Orientation).IsEqualTo(r.Orientation);
     }
 
-    [Theory]
-    [MemberData(nameof(JpegFiles))]
-    public void Identify_MatchesReference(string file)
+    [Test]
+    [MethodDataSource(nameof(JpegFiles))]
+    public async Task Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Jpeg, info.Format);
-        Assert.Equal((r.Width, r.Height), (info.Width, info.Height));
-        Assert.False(info.HasAlpha);
-        Assert.Equal(1, info.FrameCount);
-        Assert.Equal(r.Orientation, (int)info.Orientation);
+        await Assert.That(info.Format).IsEqualTo(ImageFormat.Jpeg);
+        await Assert.That((info.Width, info.Height)).IsEqualTo((r.Width, r.Height));
+        await Assert.That(info.HasAlpha).IsFalse();
+        await Assert.That(info.FrameCount).IsEqualTo(1);
+        await Assert.That((int)info.Orientation).IsEqualTo(r.Orientation);
         if (r.Dpi is { } dpi)
         {
-            Assert.Equal(dpi[0], info.HorizontalResolution, 1);
+            await Assert.That(Math.Round((double)info.HorizontalResolution, 1)).IsEqualTo(Math.Round((double)(dpi[0]), 1));
         }
     }
 
-    [Fact]
-    public void Format_DecodesAndEncodes()
+    [Test]
+    public async Task Format_DecodesAndEncodes()
     {
-        Assert.Equal(ImageFormat.Jpeg, Image.DetectFormat(Corpus.Read("jpeg/q90_420.jpg")));
-        Assert.True(ImageFormat.Jpeg.CanDecode);
-        Assert.True(ImageFormat.Jpeg.CanEncode);
+        await Assert.That(Image.DetectFormat(Corpus.Read("jpeg/q90_420.jpg"))).IsEqualTo(ImageFormat.Jpeg);
+        await Assert.That(ImageFormat.Jpeg.CanDecode).IsTrue();
+        await Assert.That(ImageFormat.Jpeg.CanEncode).IsTrue();
     }
 
-    [Fact]
-    public void Resolution_InCentimeters_IsConvertedToDpi()
+    [Test]
+    public async Task Resolution_InCentimeters_IsConvertedToDpi()
     {
         // Pillow 10.2 ignores JFIF density unit 2, so this is not covered by the reference.
         using Image image = Image.Load(Corpus.PathOf("jpeg/dpcm.jpg"));
-        Assert.Equal(28 * 2.54f, image.Metadata.HorizontalResolution, 2);
-        Assert.Equal(28 * 2.54f, Image.Identify(Corpus.PathOf("jpeg/dpcm.jpg")).VerticalResolution, 2);
+        await Assert.That(Math.Round((double)image.Metadata.HorizontalResolution, 2)).IsEqualTo(Math.Round((double)(28 * 2.54f), 2));
+        await Assert.That(Math.Round((double)(Image.Identify(Corpus.PathOf("jpeg/dpcm.jpg")).VerticalResolution), 2)).IsEqualTo(Math.Round((double)(28 * 2.54f), 2));
     }
 
-    [Fact]
-    public void Resolution_FromExif_KeepsBothAxesAndUnits()
+    [Test]
+    public async Task Resolution_FromExif_KeepsBothAxesAndUnits()
     {
         static byte[] Exif(uint x, uint y, ushort unit)
         {
@@ -94,21 +94,21 @@ public class JpegDecoderTests
             return tiff;
         }
 
-        Assert.Equal((300f, 75f), ExifReader.GetResolution(Exif(300, 150, 2)));
-        Assert.Equal((254f, 127f), ExifReader.GetResolution(Exif(100, 100, 3)));
+        await Assert.That(ExifReader.GetResolution(Exif(300, 150, 2))).IsEqualTo((300f, 75f));
+        await Assert.That(ExifReader.GetResolution(Exif(100, 100, 3))).IsEqualTo((254f, 127f));
         Assert.Null(ExifReader.GetResolution(Exif(300, 150, 1)));
         Assert.Null(ExifReader.GetResolution(Exif(0, 150, 2)));
     }
 
-    [Fact]
-    public void Metadata_CanBeIgnored_AndOrientationApplied()
+    [Test]
+    public async Task Metadata_CanBeIgnored_AndOrientationApplied()
     {
         using Image plain = Image.Load(Corpus.PathOf("jpeg/icc_multi.jpg"), new DecoderOptions { IgnoreMetadata = true });
-        Assert.True(plain.Metadata.IsEmpty);
+        await Assert.That(plain.Metadata.IsEmpty).IsTrue();
 
         using Image rotated = Image.Load(Corpus.PathOf("jpeg/orientation_6.jpg"), new DecoderOptions { ApplyExifOrientation = true });
-        Assert.Equal((192, 256), (rotated.Width, rotated.Height));
-        Assert.Equal(ExifOrientation.TopLeft, rotated.Metadata.Orientation);
+        await Assert.That((rotated.Width, rotated.Height)).IsEqualTo((192, 256));
+        await Assert.That(rotated.Metadata.Orientation).IsEqualTo(ExifOrientation.TopLeft);
     }
 
     // ------------------------------------------------------------------ damaged and unusual streams
@@ -154,44 +154,44 @@ public class JpegDecoderTests
         return image.GetPixelSpan().ToArray();
     }
 
-    [Fact]
-    public void Truncated_Baseline_FillsTheRestWithGray()
+    [Test]
+    public async Task Truncated_Baseline_FillsTheRestWithGray()
     {
         byte[] full = Corpus.Read("jpeg/q90_420.jpg");
         Rgba32[] expected = Pixels(full);
         Rgba32[] actual = Pixels(full[..(full.Length / 2)]);
-        Assert.Equal(expected[0], actual[0]);
-        Assert.Equal(Gray, actual[^1]);
+        await Assert.That(actual[0]).IsEqualTo(expected[0]);
+        await Assert.That(actual[^1]).IsEqualTo(Gray);
     }
 
-    [Fact]
-    public void Truncated_Progressive_StillDecodes()
+    [Test]
+    public async Task Truncated_Progressive_StillDecodes()
     {
         byte[] full = Corpus.Read("jpeg/progressive_420.jpg");
         using Image image = Image.Load(full[..(full.Length * 2 / 3)]);
-        Assert.Equal((256, 192), (image.Width, image.Height));
+        await Assert.That((image.Width, image.Height)).IsEqualTo((256, 192));
     }
 
-    [Fact]
-    public void Truncated_BeforeTheFirstScan_Throws()
+    [Test]
+    public async Task Truncated_BeforeTheFirstScan_Throws()
     {
         byte[] full = Corpus.Read("jpeg/q90_420.jpg");
         (int sos, _) = Find(full, 0xDA);
-        Assert.Throws<ImageFormatException>(() => Image.Load(full[..sos]));
-        Assert.Throws<ImageFormatException>(() => Image.Load(full[..(sos - 3)]));
-        Assert.Equal(256, Image.Identify(full[..(sos + 2)]).Width);
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(full[..sos]));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(full[..(sos - 3)]));
+        await Assert.That(Image.Identify(full[..(sos + 2)]).Width).IsEqualTo(256);
     }
 
-    [Fact]
-    public void GarbageBetweenSegments_IsSkipped()
+    [Test]
+    public async Task GarbageBetweenSegments_IsSkipped()
     {
         byte[] full = Corpus.Read("jpeg/q90_444.jpg");
         (int sof, _) = Find(full, 0xC0);
         byte[] damaged = [.. full[..sof], 0x12, 0x34, 0xFF, 0x00, 0xFF, .. full[sof..]];
-        Assert.Equal(Pixels(full), Pixels(damaged));
+        await Assert.That(Pixels(damaged)).IsEquivalentTo(Pixels(full), CollectionOrdering.Matching);
     }
 
-    public static TheoryData<string, byte[]> UnsupportedFiles() => new()
+    public static TestCases<string, byte[]> UnsupportedFiles() => new()
     {
         { "lossless", Build(Sof(0xC3, 8, 8, 8, (1, 1, 1))) },
         { "arithmetic", Build(Sof(0xC9, 8, 8, 8, (1, 1, 1))) },
@@ -203,15 +203,15 @@ public class JpegDecoderTests
         { "fractional sampling", Build(Sof(0xC0, 8, 8, 8, (1, 3, 1), (2, 2, 1), (3, 1, 1))) },
     };
 
-    [Theory]
-    [MemberData(nameof(UnsupportedFiles))]
-    public void Decode_UnsupportedVariant_ThrowsNotSupported(string name, byte[] jpeg)
+    [Test]
+    [MethodDataSource(nameof(UnsupportedFiles))]
+    public async Task Decode_UnsupportedVariant_ThrowsNotSupported(string name, byte[] jpeg)
     {
-        Assert.Throws<NotSupportedException>(() => Image.Load(jpeg));
-        Assert.NotEmpty(name);
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Load(jpeg));
+        await Assert.That(name).IsNotEmpty();
     }
 
-    public static TheoryData<string, byte[]> InvalidFiles()
+    public static TestCases<string, byte[]> InvalidFiles()
     {
         byte[] good = Corpus.Read("jpeg/q90_420.jpg");
         (int sos, int sosLength) = Find(good, 0xDA);
@@ -225,7 +225,7 @@ public class JpegDecoderTests
             return copy;
         }
 
-        return new TheoryData<string, byte[]>
+        return new TestCases<string, byte[]>
         {
             { "no frame header", Build(Segment(0xDA, 1, 1, 0, 0, 63, 0)) },
             { "empty", Build() },
@@ -247,20 +247,20 @@ public class JpegDecoderTests
         };
     }
 
-    [Theory]
-    [MemberData(nameof(InvalidFiles))]
-    public void Decode_InvalidFile_ThrowsFormatException(string name, byte[] jpeg)
+    [Test]
+    [MethodDataSource(nameof(InvalidFiles))]
+    public async Task Decode_InvalidFile_ThrowsFormatException(string name, byte[] jpeg)
     {
-        var ex = Assert.ThrowsAny<Exception>(() => Image.Load(jpeg));
-        Assert.True(ex is ImageFormatException, $"{name}: {ex}");
+        var ex = Assert.Throws<Exception>(() => Image.Load(jpeg));
+        await Assert.That(ex is ImageFormatException).IsTrue().Because($"{name}: {ex}");
     }
 
-    [Fact]
-    public void Decode_RespectsMaxPixels()
+    [Test]
+    public async Task Decode_RespectsMaxPixels()
     {
         byte[] jpeg = Build(Sof(0xC0, 8, 60000, 60000, (1, 1, 1)));
-        Assert.Throws<ImageFormatException>(() => Image.Load(jpeg, new DecoderOptions { MaxPixels = 1 << 20 }));
-        Assert.Equal(60000, Image.Identify(jpeg).Width);
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(jpeg, new DecoderOptions { MaxPixels = 1 << 20 }));
+        await Assert.That(Image.Identify(jpeg).Width).IsEqualTo(60000);
     }
 
     // ------------------------------------------------------------------ damaged streams against libjpeg
@@ -269,9 +269,9 @@ public class JpegDecoderTests
     /// Damaged files are decoded like libjpeg-turbo does: a truncated baseline scan ends in gray, and restart
     /// markers that are missing or out of order are resynchronized with jpeg_resync_to_restart.
     /// </summary>
-    [Trait("Category", "Oracle")]
-    [Fact]
-    public void DamagedFiles_MatchPillow()
+    [Property("Category", "Oracle")]
+    [Test]
+    public async Task DamagedFiles_MatchPillow()
     {
         byte[] restart = Corpus.Read("jpeg/restart_blocks.jpg");
         (int sos, int sosLength) = Find(restart, 0xDA);
@@ -323,7 +323,7 @@ public class JpegDecoderTests
                 foreach ((string name, byte[] data) in files)
                 {
                     using Image image = PictureSharp.Infrastructure.Codecs.Jpeg.JpegDecoder.DecodeScaled(data, DecoderOptions.Default, scale);
-                    Assert.True(reference[name] == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} at 1/{scale} differs from Pillow");
+                    await Assert.That(reference[name] == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because($"{name} at 1/{scale} differs from Pillow");
                 }
             }
         }

@@ -13,7 +13,7 @@ public class PublicApiTests
 {
     private static readonly NullabilityInfoContext Nullability = new();
 
-    [Fact]
+    [Test]
     public void PublicApi_MatchesApprovedSnapshot()
     {
         string actual = Describe(typeof(Image).Assembly);

@@ -27,8 +27,8 @@ public class ResizeSimdTests
         return (ksize, bounds, kk);
     }
 
-    [Fact]
-    public void HorizontalRow_MatchesScalar()
+    [Test]
+    public async Task HorizontalRow_MatchesScalar()
     {
         var rng = new Random(50);
         foreach (int inWidth in new[] { 1, 3, 17, 200 })
@@ -43,12 +43,12 @@ public class ResizeSimdTests
                     Resizer.HorizontalRowScalar(row, scalar, ksize, bounds, kk, 0);
                     int done = Resizer.HorizontalRowSimd(row, simd, ksize, bounds, kk);
                     Resizer.HorizontalRowScalar(row, simd, ksize, bounds, kk, done);
-                    Assert.Equal(scalar, simd);
+                    await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
                 }
     }
 
-    [Fact]
-    public void VerticalRow_MatchesScalar()
+    [Test]
+    public async Task VerticalRow_MatchesScalar()
     {
         var rng = new Random(51);
         foreach (int width in new[] { 1, 3, 4, 5, 8, 33, 250 })
@@ -63,12 +63,12 @@ public class ResizeSimdTests
                 Resizer.VerticalRowScalar(rows, stride, k, scalar, 0);
                 int done = Resizer.VerticalRowSimd(rows, stride, k, simd);
                 Resizer.VerticalRowScalar(rows, stride, k, simd, done);
-                Assert.Equal(scalar, simd);
+                await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
             }
     }
 
-    [Fact]
-    public void Premultiply_MatchesScalar()
+    [Test]
+    public async Task Premultiply_MatchesScalar()
     {
         var rng = new Random(52);
         foreach (int length in new[] { 0, 1, 3, 4, 7, 64, 1001 })
@@ -85,10 +85,10 @@ public class ResizeSimdTests
             Premultiplied.FromStraightScalar(pixels, scalar);
             int done = Premultiplied.FromStraightSimd(pixels, simd);
             Premultiplied.FromStraightScalar(pixels.AsSpan(done), simd.AsSpan(done));
-            Assert.Equal(scalar, simd);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
 
             // Every alpha and channel value against the definition.
-            Assert.Equal(pixels.All(p => p.A == 255), Premultiplied.IsOpaque(pixels));
+            await Assert.That(Premultiplied.IsOpaque(pixels)).IsEqualTo(pixels.All(p => p.A == 255));
         }
 
         var all = new Rgba32[256 * 256];
@@ -101,11 +101,11 @@ public class ResizeSimdTests
         var actual = new Rgba32[all.Length];
         Premultiplied.FromStraightScalar(all, expected);
         Premultiplied.FromStraight(all, actual);
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void ToStraight_MatchesDefinition()
+    [Test]
+    public async Task ToStraight_MatchesDefinition()
     {
         var rng = new Random(53);
         var pixels = new Rgba32[5000];
@@ -122,6 +122,6 @@ public class ResizeSimdTests
         Rgba32[] expected = pixels.Select(p => p.A is 0 or 255 ? p : new Rgba32(
             (byte)Math.Min(255, 255 * p.R / p.A), (byte)Math.Min(255, 255 * p.G / p.A), (byte)Math.Min(255, 255 * p.B / p.A), p.A)).ToArray();
         Premultiplied.ToStraight(pixels);
-        Assert.Equal(expected, pixels);
+        await Assert.That(pixels).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 }

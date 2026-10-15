@@ -10,7 +10,7 @@ public class BmpDecoderTests
     private static readonly Rgba32 Black = new(0, 0, 0, 255);
     private static readonly Rgba32[] Pal4 = [new(255, 0, 0, 255), new(0, 255, 0, 255), new(0, 0, 255, 255), new(255, 255, 255, 255)];
 
-    public static TheoryData<string> BmpFiles => Corpus.Files("bmp/");
+    public static TestCases<string> BmpFiles => Corpus.Files("bmp/");
 
     private static Rgba32[] Pixels(byte[] bmp, DecoderOptions? options = null)
     {
@@ -18,70 +18,70 @@ public class BmpDecoderTests
         return image.GetPixelSpan().ToArray();
     }
 
-    [Theory]
-    [MemberData(nameof(BmpFiles))]
-    public void Decode_MatchesReference(string file)
+    [Test]
+    [MethodDataSource(nameof(BmpFiles))]
+    public async Task Decode_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
         using Image image = Image.Load(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Bmp, image.SourceFormat);
-        Assert.Equal(r.HasAlpha, image.HasAlpha);
-        LosslessDecoderTests.AssertMatchesReference(file, image);
+        await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Bmp);
+        await Assert.That(image.HasAlpha).IsEqualTo(r.HasAlpha);
+        await LosslessDecoderTests.AssertMatchesReference(file, image);
         if (r.Dpi is { } dpi)
         {
-            Assert.Equal(dpi[0], image.Metadata.HorizontalResolution, 1);
-            Assert.Equal(dpi[1], image.Metadata.VerticalResolution, 1);
+            await Assert.That(Math.Round((double)image.Metadata.HorizontalResolution, 1)).IsEqualTo(Math.Round((double)(dpi[0]), 1));
+            await Assert.That(Math.Round((double)image.Metadata.VerticalResolution, 1)).IsEqualTo(Math.Round((double)(dpi[1]), 1));
         }
     }
 
-    [Theory]
-    [MemberData(nameof(BmpFiles))]
-    public void Identify_MatchesReference(string file)
+    [Test]
+    [MethodDataSource(nameof(BmpFiles))]
+    public async Task Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
-        Assert.Equal(ImageFormat.Bmp, info.Format);
-        Assert.Equal((r.Width, r.Height), (info.Width, info.Height));
-        Assert.Equal(r.HasAlpha, info.HasAlpha);
-        Assert.Equal(1, info.FrameCount);
+        await Assert.That(info.Format).IsEqualTo(ImageFormat.Bmp);
+        await Assert.That((info.Width, info.Height)).IsEqualTo((r.Width, r.Height));
+        await Assert.That(info.HasAlpha).IsEqualTo(r.HasAlpha);
+        await Assert.That(info.FrameCount).IsEqualTo(1);
     }
 
-    [Fact]
-    public void Detect_RecognizesBmp()
+    [Test]
+    public async Task Detect_RecognizesBmp()
     {
-        Assert.Equal(ImageFormat.Bmp, Image.DetectFormat(Corpus.Read("bmp/im_rgb24.bmp")));
-        Assert.Equal(ImageFormat.Bmp, ImageFormat.FromExtension("x.DIB"));
-        Assert.True(ImageFormat.Bmp.CanDecode);
-        Assert.True(ImageFormat.Bmp.CanEncode);
+        await Assert.That(Image.DetectFormat(Corpus.Read("bmp/im_rgb24.bmp"))).IsEqualTo(ImageFormat.Bmp);
+        await Assert.That(ImageFormat.FromExtension("x.DIB")).IsEqualTo(ImageFormat.Bmp);
+        await Assert.That(ImageFormat.Bmp.CanDecode).IsTrue();
+        await Assert.That(ImageFormat.Bmp.CanEncode).IsTrue();
     }
 
-    [Fact]
-    public void Pal2_UnpacksTwoBitIndices()
+    [Test]
+    public async Task Pal2_UnpacksTwoBitIndices()
     {
         // 5 pixels: 0 1 2 3 | 1 -> 0b00011011, 0b01000000
         byte[] bmp = new BmpBuilder { Width = 5, Height = 1, Bits = 2, Palette = Pal4, Rows = [[0x1B, 0x40]] }.Build();
-        Assert.Equal([Pal4[0], Pal4[1], Pal4[2], Pal4[3], Pal4[1]], Pixels(bmp));
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([Pal4[0], Pal4[1], Pal4[2], Pal4[3], Pal4[1]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Palette_IndexBeyondPalette_IsBlack()
+    [Test]
+    public async Task Palette_IndexBeyondPalette_IsBlack()
     {
         byte[] bmp = new BmpBuilder { Width = 3, Height = 1, Bits = 8, Palette = Pal4[..2], Rows = [[0, 1, 200]] }.Build();
-        Assert.Equal([Pal4[0], Pal4[1], Black], Pixels(bmp));
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([Pal4[0], Pal4[1], Black], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void TopDown_KeepsRowOrder()
+    [Test]
+    public async Task TopDown_KeepsRowOrder()
     {
         byte[][] rows = [[0, 0], [1, 0], [2, 0]];
         Rgba32[] bottomUp = Pixels(new BmpBuilder { Width = 1, Height = 3, Bits = 8, Palette = Pal4, Rows = rows }.Build());
         Rgba32[] topDown = Pixels(new BmpBuilder { Width = 1, Height = 3, Bits = 8, Palette = Pal4, Rows = rows, TopDown = true }.Build());
-        Assert.Equal([Pal4[0], Pal4[1], Pal4[2]], bottomUp);
-        Assert.Equal(bottomUp, topDown);
+        await Assert.That(bottomUp).IsEquivalentTo([Pal4[0], Pal4[1], Pal4[2]], CollectionOrdering.Matching);
+        await Assert.That(topDown).IsEquivalentTo(bottomUp, CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Rle8_HandlesDeltaEndOfLineAndAbsoluteRuns()
+    [Test]
+    public async Task Rle8_HandlesDeltaEndOfLineAndAbsoluteRuns()
     {
         byte[] stream =
         [
@@ -94,17 +94,15 @@ public class BmpDecoderTests
         ];
         byte[] bmp = new BmpBuilder { Width = 4, Height = 3, Bits = 8, Compression = 1, Palette = Pal4, Data = stream }.Build();
         Rgba32 z = Pal4[0];
-        Assert.Equal(
-            [
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([
                 Pal4[0], Pal4[1], Pal4[2], z,   // file row 2 (top)
                 z, z, z, Pal4[3],               // file row 1
                 Pal4[1], Pal4[1], z, z,         // file row 0 (bottom)
-            ],
-            Pixels(bmp));
+            ], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Rle4_OddAbsoluteRunAndAlternatingNibbles()
+    [Test]
+    public async Task Rle4_OddAbsoluteRunAndAlternatingNibbles()
     {
         byte[] stream =
         [
@@ -113,19 +111,19 @@ public class BmpDecoderTests
             0, 1,
         ];
         byte[] bmp = new BmpBuilder { Width = 6, Height = 1, Bits = 4, Compression = 2, Palette = Pal4, Data = stream }.Build();
-        Assert.Equal([Pal4[1], Pal4[2], Pal4[3], Pal4[0], Pal4[1], Pal4[0]], Pixels(bmp));
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([Pal4[1], Pal4[2], Pal4[3], Pal4[0], Pal4[1], Pal4[0]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Rle_ClipsLongRunsAndToleratesTruncation()
+    [Test]
+    public async Task Rle_ClipsLongRunsAndToleratesTruncation()
     {
         byte[] stream = [255, 2, 0, 0, 3];  // a run wider than the image, then a cut-off command
         byte[] bmp = new BmpBuilder { Width = 2, Height = 2, Bits = 8, Compression = 1, Palette = Pal4, Data = stream }.Build();
-        Assert.Equal([Pal4[0], Pal4[0], Pal4[2], Pal4[2]], Pixels(bmp));
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([Pal4[0], Pal4[0], Pal4[2], Pal4[2]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Rle_HostileDeltas_DoNotOverflow()
+    [Test]
+    public async Task Rle_HostileDeltas_DoNotOverflow()
     {
         var stream = new List<byte>();
         for (int i = 0; i < 100_000; i++)
@@ -134,11 +132,14 @@ public class BmpDecoderTests
         }
 
         byte[] bmp = new BmpBuilder { Width = 2, Height = 2, Bits = 8, Compression = 1, Palette = Pal4, Data = [.. stream] }.Build();
-        Assert.All(Pixels(bmp), p => Assert.Equal(Pal4[0], p));
+        foreach (var p in Pixels(bmp))
+        {
+            await Assert.That(p).IsEqualTo(Pal4[0]);
+        }
     }
 
-    [Fact]
-    public void BitFields_V3_ReadsAlphaMask()
+    [Test]
+    public async Task BitFields_V3_ReadsAlphaMask()
     {
         // RGBA byte order: R = 0x000000FF, G = 0x0000FF00, B = 0x00FF0000, A = 0xFF000000.
         byte[] bmp = new BmpBuilder
@@ -152,12 +153,12 @@ public class BmpDecoderTests
             Rows = [[10, 20, 30, 40, 50, 60, 70, 255]],
         }.Build();
         using Image image = Image.Load(bmp);
-        Assert.True(image.HasAlpha);
-        Assert.Equal([new Rgba32(10, 20, 30, 40), new Rgba32(50, 60, 70, 255)], image.GetPixelSpan().ToArray());
+        await Assert.That(image.HasAlpha).IsTrue();
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo([new Rgba32(10, 20, 30, 40), new Rgba32(50, 60, 70, 255)], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void BitFields_V2Header_HasNoAlpha()
+    [Test]
+    public async Task BitFields_V2Header_HasNoAlpha()
     {
         byte[] bmp = new BmpBuilder
         {
@@ -170,12 +171,12 @@ public class BmpDecoderTests
             Rows = [[0xFF, 0xFF]],
         }.Build();
         using Image image = Image.Load(bmp);
-        Assert.False(image.HasAlpha);
-        Assert.Equal(new Rgba32(255, 255, 255, 255), image[0, 0]);
+        await Assert.That(image.HasAlpha).IsFalse();
+        await Assert.That(image[0, 0]).IsEqualTo(new Rgba32(255, 255, 255, 255));
     }
 
-    [Fact]
-    public void AlphaBitFields_InfoHeader_ReadsFourMasks()
+    [Test]
+    public async Task AlphaBitFields_InfoHeader_ReadsFourMasks()
     {
         byte[] bmp = new BmpBuilder
         {
@@ -187,12 +188,12 @@ public class BmpDecoderTests
             Rows = [[0x1F, 0x00]],  // blue only, alpha bit clear
         }.Build();
         using Image image = Image.Load(bmp);
-        Assert.True(image.HasAlpha);
-        Assert.Equal(new Rgba32(0, 0, 255, 0), image[0, 0]);
+        await Assert.That(image.HasAlpha).IsTrue();
+        await Assert.That(image[0, 0]).IsEqualTo(new Rgba32(0, 0, 255, 0));
     }
 
-    [Fact]
-    public void BitFields_ScaleArbitraryWidthsLikePillow()
+    [Test]
+    public async Task BitFields_ScaleArbitraryWidthsLikePillow()
     {
         // 32-bit 10-10-10-2 and 16-bit 1-5-5-5: v * 255 / max, truncated.
         uint p32 = (1023u << 20) | (512u << 10) | 1u | (1u << 30);
@@ -206,7 +207,7 @@ public class BmpDecoderTests
             Masks = [0x3FF00000, 0xFFC00, 0x3FF, 0xC0000000],
             Rows = [BitConverter.GetBytes(p32)],
         }.Build();
-        Assert.Equal(new Rgba32(255, 512 * 255 / 1023, 0, 85), Pixels(bmp)[0]);
+        await Assert.That(Pixels(bmp)[0]).IsEqualTo(new Rgba32(255, 512 * 255 / 1023, 0, 85));
 
         ushort p16 = (ushort)(0x8000 | (16 << 10) | (1 << 5) | 31);
         bmp = new BmpBuilder
@@ -219,59 +220,59 @@ public class BmpDecoderTests
             Masks = [0x7C00, 0x3E0, 0x1F, 0x8000],
             Rows = [BitConverter.GetBytes(p16)],
         }.Build();
-        Assert.Equal(new Rgba32(16 * 255 / 31, 8, 255, 255), Pixels(bmp)[0]);
+        await Assert.That(Pixels(bmp)[0]).IsEqualTo(new Rgba32(16 * 255 / 31, 8, 255, 255));
     }
 
-    [Fact]
-    public void Rgb32_IgnoresReservedByte()
+    [Test]
+    public async Task Rgb32_IgnoresReservedByte()
     {
         byte[] bmp = new BmpBuilder { Width = 1, Height = 1, Bits = 32, Rows = [[1, 2, 3, 77]] }.Build();
         using Image image = Image.Load(bmp);
-        Assert.False(image.HasAlpha);
-        Assert.Equal(new Rgba32(3, 2, 1, 255), image[0, 0]);
+        await Assert.That(image.HasAlpha).IsFalse();
+        await Assert.That(image[0, 0]).IsEqualTo(new Rgba32(3, 2, 1, 255));
     }
 
-    [Fact]
-    public void Os2V2_TruncatedHeader_Decodes()
+    [Test]
+    public async Task Os2V2_TruncatedHeader_Decodes()
     {
         byte[] bmp = new BmpBuilder { Width = 2, Height = 1, Bits = 8, HeaderSize = 16, Palette = Pal4, ColorsUsed = 0, Rows = [[3, 2]] }.Build();
-        Assert.Equal([Pal4[3], Pal4[2]], Pixels(bmp));
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([Pal4[3], Pal4[2]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Os2V1_PaletteSizeFollowsDataOffset()
+    [Test]
+    public async Task Os2V1_PaletteSizeFollowsDataOffset()
     {
         // Only four 3-byte entries before the pixels, although 8 bits allow 256.
         byte[] bmp = new BmpBuilder { Width = 2, Height = 1, Bits = 8, HeaderSize = 12, Palette = Pal4, Rows = [[1, 5]] }.Build();
-        Assert.Equal([Pal4[1], Black], Pixels(bmp));
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([Pal4[1], Black], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void ZeroDataOffset_MeansAfterPalette()
+    [Test]
+    public async Task ZeroDataOffset_MeansAfterPalette()
     {
         byte[] bmp = new BmpBuilder { Width = 1, Height = 1, Bits = 8, Palette = Pal4, OffBits = 0, Rows = [[2]] }.Build();
-        Assert.Equal([Pal4[2]], Pixels(bmp));
+        await Assert.That(Pixels(bmp)).IsEquivalentTo([Pal4[2]], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void MissingPaddingOfLastRow_IsAccepted()
+    [Test]
+    public async Task MissingPaddingOfLastRow_IsAccepted()
     {
         byte[] bmp = new BmpBuilder { Width = 1, Height = 2, Bits = 24, Rows = [[1, 2, 3], [4, 5, 6]] }.Build();
-        Assert.Equal([new Rgba32(3, 2, 1, 255), new Rgba32(6, 5, 4, 255)], Pixels(bmp[..^1]));
-        Assert.Throws<ImageFormatException>(() => Pixels(bmp[..^5]));
+        await Assert.That(Pixels(bmp[..^1])).IsEquivalentTo([new Rgba32(3, 2, 1, 255), new Rgba32(6, 5, 4, 255)], CollectionOrdering.Matching);
+        Assert.ThrowsExactly<ImageFormatException>(() => Pixels(bmp[..^5]));
     }
 
-    [Fact]
-    public void Resolution_ComesFromPixelsPerMeter()
+    [Test]
+    public async Task Resolution_ComesFromPixelsPerMeter()
     {
         using Image image = Image.Load(new BmpBuilder { Width = 1, Height = 1, PixelsPerMeter = 11811, Rows = [[0, 0, 0]] }.Build());
-        Assert.Equal(300f, image.Metadata.HorizontalResolution, 0.01f);
+        await Assert.That(image.Metadata.HorizontalResolution).IsEqualTo(300f).Within(0.01f);
         using Image unspecified = Image.Load(new BmpBuilder { Width = 1, Height = 1, Rows = [[0, 0, 0]] }.Build());
-        Assert.Equal(96f, unspecified.Metadata.HorizontalResolution);
+        await Assert.That(unspecified.Metadata.HorizontalResolution).IsEqualTo(96f);
     }
 
-    [Fact]
-    public void V5_EmbeddedProfile_IsRead()
+    [Test]
+    public async Task V5_EmbeddedProfile_IsRead()
     {
         byte[] icc = [1, 2, 3, 4, 5, 6, 7];
         byte[] bmp = new BmpBuilder
@@ -289,40 +290,40 @@ public class BmpDecoderTests
             Trailer = icc,
         }.Build();
         using Image image = Image.Load(bmp);
-        Assert.Equal(icc, image.Metadata.IccProfile);
+        await Assert.That(image.Metadata.IccProfile).IsEquivalentTo(icc, CollectionOrdering.Matching);
         using Image noMeta = Image.Load(bmp, new DecoderOptions { IgnoreMetadata = true });
         Assert.Null(noMeta.Metadata.IccProfile);
     }
 
-    [Fact]
-    public void EmbeddedPng_IsDecoded()
+    [Test]
+    public async Task EmbeddedPng_IsDecoded()
     {
         using var source = new Image(3, 2, System.Drawing.Color.FromArgb(128, 10, 20, 30));
         source[1, 1] = new Rgba32(200, 100, 50, 255);
         byte[] png = source.ToPng();
         byte[] bmp = new BmpBuilder { Width = 3, Height = 2, Bits = 0, Compression = 5, Data = png, ImageSize = (uint)png.Length }.Build();
         using Image image = Image.Load(bmp);
-        Assert.Equal(ImageFormat.Bmp, image.SourceFormat);
-        Assert.True(image.HasAlpha);
-        Assert.Equal(source.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
-        Assert.True(Image.Identify(bmp).HasAlpha);
+        await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Bmp);
+        await Assert.That(image.HasAlpha).IsTrue();
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(Image.Identify(bmp).HasAlpha).IsTrue();
     }
 
-    [Fact]
-    public void EmbeddedJpeg_IsDecoded()
+    [Test]
+    public async Task EmbeddedJpeg_IsDecoded()
     {
         byte[] jpeg = Corpus.Read("jpeg/odd_420.jpg");
         byte[] bmp = new BmpBuilder { Width = 171, Height = 93, Bits = 0, Compression = 4, Data = jpeg }.Build();
         using Image image = Image.Load(bmp);
         using Image direct = Image.Load(jpeg);
-        Assert.Equal(ImageFormat.Bmp, image.SourceFormat);
-        Assert.Equal(direct.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
+        await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Bmp);
+        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(direct.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
 
         byte[] broken = new BmpBuilder { Width = 1, Height = 1, Bits = 0, Compression = 4, Data = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(broken));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(broken));
     }
 
-    public static TheoryData<string, byte[]> InvalidFiles() => new()
+    public static TestCases<string, byte[]> InvalidFiles() => new()
     {
         { "header size", new BmpBuilder { Width = 1, Height = 1, HeaderSize = 100, Rows = [[0, 0, 0]] }.Build() },
         { "planes", new BmpBuilder { Width = 1, Height = 1, Planes = 2, Rows = [[0, 0, 0]] }.Build() },
@@ -340,28 +341,28 @@ public class BmpDecoderTests
         { "truncated header", new BmpBuilder { Width = 1, Height = 1, HeaderSize = 124, Rows = [[0, 0, 0]] }.Build()[..40] },
     };
 
-    [Theory]
-    [MemberData(nameof(InvalidFiles))]
+    [Test]
+    [MethodDataSource(nameof(InvalidFiles))]
     public void Decode_InvalidFile_ThrowsFormatException(string reason, byte[] bmp)
     {
         Assert.NotNull(reason);
-        Assert.Throws<ImageFormatException>(() => Image.Load(bmp));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(bmp));
     }
 
-    [Theory]
-    [InlineData(64, 0u)]
-    [InlineData(32, 11u)]
-    [InlineData(1, 3u)]   // OS/2 Huffman 1D
+    [Test]
+    [Arguments(64, 0u)]
+    [Arguments(32, 11u)]
+    [Arguments(1, 3u)]   // OS/2 Huffman 1D
     public void Decode_UnsupportedVariant_ThrowsNotSupported(int bits, uint compression)
     {
         byte[] bmp = new BmpBuilder { Width = 1, Height = 1, Bits = bits, Compression = compression, HeaderSize = 64, Rows = [new byte[8]] }.Build();
-        Assert.Throws<NotSupportedException>(() => Image.Load(bmp));
+        Assert.ThrowsExactly<NotSupportedException>(() => Image.Load(bmp));
     }
 
-    [Fact]
+    [Test]
     public void Decode_RespectsMaxPixels()
     {
         byte[] bmp = new BmpBuilder { Width = 100_000, Height = 100_000, Bits = 1, Palette = Pal4[..2], Rows = [] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(bmp, new DecoderOptions { MaxPixels = 1 << 20 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(bmp, new DecoderOptions { MaxPixels = 1 << 20 }));
     }
 }

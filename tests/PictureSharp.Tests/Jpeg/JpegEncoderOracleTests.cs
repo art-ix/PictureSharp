@@ -5,9 +5,9 @@ namespace PictureSharp.Tests.Jpeg;
 
 public class JpegEncoderOracleTests
 {
-    [Fact]
-    [Trait("Category", "Oracle")]
-    public void AllSamplingAndRestartModes_AreByteExactWithLibjpeg_AndOpenInPillowAndImageMagick()
+    [Test]
+    [Property("Category", "Oracle")]
+    public async Task AllSamplingAndRestartModes_AreByteExactWithLibjpeg_AndOpenInPillowAndImageMagick()
     {
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-jpeg-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -15,7 +15,7 @@ public class JpegEncoderOracleTests
         {
             string oracle = Path.Combine(directory, "oracle");
             string source = Path.Combine(Corpus.Assets, "jpeg_encode_oracle.c");
-            if (ReferenceTools.Run("cc", $"\"{source}\" -ljpeg -o \"{oracle}\"", out _) != 0) return;
+            Skip.Unless(ReferenceTools.Run("cc", $"\"{source}\" -ljpeg -o \"{oracle}\"", out _) == 0, "cc with libjpeg is not available.");
             string raw = Path.Combine(directory, "input.rgb"), expectedPath = Path.Combine(directory, "expected.jpg");
             string actualPath = Path.Combine(directory, "actual.jpg"), rgba = Path.Combine(directory, "decoded.rgba");
             string script = Path.Combine(directory, "decode.py");
@@ -46,16 +46,16 @@ public class JpegEncoderOracleTests
                             if (width == 2048 && (sampling != JpegSubsampling.Ratio420 || !progressive || interval is not (0 or 7))) continue;
                             var options = new JpegEncoderOptions { Subsampling = sampling, RestartInterval = interval, OptimizeCoding = optimize, Progressive = progressive, Quality = 90 };
                             byte[] encoded = image.ToJpeg(options);
-                            Assert.Equal(0, ReferenceTools.Run(oracle, $"\"{raw}\" \"{expectedPath}\" {width} {height} 90 {(int)sampling} {(optimize ? 1 : 0)} {(progressive ? 1 : 0)} {interval} {(gray ? 1 : 0)}", out _));
-                            Assert.True(File.ReadAllBytes(expectedPath).AsSpan().SequenceEqual(encoded), $"{width}x{height} gray={gray}, {sampling}, restart={interval}, optimize={optimize}, progressive={progressive}");
+                            await Assert.That(ReferenceTools.Run(oracle, $"\"{raw}\" \"{expectedPath}\" {width} {height} 90 {(int)sampling} {(optimize ? 1 : 0)} {(progressive ? 1 : 0)} {interval} {(gray ? 1 : 0)}", out _)).IsEqualTo(0);
+                            await Assert.That(File.ReadAllBytes(expectedPath).AsSpan().SequenceEqual(encoded)).IsTrue().Because($"{width}x{height} gray={gray}, {sampling}, restart={interval}, optimize={optimize}, progressive={progressive}");
                             File.WriteAllBytes(actualPath, encoded);
                             using Image decoded = Image.Load(encoded.AsMemory());
                             if (pillow)
                             {
-                                Assert.Equal(0, ReferenceTools.Run("python3", $"-I \"{script}\" \"{actualPath}\" \"{rgba}\"", out _));
-                                Assert.Equal(File.ReadAllBytes(rgba), decoded.ToPixelData(PixelFormat.Rgba32));
+                                await Assert.That(ReferenceTools.Run("python3", $"-I \"{script}\" \"{actualPath}\" \"{rgba}\"", out _)).IsEqualTo(0);
+                                await Assert.That(decoded.ToPixelData(PixelFormat.Rgba32)).IsEquivalentTo(File.ReadAllBytes(rgba), CollectionOrdering.Matching);
                             }
-                            if (convert) Assert.Equal(0, ReferenceTools.Run("convert", $"\"{actualPath}\" null:", out _));
+                            if (convert) await Assert.That(ReferenceTools.Run("convert", $"\"{actualPath}\" null:", out _)).IsEqualTo(0);
                         }
             }
         }

@@ -13,7 +13,7 @@ public class EncodingAndIdentificationApiTests
 {
     private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
 
-    public static TheoryData<ImageFormat, EncoderOptions> Formats => new()
+    public static TestCases<ImageFormat, EncoderOptions> Formats => new()
     {
         { ImageFormat.WebP, new WebPEncoderOptions() },
         { ImageFormat.Png, new PngEncoderOptions() },
@@ -24,29 +24,29 @@ public class EncodingAndIdentificationApiTests
         { ImageFormat.Ico, new IcoEncoderOptions() },
     };
 
-    [Theory]
-    [MemberData(nameof(Formats))]
-    public void Encode_UsesDefaultOptionsAndMatchesStreamSave(ImageFormat format, EncoderOptions options)
+    [Test]
+    [MethodDataSource(nameof(Formats))]
+    public async Task Encode_UsesDefaultOptionsAndMatchesStreamSave(ImageFormat format, EncoderOptions options)
     {
         using Image image = Image.Load(Corpus.Read("png/tiny.png"));
         using var stream = new MemoryStream();
         image.Save(stream, options);
-        Assert.Equal(stream.ToArray(), image.Encode(options));
-        Assert.Equal(stream.ToArray(), image.Encode(format));
-        Assert.Equal(format, Image.Identify(image.Encode(format)).Format);
+        await Assert.That(image.Encode(options)).IsEquivalentTo(stream.ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.Encode(format)).IsEquivalentTo(stream.ToArray(), CollectionOrdering.Matching);
+        await Assert.That(Image.Identify(image.Encode(format)).Format).IsEqualTo(format);
     }
 
-    [Theory]
-    [InlineData("a.webp", "WebP")]
-    [InlineData("a.png", "PNG")]
-    [InlineData("a.apng", "PNG")]
-    [InlineData("a.jpg", "JPEG")]
-    [InlineData("a.bmp", "BMP")]
-    [InlineData("a.DIB", "BMP")]
-    [InlineData("a.gif", "GIF")]
-    [InlineData("a.pcx", "PCX")]
-    [InlineData("a.ico", "ICO")]
-    public void SaveToFile_ChoosesFormatFromExtension_AndMatchesEncode(string file, string format)
+    [Test]
+    [Arguments("a.webp", "WebP")]
+    [Arguments("a.png", "PNG")]
+    [Arguments("a.apng", "PNG")]
+    [Arguments("a.jpg", "JPEG")]
+    [Arguments("a.bmp", "BMP")]
+    [Arguments("a.DIB", "BMP")]
+    [Arguments("a.gif", "GIF")]
+    [Arguments("a.pcx", "PCX")]
+    [Arguments("a.ico", "ICO")]
+    public async Task SaveToFile_ChoosesFormatFromExtension_AndMatchesEncode(string file, string format)
     {
         using Image image = Image.Load(Corpus.Read("png/tiny.png"));
         string directory = Path.Combine(Path.GetTempPath(), $"picturesharp-save-{Guid.NewGuid():N}");
@@ -56,9 +56,9 @@ public class EncodingAndIdentificationApiTests
             string path = Path.Combine(directory, file);
             image.Save(path);
             ImageFormat expected = ImageFormat.All.Single(f => f.Name == format);
-            Assert.Equal(image.Encode(expected), File.ReadAllBytes(path));
+            await Assert.That(File.ReadAllBytes(path)).IsEquivalentTo(image.Encode(expected), CollectionOrdering.Matching);
             using Image loaded = Image.Load(path);
-            Assert.Same(expected, loaded.SourceFormat);
+            await Assert.That(loaded.SourceFormat).IsSameReferenceAs(expected);
         }
         finally
         {
@@ -66,36 +66,36 @@ public class EncodingAndIdentificationApiTests
         }
     }
 
-    [Fact]
-    public void Encode_ValidatesNullAndDisposedImage()
+    [Test]
+    public async Task Encode_ValidatesNullAndDisposedImage()
     {
         using var image = new Image(1, 1);
-        Assert.Equal("format", Assert.Throws<ArgumentNullException>(() => image.Encode((ImageFormat)null!)).ParamName);
-        Assert.Equal("options", Assert.Throws<ArgumentNullException>(() => image.Encode((EncoderOptions)null!)).ParamName);
+        await Assert.That(Assert.ThrowsExactly<ArgumentNullException>(() => image.Encode((ImageFormat)null!)).ParamName).IsEqualTo("format");
+        await Assert.That(Assert.ThrowsExactly<ArgumentNullException>(() => image.Encode((EncoderOptions)null!)).ParamName).IsEqualTo("options");
         image.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => image.Encode(ImageFormat.Png));
-        Assert.Throws<ObjectDisposedException>(() => image.Encode(new PngEncoderOptions()));
+        Assert.ThrowsExactly<ObjectDisposedException>(() => image.Encode(ImageFormat.Png));
+        Assert.ThrowsExactly<ObjectDisposedException>(() => image.Encode(new PngEncoderOptions()));
     }
 
-    [Theory]
-    [InlineData("png/exif.png")]
-    [InlineData("jpeg/q90_444.jpg")]
-    [InlineData("webp/anim/alpha_lossless.webp")]
-    [InlineData("gif/pil_anim_alpha.gif")]
-    public void Identify_ArrayMemoryAndSpanAgree_AndRespectSlices(string path)
+    [Test]
+    [Arguments("png/exif.png")]
+    [Arguments("jpeg/q90_444.jpg")]
+    [Arguments("webp/anim/alpha_lossless.webp")]
+    [Arguments("gif/pil_anim_alpha.gif")]
+    public async Task Identify_ArrayMemoryAndSpanAgree_AndRespectSlices(string path)
     {
         byte[] data = Corpus.Read(path);
         byte[] padded = [99, 98, .. data, 97];
         ImageInfo expected = Image.Identify(data);
-        Assert.Equal(expected, Image.Identify(padded.AsMemory(2, data.Length)));
-        Assert.Equal(expected, Image.Identify(padded.AsSpan(2, data.Length)));
-        Assert.Equal(expected, Image.Identify((ReadOnlyMemory<byte>)data));
-        Assert.Equal(expected, Image.Identify((ReadOnlySpan<byte>)data));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(ReadOnlyMemory<byte>.Empty));
+        await Assert.That(Image.Identify(padded.AsMemory(2, data.Length))).IsEqualTo(expected);
+        await Assert.That(Image.Identify(padded.AsSpan(2, data.Length))).IsEqualTo(expected);
+        await Assert.That(Image.Identify((ReadOnlyMemory<byte>)data)).IsEqualTo(expected);
+        await Assert.That(Image.Identify((ReadOnlySpan<byte>)data)).IsEqualTo(expected);
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Identify(ReadOnlyMemory<byte>.Empty));
     }
 
-    [Fact]
-    public void Identify_MemoryDoesNotCopyLargeInput()
+    [Test]
+    public async Task Identify_MemoryDoesNotCopyLargeInput()
     {
         byte[] png = Corpus.Read("png/tiny.png");
         byte[] padded = new byte[2 * 1024 * 1024];
@@ -105,33 +105,33 @@ public class EncodingAndIdentificationApiTests
         long before = GC.GetAllocatedBytesForCurrentThread();
         ImageInfo actual = Image.Identify(memory);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.Equal(expected, actual);
-        Assert.True(allocated < padded.Length / 2, $"Identify allocated {allocated} bytes for {padded.Length} input bytes.");
+        await Assert.That(actual).IsEqualTo(expected);
+        await Assert.That(allocated < padded.Length / 2).IsTrue().Because($"Identify allocated {allocated} bytes for {padded.Length} input bytes.");
     }
 
-    [Fact]
-    public void LoadAndSave_ThroughEveryEntryPoint()
+    [Test]
+    public async Task LoadAndSave_ThroughEveryEntryPoint()
     {
         using Image img = ImageTests.Pattern(5, 4);
         byte[] png = img.ToPng();
         using Image fromArray = Image.Load(png);
         using Image fromSpan = Image.Load(png.AsSpan());
         using Image fromStream = Image.Load(new MemoryStream(png));
-        Assert.Equal(ImageFormat.Png, fromArray.SourceFormat);
-        Assert.Equal(Pixels(fromArray), Pixels(fromSpan));
-        Assert.Equal(Pixels(fromArray), Pixels(fromStream));
-        Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
+        await Assert.That(fromArray.SourceFormat).IsEqualTo(ImageFormat.Png);
+        await Assert.That(Pixels(fromSpan)).IsEquivalentTo(Pixels(fromArray), CollectionOrdering.Matching);
+        await Assert.That(Pixels(fromStream)).IsEquivalentTo(Pixels(fromArray), CollectionOrdering.Matching);
+        await Assert.That(Image.DetectFormat(png)).IsEqualTo(ImageFormat.Png);
 
         using var stream = new MemoryStream();
         img.SaveAsWebP(stream, new() { Lossless = true, Exact = true });
         stream.Position = 0;
-        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(stream));
-        Assert.Equal(0, stream.Position);
+        await Assert.That(Image.DetectFormat(stream)).IsEqualTo(ImageFormat.WebP);
+        await Assert.That(stream.Position).IsEqualTo(0);
         using Image webp = Image.Load(stream);
-        Assert.Equal(Pixels(img), Pixels(webp));
+        await Assert.That(Pixels(webp)).IsEquivalentTo(Pixels(img), CollectionOrdering.Matching);
     }
 
-    [Fact]
+    [Test]
     public async Task AsyncEntryPoints_RoundTrip()
     {
         string dir = Path.Combine(Path.GetTempPath(), $"picturesharp-async-{Guid.NewGuid():N}");
@@ -143,13 +143,13 @@ public class EncodingAndIdentificationApiTests
             string webp = Path.Combine(dir, "a.webp");
             await img.SaveAsync(png);
             await img.SaveAsWebPAsync(webp, new() { Lossless = true, Exact = true });
-            Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
+            await Assert.That(Image.DetectFormat(png)).IsEqualTo(ImageFormat.Png);
             ImageInfo info = await Image.IdentifyAsync(webp);
-            Assert.Equal((6, 3), (info.Width, info.Height));
+            await Assert.That((info.Width, info.Height)).IsEqualTo((6, 3));
             using Image back = await Image.LoadAsync(webp);
-            Assert.Equal(Pixels(img), Pixels(back));
+            await Assert.That(Pixels(back)).IsEquivalentTo(Pixels(img), CollectionOrdering.Matching);
             using Image limited = await Image.LoadAsync(png, new DecoderOptions { FirstFrameOnly = true });
-            Assert.Equal(Pixels(img), Pixels(limited));
+            await Assert.That(Pixels(limited)).IsEquivalentTo(Pixels(img), CollectionOrdering.Matching);
         }
         finally
         {

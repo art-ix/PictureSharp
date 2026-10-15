@@ -9,94 +9,94 @@ namespace PictureSharp.Tests.Core;
 
 public class RgbaAndFormatTests
 {
-    [Fact]
-    public void Rgba32_ConvertsToAndFromColor()
+    [Test]
+    public async Task Rgba32_ConvertsToAndFromColor()
     {
         var p = new Rgba32(10, 20, 30, 40);
         Color c = p;
-        Assert.Equal(Color.FromArgb(40, 10, 20, 30).ToArgb(), c.ToArgb());
-        Assert.Equal(p, (Rgba32)c);
-        Assert.Equal(0x280A141Eu, p.ToArgb());
-        Assert.Equal(p, Rgba32.FromArgb(p.ToArgb()));
-        Assert.Equal(0x281E140Au, p.PackedValue);
+        await Assert.That(c.ToArgb()).IsEqualTo(Color.FromArgb(40, 10, 20, 30).ToArgb());
+        await Assert.That((Rgba32)c).IsEqualTo(p);
+        await Assert.That(p.ToArgb()).IsEqualTo(0x280A141Eu);
+        await Assert.That(Rgba32.FromArgb(p.ToArgb())).IsEqualTo(p);
+        await Assert.That(p.PackedValue).IsEqualTo(0x281E140Au);
     }
 
-    [Theory]
-    [InlineData("a.webp", "WebP")]
-    [InlineData("A.PNG", "PNG")]
-    [InlineData("x/y/photo.jpeg", "JPEG")]
-    [InlineData(".jpg", "JPEG")]
-    [InlineData("jfif", "JPEG")]
-    public void ImageFormat_FromExtension(string input, string expected) =>
-        Assert.Equal(expected, ImageFormat.FromExtension(input)?.Name);
+    [Test]
+    [Arguments("a.webp", "WebP")]
+    [Arguments("A.PNG", "PNG")]
+    [Arguments("x/y/photo.jpeg", "JPEG")]
+    [Arguments(".jpg", "JPEG")]
+    [Arguments("jfif", "JPEG")]
+    public async Task ImageFormat_FromExtension(string input, string expected) =>
+        await Assert.That(ImageFormat.FromExtension(input)?.Name).IsEqualTo(expected);
 
-    [Fact]
+    [Test]
     public void ImageFormat_FromExtension_Unknown() => Assert.Null(ImageFormat.FromExtension("file.tiff"));
 
-    public static TheoryData<string> AllFiles => Corpus.Files("");
+    public static TestCases<string> AllFiles => Corpus.Files("");
 
-    [Theory]
-    [MemberData(nameof(AllFiles))]
-    public void FormatDetector_RecognizesCorpus(string file)
+    [Test]
+    [MethodDataSource(nameof(AllFiles))]
+    public async Task FormatDetector_RecognizesCorpus(string file)
     {
         ImageFormat? format = Image.DetectFormat(Corpus.Read(file).AsSpan(0, LibraryServices.Codecs.HeaderSize));
         Assert.NotNull(format);
-        Assert.Equal(Corpus.References[file].Format, format.Name);
+        await Assert.That(format.Name).IsEqualTo(Corpus.References[file].Format);
     }
 
-    [Fact]
+    [Test]
     public void FormatDetector_RejectsGarbage()
     {
         Assert.Null(Image.DetectFormat("RIFF\0\0\0\0WAVE"u8));
         Assert.Null(Image.DetectFormat([]));
-        Assert.Throws<ImageFormatException>(() => Image.Load("not an image"u8));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load("not an image"u8));
     }
 
-    public static TheoryData<string> AllFormats => [.. ImageFormat.All.Select(f => f.Name)];
+    public static TestCases<string> AllFormats => [.. ImageFormat.All.Select(f => f.Name)];
 
-    [Theory]
-    [MemberData(nameof(AllFormats))]
-    public void CodecRegistry_CoversEveryFormat(string name)
+    [Test]
+    [MethodDataSource(nameof(AllFormats))]
+    public async Task CodecRegistry_CoversEveryFormat(string name)
     {
         ImageFormat format = ImageFormat.All.Single(f => f.Name == name);
         IImageFormatDetector? detector = LibraryServices.Codecs.GetDetector(format);
         Assert.NotNull(detector);
-        Assert.True(detector.HeaderSize <= LibraryServices.Codecs.HeaderSize);
-        Assert.Equal(format, LibraryServices.Codecs.GetDecoder(format)?.Format);
-        Assert.Equal(format, LibraryServices.Codecs.GetEncoder(format)?.Format);
-        Assert.True(format.CanDecode);
-        Assert.True(format.CanEncode);
-        Assert.Equal(format, LibraryServices.Codecs.GetEncoder(format)!.CreateDefaultOptions().Format);
+        await Assert.That(detector.HeaderSize <= LibraryServices.Codecs.HeaderSize).IsTrue();
+        await Assert.That(LibraryServices.Codecs.GetDecoder(format)?.Format).IsEqualTo(format);
+        await Assert.That(LibraryServices.Codecs.GetEncoder(format)?.Format).IsEqualTo(format);
+        await Assert.That(format.CanDecode).IsTrue();
+        await Assert.That(format.CanEncode).IsTrue();
+        await Assert.That(LibraryServices.Codecs.GetEncoder(format)!.CreateDefaultOptions().Format).IsEqualTo(format);
     }
 
-    [Fact]
-    public void FormatDetector_HeaderSizeCoversWebP() => Assert.Equal(12, LibraryServices.Codecs.HeaderSize);
+    [Test]
+    public async Task FormatDetector_HeaderSizeCoversWebP() => await Assert.That(LibraryServices.Codecs.HeaderSize).IsEqualTo(12);
 
-    [Fact]
+    [Test]
     public void Encoder_RejectsOptionsOfAnotherFormat()
     {
         IImageEncoder encoder = PictureSharp.Infrastructure.Codecs.Png.PngEncoder.Instance;
         using Image image = Image.LoadPixelData([default(Rgba32)], 1, 1);
-        Assert.Throws<ArgumentException>(() => encoder.Encode(image, Stream.Null, new BmpEncoderOptions(), CancellationToken.None));
+        Assert.ThrowsExactly<ArgumentException>(() => encoder.Encode(image, Stream.Null, new BmpEncoderOptions(), CancellationToken.None));
     }
 
-    [Fact]
-    public void Rgba32_ParsesHexAndNames()
+    [Test]
+    public async Task Rgba32_ParsesHexAndNames()
     {
-        Assert.Equal(new Rgba32(0x11, 0x22, 0x33), Rgba32.Parse("#123"));
-        Assert.Equal(new Rgba32(0x11, 0x22, 0x33, 0x44), Rgba32.Parse("1234"));
-        Assert.Equal(new Rgba32(0xAB, 0xCD, 0xEF), Rgba32.Parse("#abcdef"));
-        Assert.Equal(new Rgba32(1, 2, 3, 4), Rgba32.Parse(" #01020304 "));
-        Assert.Equal(Rgba32.FromColor(Color.CornflowerBlue), Rgba32.Parse("cornflowerblue"));
-        Assert.Equal("#01020304", new Rgba32(1, 2, 3, 4).ToHex());
-        Assert.True(Rgba32.TryParse(new Rgba32(9, 8, 7, 6).ToHex(), out Rgba32 back));
-        Assert.Equal(new Rgba32(9, 8, 7, 6), back);
-        Assert.False(Rgba32.TryParse("#12345", out _));
-        Assert.False(Rgba32.TryParse("#red", out _));
-        Assert.False(Rgba32.TryParse("NoSuchColor", out _));
-        Assert.False(Rgba32.TryParse((string?)null, out _));
-        Assert.Throws<FormatException>(() => Rgba32.Parse("xyz"));
+        await Assert.That(Rgba32.Parse("#123")).IsEqualTo(new Rgba32(0x11, 0x22, 0x33));
+        await Assert.That(Rgba32.Parse("1234")).IsEqualTo(new Rgba32(0x11, 0x22, 0x33, 0x44));
+        await Assert.That(Rgba32.Parse("#abcdef")).IsEqualTo(new Rgba32(0xAB, 0xCD, 0xEF));
+        await Assert.That(Rgba32.Parse(" #01020304 ")).IsEqualTo(new Rgba32(1, 2, 3, 4));
+        await Assert.That(Rgba32.Parse("cornflowerblue")).IsEqualTo(Rgba32.FromColor(Color.CornflowerBlue));
+        await Assert.That(new Rgba32(1, 2, 3, 4).ToHex()).IsEqualTo("#01020304");
+        await Assert.That(Rgba32.TryParse(new Rgba32(9, 8, 7, 6).ToHex(), out Rgba32 back)).IsTrue();
+        await Assert.That(back).IsEqualTo(new Rgba32(9, 8, 7, 6));
+        await Assert.That(Rgba32.TryParse("#12345", out _)).IsFalse();
+        await Assert.That(Rgba32.TryParse("#red", out _)).IsFalse();
+        await Assert.That(Rgba32.TryParse("NoSuchColor", out _)).IsFalse();
+        await Assert.That(Rgba32.TryParse((string?)null, out _)).IsFalse();
+        Assert.ThrowsExactly<FormatException>(() => Rgba32.Parse("xyz"));
         (byte r, byte g, byte b, byte a) = new Rgba32(1, 2, 3, 4);
-        Assert.Equal((1, 2, 3, 4), (r, g, b, a));
+        await Assert.That(((int, int, int, int))((r, g, b, a))).IsEqualTo((1, 2, 3, 4));
     }
 }

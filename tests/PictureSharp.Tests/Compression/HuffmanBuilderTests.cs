@@ -4,7 +4,7 @@ namespace PictureSharp.Tests.Compression;
 
 public class HuffmanBuilderTests
 {
-    private static void AssertValidCode(int[] freqs, int maxLength)
+    private static async Task AssertValidCode(int[] freqs, int maxLength)
     {
         var lengths = new byte[freqs.Length];
         HuffmanBuilder.BuildLengths(freqs, maxLength, lengths);
@@ -12,8 +12,8 @@ public class HuffmanBuilderTests
         double kraft = 0;
         for (int i = 0; i < freqs.Length; i++)
         {
-            Assert.True(lengths[i] <= maxLength, $"length {lengths[i]} > {maxLength}");
-            Assert.True(freqs[i] > 0 == lengths[i] > 0, $"symbol {i}: freq {freqs[i]} length {lengths[i]}; freqs=[{string.Join(",", freqs)}] lengths=[{string.Join(",", lengths)}]");
+            await Assert.That(lengths[i] <= maxLength).IsTrue().Because($"length {lengths[i]} > {maxLength}");
+            await Assert.That(freqs[i] > 0 == lengths[i] > 0).IsTrue().Because($"symbol {i}: freq {freqs[i]} length {lengths[i]}; freqs=[{string.Join(",", freqs)}] lengths=[{string.Join(",", lengths)}]");
             if (lengths[i] > 0)
             {
                 kraft += Math.Pow(2, -lengths[i]);
@@ -22,13 +22,13 @@ public class HuffmanBuilderTests
 
         if (used >= 2)
         {
-            Assert.Equal(1.0, kraft, 9);
+            await Assert.That(Math.Round((double)kraft, 9)).IsEqualTo(Math.Round((double)1.0, 9));
         }
     }
 
-    [Fact]
-    [Trait("Category", "Slow")]
-    public void RandomFrequencies_GiveCompletePrefixCodes()
+    [Test]
+    [Property("Category", "Slow")]
+    public async Task RandomFrequencies_GiveCompletePrefixCodes()
     {
         var rng = new Random(42);
         for (int iteration = 0; iteration < 2000; iteration++)
@@ -48,12 +48,12 @@ public class HuffmanBuilderTests
                 };
             }
 
-            AssertValidCode(freqs, maxLength);
+            await AssertValidCode(freqs, maxLength);
         }
     }
 
-    [Fact]
-    public void Fibonacci_IsLimited()
+    [Test]
+    public async Task Fibonacci_IsLimited()
     {
         var freqs = new int[30];
         freqs[0] = freqs[1] = 1;
@@ -62,7 +62,7 @@ public class HuffmanBuilderTests
             freqs[i] = freqs[i - 1] + freqs[i - 2];
         }
 
-        AssertValidCode(freqs, 15);
-        AssertValidCode(freqs, 7);
+        await AssertValidCode(freqs, 15);
+        await AssertValidCode(freqs, 7);
     }
 }

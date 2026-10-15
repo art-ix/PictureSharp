@@ -25,10 +25,10 @@ public class ArchitectureTests
         ["PublicApi"] = ["PublicApi", "Composition", "Application", "Algorithms", "Domain", "Primitives"],
     };
 
-    [Fact]
-    public void CompiledDependencies_RespectLayerDirections_AndHaveNoLayerCycles()
+    [Test]
+    public async Task CompiledDependencies_RespectLayerDirections_AndHaveNoLayerCycles()
     {
-        Dictionary<string, string> layers = SourceLayers();
+        Dictionary<string, string> layers = await SourceLayers();
         var errors = new SortedSet<string>(StringComparer.Ordinal);
         var edges = Allowed.Keys.ToDictionary(k => k, _ => new HashSet<string>());
         foreach (Type type in Library.GetTypes())
@@ -42,48 +42,51 @@ public class ArchitectureTests
                 if (!Allowed[from].Contains(to)) errors.Add($"{type.FullName} ({from}) -> {dependency.FullName} ({to})");
             }
         }
-        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+        await Assert.That(errors.Count == 0).IsTrue().Because(string.Join(Environment.NewLine, errors));
         foreach (string layer in edges.Keys)
         {
-            Assert.False(Reaches(layer, layer, edges, []), $"A layer dependency cycle includes {layer}.");
+            await Assert.That(Reaches(layer, layer, edges, [])).IsFalse().Because($"A layer dependency cycle includes {layer}.");
         }
     }
 
-    [Fact]
-    public void OnlyInfrastructure_PerformsFilesystemIO()
+    [Test]
+    public async Task OnlyInfrastructure_PerformsFilesystemIO()
     {
-        Dictionary<string, string> layers = SourceLayers();
+        Dictionary<string, string> layers = await SourceLayers();
         var forbidden = new[] { typeof(File), typeof(FileStream), typeof(FileInfo), typeof(Directory), typeof(DirectoryInfo), typeof(FileSystemWatcher), typeof(RandomAccess) };
         var violations = Library.GetTypes().Where(t => Layer(t, layers) != "Infrastructure")
             .SelectMany(t => Dependencies(t).Where(forbidden.Contains).Select(d => $"{t.FullName} -> {d.FullName}"));
-        Assert.Empty(violations);
+        await Assert.That(violations).IsEmpty();
     }
 
-    [Fact]
-    public void CodecRegistration_IsConfinedToComposition()
+    [Test]
+    public async Task CodecRegistration_IsConfinedToComposition()
     {
-        Dictionary<string, string> layers = SourceLayers();
+        Dictionary<string, string> layers = await SourceLayers();
         Type registry = Library.GetType("PictureSharp.Composition.CodecRegistry", throwOnError: true)!;
         var violations = Library.GetTypes().Where(t => Layer(t, layers) != "Composition")
             .Where(t => Dependencies(t).Contains(registry)).Select(t => t.FullName);
-        Assert.Empty(violations);
+        await Assert.That(violations).IsEmpty();
     }
 
-    [Fact]
-    public void PublicNamespaces_AreFunctional_AndImageHasNoOperationFacade()
+    [Test]
+    public async Task PublicNamespaces_AreFunctional_AndImageHasNoOperationFacade()
     {
         foreach (Type type in Library.GetExportedTypes())
         {
-            Assert.True(type.Namespace is "PictureSharp" or "PictureSharp.Processing" or "PictureSharp.Formats"
-                || type.Namespace?.StartsWith("PictureSharp.Formats.", StringComparison.Ordinal) == true, type.FullName);
+            await Assert.That(type.Namespace is "PictureSharp" or "PictureSharp.Processing" or "PictureSharp.Formats"
+                || type.Namespace?.StartsWith("PictureSharp.Formats.", StringComparison.Ordinal) == true).IsTrue().Because(type.FullName ?? "");
         }
         string[] removed = ["Load", "LoadAsync", "Identify", "IdentifyAsync", "DetectFormat", "Save", "SaveAsync", "Encode", "Mutate"];
-        Assert.DoesNotContain(typeof(Image).GetMethods(), m => removed.Contains(m.Name));
-        Assert.All(typeof(Image).GetMethods().Where(m => m.Name == "Clone"), m => Assert.Empty(m.GetParameters()));
+        await Assert.That(typeof(Image).GetMethods()).DoesNotContain(m => removed.Contains(m.Name));
+        foreach (var m in typeof(Image).GetMethods().Where(method => method.Name == "Clone"))
+        {
+            await Assert.That(m.GetParameters()).IsEmpty();
+        }
     }
 
-    [Fact]
-    public void ImageOperations_AreExtensionMembersOfImage_InTheRootNamespace()
+    [Test]
+    public async Task ImageOperations_AreExtensionMembersOfImage_InTheRootNamespace()
     {
         // The model stays free of I/O; callers still write Image.Load and image.Save through C# 14 extension blocks.
         string[] operations = ["Load", "LoadAsync", "Identify", "IdentifyAsync", "DetectFormat", "Save", "SaveAsync", "Encode", "Mutate"];
@@ -95,22 +98,25 @@ public class ArchitectureTests
             .Where(t => !t.Name.Contains('<'))
             .Distinct()
             .ToArray();
-        Assert.Equal([typeof(ImageIOExtensions), typeof(ImageProcessingExtensions)], owners.OrderBy(t => t.Name));
-        Assert.All(owners, t => Assert.True(t.Namespace == "PictureSharp" && t.IsDefined(typeof(ExtensionAttribute)), t.FullName));
+        await Assert.That(owners.OrderBy(t => t.Name)).IsEquivalentTo([typeof(ImageIOExtensions), typeof(ImageProcessingExtensions)], CollectionOrdering.Matching);
+        foreach (var t in owners)
+        {
+            await Assert.That(t.Namespace == "PictureSharp" && t.IsDefined(typeof(ExtensionAttribute))).IsTrue().Because(t.FullName ?? "");
+        }
     }
 
-    [Fact]
-    public void Inspector_FindsMethodCallsFieldsGenericArgumentsAndExceptionHandlers()
+    [Test]
+    public async Task Inspector_FindsMethodCallsFieldsGenericArgumentsAndExceptionHandlers()
     {
         HashSet<Type> found = Dependencies(typeof(DependencyFixture));
-        Assert.Contains(typeof(File), found);
-        Assert.Contains(typeof(Image), found);
-        Assert.Contains(typeof(ImageFormatException), found);
-        Assert.Contains(typeof(ImageFrame), found);
+        await Assert.That(found).Contains(typeof(File));
+        await Assert.That(found).Contains(typeof(Image));
+        await Assert.That(found).Contains(typeof(ImageFormatException));
+        await Assert.That(found).Contains(typeof(ImageFrame));
     }
 
-    [Fact]
-    public void CodecModules_HaveOnlyDeclaredDependencies_AndNoCycles()
+    [Test]
+    public async Task CodecModules_HaveOnlyDeclaredDependencies_AndNoCycles()
     {
         var edges = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (Type type in Library.GetTypes())
@@ -123,52 +129,52 @@ public class ArchitectureTests
                 string? to = CodecModule(dependency);
                 if (to is null || from == to) continue;
                 // ICO validates embedded PNG headers; BMP obtains codecs only through application ports.
-                Assert.True(from == "Ico" && to == "Png", $"Undeclared codec dependency: {from} -> {to}");
+                await Assert.That(from == "Ico" && to == "Png").IsTrue().Because($"Undeclared codec dependency: {from} -> {to}");
                 edges[from].Add(to);
             }
         }
         foreach (string module in edges.Keys)
-            Assert.False(Reaches(module, module, edges, []), $"Codec dependency cycle: {module}");
+            await Assert.That(Reaches(module, module, edges, [])).IsFalse().Because($"Codec dependency cycle: {module}");
     }
 
-    [Fact]
-    public void SourceClassifier_HandlesRecordsBlockNamespacesAndAttributes()
+    [Test]
+    public async Task SourceClassifier_HandlesRecordsBlockNamespacesAndAttributes()
     {
         var syntax = CSharpSyntaxTree.ParseText("namespace A { [System.Serializable] internal record R<T>(T Value); namespace B { public enum E { A } } }").GetRoot();
         var names = syntax.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(t => t.Identifier.ValueText).ToArray();
-        Assert.Equal(new[] { "R", "E" }, names);
+        await Assert.That(names).IsEquivalentTo(new[] { "R", "E" }, CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void CycleDetector_DetectsCyclesAndAcceptsAnAcyclicGraph()
+    [Test]
+    public async Task CycleDetector_DetectsCyclesAndAcceptsAnAcyclicGraph()
     {
         var edges = new Dictionary<string, HashSet<string>> { ["A"] = ["B"], ["B"] = ["C"], ["C"] = [] };
-        Assert.False(Reaches("A", "A", edges, []));
+        await Assert.That(Reaches("A", "A", edges, [])).IsFalse();
         edges["C"].Add("A");
-        Assert.True(Reaches("A", "A", edges, []));
+        await Assert.That(Reaches("A", "A", edges, [])).IsTrue();
     }
 
-    [Fact]
-    public void FrameMutation_UsesOnlyAggregateAndOwnershipBoundaries()
+    [Test]
+    public async Task FrameMutation_UsesOnlyAggregateAndOwnershipBoundaries()
     {
         var violations = new List<string>();
         foreach (Type type in Library.GetTypes())
         foreach (MethodBase method in DeclaredMethods(type))
         foreach (MemberInfo member in UsedMembers(method))
             if (!AllowedFrameMutation(type, member)) violations.Add($"{type.FullName}.{method.Name} -> {member.DeclaringType?.Name}.{member.Name}");
-        Assert.Empty(violations);
+        await Assert.That(violations).IsEmpty();
     }
 
-    [Fact]
-    public void FrameMutationInspector_DetectsForbiddenCallsAndDirectFieldWrites()
+    [Test]
+    public async Task FrameMutationInspector_DetectsForbiddenCallsAndDirectFieldWrites()
     {
         MethodInfo method = typeof(MutationFixture).GetMethod(nameof(MutationFixture.Replace))!;
-        MemberInfo publish = Assert.Single(UsedMembers(method), m => m.Name == "Publish");
-        Assert.False(AllowedFrameMutation(typeof(MutationFixture), publish));
-        Assert.True(AllowedFrameMutation(typeof(Image), publish));
+        MemberInfo publish = await Assert.That(UsedMembers(method).Where(m => m.Name == "Publish")).HasSingleItem();
+        await Assert.That(AllowedFrameMutation(typeof(MutationFixture), publish)).IsFalse();
+        await Assert.That(AllowedFrameMutation(typeof(Image), publish)).IsTrue();
         FieldInfo pixels = typeof(ImageFrame).GetField("_pixels", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        Assert.False(AllowedFrameMutation(typeof(MutationFixture), pixels));
-        Assert.True(AllowedFrameMutation(typeof(ImageFrame), pixels));
+        await Assert.That(AllowedFrameMutation(typeof(MutationFixture), pixels)).IsFalse();
+        await Assert.That(AllowedFrameMutation(typeof(ImageFrame), pixels)).IsTrue();
     }
 
     private sealed class MutationFixture
@@ -253,7 +259,7 @@ public class ArchitectureTests
     }
 
     // Source declarations label the compiled types by folder. Dependencies themselves come from signatures and IL.
-    private static Dictionary<string, string> SourceLayers()
+    private static async Task<Dictionary<string, string>> SourceLayers()
     {
         string root = Path.GetFullPath(Path.Combine(Corpus.Assets, "../../src/PictureSharp"));
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -262,7 +268,7 @@ public class ArchitectureTests
             string relative = Path.GetRelativePath(root, path);
             string layer = relative.Split(Path.DirectorySeparatorChar)[0];
             if (layer is "obj" or "bin") continue;
-            Assert.Contains(layer, Allowed.Keys);
+            await Assert.That(Allowed.Keys).Contains(layer);
             string source = File.ReadAllText(path);
             var syntax = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14)).GetRoot();
             foreach (BaseTypeDeclarationSyntax declaration in syntax.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
@@ -270,14 +276,19 @@ public class ArchitectureTests
             {
                 string ns = string.Join(".", declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().Reverse().Select(n => n.Name.ToString()));
                 string name = ns + "." + declaration.Identifier.ValueText;
-                if (result.TryGetValue(name, out string? existing)) Assert.Equal(existing, layer);
+                if (result.TryGetValue(name, out string? existing)) await Assert.That(layer).IsEqualTo(existing);
                 result[name] = layer;
             }
         }
-        Assert.All(Allowed.Keys, layer => Assert.Contains(layer, result.Values));
+        foreach (var layer in Allowed.Keys)
+        {
+            await Assert.That(result.Values).Contains(layer);
+        }
+
         return result;
     }
 
+    // Runs inside LINQ queries, so an unclassified type fails the test by throwing rather than through an awaited assertion.
     private static string Layer(Type type, Dictionary<string, string> layers)
     {
         while (type.HasElementType) type = type.GetElementType()!;
@@ -286,8 +297,7 @@ public class ArchitectureTests
         string name = type.FullName!.Split('`')[0];
         // Constant data emitted by the compiler has no source declaration and no outward dependencies.
         if (name == "<PrivateImplementationDetails>" || (type.Namespace is null && name.StartsWith("<>", StringComparison.Ordinal))) return "Primitives";
-        Assert.True(layers.TryGetValue(name, out string? layer), $"Unclassified compiled type: {name}");
-        return layer!;
+        return layers.TryGetValue(name, out string? layer) ? layer : throw new InvalidOperationException($"Unclassified compiled type: {name}");
     }
 
     private static HashSet<Type> Dependencies(Type type)

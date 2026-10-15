@@ -12,7 +12,7 @@ public class RobustnessTests
     // Small enough to keep mutated headers from allocating huge canvases, large enough for every corpus file.
     private static readonly DecoderOptions Options = new() { MaxPixels = 1 << 22 };
 
-    public static TheoryData<string> CorpusFiles() => [.. CorpusPaths()];
+    public static TestCases<string> CorpusFiles() => [.. CorpusPaths()];
 
     private static IEnumerable<string> CorpusPaths() =>
         Directory.EnumerateFiles(Corpus.CorpusDir, "*", SearchOption.AllDirectories)
@@ -20,8 +20,8 @@ public class RobustnessTests
             .Select(p => Path.GetRelativePath(Corpus.CorpusDir, p).Replace('\\', '/'))
             .Order(StringComparer.Ordinal);
 
-    [Theory]
-    [MemberData(nameof(CorpusFiles))]
+    [Test]
+    [MethodDataSource(nameof(CorpusFiles))]
     public void Truncations_OnlyThrowDocumentedExceptions(string file)
     {
         byte[] original = Corpus.Read(file);
@@ -31,9 +31,9 @@ public class RobustnessTests
         }
     }
 
-    [Theory]
-    [Trait("Category", "Slow")]
-    [MemberData(nameof(CorpusFiles))]
+    [Test]
+    [Property("Category", "Slow")]
+    [MethodDataSource(nameof(CorpusFiles))]
     public void RandomMutations_OnlyThrowDocumentedExceptions(string file)
     {
         byte[] original = Corpus.Read(file);
@@ -46,8 +46,8 @@ public class RobustnessTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(CorpusFiles))]
+    [Test]
+    [MethodDataSource(nameof(CorpusFiles))]
     public void MaxPixels_IsEnforcedBeforeDecoding(string file)
     {
         byte[] data = Corpus.Read(file);
@@ -68,12 +68,12 @@ public class RobustnessTests
         }
 
         var options = new DecoderOptions { MaxPixels = limit };
-        Assert.Throws<ImageFormatException>(() => Image.Load(data, options).Dispose());
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, options).Dispose());
     }
 
-    public static TheoryData<string> AnimatedCorpusFiles()
+    public static TestCases<string> AnimatedCorpusFiles()
     {
-        var data = new TheoryData<string>();
+        var data = new TestCases<string>();
         foreach (string file in CorpusPaths())
         {
             try
@@ -91,22 +91,22 @@ public class RobustnessTests
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(AnimatedCorpusFiles))]
-    public void MaxPixels_CoversAllAnimationFrames(string file)
+    [Test]
+    [MethodDataSource(nameof(AnimatedCorpusFiles))]
+    public async Task MaxPixels_CoversAllAnimationFrames(string file)
     {
         byte[] data = Corpus.Read(file);
         ImageInfo info = Image.Identify(data);
         long all = (long)info.Width * info.Height * info.FrameCount;
 
-        Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxPixels = all - 1 }).Dispose());
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxPixels = all - 1 }).Dispose());
         using (Image image = Image.Load(data, new DecoderOptions { MaxPixels = all }))
         {
-            Assert.Equal(info.FrameCount, image.FrameCount);
+            await Assert.That(image.FrameCount).IsEqualTo(info.FrameCount);
         }
 
         using Image first = Image.Load(data, new DecoderOptions { MaxPixels = (long)info.Width * info.Height, FirstFrameOnly = true });
-        Assert.Equal(1, first.FrameCount);
+        await Assert.That(first.FrameCount).IsEqualTo(1);
     }
 
     private static IEnumerable<int> TruncationLengths(int length)

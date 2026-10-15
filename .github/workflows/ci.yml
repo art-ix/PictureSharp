@@ -18,9 +18,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet build -c Release
-      - run: dotnet test -c Release --no-build --filter "Category!=Local&Category!=External&Category!=Oracle"
+      - run: dotnet test -c Release --no-build --treenode-filter "/*/*/*/*[(Category!=Local)&(Category!=External)&(Category!=Oracle)]"
       - name: Scalar fallbacks
-        run: dotnet test -c Release --no-build --filter "FullyQualifiedName~SimdTests"
+        run: dotnet test -c Release --no-build --treenode-filter "/*/*/*SimdTests/*"
         env:
           DOTNET_EnableHWIntrinsic: 0
 
@@ -47,7 +47,7 @@ jobs:
           test -x reference/libwebp-1.6.0-build/gif2webp
           test -x reference/libwebp-1.6.0-build/anim_dump
           python -c 'import numpy; from PIL import Image, features; assert Image.__version__ == "10.2.0"; assert features.check("webp")'
-      - run: dotnet test -c Release --filter "Category=Oracle"
+      - run: dotnet test -c Release --treenode-filter "/*/*/*/*[Category=Oracle]"
 
   package-consumer:
     runs-on: ubuntu-latest

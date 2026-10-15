@@ -18,8 +18,8 @@ public class MutateCloneTests
         return a;
     }
 
-    [Fact]
-    public void Clone_LeavesSourceUntouched_ForEveryKindOfOperation()
+    [Test]
+    public async Task Clone_LeavesSourceUntouched_ForEveryKindOfOperation()
     {
         using Image source = Animation();
         Rgba32[][] before = source.Frames.Select(f => f.GetPixelSpan().ToArray()).ToArray();
@@ -47,15 +47,20 @@ public class MutateCloneTests
         foreach (Action<ImageProcessingContext> operation in operations)
         {
             using Image clone = source.Clone(operation);
-            Assert.Equal(2, clone.FrameCount);
-            Assert.Equal(new Size(8, 6), source.Size);
-            Assert.Equal(before, source.Frames.Select(f => f.GetPixelSpan().ToArray()).ToArray());
-            Assert.NotSame(source.Frames[0], clone.Frames[0]);
+            await Assert.That(clone.FrameCount).IsEqualTo(2);
+            await Assert.That(source.Size).IsEqualTo(new Size(8, 6));
+            await Assert.That(source.FrameCount).IsEqualTo(before.Length);
+            for (int i = 0; i < before.Length; i++)
+            {
+                await Assert.That(source.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
+            }
+
+            await Assert.That(clone.Frames[0]).IsNotSameReferenceAs(source.Frames[0]);
         }
     }
 
-    [Fact]
-    public void Clone_GivesTheSamePixelsAsMutateOnACopy()
+    [Test]
+    public async Task Clone_GivesTheSamePixelsAsMutateOnACopy()
     {
         using Image source = Animation();
         using Image badge = ImageTests.Pattern(3, 2);
@@ -69,40 +74,41 @@ public class MutateCloneTests
         using Image cloned = source.Clone(pipeline);
         using Image mutated = source.Clone();
         mutated.Mutate(pipeline);
-        Assert.Equal(mutated.Size, cloned.Size);
+        await Assert.That(cloned.Size).IsEqualTo(mutated.Size);
         for (int i = 0; i < 2; i++)
         {
-            Assert.Equal(mutated.Frames[i].GetPixelSpan().ToArray(), cloned.Frames[i].GetPixelSpan().ToArray());
+            await Assert.That(cloned.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(mutated.Frames[i].GetPixelSpan().ToArray(), CollectionOrdering.Matching);
         }
     }
 
-    [Fact]
-    public void Clone_WithoutInPlaceOperations_StillOwnsItsPixels()
+    [Test]
+    public async Task Clone_WithoutInPlaceOperations_StillOwnsItsPixels()
     {
         using Image source = ImageTests.Pattern(4, 4);
         using Image clone = source.Clone(x => { });
         clone[0, 0] = Rgba32.White;
-        Assert.NotEqual(Rgba32.White, source[0, 0]);
+        await Assert.That(source[0, 0]).IsNotEqualTo(Rgba32.White);
     }
 
-    [Fact]
-    public void Clone_CopiesMetadata_AndDisposesOnFailure()
+    [Test]
+    public async Task Clone_CopiesMetadata_AndDisposesOnFailure()
     {
         using Image source = ImageTests.Pattern(4, 4);
         source.Metadata.Xmp = [1, 2];
         source.Metadata.HorizontalResolution = 300;
         using Image clone = source.Clone(x => x.Resize(3, 2));
         clone.Metadata.Xmp![0] = 9;
-        Assert.Equal(1, source.Metadata.Xmp[0]);
-        Assert.Equal(300f, clone.Metadata.HorizontalResolution);
-        Assert.Throws<ArgumentOutOfRangeException>(() => source.Clone(x => x.Crop(0, 0, 5, 5)));
+        await Assert.That((int)(source.Metadata.Xmp[0])).IsEqualTo(1);
+        await Assert.That(clone.Metadata.HorizontalResolution).IsEqualTo(300f);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => source.Clone(x => x.Crop(0, 0, 5, 5)));
     }
 
-    [Fact]
-    public void Context_ReportsCurrentSize_AndChainRunsInOrder()
+    [Test]
+    public async Task Context_ReportsCurrentSize_AndChainRunsInOrder()
     {
         using Image img = ImageTests.Pattern(10, 4);
         var sizes = new List<Size>();
+        int frames = 0;
         img.Mutate(x =>
         {
             sizes.Add(x.Size);
@@ -110,35 +116,36 @@ public class MutateCloneTests
             sizes.Add(x.Size);
             x.Rotate(RotateMode.Rotate90);
             sizes.Add(x.Size);
-            Assert.Equal(1, x.FrameCount);
+            frames = x.FrameCount;
         });
-        Assert.Equal([new Size(10, 4), new Size(5, 2), new Size(2, 5)], sizes);
+        await Assert.That(frames).IsEqualTo(1);
+        await Assert.That(sizes).IsEquivalentTo([new Size(10, 4), new Size(5, 2), new Size(2, 5)], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void CustomOperation_CanBeAnExtensionMember()
+    [Test]
+    public async Task CustomOperation_CanBeAnExtensionMember()
     {
         using Image img = new(2, 2, Color.Black);
         img.Mutate(x => x.Posterize());
-        Assert.Equal(new Rgba32(1, 1, 1), img[1, 1]);
+        await Assert.That(img[1, 1]).IsEqualTo(new Rgba32(1, 1, 1));
     }
 
-    [Theory]
-    [InlineData(ResizeMode.Stretch, 200, 50, 100, 50)]
-    [InlineData(ResizeMode.Max, 200, 200, 100, 50)]
-    [InlineData(ResizeMode.Min, 300, 300, 100, 50)]
-    [InlineData(ResizeMode.Crop, 300, 20, 100, 20)]
-    [InlineData(ResizeMode.Pad, 300, 300, 300, 300)]
-    [InlineData(ResizeMode.Max, 50, 50, 50, 25)]
-    public void Resize_WithoutUpscale_NeverEnlarges(ResizeMode mode, int w, int h, int ew, int eh)
+    [Test]
+    [Arguments(ResizeMode.Stretch, 200, 50, 100, 50)]
+    [Arguments(ResizeMode.Max, 200, 200, 100, 50)]
+    [Arguments(ResizeMode.Min, 300, 300, 100, 50)]
+    [Arguments(ResizeMode.Crop, 300, 20, 100, 20)]
+    [Arguments(ResizeMode.Pad, 300, 300, 300, 300)]
+    [Arguments(ResizeMode.Max, 50, 50, 50, 25)]
+    public async Task Resize_WithoutUpscale_NeverEnlarges(ResizeMode mode, int w, int h, int ew, int eh)
     {
         using Image img = ProcessingOracleTests.Noise(100, 50, 2);
         using Image result = img.Clone(x => x.Resize(new ResizeOptions { Size = new(w, h), Mode = mode, AllowUpscale = false }));
-        Assert.Equal(new Size(ew, eh), result.Size);
+        await Assert.That(result.Size).IsEqualTo(new Size(ew, eh));
     }
 
-    [Fact]
-    public void Resize_CropWithoutUpscale_CropsAtAnchor_WithoutResampling()
+    [Test]
+    public async Task Resize_CropWithoutUpscale_CropsAtAnchor_WithoutResampling()
     {
         using Image img = ImageTests.Pattern(10, 4);
         using Image result = img.Clone(x => x.Resize(new ResizeOptions
@@ -148,13 +155,13 @@ public class MutateCloneTests
             Position = AnchorPosition.Right,
             AllowUpscale = false,
         }));
-        Assert.Equal(new Size(6, 4), result.Size);
-        Assert.Equal(img[4, 0], result[0, 0]);
-        Assert.Equal(img[9, 3], result[5, 3]);
+        await Assert.That(result.Size).IsEqualTo(new Size(6, 4));
+        await Assert.That(result[0, 0]).IsEqualTo(img[4, 0]);
+        await Assert.That(result[5, 3]).IsEqualTo(img[9, 3]);
     }
 
-    [Fact]
-    public void Resize_PadWithoutUpscale_CentersOriginal()
+    [Test]
+    public async Task Resize_PadWithoutUpscale_CentersOriginal()
     {
         using Image img = new(4, 2, Color.Red);
         using Image result = img.Clone(x => x.Resize(new ResizeOptions
@@ -164,91 +171,91 @@ public class MutateCloneTests
             PadColor = Color.White,
             AllowUpscale = false,
         }));
-        Assert.Equal(new Size(8, 6), result.Size);
-        Assert.Equal(Rgba32.White, result[1, 2]);
-        Assert.Equal(new Rgba32(255, 0, 0), result[2, 2]);
-        Assert.Equal(new Rgba32(255, 0, 0), result[5, 3]);
-        Assert.Equal(Rgba32.White, result[6, 3]);
-        Assert.False(result.HasAlpha);
+        await Assert.That(result.Size).IsEqualTo(new Size(8, 6));
+        await Assert.That(result[1, 2]).IsEqualTo(Rgba32.White);
+        await Assert.That(result[2, 2]).IsEqualTo(new Rgba32(255, 0, 0));
+        await Assert.That(result[5, 3]).IsEqualTo(new Rgba32(255, 0, 0));
+        await Assert.That(result[6, 3]).IsEqualTo(Rgba32.White);
+        await Assert.That(result.HasAlpha).IsFalse();
     }
 
-    [Theory]
-    [InlineData(AnchorPosition.TopLeft, 0, 0)]
-    [InlineData(AnchorPosition.Center, 3, 2)]
-    [InlineData(AnchorPosition.BottomRight, 6, 4)]
-    [InlineData(AnchorPosition.Right, 6, 2)]
-    public void Crop_WithAnchor_TakesTheRightPart(AnchorPosition position, int x0, int y0)
+    [Test]
+    [Arguments(AnchorPosition.TopLeft, 0, 0)]
+    [Arguments(AnchorPosition.Center, 3, 2)]
+    [Arguments(AnchorPosition.BottomRight, 6, 4)]
+    [Arguments(AnchorPosition.Right, 6, 2)]
+    public async Task Crop_WithAnchor_TakesTheRightPart(AnchorPosition position, int x0, int y0)
     {
         using Image img = ImageTests.Pattern(10, 7);
         using Image part = img.Clone(x => x.Crop(4, 3, position));
-        Assert.Equal(new Size(4, 3), part.Size);
-        Assert.Equal(img[x0, y0], part[0, 0]);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Crop(11, 3)));
+        await Assert.That(part.Size).IsEqualTo(new Size(4, 3));
+        await Assert.That(part[0, 0]).IsEqualTo(img[x0, y0]);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Crop(11, 3)));
     }
 
-    [Fact]
-    public void Pad_ExtendsCanvas_AndCanCut()
+    [Test]
+    public async Task Pad_ExtendsCanvas_AndCanCut()
     {
         using Image img = new(2, 2, Color.Red);
         img.Mutate(x => x.Pad(4, 3, Color.Transparent, AnchorPosition.TopLeft));
-        Assert.Equal(new Size(4, 3), img.Size);
-        Assert.True(img.HasAlpha);
-        Assert.Equal(new Rgba32(255, 0, 0), img[1, 1]);
-        Assert.Equal(Rgba32.FromColor(Color.Transparent), img[2, 0]);
+        await Assert.That(img.Size).IsEqualTo(new Size(4, 3));
+        await Assert.That(img.HasAlpha).IsTrue();
+        await Assert.That(img[1, 1]).IsEqualTo(new Rgba32(255, 0, 0));
+        await Assert.That(img[2, 0]).IsEqualTo(Rgba32.FromColor(Color.Transparent));
 
         using Image smaller = ImageTests.Pattern(6, 6);
         using Image cut = smaller.Clone(x => x.Pad(2, 2));
-        Assert.Equal(smaller[2, 2], cut[0, 0]);
+        await Assert.That(cut[0, 0]).IsEqualTo(smaller[2, 2]);
     }
 
-    [Fact]
-    public void BackgroundColor_FlattensAlpha()
+    [Test]
+    public async Task BackgroundColor_FlattensAlpha()
     {
         using Image img = new(2, 1);
         img[0, 0] = new Rgba32(255, 0, 0, 0);
         img[1, 0] = new Rgba32(0, 0, 255, 255);
         img.Mutate(x => x.BackgroundColor(Color.White));
-        Assert.False(img.HasAlpha);
-        Assert.Equal(Rgba32.White, img[0, 0]);
-        Assert.Equal(new Rgba32(0, 0, 255), img[1, 0]);
-        Assert.True(img.IsOpaque());
+        await Assert.That(img.HasAlpha).IsFalse();
+        await Assert.That(img[0, 0]).IsEqualTo(Rgba32.White);
+        await Assert.That(img[1, 0]).IsEqualTo(new Rgba32(0, 0, 255));
+        await Assert.That(img.IsOpaque()).IsTrue();
     }
 
-    [Fact]
-    public void Opacity_ScalesAlpha()
+    [Test]
+    public async Task Opacity_ScalesAlpha()
     {
         using Image img = new(1, 1, Color.Red);
         img.Mutate(x => x.Opacity(0.5f));
-        Assert.Equal(new Rgba32(255, 0, 0, 128), img[0, 0]);
-        Assert.True(img.HasAlpha);
-        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Opacity(-0.1f)));
+        await Assert.That(img[0, 0]).IsEqualTo(new Rgba32(255, 0, 0, 128));
+        await Assert.That(img.HasAlpha).IsTrue();
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Opacity(-0.1f)));
     }
 
-    [Fact]
-    public void DrawImage_AtAnchor_PlacesInCorner()
+    [Test]
+    public async Task DrawImage_AtAnchor_PlacesInCorner()
     {
         using Image dst = new(5, 4, Color.White);
         using Image badge = new(2, 1, Color.Red);
         dst.Mutate(x => x.DrawImage(badge, AnchorPosition.BottomRight));
-        Assert.Equal(new Rgba32(255, 0, 0), dst[3, 3]);
-        Assert.Equal(new Rgba32(255, 0, 0), dst[4, 3]);
-        Assert.Equal(Rgba32.White, dst[2, 3]);
-        Assert.Equal(Rgba32.White, dst[4, 2]);
+        await Assert.That(dst[3, 3]).IsEqualTo(new Rgba32(255, 0, 0));
+        await Assert.That(dst[4, 3]).IsEqualTo(new Rgba32(255, 0, 0));
+        await Assert.That(dst[2, 3]).IsEqualTo(Rgba32.White);
+        await Assert.That(dst[4, 2]).IsEqualTo(Rgba32.White);
     }
 
-    [Fact]
-    public void Options_AreRecords_ValidatedWhenSet()
+    [Test]
+    public async Task Options_AreRecords_ValidatedWhenSet()
     {
         var options = new WebPEncoderOptions { Quality = 80 };
         WebPEncoderOptions lossless = options with { Lossless = true };
-        Assert.Equal(80, lossless.Quality);
-        Assert.True(lossless.Lossless);
-        Assert.Equal(options, new WebPEncoderOptions { Quality = 80 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => options with { Quality = 101 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => new PngEncoderOptions { CompressionLevel = 10 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => new BmpEncoderOptions { BitsPerPixel = 16 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxPixels = 0 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ImageMetadata { HorizontalResolution = float.NaN });
+        await Assert.That(lossless.Quality).IsEqualTo(80);
+        await Assert.That(lossless.Lossless).IsTrue();
+        await Assert.That(new WebPEncoderOptions { Quality = 80 }).IsEqualTo(options);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => _ = options with { Quality = 101 });
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new PngEncoderOptions { CompressionLevel = 10 });
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new BmpEncoderOptions { BitsPerPixel = 16 });
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxPixels = 0 });
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ImageMetadata { HorizontalResolution = float.NaN });
     }
 }
 

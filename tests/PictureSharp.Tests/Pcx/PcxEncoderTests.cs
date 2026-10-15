@@ -15,14 +15,14 @@ public class PcxEncoderTests
         return decoded.GetPixelSpan().ToArray();
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(4)]
-    [InlineData(8)]
-    [InlineData(24)]
-    [InlineData(32)]
-    public void RoundTrip_PreservesPixels(int bits)
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(4)]
+    [Arguments(8)]
+    [Arguments(24)]
+    [Arguments(32)]
+    public async Task RoundTrip_PreservesPixels(int bits)
     {
         using var image = new Image(5, 3);
         Span<Rgba32> pixels = image.GetPixelSpan();
@@ -45,17 +45,17 @@ public class PcxEncoderTests
             }
         }
 
-        Assert.Equal(pixels.ToArray(), RoundTrip(image, bits == 0 ? null : new PcxEncoderOptions { BitsPerPixel = bits }));
+        await Assert.That(RoundTrip(image, bits == 0 ? null : new PcxEncoderOptions { BitsPerPixel = bits })).IsEquivalentTo(pixels.ToArray(), CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Automatic_PicksTheSmallestLayout()
+    [Test]
+    public async Task Automatic_PicksTheSmallestLayout()
     {
         using var two = new Image(2, 1);
         two[0, 0] = new Rgba32(0, 0, 0);
         two[1, 0] = new Rgba32(255, 255, 255);
         byte[] mono = two.ToPcx();
-        Assert.Equal((2, 1, 1), (mono[1], mono[3], mono[65]));
+        await Assert.That(((int, int, int))((mono[1], mono[3], mono[65]))).IsEqualTo((2, 1, 1));
 
         using var four = new Image(4, 1);
         four[0, 0] = new Rgba32(0, 0, 0);
@@ -63,8 +63,8 @@ public class PcxEncoderTests
         four[2, 0] = new Rgba32(255, 0, 0);
         four[3, 0] = new Rgba32(0, 255, 0);
         byte[] planar = four.ToPcx();
-        Assert.Equal(2, planar[65]);
-        Assert.Equal(1, planar[66]);
+        await Assert.That((int)(planar[65])).IsEqualTo(2);
+        await Assert.That((int)(planar[66])).IsEqualTo(1);
 
         using var seventeen = new Image(17, 1);
         for (int i = 0; i < 17; i++)
@@ -73,8 +73,8 @@ public class PcxEncoderTests
         }
 
         byte[] indexed = seventeen.ToPcx();
-        Assert.Equal((5, 8, 1), (indexed[1], indexed[3], indexed[65]));
-        Assert.Equal(0x0C, indexed[^769]);
+        await Assert.That(((int, int, int))((indexed[1], indexed[3], indexed[65]))).IsEqualTo((5, 8, 1));
+        await Assert.That((int)(indexed[^769])).IsEqualTo(0x0C);
 
         using var many = new Image(20, 20);
         for (int i = 0; i < 400; i++)
@@ -82,24 +82,24 @@ public class PcxEncoderTests
             many.GetPixelSpan()[i] = new Rgba32((byte)i, (byte)(i >> 4), 9);
         }
 
-        Assert.Equal(3, many.ToPcx()[65]);
+        await Assert.That((int)(many.ToPcx()[65])).IsEqualTo(3);
     }
 
-    [Fact]
-    public void Forced4_UsesFourPlanes()
+    [Test]
+    public async Task Forced4_UsesFourPlanes()
     {
         using var image = new Image(3, 1);
         image[0, 0] = new Rgba32(255, 0, 0);
         image[1, 0] = new Rgba32(0, 0, 255);
         image[2, 0] = new Rgba32(255, 255, 255);
         byte[] pcx = image.ToPcx(new() { BitsPerPixel = 4 });
-        Assert.Equal(4, pcx[65]);
-        Assert.Equal(1, pcx[66]);
-        Assert.Equal(image.GetPixelSpan().ToArray(), RoundTrip(image, new() { BitsPerPixel = 4 }));
+        await Assert.That((int)(pcx[65])).IsEqualTo(4);
+        await Assert.That((int)(pcx[66])).IsEqualTo(1);
+        await Assert.That(RoundTrip(image, new() { BitsPerPixel = 4 })).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Gray_WritesAnIdentityPalette()
+    [Test]
+    public async Task Gray_WritesAnIdentityPalette()
     {
         using var gray = new Image(20, 1);
         for (int i = 0; i < 20; i++)
@@ -108,19 +108,19 @@ public class PcxEncoderTests
         }
 
         byte[] pcx = gray.ToPcx();
-        Assert.Equal(2, pcx[68]);
-        Assert.Equal(0x0C, pcx[^769]);
-        Assert.Equal(new byte[] { 0, 0, 0, 1, 1, 1 }, pcx.AsSpan()[^768..^762].ToArray());
-        Assert.Equal(gray.GetPixelSpan().ToArray(), RoundTrip(gray));
+        await Assert.That((int)(pcx[68])).IsEqualTo(2);
+        await Assert.That((int)(pcx[^769])).IsEqualTo(0x0C);
+        await Assert.That(pcx.AsSpan()[^768..^762].ToArray()).IsEquivalentTo(new byte[] { 0, 0, 0, 1, 1, 1 }, CollectionOrdering.Matching);
+        await Assert.That(RoundTrip(gray)).IsEquivalentTo(gray.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Alpha_IsKeptOnlyAt32Bits()
+    [Test]
+    public async Task Alpha_IsKeptOnlyAt32Bits()
     {
         using var image = new Image(1, 1, new Rgba32(10, 20, 30, 40));
-        Assert.Equal(new Rgba32(10, 20, 30, 40), RoundTrip(image).Single());
-        Assert.Equal(new Rgba32(10, 20, 30, 255), RoundTrip(image, new() { BitsPerPixel = 24 }).Single());
-        Assert.Equal(4, image.ToPcx()[65]);
+        await Assert.That(RoundTrip(image).Single()).IsEqualTo(new Rgba32(10, 20, 30, 40));
+        await Assert.That(RoundTrip(image, new() { BitsPerPixel = 24 }).Single()).IsEqualTo(new Rgba32(10, 20, 30, 255));
+        await Assert.That((int)(image.ToPcx()[65])).IsEqualTo(4);
 
         using var many = new Image(258, 1);
         Span<Rgba32> pixels = many.GetPixelSpan();
@@ -130,42 +130,43 @@ public class PcxEncoderTests
         }
 
         pixels[257] = new Rgba32(1, 2, 3, 128);
-        Assert.Equal(4, many.ToPcx()[65]);
-        Assert.Equal(pixels.ToArray(), RoundTrip(many));
+        Rgba32[] expected = pixels.ToArray();
+        await Assert.That((int)(many.ToPcx()[65])).IsEqualTo(4);
+        await Assert.That(RoundTrip(many)).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
-    [Fact]
+    [Test]
     public void TooManyColors_Throws()
     {
         using var image = new Image(3, 1);
         image[0, 0] = new Rgba32(255, 0, 0);
         image[1, 0] = new Rgba32(0, 255, 0);
         image[2, 0] = new Rgba32(0, 0, 255);
-        Assert.Throws<InvalidOperationException>(() => image.ToPcx(new() { BitsPerPixel = 1 }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new PcxEncoderOptions { BitsPerPixel = 2 });
+        Assert.ThrowsExactly<InvalidOperationException>(() => image.ToPcx(new() { BitsPerPixel = 1 }));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new PcxEncoderOptions { BitsPerPixel = 2 });
     }
 
-    [Fact]
-    public void Animation_WritesTheFirstFrame()
+    [Test]
+    public async Task Animation_WritesTheFirstFrame()
     {
         using var first = new Image(2, 1, new Rgba32(255, 0, 0));
         using var second = new Image(2, 1, new Rgba32(0, 0, 255));
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(40), first, second);
-        Assert.Equal(first.GetPixelSpan().ToArray(), RoundTrip(animation));
+        await Assert.That(RoundTrip(animation)).IsEquivalentTo(first.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Dpi_RoundTrips()
+    [Test]
+    public async Task Dpi_RoundTrips()
     {
         using var image = new Image(1, 1, Rgba32.White);
         image.Metadata.HorizontalResolution = 150.2f;
         image.Metadata.VerticalResolution = 300f;
         using Image decoded = Load(image.ToPcx());
-        Assert.Equal(150f, decoded.Metadata.HorizontalResolution);
-        Assert.Equal(300f, decoded.Metadata.VerticalResolution);
+        await Assert.That(decoded.Metadata.HorizontalResolution).IsEqualTo(150f);
+        await Assert.That(decoded.Metadata.VerticalResolution).IsEqualTo(300f);
     }
 
-    [Fact]
+    [Test]
     public void MetadataBlocks_AreDropped()
     {
         using var image = new Image(1, 1, new Rgba32(0, 0, 0));
@@ -178,12 +179,12 @@ public class PcxEncoderTests
         Assert.Null(decoded.Metadata.Xmp);
     }
 
-    [Fact]
+    [Test]
     public void Dimensions_MustFitTheHeader()
     {
         using var wide = new Image(65535, 1, new Rgba32(255, 0, 0));
-        Assert.Throws<NotSupportedException>(() => wide.ToPcx(new() { BitsPerPixel = 8 }));
+        Assert.ThrowsExactly<NotSupportedException>(() => wide.ToPcx(new() { BitsPerPixel = 8 }));
         using var tall = new Image(1, 65537, new Rgba32(255, 0, 0));
-        Assert.Throws<NotSupportedException>(() => tall.ToPcx());
+        Assert.ThrowsExactly<NotSupportedException>(() => tall.ToPcx());
     }
 }
