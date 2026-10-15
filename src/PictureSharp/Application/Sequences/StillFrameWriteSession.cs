@@ -9,9 +9,11 @@ internal sealed class StillFrameWriteSession(Stream stream, FrameSequenceInfo in
     EncoderOptions options, ImageMetadata metadata, DecodeContext context)
     : FrameWriteSession(stream, info, context, leaveOpen: true)
 {
-    protected override async ValueTask WriteCoreAsync(ImageFrame frame, CancellationToken cancellationToken)
+    protected override async ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan duration, CancellationToken cancellationToken)
     {
-        using var image = new Image([frame.Clone()]) { Metadata = metadata };
+        ImageFrame copy = frame.Clone();
+        copy.Duration = duration;
+        using var image = new Image([copy]) { Metadata = metadata };
         using var buffer = new PooledBufferStream();
         encoder.Encode(image, buffer, options, cancellationToken);
         await buffer.WriteToAsync(Stream, cancellationToken).ConfigureAwait(false);

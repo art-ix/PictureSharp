@@ -49,7 +49,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
         int sequence = 0;
         for (int index = 0; index < frames.Count; index++)
         {
-            WriteFrame(writer, frames[index], layout, options, index, animated, ref sequence, cancellationToken);
+            WriteFrame(writer, frames[index], frames[index].Duration, layout, options, index, animated, ref sequence, cancellationToken);
         }
 
         if (MetadataSelection.Select(meta.XmpData, options.Metadata, MetadataKinds.Xmp) is { } xmp)
@@ -127,7 +127,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
         }
     }
 
-    private static void WriteFrame(ChunkWriter writer, ImageFrame frame, Layout layout, PngEncoderOptions options,
+    private static void WriteFrame(ChunkWriter writer, ImageFrame frame, TimeSpan duration, Layout layout, PngEncoderOptions options,
         int index, bool animated, ref int sequence, CancellationToken cancellationToken)
     {
         int width = frame.Width;
@@ -140,7 +140,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
             BinaryPrimitives.WriteUInt32BigEndian(fctl[8..], (uint)height);
             BinaryPrimitives.WriteUInt32BigEndian(fctl[12..], 0);
             BinaryPrimitives.WriteUInt32BigEndian(fctl[16..], 0);
-            (ushort num, ushort den) = ToDelay(frame.Duration);
+            (ushort num, ushort den) = ToDelay(duration);
             BinaryPrimitives.WriteUInt16BigEndian(fctl[20..], num);
             BinaryPrimitives.WriteUInt16BigEndian(fctl[22..], den);
             fctl[24] = 0;  // dispose: none

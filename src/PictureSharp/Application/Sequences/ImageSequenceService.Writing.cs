@@ -1,6 +1,7 @@
 using System.Drawing;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
+using PictureSharp.Application.Identification;
 
 namespace PictureSharp.Application.Sequences;
 
@@ -21,6 +22,9 @@ internal sealed partial class ImageSequenceService
         }
     }
 
+    public ImageFrameWriter CreateWriter(string path, Size size, ImageFrameWriterOptions? sequenceOptions) =>
+        CreateWriter(path, size, DefaultOptions(FormatFromPath(path)), sequenceOptions);
+
     public ImageFrameWriter CreateWriter(Stream stream, Size size, EncoderOptions options, ImageFrameWriterOptions? sequenceOptions)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -33,6 +37,13 @@ internal sealed partial class ImageSequenceService
     {
         ArgumentNullException.ThrowIfNull(format);
         return GetEncoder(format).CreateDefaultOptions();
+    }
+
+    private ImageFormat FormatFromPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return FormatLookup.FromExtension(path, codecs.Formats)
+            ?? throw new NotSupportedException($"Cannot determine the image format from the extension of '{path}'.");
     }
 
     private IImageEncoder GetEncoder(ImageFormat format) => codecs.GetEncoder(format)

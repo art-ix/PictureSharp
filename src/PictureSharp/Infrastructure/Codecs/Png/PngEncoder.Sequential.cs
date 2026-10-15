@@ -32,7 +32,7 @@ internal sealed partial class PngEncoder
         private int _sequence;
         private long _countOffset;
 
-        protected override async ValueTask WriteCoreAsync(ImageFrame frame, CancellationToken cancellationToken)
+        protected override async ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan duration, CancellationToken cancellationToken)
         {
             _buffer.Reset();
             var writer = new ChunkWriter(_buffer);
@@ -49,7 +49,7 @@ internal sealed partial class PngEncoder
 
             if (_sequence > int.MaxValue - 4096)
                 throw new NotSupportedException("APNG sequence numbers exceed the supported range.");
-            WriteFrame(writer, frame, _layout, options, FramesWritten, animated: true, ref _sequence, cancellationToken);
+            WriteFrame(writer, frame, duration, _layout, options, FramesWritten, animated: true, ref _sequence, cancellationToken);
             await _buffer.WriteToAsync(Stream, cancellationToken).ConfigureAwait(false);
         }
 

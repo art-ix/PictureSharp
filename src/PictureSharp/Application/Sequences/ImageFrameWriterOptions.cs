@@ -8,6 +8,23 @@ public sealed record ImageFrameWriterOptions
     /// <summary>Default options: loop forever, transparent background, frame count unknown, no metadata.</summary>
     public static ImageFrameWriterOptions Default { get; } = new();
 
+    /// <summary>
+    /// Creates options that keep the loop count, background and metadata of <paramref name="reader"/>, for converting
+    /// an animation frame by frame. The values are a snapshot taken now, so call this after opening the reader and
+    /// before writing. Metadata stored after the frames (EXIF/XMP in WebP or PNG, rarely a late GIF loop extension)
+    /// is known only once the reader is complete; adjust the result with <c>with</c> if a first pass found it.
+    /// </summary>
+    public static ImageFrameWriterOptions From(ImageFrameReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        return new()
+        {
+            LoopCount = reader.LoopCount,
+            AnimationBackgroundColor = reader.AnimationBackgroundColor,
+            Metadata = reader.Metadata.Clone(),
+        };
+    }
+
     /// <summary>Number of plays; 0 means forever, as <see cref="Image.LoopCount"/>. Default: 0.</summary>
     public int LoopCount { get; init => field = Check.AtLeast(value, 0); }
 

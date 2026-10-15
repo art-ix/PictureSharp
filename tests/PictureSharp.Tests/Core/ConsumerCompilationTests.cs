@@ -69,8 +69,13 @@ public class ConsumerCompilationTests
                     using Image animation = Image.CreateAnimation(TimeSpan.Zero, new Image[] { a, b });
                     using ImageFrameWriter writer = Image.CreateFrameWriter(Stream.Null, a.Size, ImageFormat.Gif, new() { FrameCount = 1 });
                     _ = writer.WriteAsync(a.Frames[0]);
+                    _ = writer.WriteAsync(a.Frames[0], TimeSpan.Zero);
+                    _ = writer.WriteAsync(a, TimeSpan.Zero);
                     _ = writer.CompleteAsync();
                     _ = Image.OpenFrameReaderAsync(Stream.Null, options);
+                    using ImageFrameWriter byExtension = Image.CreateFrameWriter("out.webp", a.Size);
+                    using ImageFrameWriter named = Image.CreateFrameWriter("out.gif", a.Size, sequenceOptions: new() { LoopCount = 2 });
+                    using ImageFrameWriter typed = Image.CreateFrameWriter("out.png", a.Size, new ImageFrameWriterOptions { FrameCount = 2 });
                     Span<byte> block = stackalloc byte[a.Metadata.GetBlockLength(MetadataKinds.Exif)];
                     a.Metadata.CopyBlockTo(MetadataKinds.Exif, block);
                 }
@@ -87,6 +92,9 @@ public class ConsumerCompilationTests
         await Assert.That(FirstParameter(model, tree, "Image.Load(bytes)")).IsEqualTo("System.ReadOnlyMemory<byte>");
         await Assert.That(FirstParameter(model, tree, "Image.Identify(bytes, null)")).IsEqualTo("System.ReadOnlyMemory<byte>");
         await Assert.That(FirstParameter(model, tree, "Image.Load(span, options)")).IsEqualTo("System.ReadOnlySpan<byte>");
+        await Assert.That(FirstParameter(model, tree, "writer.WriteAsync(a.Frames[0], TimeSpan.Zero)")).IsEqualTo("PictureSharp.ImageFrame");
+        await Assert.That(FirstParameter(model, tree, "writer.WriteAsync(a, TimeSpan.Zero)")).IsEqualTo("PictureSharp.Image");
+        await Assert.That(Parameter(model, tree, "Image.CreateFrameWriter(\"out.webp\", a.Size)", 2)).IsEqualTo("PictureSharp.ImageFrameWriterOptions?");
     }
 
     [Test]
@@ -160,11 +168,13 @@ public class ConsumerCompilationTests
         return paths.Append(typeof(Image).Assembly.Location).Distinct().Select(p => MetadataReference.CreateFromFile(p));
     }
 
-    private static string FirstParameter(SemanticModel model, SyntaxTree tree, string invocation)
+    private static string FirstParameter(SemanticModel model, SyntaxTree tree, string invocation) => Parameter(model, tree, invocation, 0);
+
+    private static string Parameter(SemanticModel model, SyntaxTree tree, string invocation, int index)
     {
         InvocationExpressionSyntax call = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>()
             .Single(n => n.ToString() == invocation);
         var symbol = (IMethodSymbol)model.GetSymbolInfo(call).Symbol!;
-        return symbol.Parameters[0].Type.ToDisplayString();
+        return symbol.Parameters[index].Type.ToDisplayString();
     }
 }

@@ -28,10 +28,20 @@ retaining resolution and unrelated container information; these operations do no
 JPEG EXIF and standard XMP each must fit in one APP1 segment. Extended JPEG XMP and MPF/MPO are explicitly unsupported.
 Changing orientation or ICC metadata may change viewer presentation even though compressed pixel data is unchanged.
 
-Local validation: Release build with zero warnings; **4719/4719 full tests**, **155/155 Oracle** without skips,
+Sequential animation API refinements (additive to 0.6.0):
+
+- `Image.CreateFrameWriter(path, size[, sequenceOptions])` chooses GIF, APNG or WebP from the extension with default
+  options, like `Save(path)`. `ImageFrameWriter` also exposes `Width` and `Height`.
+- `ImageFrameReader.CloneCurrent()` returns the current frame as an independent still image, and
+  `ImageFrameWriter.WriteAsync(image, duration)` writes a processed image's root frame, like `Frames.Add(image, duration)`.
+  Animations can be resized or filtered frame by frame without loading every frame.
+- `WriteAsync(frame, duration)` overrides a frame's duration without changing it. Output bytes are unchanged.
+- `ImageFrameWriterOptions.From(reader)` snapshots the reader's loop count, background and metadata for conversion.
+
+Local validation: Release build with zero warnings; **4736/4736 full tests**, **155/155 Oracle** without skips,
 **113/113 SIMD fallback tests** and **57/57 metadata tests without intrinsics**. The package consumer checks contents,
-full trimming and linux-x64 Native AOT, including the new metadata APIs. The 80-case regression matrix and alternating
-confirmation runs found no repeatable slowdown above 5%. Actual ARM64 execution remains a separate check.
+full trimming and linux-x64 Native AOT, including the new metadata and frame-sequence APIs. The 80-case regression
+matrix and alternating confirmation runs found no repeatable slowdown above 5%. Actual ARM64 execution remains a separate check.
 
 See [metadata](../metadata.md), [architecture](../architecture.md#metadata-only-operations) and
 [measurements](../performance.md#metadata-without-image-recompression-061-implementation).

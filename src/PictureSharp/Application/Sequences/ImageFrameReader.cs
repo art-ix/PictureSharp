@@ -73,6 +73,19 @@ public sealed class ImageFrameReader : IDisposable, IAsyncDisposable
     public ImageFrame Current => _session.Current;
 
     /// <summary>
+    /// Returns <see cref="Current"/> as a new, independent still image that can be processed with <c>Mutate</c> and
+    /// written with <see cref="ImageFrameWriter.WriteAsync(Image, TimeSpan, CancellationToken)"/>. Its root frame keeps
+    /// the frame duration and <see cref="Image.SourceFormat"/> is <see cref="Format"/>. Metadata is not copied, because
+    /// it may still be incomplete; read <see cref="Metadata"/> instead.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No frame has been read, or the end was reached.</exception>
+    public Image CloneCurrent()
+    {
+        ImageFrame frame = Current.Clone();
+        return new Image([frame]) { SourceFormat = Format };
+    }
+
+    /// <summary>
     /// Reads and composites the next frame into <see cref="Current"/>; false at the end of the sequence. A failure or
     /// cancellation disposes the reader.
     /// </summary>

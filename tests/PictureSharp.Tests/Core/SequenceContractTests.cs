@@ -218,7 +218,7 @@ public class SequenceContractTests
         public Action? AfterComplete;
         public int Disposals;
         public Exception? Failure;
-        protected override ValueTask WriteCoreAsync(ImageFrame frame, CancellationToken cancellationToken)
+        protected override ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan duration, CancellationToken cancellationToken)
         {
             if (Failure is not null) throw Failure;
             Writes++;

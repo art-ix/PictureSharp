@@ -77,6 +77,24 @@ foreach (ImageFormat format in new[] { ImageFormat.Gif, ImageFormat.Png, ImageFo
     }
     if (read != 2 || !reader.IsComplete) throw new InvalidOperationException("Sequential animation failed.");
 }
+string resizedPath = Path.Combine(Path.GetTempPath(), $"picturesharp-aot-{Guid.NewGuid():N}.webp");
+try
+{
+    await using (var reader = await Image.OpenFrameReaderAsync(new MemoryStream(animation.ToPng())))
+    await using (var writer = Image.CreateFrameWriter(resizedPath, new(1, 1), ImageFrameWriterOptions.From(reader)))
+    {
+        await foreach (ImageFrame frame in reader.ReadFramesAsync())
+        {
+            using Image image = reader.CloneCurrent();
+            image.Mutate(x => x.Resize(1, 1));
+            await writer.WriteAsync(image, frame.Duration);
+        }
+        await writer.CompleteAsync();
+    }
+    using Image resized = Image.Load(resizedPath);
+    if (resized.FrameCount != 2 || resized.Width != 1) throw new InvalidOperationException("Sequential resize failed.");
+}
+finally { File.Delete(resizedPath); }
 using Image jpegThumbnail = Image.Load(source.Encode(new JpegEncoderOptions()), new DecoderOptions { TargetSize = new(2, 2) });
 if (jpegThumbnail.Width != 2) throw new InvalidOperationException("JPEG reduction failed.");
 ImageConfiguration builtIn = ImageConfiguration.Default;

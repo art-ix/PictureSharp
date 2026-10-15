@@ -28,7 +28,7 @@ internal sealed partial class GifEncoder
     {
         private readonly PooledBufferStream _buffer = new();
 
-        protected override async ValueTask WriteCoreAsync(ImageFrame frame, CancellationToken cancellationToken)
+        protected override async ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan duration, CancellationToken cancellationToken)
         {
             _buffer.Reset();
             var writer = new GifBlockWriter(_buffer, cancellationToken);
@@ -53,7 +53,7 @@ internal sealed partial class GifEncoder
                 },
                 Rendered = null, Before = null, IsFirst = FramesWritten == 0,
                 X1 = Info.Width, Y1 = Info.Height, Disposal = GifDisposal.Background,
-                DurationMs = frame.Duration.TotalMilliseconds,
+                DurationMs = duration.TotalMilliseconds,
             };
             WriteFrame(writer, pending, palettes, Info.Width, animated: true, options with { OptimizeFrames = false });
             await _buffer.WriteToAsync(Stream, cancellationToken).ConfigureAwait(false);

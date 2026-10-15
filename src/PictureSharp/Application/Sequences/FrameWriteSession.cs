@@ -14,16 +14,21 @@ internal abstract class FrameWriteSession(Stream output, FrameSequenceInfo info,
 
     /// <summary>Whether the sequence footer was written.</summary>
     public bool IsComplete => _complete;
-    protected abstract ValueTask WriteCoreAsync(ImageFrame frame, CancellationToken cancellationToken);
+    /// <summary>Encodes a borrowed frame; <paramref name="duration"/> replaces <see cref="ImageFrame.Duration"/>.</summary>
+    protected abstract ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan duration, CancellationToken cancellationToken);
     protected abstract ValueTask CompleteCoreAsync(CancellationToken cancellationToken);
 
-    public async ValueTask WriteAsync(ImageFrame frame, CancellationToken cancellationToken = default)
+    public ValueTask WriteAsync(ImageFrame frame, CancellationToken cancellationToken = default) =>
+        WriteAsync(frame, frame?.Duration ?? TimeSpan.Zero, cancellationToken);
+
+    public async ValueTask WriteAsync(ImageFrame frame, TimeSpan duration,CancellationToken cancellationToken = default)
     {
         Begin();
         CancellationToken token = OperationToken(cancellationToken, out CancellationTokenSource? linked);
         try
         {
             ArgumentNullException.ThrowIfNull(frame);
+            ArgumentOutOfRangeException.ThrowIfLessThan(duration, TimeSpan.Zero);
             token.ThrowIfCancellationRequested();
             if (_complete) throw new InvalidOperationException("The writer is already complete.");
             if (frame.Width != Info.Width || frame.Height != Info.Height)
@@ -31,7 +36,7 @@ internal abstract class FrameWriteSession(Stream output, FrameSequenceInfo info,
             if (Info.FrameCount is { } declared && _count >= declared)
                 throw new ImageFormatException(Info.Format, "Too many frames for the declared sequence.");
             Context.Budget.ReserveImage(Info.Format, frame.Width, frame.Height);
-            await WriteCoreAsync(frame, token).ConfigureAwait(false);
+            await WriteCoreAsync(frame, duration, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             _count++;
         }

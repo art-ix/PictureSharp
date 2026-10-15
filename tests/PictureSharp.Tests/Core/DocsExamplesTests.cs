@@ -501,8 +501,7 @@ public sealed class DocsExamplesTests : IDisposable
     {
         await using ImageFrameReader reader = await Image.OpenFrameReaderAsync(P("animated.webp"));
         await using ImageFrameWriter writer = Image.CreateFrameWriter(
-            P("sequential.png"), reader.Size, ImageFormat.Png,
-            new ImageFrameWriterOptions { LoopCount = reader.LoopCount, AnimationBackgroundColor = reader.AnimationBackgroundColor });
+            P("sequential.png"), reader.Size, ImageFormat.Png, ImageFrameWriterOptions.From(reader));
         int count = 0;
         await foreach (ImageFrame frame in reader.ReadFramesAsync())
         {
@@ -519,6 +518,31 @@ public sealed class DocsExamplesTests : IDisposable
             await Assert.That(actual.Frames[i].GetPixelSpan().SequenceEqual(expected.Frames[i].GetPixelSpan())).IsTrue();
             await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
         }
+    }
+
+    [Test]
+    public async Task SequentialAnimation_StreamingResizeExample()
+    {
+        await using (ImageFrameReader reader = await Image.OpenFrameReaderAsync(P("animated.webp")))
+        await using (ImageFrameWriter writer = Image.CreateFrameWriter(
+            P("small.webp"), new Size(16, 12), ImageFrameWriterOptions.From(reader)))
+        {
+            await foreach (ImageFrame frame in reader.ReadFramesAsync())
+            {
+                using Image image = reader.CloneCurrent();
+                image.Mutate(x => x.Resize(16, 12));
+                await writer.WriteAsync(image, frame.Duration);
+            }
+            await writer.CompleteAsync();
+        }
+
+        using Image expected = Image.Load(P("animated.webp"));
+        using Image actual = Image.Load(P("small.webp"));
+        await Assert.That(actual.Size).IsEqualTo(new Size(16, 12));
+        await Assert.That(actual.FrameCount).IsEqualTo(expected.FrameCount);
+        await Assert.That(actual.LoopCount).IsEqualTo(expected.LoopCount);
+        for (int i = 0; i < expected.FrameCount; i++)
+            await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
     }
 
     // ------------------------------------------------------------ animation.md

@@ -32,6 +32,15 @@ public static partial class ImageIOExtensions
         /// <summary>Reads the frames of a stream one at a time with the given limits and formats. The stream is left open.</summary>
         public static Task<ImageFrameReader> OpenFrameReaderAsync(Stream stream, DecoderOptions? options, CancellationToken cancellationToken = default) =>
             LibraryServices.SequencesFor(options).OpenReaderAsync(stream, options, leaveOpen: true, cancellationToken);
+
+        /// <summary>
+        /// Creates a GIF, APNG or WebP frame writer in the format given by the file extension (.gif, .png/.apng, .webp),
+        /// with that format's default options. Complete it explicitly to finish the file; aborting deletes the path.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The extension is unknown, or the format cannot be written frame by frame.</exception>
+        public static ImageFrameWriter CreateFrameWriter(string path, System.Drawing.Size size, ImageFrameWriterOptions? sequenceOptions = null) =>
+            LibraryServices.Sequences.CreateWriter(path, size, sequenceOptions);
+
         /// <summary>Creates a GIF, APNG or WebP frame writer. Complete it explicitly to finish the file; aborting deletes the path.</summary>
         public static ImageFrameWriter CreateFrameWriter(string path, System.Drawing.Size size, EncoderOptions options, ImageFrameWriterOptions? sequenceOptions = null) =>
             LibraryServices.Sequences.CreateWriter(path, size, options, sequenceOptions);

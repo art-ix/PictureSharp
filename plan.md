@@ -220,6 +220,12 @@ naprzemiennie w jednym procesie, żadnej powtarzalnej regresji >5%. Pomiary nowe
 `docs/performance.md`. VERSION 0.6.1, notatki `docs/releases/release-0.6.1.md`; przygotowany lokalny commit na polecenie użytkownika, bez pusha i publikacji. ARM64 wymaga osobnego wykonania;
 nie dodano nowych ścieżek SIMD.
 
+Poprawki API sekwencyjnego z 0.6.0 (addytywne, w 0.6.1): `CreateFrameWriter(path, size[, options])` z formatem
+z rozszerzenia, `ImageFrameWriter.Width/Height`, `WriteAsync(frame, duration)` i `WriteAsync(image, duration)`,
+`ImageFrameReader.CloneCurrent()` (strumieniowe przetwarzanie klatek przez `Mutate`) oraz
+`ImageFrameWriterOptions.From(reader)`. Bajty wyjścia kodeków bez zmian. Weryfikacja 2026-10-15: build Release bez
+ostrzeżeń, 4736/4736 testów, 155/155 Oracle, package consumer (trim + Native AOT linux-x64) OK.
+
 ## 0.6.2 — zarządzanie kolorem i światło liniowe
 
 Zakres:

@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.6.1 adds typed EXIF profiles and tags, GPS positions, GPS removal and field selection, and JPEG/PNG/APNG/WebP metadata editing without image recompression, with atomic file replacement, limits and cancellation. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.1/docs/releases/release-0.6.1.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.1 adds typed EXIF profiles and tags, GPS positions, GPS removal and field selection, and JPEG/PNG/APNG/WebP metadata editing without image recompression, with atomic file replacement, limits and cancellation. Frame writers also infer the format from the extension and accept processed images with explicit durations, readers clone the current frame as an image, and writer options can be copied from a reader. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.1/docs/releases/release-0.6.1.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

@@ -170,7 +170,8 @@ Always call `CompleteAsync` to write the footer and patch headers; disposal alon
 path is closed immediately. Incomplete path output is deleted. Caller streams stay open and may contain partial bytes
 after failure, cancellation or abandonment. An existing path is truncated when a writer is created.
 
-This converts without collecting frames (loop/background settings must be known before writing):
+This converts without collecting frames. `ImageFrameWriterOptions.From(reader)` copies the loop count, background and
+metadata known so far, because they must be written before the first frame:
 
 ```csharp
 using PictureSharp;
@@ -179,7 +180,7 @@ using PictureSharp.Formats.WebP;
 await using ImageFrameReader reader = await Image.OpenFrameReaderAsync("animation.png");
 await using ImageFrameWriter writer = Image.CreateFrameWriter(
     "converted.webp", reader.Size, new WebPEncoderOptions { Lossless = true, Exact = true },
-    new ImageFrameWriterOptions { LoopCount = reader.LoopCount, AnimationBackgroundColor = reader.AnimationBackgroundColor });
+    ImageFrameWriterOptions.From(reader));
 await foreach (ImageFrame frame in reader.ReadFramesAsync())
 {
     await writer.WriteAsync(frame);
@@ -187,10 +188,36 @@ await foreach (ImageFrame frame in reader.ReadFramesAsync())
 await writer.CompleteAsync();
 ```
 
-`ImageFrameWriterOptions.Metadata` is copied at creation and filtered by `EncoderOptions.Metadata`. Metadata and GIF
-loop extensions encountered later cannot be retroactively transferred by this one-pass conversion. Supply known
-values explicitly or make a first pass if they must be preserved. This example uses APNG, whose loop count is in its
-initial header. GIF may reveal its loop count later.
+`Image.CreateFrameWriter(path, size)` chooses GIF, APNG or WebP from the extension with default options, like
+`Save(path)`. `ImageFrameWriterOptions.Metadata` is copied at creation and filtered by `EncoderOptions.Metadata`.
+`From` takes a snapshot when it is called: blocks stored after the frames (EXIF/XMP in WebP and PNG) and a GIF loop
+extension that follows the first image cannot be transferred retroactively by a one-pass conversion. Supply known
+values with `with` or make a first pass if they must be preserved. APNG and WebP store the loop count in the initial
+header; GIF usually stores it before the first image, where the reader sees it when it opens.
+
+Frames from a reader can be processed one at a time. `CloneCurrent` returns the current frame as an independent still
+image (without metadata), and `WriteAsync(image, duration)` writes the root frame of a processed image, like
+`Frames.Add(image, duration)`. Only one canvas and the processed copy are held at a time:
+
+```csharp
+using System.Drawing;
+using PictureSharp;
+
+await using ImageFrameReader reader = await Image.OpenFrameReaderAsync("animation.gif");
+await using ImageFrameWriter writer = Image.CreateFrameWriter(
+    "small.webp", new Size(160, 120), ImageFrameWriterOptions.From(reader));
+await foreach (ImageFrame frame in reader.ReadFramesAsync())
+{
+    using Image image = reader.CloneCurrent();
+    image.Mutate(x => x.Resize(160, 120));
+    await writer.WriteAsync(image, frame.Duration);
+}
+await writer.CompleteAsync();
+```
+
+`WriteAsync(frame, duration)` likewise overrides the frame's own duration without changing it. Readers and writers are
+asynchronous only: they interleave I/O with work per frame and accept non-seekable streams, so there are no
+synchronous counterparts to `Load` and `Save` here.
 
 | Output | Non-seekable stream | Sequential encoding choices |
 | --- | --- | --- |

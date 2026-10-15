@@ -408,6 +408,7 @@ sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<Image
     property ImageFrame this[System.Int32 index] { get; }
     property System.Int32 Count { get; }
 sealed class ImageFrameReader : System.IAsyncDisposable, System.IDisposable
+    method Image CloneCurrent()
     method System.Collections.Generic.IAsyncEnumerable<ImageFrame> ReadFramesAsync(System.Threading.CancellationToken cancellationToken = default)
     method System.String ToString()
     method System.Threading.Tasks.ValueTask DisposeAsync()
@@ -426,14 +427,19 @@ sealed class ImageFrameReader : System.IAsyncDisposable, System.IDisposable
 sealed class ImageFrameWriter : System.IAsyncDisposable, System.IDisposable
     method System.Threading.Tasks.ValueTask CompleteAsync(System.Threading.CancellationToken cancellationToken = default)
     method System.Threading.Tasks.ValueTask DisposeAsync()
+    method System.Threading.Tasks.ValueTask WriteAsync(Image image, System.TimeSpan duration, System.Threading.CancellationToken cancellationToken = default)
     method System.Threading.Tasks.ValueTask WriteAsync(ImageFrame frame, System.Threading.CancellationToken cancellationToken = default)
+    method System.Threading.Tasks.ValueTask WriteAsync(ImageFrame frame, System.TimeSpan duration, System.Threading.CancellationToken cancellationToken = default)
     method System.Void Dispose()
     property ImageFormat Format { get; }
     property System.Boolean IsComplete { get; }
     property System.Drawing.Size Size { get; }
     property System.Int32 FramesWritten { get; }
+    property System.Int32 Height { get; }
+    property System.Int32 Width { get; }
 sealed record ImageFrameWriterOptions : System.IEquatable<ImageFrameWriterOptions>
     ctor()
+    method static ImageFrameWriterOptions From(ImageFrameReader reader)
     property ImageMetadata? Metadata { get; init; }
     property Rgba32 AnimationBackgroundColor { get; init; }
     property System.Boolean UseTemporaryFile { get; init; }
@@ -475,6 +481,7 @@ static class ImageIOExtensions
     method static ImageFrameWriter CreateFrameWriter(System.IO.Stream stream, System.Drawing.Size size, ImageFormat format, ImageFrameWriterOptions? sequenceOptions = null)
     method static ImageFrameWriter CreateFrameWriter(System.String path, System.Drawing.Size size, EncoderOptions options, ImageFrameWriterOptions? sequenceOptions = null)
     method static ImageFrameWriter CreateFrameWriter(System.String path, System.Drawing.Size size, ImageFormat format, ImageFrameWriterOptions? sequenceOptions = null)
+    method static ImageFrameWriter CreateFrameWriter(System.String path, System.Drawing.Size size, ImageFrameWriterOptions? sequenceOptions = null)
     method static ImageInfo Identify(System.IO.Stream stream)
     method static ImageInfo Identify(System.IO.Stream stream, DecoderOptions? options)
     method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data)

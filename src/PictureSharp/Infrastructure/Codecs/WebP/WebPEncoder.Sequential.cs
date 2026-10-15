@@ -40,9 +40,9 @@ internal sealed partial class WebPEncoder
 
         private byte[]? Select(byte[]? block, MetadataKinds kind) => MetadataSelection.Select(block, options.Metadata, kind);
 
-        protected override async ValueTask WriteCoreAsync(ImageFrame frame, CancellationToken cancellationToken)
+        protected override async ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan frameDuration, CancellationToken cancellationToken)
         {
-            int duration = AnimationEncoder.Duration(frame.Duration);
+            int duration = AnimationEncoder.Duration(frameDuration);
             _buffer.Reset();
             if (FramesWritten == 0)
             {
