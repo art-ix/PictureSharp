@@ -76,6 +76,7 @@ public class PngParallelTests
     }
 
     [Theory]
+    [Trait("Category", "Slow")]
     [InlineData(800, 500, false, false)]
     [InlineData(700, 450, true, false)]
     [InlineData(640, 480, true, true)]

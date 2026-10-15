@@ -112,22 +112,6 @@ public class BmpEncoderTests
         Assert.Equal(40, Header(stripped).HeaderSize);
     }
 
-    [Fact]
-    public void Save_ChoosesBmpFromExtension()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.bmp");
-        try
-        {
-            using Image image = WithColors(5);
-            image.Save(path);
-            Assert.Equal(ImageFormat.Bmp, Image.Identify(path).Format);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
     [Theory]
     [MemberData(nameof(BmpDecoderTests.BmpFiles), MemberType = typeof(BmpDecoderTests))]
     public void Corpus_RoundTrip_IsLossless(string file)

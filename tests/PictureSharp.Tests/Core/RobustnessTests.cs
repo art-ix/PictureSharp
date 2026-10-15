@@ -32,14 +32,16 @@ public class RobustnessTests
     }
 
     [Theory]
+    [Trait("Category", "Slow")]
     [MemberData(nameof(CorpusFiles))]
     public void RandomMutations_OnlyThrowDocumentedExceptions(string file)
     {
         byte[] original = Corpus.Read(file);
         var rng = new Random(StableSeed(file));
+        int header = HeaderLength(original);
         for (int iteration = 0; iteration < 120; iteration++)
         {
-            byte[] data = Mutate(original, rng);
+            byte[] data = Mutate(original, rng, header);
             AssertDecodesOrRejects(data, file, $"mutation {iteration}");
         }
     }
@@ -129,7 +131,22 @@ public class RobustnessTests
         return lengths;
     }
 
-    private static byte[] Mutate(byte[] original, Random rng)
+    // JPEG keeps its tables in the marker segments before the first scan; elsewhere the first 64 bytes hold the header.
+    private static int HeaderLength(byte[] data)
+    {
+        if (data is [0xFF, 0xD8, ..])
+        {
+            int sos = data.AsSpan().IndexOf([(byte)0xFF, (byte)0xDA]);
+            if (sos > 0)
+            {
+                return sos + 20;
+            }
+        }
+
+        return 64;
+    }
+
+    private static byte[] Mutate(byte[] original, Random rng, int header)
     {
         byte[] data = (byte[])original.Clone();
         if (data.Length == 0)
@@ -137,8 +154,8 @@ public class RobustnessTests
             return data;
         }
 
-        // Headers carry most of the structure, so half of the edits land in the first 64 bytes.
-        int Position() => rng.Next(2) == 0 ? rng.Next(Math.Min(64, data.Length)) : rng.Next(data.Length);
+        // Headers carry most of the structure, so half of the edits land in them.
+        int Position() => rng.Next(2) == 0 ? rng.Next(Math.Min(header, data.Length)) : rng.Next(data.Length);
 
         int edits = rng.Next(1, 6);
         for (int i = 0; i < edits; i++)

@@ -49,13 +49,6 @@ public class LosslessDecoderTests
         Assert.Equal(ExifOrientation.TopLeft, image.Metadata.Orientation);
     }
 
-    [Fact]
-    public void Decode_RespectsMaxPixels()
-    {
-        Assert.Throws<ImageFormatException>(() =>
-            Image.Load(Corpus.PathOf("webp/lossless/photo_ll_z6.webp"), new DecoderOptions { MaxPixels = 1000 }));
-    }
-
     public static TheoryData<string, int> Truncations => new()
     {
         { "webp/lossless/photo_ll_z6.webp", 20 },
@@ -74,30 +67,5 @@ public class LosslessDecoderTests
         BitConverter.GetBytes(truncated.Length - 8).CopyTo(truncated, 4);
         BitConverter.GetBytes(truncated.Length - 20).CopyTo(truncated, 16);
         Assert.Throws<ImageFormatException>(() => Image.Load(truncated));
-    }
-
-    [Fact]
-    public void Decode_RandomCorruption_OnlyThrowsFormatException()
-    {
-        byte[] original = Corpus.Read("webp/lossless/graphic_ll_z6.webp");
-        var rng = new Random(1234);
-        for (int iteration = 0; iteration < 300; iteration++)
-        {
-            byte[] data = (byte[])original.Clone();
-            int flips = rng.Next(1, 8);
-            for (int i = 0; i < flips; i++)
-            {
-                int pos = rng.Next(20, data.Length);
-                data[pos] ^= (byte)(1 << rng.Next(8));
-            }
-
-            try
-            {
-                using Image img = Image.Load(data);
-            }
-            catch (ImageFormatException)
-            {
-            }
-        }
     }
 }

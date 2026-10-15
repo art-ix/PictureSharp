@@ -52,51 +52,6 @@ public class ImageTests
         Assert.Throws<ArgumentOutOfRangeException>(() => img[0, -1] = Color.Red);
     }
 
-    [Theory]
-    [InlineData(0, 1)]
-    [InlineData(1, 0)]
-    [InlineData(-5, 3)]
-    public void InvalidSize_Throws(int w, int h) => Assert.Throws<ArgumentOutOfRangeException>(() => new Image(w, h));
-
-    [Theory]
-    [InlineData(PixelFormat.Rgba32)]
-    [InlineData(PixelFormat.Bgra32)]
-    [InlineData(PixelFormat.Argb32)]
-    public void PixelArray_RoundTrip_Lossless(PixelFormat format)
-    {
-        using Image img = Pattern(5, 3);
-        byte[] bytes = img.ToPixelData(format);
-        Assert.Equal(5 * 3 * 4, bytes.Length);
-        using Image back = Image.LoadPixelData(bytes, 5, 3, format);
-        Assert.Equal(img.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
-    }
-
-    [Theory]
-    [InlineData(PixelFormat.Rgb24)]
-    [InlineData(PixelFormat.Bgr24)]
-    public void PixelArray_Rgb_DropsAlpha(PixelFormat format)
-    {
-        using Image img = Pattern(4, 4);
-        using Image back = Image.LoadPixelData(img.ToPixelData(format), 4, 4, format);
-        Assert.False(back.HasAlpha);
-        for (int i = 0; i < 16; i++)
-        {
-            Rgba32 a = img.GetPixelSpan()[i];
-            Rgba32 b = back.GetPixelSpan()[i];
-            Assert.Equal((a.R, a.G, a.B, (byte)255), (b.R, b.G, b.B, b.A));
-        }
-    }
-
-    [Fact]
-    public void Bgra32_ByteOrder()
-    {
-        using var img = new Image(1, 1);
-        img[0, 0] = new Rgba32(1, 2, 3, 4);
-        Assert.Equal(new byte[] { 3, 2, 1, 4 }, img.ToPixelData(PixelFormat.Bgra32));
-        Assert.Equal(new byte[] { 4, 1, 2, 3 }, img.ToPixelData(PixelFormat.Argb32));
-        Assert.Equal(new byte[] { 3, 2, 1 }, img.ToPixelData(PixelFormat.Bgr24));
-    }
-
     [Fact]
     public void Gray8_UsesBt601()
     {
@@ -159,18 +114,6 @@ public class ImageTests
     }
 
     [Fact]
-    public void CopyPixelDataTo_WithStride_LeavesPadding()
-    {
-        using Image img = Pattern(2, 2);
-        byte[] dst = new byte[8 + 6];
-        dst.AsSpan().Fill(0xEE);
-        img.CopyPixelDataTo(dst, PixelFormat.Bgr24, stride: 8);
-        Assert.Equal(img[0, 1].B, dst[8]);
-        Assert.Equal(0xEE, dst[7]);
-        Assert.Throws<ArgumentException>(() => img.CopyPixelDataTo(dst.AsSpan(0, 13), PixelFormat.Bgr24, stride: 8));
-    }
-
-    [Fact]
     public void Clone_IsDeep()
     {
         using Image img = Pattern(4, 3);
@@ -184,32 +127,6 @@ public class ImageTests
         Assert.Equal(1, img.Metadata.Xmp[0]);
         Assert.Equal(300f, copy.Metadata.HorizontalResolution);
         Assert.Equal(200f, copy.Metadata.VerticalResolution);
-    }
-
-    [Fact]
-    public void CloneCrop_And_MutateCrop()
-    {
-        using Image img = Pattern(10, 8);
-        using Image part = img.Clone(x => x.Crop(new Rectangle(2, 3, 4, 2)));
-        Assert.Equal(new Size(4, 2), part.Size);
-        Assert.Equal(img[2, 3], part[0, 0]);
-        Assert.Equal(img[5, 4], part[3, 1]);
-
-        Rgba32 expected = img[7, 7];
-        img.Mutate(x => x.Crop(5, 5, 5, 3));
-        Assert.Equal(new Size(5, 3), img.Size);
-        Assert.Equal(expected, img[2, 2]);
-    }
-
-    [Fact]
-    public void Dispose_PreventsFurtherUse()
-    {
-        var img = new Image(2, 2);
-        img.Dispose();
-        img.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => img.Width);
-        Assert.Throws<ObjectDisposedException>(() => img[0, 0]);
-        Assert.Throws<ObjectDisposedException>(() => img.Mutate(x => x.Invert()));
     }
 
     [Fact]

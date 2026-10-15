@@ -14,9 +14,11 @@ public class DomainRulesTests
     [InlineData(0, 1)]
     [InlineData(1, 0)]
     [InlineData(-1, 1)]
+    [InlineData(-5, 3)]
     [InlineData(int.MaxValue, 2)]
     public void AllFrameConstructors_RejectInvalidDimensions(int width, int height)
     {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Image(width, height));
         Assert.Throws<ArgumentOutOfRangeException>(() => new ImageFrame(width, height));
         Assert.Throws<ArgumentOutOfRangeException>(() => new ImageFrame(width, height, []));
     }
@@ -148,7 +150,9 @@ public class DomainRulesTests
             () => _ = image.Metadata, () => _ = image.FrameCount, () => _ = image.IsAnimated,
             () => _ = image.LoopCount, () => image.LoopCount = 1, () => _ = image.AnimationBackgroundColor,
             () => image.AnimationBackgroundColor = default, () => _ = image.Frames, () => image.Clone(),
-            () => image.IsOpaque(), () => image.GetPixelMemory(), () => _ = frames.Count,
+            () => image.IsOpaque(), () => image.GetPixelMemory(), () => image.GetPixelByteSpan(),
+            () => _ = image[0, 0], () => image[0, 0] = default, () => image.ToPixelData(),
+            () => image.CopyPixelDataFrom(new Rgba32[1]), () => image.Mutate(x => x.Invert()), () => _ = frames.Count,
             () => _ = frames[0], () => frames.GetEnumerator(), () => frames.Add(new ImageFrame(1, 1)),
             () => frames.AddClone(new ImageFrame(1, 1)), () => frames.RemoveAt(0), () => frames.Move(0, 0),
             () => frames.CloneFrame(0), () => frames.ExportFrame(0), () => frames.IndexOf(new ImageFrame(1, 1))];

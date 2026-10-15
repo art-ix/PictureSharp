@@ -40,6 +40,7 @@ public class MutateCloneTests
             x => x.MakeTransparent(source[0, 0]),
             x => x.Apply(f => f.GetPixelSpan().Clear()),
             x => x.Resize(4, 3).Grayscale(),
+            x => x.ApplyProcessor(new Extensibility.TransposeProcessor()),
             x => { },
         ];
 
@@ -89,9 +90,11 @@ public class MutateCloneTests
     {
         using Image source = ImageTests.Pattern(4, 4);
         source.Metadata.Xmp = [1, 2];
-        using Image clone = source.Clone(x => x.Invert());
+        source.Metadata.HorizontalResolution = 300;
+        using Image clone = source.Clone(x => x.Resize(3, 2));
         clone.Metadata.Xmp![0] = 9;
         Assert.Equal(1, source.Metadata.Xmp[0]);
+        Assert.Equal(300f, clone.Metadata.HorizontalResolution);
         Assert.Throws<ArgumentOutOfRangeException>(() => source.Clone(x => x.Crop(0, 0, 5, 5)));
     }
 
@@ -118,16 +121,6 @@ public class MutateCloneTests
         using Image img = new(2, 2, Color.Black);
         img.Mutate(x => x.Posterize());
         Assert.Equal(new Rgba32(1, 1, 1), img[1, 1]);
-    }
-
-    [Fact]
-    public void Resize_ZeroSide_KeepsAspectRatio()
-    {
-        using Image img = ProcessingOracleTests.Noise(120, 80, 1);
-        using Image byWidth = img.Clone(x => x.Resize(60, 0));
-        using Image byHeight = img.Clone(x => x.Resize(new Size(0, 20)));
-        Assert.Equal(new Size(60, 40), byWidth.Size);
-        Assert.Equal(new Size(30, 20), byHeight.Size);
     }
 
     [Theory]
@@ -244,26 +237,6 @@ public class MutateCloneTests
     }
 
     [Fact]
-    public void Rgba32_ParsesHexAndNames()
-    {
-        Assert.Equal(new Rgba32(0x11, 0x22, 0x33), Rgba32.Parse("#123"));
-        Assert.Equal(new Rgba32(0x11, 0x22, 0x33, 0x44), Rgba32.Parse("1234"));
-        Assert.Equal(new Rgba32(0xAB, 0xCD, 0xEF), Rgba32.Parse("#abcdef"));
-        Assert.Equal(new Rgba32(1, 2, 3, 4), Rgba32.Parse(" #01020304 "));
-        Assert.Equal(Rgba32.FromColor(Color.CornflowerBlue), Rgba32.Parse("cornflowerblue"));
-        Assert.Equal("#01020304", new Rgba32(1, 2, 3, 4).ToHex());
-        Assert.True(Rgba32.TryParse(new Rgba32(9, 8, 7, 6).ToHex(), out Rgba32 back));
-        Assert.Equal(new Rgba32(9, 8, 7, 6), back);
-        Assert.False(Rgba32.TryParse("#12345", out _));
-        Assert.False(Rgba32.TryParse("#red", out _));
-        Assert.False(Rgba32.TryParse("NoSuchColor", out _));
-        Assert.False(Rgba32.TryParse((string?)null, out _));
-        Assert.Throws<FormatException>(() => Rgba32.Parse("xyz"));
-        (byte r, byte g, byte b, byte a) = new Rgba32(1, 2, 3, 4);
-        Assert.Equal((1, 2, 3, 4), (r, g, b, a));
-    }
-
-    [Fact]
     public void Options_AreRecords_ValidatedWhenSet()
     {
         var options = new WebPEncoderOptions { Quality = 80 };
@@ -276,54 +249,6 @@ public class MutateCloneTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new BmpEncoderOptions { BitsPerPixel = 16 });
         Assert.Throws<ArgumentOutOfRangeException>(() => new DecoderOptions { MaxPixels = 0 });
         Assert.Throws<ArgumentOutOfRangeException>(() => new ImageMetadata { HorizontalResolution = float.NaN });
-    }
-
-    [Fact]
-    public void LoadAndSave_ThroughEveryEntryPoint()
-    {
-        using Image img = ImageTests.Pattern(5, 4);
-        byte[] png = img.ToPng();
-        using Image fromArray = Image.Load(png);
-        using Image fromSpan = Image.Load(png.AsSpan());
-        using Image fromStream = Image.Load(new MemoryStream(png));
-        Assert.Equal(ImageFormat.Png, fromArray.SourceFormat);
-        Assert.Equal(Pixels(fromArray), Pixels(fromSpan));
-        Assert.Equal(Pixels(fromArray), Pixels(fromStream));
-        Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
-
-        using var stream = new MemoryStream();
-        img.SaveAsWebP(stream, new() { Lossless = true, Exact = true });
-        stream.Position = 0;
-        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(stream));
-        Assert.Equal(0, stream.Position);
-        using Image webp = Image.Load(stream);
-        Assert.Equal(Pixels(img), Pixels(webp));
-    }
-
-    [Fact]
-    public async Task AsyncEntryPoints_RoundTrip()
-    {
-        string dir = Path.Combine(Path.GetTempPath(), $"picturesharp-async-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dir);
-        try
-        {
-            using Image img = ImageTests.Pattern(6, 3);
-            string png = Path.Combine(dir, "a.png");
-            string webp = Path.Combine(dir, "a.webp");
-            await img.SaveAsync(png);
-            await img.SaveAsWebPAsync(webp, new() { Lossless = true, Exact = true });
-            Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
-            ImageInfo info = await Image.IdentifyAsync(webp);
-            Assert.Equal((6, 3), (info.Width, info.Height));
-            using Image back = await Image.LoadAsync(webp);
-            Assert.Equal(Pixels(img), Pixels(back));
-            using Image limited = await Image.LoadAsync(png, new DecoderOptions { FirstFrameOnly = true });
-            Assert.Equal(Pixels(img), Pixels(limited));
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
     }
 }
 

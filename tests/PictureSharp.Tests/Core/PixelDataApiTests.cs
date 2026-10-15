@@ -111,17 +111,6 @@ public class PixelDataApiTests
     }
 
     [Fact]
-    public void ImagePixelAccess_ThrowsAfterDisposal()
-    {
-        var image = new Image(1, 1);
-        image.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => image.GetPixelMemory());
-        Assert.Throws<ObjectDisposedException>(() => image.GetPixelByteSpan());
-        Assert.Throws<ObjectDisposedException>(() => image.CopyPixelDataFrom(new Rgba32[1]));
-        Assert.Throws<ObjectDisposedException>(() => image.ToPixelData());
-    }
-
-    [Fact]
     public void CopyPixelDataFrom_AndFrameInsertion_UpdateHasAlpha()
     {
         Rgba32 white = new(255, 255, 255);

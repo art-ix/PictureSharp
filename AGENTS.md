@@ -62,7 +62,7 @@ dotnet test -c Release
 dotnet test -c Release --filter Category=Oracle
 ```
 
-Oracle tests compare with external tools and skip when those tools are missing. Close a phase only when its tests pass and its DoD is met.
+Oracle tests compare with external tools and skip when those tools are missing. `Category=Slow` marks fuzzing, thread-count and in-flight cancellation tests; CI runs them, and a quick local loop may exclude them with `--filter "Category!=Slow&Category!=Oracle"`. Close a phase only when its tests pass and its DoD is met.
 
 - Commit the synthetic corpus in `tests/assets/corpus/`, including variants from `cwebp`, `img2webp`, `webpmux`, ImageMagick and Pillow. Regenerate with:
 

@@ -16,27 +16,6 @@ public class PcxOracleTests
 
     [Fact]
     [Trait("Category", "Oracle")]
-    public void PillowCorpus_MatchesPillow()
-    {
-        if (!HasPillow())
-        {
-            return;
-        }
-
-        string directory = Path.Combine(Corpus.CorpusDir, "pcx");
-        Assert.True(Directory.Exists(directory), "Run generate_corpus.py pcx.");
-        foreach (string file in Directory.EnumerateFiles(directory, "*.pcx").Order(StringComparer.Ordinal))
-        {
-            byte[] expected = PillowRgbaBytes(file);
-            using Image image = Image.Load(file);
-            byte[] actual = MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray();
-            Assert.True(expected.AsSpan().SequenceEqual(actual), Path.GetFileName(file));
-            Assert.Equal((100f, 100f), (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution));
-        }
-    }
-
-    [Fact]
-    [Trait("Category", "Oracle")]
     public void EncodedFiles_MatchPillowExceptColoredMono()
     {
         if (!HasPillow())

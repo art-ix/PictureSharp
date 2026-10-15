@@ -14,8 +14,6 @@ namespace PictureSharp.Tests.Core;
 /// <summary>MaxInputBytes, MaxMetadataBytes and MaxFrames on every load and identify path.</summary>
 public class ResourceLimitTests
 {
-    public static TheoryData<string> CorpusFiles() => [.. CorpusPaths()];
-
     private static IEnumerable<string> CorpusPaths() =>
         Directory.EnumerateFiles(Corpus.CorpusDir, "*", SearchOption.AllDirectories)
             .Where(p => Path.GetExtension(p) is not ".bin")
@@ -37,7 +35,7 @@ public class ResourceLimitTests
     // ------------------------------------------------------------------ MaxInputBytes
 
     [Theory]
-    [MemberData(nameof(CorpusFiles))]
+    [MemberData(nameof(Corpus.Representatives), MemberType = typeof(Corpus))]
     public void MaxInputBytes_BoundaryOnEveryPath(string file)
     {
         byte[] data = Corpus.Read(file);

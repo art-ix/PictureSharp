@@ -34,6 +34,22 @@ public static class Corpus
         return data;
     }
 
+    /// <summary>
+    /// A few files per format and container variant, for format-independent paths (entry points, limits,
+    /// cancellation) where running the whole corpus adds time but no coverage.
+    /// </summary>
+    public static TheoryData<string> Representatives() =>
+    [
+        "bmp/im_pal8_rle.bmp", "bmp/im_rgba32_v5.bmp",
+        "gif/im_interlace.gif", "gif/pil_anim_dispose2.gif",
+        "ico/mixed.ico", "ico/png32.ico",
+        "jpeg/exif_resolution.jpg", "jpeg/progressive_420.jpg", "jpeg/q90_420.jpg",
+        "pcx/pil_rgb.pcx",
+        "png/apng_alpha.png", "png/rgb8_interlaced.png", "png/rgba8.png",
+        "webp/alpha/photo_alpha_a_default.webp", "webp/anim/alpha_mixed.webp", "webp/lossless/graphic_ll_z6.webp",
+        "webp/lossy/photo_q75.webp", "webp/meta/lossless_exif.webp",
+    ];
+
     public static string Sha256(ReadOnlySpan<byte> data) => Convert.ToHexStringLower(SHA256.HashData(data));
 
     private static string FindAssets()

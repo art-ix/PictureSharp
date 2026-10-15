@@ -71,12 +71,14 @@ public class LossyDecoderTests
         }
     }
 
-    [Fact]
-    public void Animation_FirstFrameOnly()
+    [Theory]
+    [InlineData("webp/anim/alpha_lossy.webp")]
+    [InlineData("webp/anim/alpha_lossless.webp")]
+    public void Animation_FirstFrameOnly(string file)
     {
-        using Image image = Image.Load(Corpus.PathOf("webp/anim/alpha_lossy.webp"), new DecoderOptions { FirstFrameOnly = true });
+        using Image image = Image.Load(Corpus.PathOf(file), new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(1, image.FrameCount);
-        Assert.Equal(Corpus.References["webp/anim/alpha_lossy.webp"].Frames[0].Sha256,
+        Assert.Equal(Corpus.References[file].Frames[0].Sha256,
             Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan())));
     }
 
@@ -94,37 +96,6 @@ public class LossyDecoderTests
         byte[] b = simple.ToPixelData(PixelFormat.Gray8);
         double mean = a.Zip(b, (x, y) => Math.Abs(x - y)).Average();
         Assert.True(mean < 3, $"mean luma difference {mean}");
-    }
-
-    [Fact]
-    public void Lossy_RandomCorruption_OnlyThrowsFormatException()
-    {
-        foreach (string file in new[] { "webp/lossy/photo_q75.webp", "webp/alpha/photo_alpha_a_default.webp", "webp/anim/alpha_mixed.webp" })
-        {
-            byte[] original = Corpus.Read(file);
-            var rng = new Random(file.Length);
-            for (int iteration = 0; iteration < 150; iteration++)
-            {
-                byte[] data = (byte[])original.Clone();
-                int flips = rng.Next(1, 6);
-                for (int i = 0; i < flips; i++)
-                {
-                    int pos = rng.Next(30, data.Length);
-                    data[pos] ^= (byte)(1 << rng.Next(8));
-                }
-
-                try
-                {
-                    using Image img = Image.Load(data);
-                }
-                catch (ImageFormatException)
-                {
-                }
-                catch (NotSupportedException)
-                {
-                }
-            }
-        }
     }
 
     [Theory]

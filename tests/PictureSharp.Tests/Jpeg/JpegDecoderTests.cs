@@ -263,45 +263,6 @@ public class JpegDecoderTests
         Assert.Equal(60000, Image.Identify(jpeg).Width);
     }
 
-    [Fact]
-    public void Decode_RandomCorruption_OnlyThrowsFormatException()
-    {
-        foreach (string file in new[] { "jpeg/q90_420.jpg", "jpeg/progressive_420.jpg", "jpeg/restart_rows_progressive.jpg",
-                                        "jpeg/crafted_ycck.jpg", "jpeg/crafted_noninterleaved.jpg", "jpeg/tiny_5x2_420.jpg" })
-        {
-            byte[] original = Corpus.Read(file);
-            (int sos, _) = Find(original, 0xDA);
-            var rng = new Random(file.Length);
-            for (int iteration = 0; iteration < 200; iteration++)
-            {
-                byte[] data = (byte[])original.Clone();
-                int flips = rng.Next(1, 4);
-                for (int i = 0; i < flips; i++)
-                {
-                    // Bias towards the marker segments, where the interesting fields are.
-                    int pos = rng.Next(2) == 0 ? rng.Next(3, data.Length) : rng.Next(3, Math.Min(data.Length, sos + 20));
-                    data[pos] ^= (byte)(1 << rng.Next(8));
-                }
-
-                if (rng.Next(4) == 0)
-                {
-                    data = data[..rng.Next(3, data.Length)];
-                }
-
-                try
-                {
-                    using Image img = Image.Load(data);
-                }
-                catch (ImageFormatException)
-                {
-                }
-                catch (NotSupportedException)
-                {
-                }
-            }
-        }
-    }
-
     // ------------------------------------------------------------------ damaged streams against libjpeg
 
     /// <summary>

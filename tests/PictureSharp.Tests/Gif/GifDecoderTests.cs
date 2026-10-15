@@ -207,32 +207,4 @@ public class GifDecoderTests
     {
         Assert.Throws<ImageFormatException>(() => Image.Load(data));
     }
-
-    [Fact]
-    public void Decode_RandomMutations_OnlyThrowFormatExceptions()
-    {
-        var random = new Random(9);
-        foreach (string file in new[] { "gif/pil_anim_dispose2.gif", "gif/hand_extensions.gif", "gif/im_interlace.gif" })
-        {
-            byte[] original = Corpus.Read(file);
-            for (int round = 0; round < 300; round++)
-            {
-                byte[] data = (byte[])original.Clone();
-                int mutations = random.Next(1, 8);
-                for (int m = 0; m < mutations; m++)
-                {
-                    data[random.Next(6, data.Length)] = (byte)random.Next(256);
-                }
-
-                int length = random.Next(4) == 0 ? random.Next(6, data.Length) : data.Length;
-                try
-                {
-                    using Image image = Image.Load(data.AsMemory(0, length));
-                }
-                catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
-                {
-                }
-            }
-        }
-    }
 }

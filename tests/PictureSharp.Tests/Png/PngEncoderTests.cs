@@ -156,25 +156,6 @@ public class PngEncoderTests
     }
 
     [Fact]
-    public void SaveToFile_ByExtension()
-    {
-        using Image image = Load("png/rgb8.png");
-        string path = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.png");
-        try
-        {
-            image.Save(path);
-            Assert.Equal(ImageFormat.Png, Image.Identify(path).Format);
-            image.SaveAsPng(path);
-            using Image back = Image.Load(path);
-            AssertSamePixels(image, back);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [Fact]
     public void Compression_IsReasonable()
     {
         // Our files should be within ~10% of ImageMagick/libpng output for the same content.

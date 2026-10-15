@@ -27,6 +27,7 @@ public class HuffmanBuilderTests
     }
 
     [Fact]
+    [Trait("Category", "Slow")]
     public void RandomFrequencies_GiveCompletePrefixCodes()
     {
         var rng = new Random(42);

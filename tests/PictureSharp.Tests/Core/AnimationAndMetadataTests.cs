@@ -98,16 +98,4 @@ public class AnimationAndMetadataTests
         Assert.Equal(ExifOrientation.Unknown, ExifReader.GetOrientation([1, 2, 3]));
         Assert.Equal(ExifOrientation.Unknown, ExifReader.GetOrientation("II*\0\xff\xff\xff\x7f"u8.ToArray()));
     }
-
-    [Fact]
-    public void AutoOrient_RotatesAndResetsTag()
-    {
-        using Image img = ImageTests.Pattern(5, 3);
-        Rgba32 bottomLeft = img[0, 2];
-        img.Metadata.Exif = Exif(6, false); // stored rotated: needs 90° clockwise
-        img.Mutate(x => x.AutoOrient());
-        Assert.Equal((3, 5), (img.Width, img.Height));
-        Assert.Equal(bottomLeft, img[0, 0]);
-        Assert.Equal(ExifOrientation.TopLeft, img.Metadata.Orientation);
-    }
 }

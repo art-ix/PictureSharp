@@ -84,17 +84,6 @@ public class FrameProcessorTests
     }
 
     [Fact]
-    public void Clone_LeavesSourceUnchanged()
-    {
-        using Image source = Numbered(3, 2);
-        Rgba32[] before = source.GetPixelSpan().ToArray();
-        using Image transposed = source.Clone(x => x.ApplyProcessor(new TransposeProcessor()));
-        Assert.Equal(new Size(2, 3), transposed.Size);
-        Assert.Equal(new Size(3, 2), source.Size);
-        Assert.Equal(before, source.GetPixelSpan().ToArray());
-    }
-
-    [Fact]
     public void Destination_StartsTransparentBlack()
     {
         using var image = new Image(2, 2, new Rgba32(9, 9, 9));

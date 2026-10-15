@@ -86,39 +86,4 @@ public class PngDecoderTests
         Rgba32 overTransparent = PictureSharp.Infrastructure.Codecs.Png.PngDecoder.BlendOver(new Rgba32(255, 0, 0, 128), default);
         Assert.Equal(new Rgba32(255, 0, 0, 128), overTransparent);
     }
-
-    [Fact]
-    public void Decode_RandomCorruption_OnlyThrowsFormatException()
-    {
-        foreach (string file in new[] { "png/rgba8.png", "png/palette4_trns.png", "png/rgb8_interlaced.png", "png/apng_alpha.png" })
-        {
-            byte[] original = Corpus.Read(file);
-            var rng = new Random(file.Length);
-            for (int iteration = 0; iteration < 200; iteration++)
-            {
-                byte[] data = (byte[])original.Clone();
-                int flips = rng.Next(1, 6);
-                for (int i = 0; i < flips; i++)
-                {
-                    data[rng.Next(8, data.Length)] ^= (byte)(1 << rng.Next(8));
-                }
-
-                if (rng.Next(4) == 0)
-                {
-                    data = data[..rng.Next(8, data.Length)];
-                }
-
-                try
-                {
-                    using Image img = Image.Load(data);
-                }
-                catch (ImageFormatException)
-                {
-                }
-                catch (NotSupportedException)
-                {
-                }
-            }
-        }
-    }
 }

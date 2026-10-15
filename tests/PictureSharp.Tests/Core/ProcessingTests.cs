@@ -103,6 +103,28 @@ public class ProcessingTests
         _ => (RotateMode.None, FlipMode.None),
     };
 
+    [Fact]
+    public void RotateFlip_AppliesToAllFrames_AndSwapsDpi()
+    {
+        using Image a = ImageTests.Pattern(4, 2);
+        using Image b = ImageTests.Pattern(4, 2);
+        using Image anim = Image.CreateAnimation(TimeSpan.FromMilliseconds(100), a, b);
+        anim.Metadata.HorizontalResolution = 300;
+        anim.Metadata.VerticalResolution = 72;
+        anim.Mutate(x => x.Rotate(RotateMode.Rotate270));
+        Assert.All(anim.Frames, f => Assert.Equal((2, 4), (f.Width, f.Height)));
+        Assert.Equal(72f, anim.Metadata.HorizontalResolution);
+        Assert.Equal(300f, anim.Metadata.VerticalResolution);
+    }
+
+    [Fact]
+    public void RotateFlip_UnknownModes_Throw()
+    {
+        using Image img = ImageTests.Pattern(2, 2);
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Rotate((RotateMode)45)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => img.Mutate(x => x.Flip((FlipMode)7)));
+    }
+
     [Theory]
     [InlineData(0, 0, 7, 4)]
     [InlineData(6, 3, 1, 1)]
@@ -269,17 +291,6 @@ public class ProcessingTests
     }
 
     [Fact]
-    public void Resize_LargeImage_ParallelIsDeterministic()
-    {
-        using Image img = ProcessingOracleTests.Noise(640, 480, 5);
-        using Image a = img.Clone(x => x.Resize(1001, 333));
-        using Image b = img.Clone(x => x.Resize(1001, 333));
-        Assert.Equal(Pixels(a), Pixels(b));
-        using Image down = img.Clone(x => x.Resize(7, 5));
-        Assert.Equal(new Size(7, 5), down.Size);
-    }
-
-    [Fact]
     public void Resize_AppliesToAllFrames_AndKeepsDurations()
     {
         using Image a = ImageTests.Pattern(8, 6);
@@ -302,19 +313,6 @@ public class ProcessingTests
         Assert.Equal(new Size(60, 40), img.Size);
         img.Mutate(x => x.Thumbnail(30, 0));
         Assert.Equal(new Size(30, 20), img.Size);
-    }
-
-    [Fact]
-    public void CloneResize_ReturnsNewImage_AndLeavesSourceUntouched()
-    {
-        using Image img = ImageTests.Pattern(10, 10);
-        img.Metadata.HorizontalResolution = 300;
-        Rgba32[] before = Pixels(img);
-        using Image thumb = img.Clone(x => x.Resize(3, 4));
-        Assert.Equal(new Size(3, 4), thumb.Size);
-        Assert.Equal(300f, thumb.Metadata.HorizontalResolution);
-        Assert.Equal(before, Pixels(img));
-        Assert.Equal(new Size(10, 10), img.Size);
     }
 
     [Fact]

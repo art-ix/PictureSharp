@@ -364,41 +364,4 @@ public class BmpDecoderTests
         byte[] bmp = new BmpBuilder { Width = 100_000, Height = 100_000, Bits = 1, Palette = Pal4[..2], Rows = [] }.Build();
         Assert.Throws<ImageFormatException>(() => Image.Load(bmp, new DecoderOptions { MaxPixels = 1 << 20 }));
     }
-
-    [Fact]
-    public void Decode_RandomCorruption_OnlyThrowsFormatException()
-    {
-        foreach (string file in new[] { "bmp/im_pal8_rle.bmp", "bmp/rle4.bmp", "bmp/im_rgba32_v5.bmp", "bmp/im_os2_pal8.bmp", "bmp/im_rgb565.bmp", "bmp/im_pal1.bmp" })
-        {
-            byte[] original = Corpus.Read(file);
-            var rng = new Random(file.Length);
-            for (int iteration = 0; iteration < 300; iteration++)
-            {
-                byte[] data = (byte[])original.Clone();
-                int flips = rng.Next(1, 4);
-                for (int i = 0; i < flips; i++)
-                {
-                    // Bias towards the headers, where the interesting fields are.
-                    int pos = rng.Next(3) == 0 ? rng.Next(2, data.Length) : rng.Next(2, Math.Min(data.Length, 160));
-                    data[pos] ^= (byte)(1 << rng.Next(8));
-                }
-
-                if (rng.Next(4) == 0)
-                {
-                    data = data[..rng.Next(2, data.Length)];
-                }
-
-                try
-                {
-                    using Image img = Image.Load(data);
-                }
-                catch (ImageFormatException)
-                {
-                }
-                catch (NotSupportedException)
-                {
-                }
-            }
-        }
-    }
 }

@@ -19,17 +19,12 @@ public class CancellationTests
 {
     private static readonly CancellationToken Canceled = new(canceled: true);
 
-    public static TheoryData<string> CorpusFiles() => [.. Directory.EnumerateFiles(Corpus.CorpusDir, "*", SearchOption.AllDirectories)
-        .Where(p => Path.GetExtension(p) is not ".bin")
-        .Select(p => Path.GetRelativePath(Corpus.CorpusDir, p).Replace('\\', '/'))
-        .Order(StringComparer.Ordinal)];
-
     public static TheoryData<string> Formats() => ["webp", "webp-lossless", "png", "jpeg", "gif", "bmp", "pcx", "ico"];
 
     // ------------------------------------------------------------------ before the start
 
     [Theory]
-    [MemberData(nameof(CorpusFiles))]
+    [MemberData(nameof(Corpus.Representatives), MemberType = typeof(Corpus))]
     public void CanceledToken_StopsEveryLoad(string file)
     {
         byte[] data = Corpus.Read(file);
@@ -183,6 +178,7 @@ public class CancellationTests
 /// otherwise drain the shared array pool that the allocation tests measure.
 /// </summary>
 [Collection(nameof(SerialCollection))]
+[Trait("Category", "Slow")]
 public class CancellationInFlightTests
 {
     private static EncoderOptions Options(string format) => CancellationTests.Options(format);

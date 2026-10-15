@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.5.6. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.5.7. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
@@ -48,7 +48,8 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Ukończona — opublikowana |
 | 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Ukończona — opublikowana |
 | 0.5.5 | Warstwy, model domenowy, własność buforów i API C# 14 | Ukończona — wydanie 0.5.5 |
-| 0.5.6 | API skupione na `Image`, `ImageConfiguration`, wtyczki formatów i procesory ramek | Ukończona — commit lokalny, nieopublikowana |
+| 0.5.6 | API skupione na `Image`, `ImageConfiguration`, wtyczki formatów i procesory ramek | Ukończona — opublikowana |
+| 0.5.7 | Porządki w testach: duplikaty, mniejsze macierze, kategoria `Slow` | Ukończona — commit lokalny, nieopublikowana |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana — następny etap |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
@@ -147,6 +148,12 @@ Biblioteka nie ma jeszcze zewnętrznych użytkowników, więc zmiana łamie API 
 - Paczka dodaje `global using PictureSharp;` przy `ImplicitUsings` (opt-out `PictureSharpImplicitUsings=false`, wyłączone dla Windows Forms, WPF i MAUI).
 
 DoD: Release bez ostrzeżeń; pełne testy, Oracle i testy architektury; testy wtyczek, konfiguracji i procesorów; migawka API przejrzana; konsument C# 14 z jednym `using`; `verify-package-consumer.sh` z trimmingiem, Native AOT, wtyczką, procesorem i global usings; dokumentacja z `Image.*` jako formą domyślną.
+
+## 0.5.7 — porządki w testach
+
+Biblioteka bez zmian; zmienia się tylko projekt testów. Usunięte testy pokryte przez inne (losowa korupcja per kodek, geometria, formaty pikseli, część testów klonowania i resize), macierze niezależne od formatu (anulowanie, `MaxInputBytes`, kwantyzacja przez enkoder GIF) zawężone do reprezentatywnych przypadków, powiązane testy połączone, a fuzzing i testy wielowątkowe oznaczone `Category=Slow` (CI uruchamia je dalej).
+
+DoD: Release bez ostrzeżeń; 3854/3854 testów (wcześniej 4610), 149/149 Oracle, 113/113 bez intrinsics; każdy usunięty przypadek ma wskazane pokrycie.
 
 ## 0.6.0 — sekwencyjne animacje
 

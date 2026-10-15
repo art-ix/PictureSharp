@@ -47,7 +47,10 @@ public class GifEncoderTests
         }
     }
 
-    public static TheoryData<string> QuantizeKeys() => QuantizationTests.Keys();
+    // QuantizationTests covers every key against Pillow; through the encoder one key per mode is enough,
+    // plus the rescaled hash of many_colors and a source whose 8 colors fit the palette.
+    public static TheoryData<string> QuantizeKeys() =>
+        ["photo/mediancut/64", "photo/octree/64", "photo/dither/64", "many_colors/mediancut/256", "graphic/mediancut/16"];
 
     [Theory]
     [MemberData(nameof(QuantizeKeys))]

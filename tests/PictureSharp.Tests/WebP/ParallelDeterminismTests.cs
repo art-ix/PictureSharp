@@ -37,6 +37,7 @@ public class ParallelDeterminismTests
     };
 
     [Theory]
+    [Trait("Category", "Slow")]
     [MemberData(nameof(LossyCases))]
     public void LossyEncoder_IsIndependentOfThreadCount(string name)
     {
@@ -48,6 +49,7 @@ public class ParallelDeterminismTests
     }
 
     [Theory]
+    [Trait("Category", "Slow")]
     [InlineData(4, 75)]
     [InlineData(5, 90)]
     [InlineData(6, 100)]

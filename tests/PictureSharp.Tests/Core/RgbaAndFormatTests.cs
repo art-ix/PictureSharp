@@ -79,4 +79,24 @@ public class RgbaAndFormatTests
         using Image image = Image.LoadPixelData([default(Rgba32)], 1, 1);
         Assert.Throws<ArgumentException>(() => encoder.Encode(image, Stream.Null, new BmpEncoderOptions(), CancellationToken.None));
     }
+
+    [Fact]
+    public void Rgba32_ParsesHexAndNames()
+    {
+        Assert.Equal(new Rgba32(0x11, 0x22, 0x33), Rgba32.Parse("#123"));
+        Assert.Equal(new Rgba32(0x11, 0x22, 0x33, 0x44), Rgba32.Parse("1234"));
+        Assert.Equal(new Rgba32(0xAB, 0xCD, 0xEF), Rgba32.Parse("#abcdef"));
+        Assert.Equal(new Rgba32(1, 2, 3, 4), Rgba32.Parse(" #01020304 "));
+        Assert.Equal(Rgba32.FromColor(Color.CornflowerBlue), Rgba32.Parse("cornflowerblue"));
+        Assert.Equal("#01020304", new Rgba32(1, 2, 3, 4).ToHex());
+        Assert.True(Rgba32.TryParse(new Rgba32(9, 8, 7, 6).ToHex(), out Rgba32 back));
+        Assert.Equal(new Rgba32(9, 8, 7, 6), back);
+        Assert.False(Rgba32.TryParse("#12345", out _));
+        Assert.False(Rgba32.TryParse("#red", out _));
+        Assert.False(Rgba32.TryParse("NoSuchColor", out _));
+        Assert.False(Rgba32.TryParse((string?)null, out _));
+        Assert.Throws<FormatException>(() => Rgba32.Parse("xyz"));
+        (byte r, byte g, byte b, byte a) = new Rgba32(1, 2, 3, 4);
+        Assert.Equal((1, 2, 3, 4), (r, g, b, a));
+    }
 }

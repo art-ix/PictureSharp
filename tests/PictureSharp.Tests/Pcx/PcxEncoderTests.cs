@@ -186,22 +186,4 @@ public class PcxEncoderTests
         using var tall = new Image(1, 65537, new Rgba32(255, 0, 0));
         Assert.Throws<NotSupportedException>(() => tall.ToPcx());
     }
-
-    [Fact]
-    public void Save_RecognizesTheExtension()
-    {
-        using var image = new Image(2, 2, new Rgba32(1, 2, 3));
-        string path = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.pcx");
-        try
-        {
-            image.Save(path);
-            using Image loaded = Image.Load(path);
-            Assert.Equal(ImageFormat.Pcx, loaded.SourceFormat);
-            Assert.Equal(image.GetPixelSpan().ToArray(), loaded.GetPixelSpan().ToArray());
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
 }
