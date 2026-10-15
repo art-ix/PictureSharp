@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using PictureSharp.Formats.Jpeg;
+using PictureSharp.Infrastructure.Codecs.Jpeg;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Jpeg;
@@ -56,7 +57,7 @@ public class JpegSamplesTests
 
         string expected = Reference.Value![name];
         Assert.NotEqual("error", expected);
-        using Image image = Image.Load(Path.Combine(Corpus.SamplesDir, name));
+        using Image image = ImageReader.Load(Path.Combine(Corpus.SamplesDir, name));
         Assert.True(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} differs from Pillow");
     }
 
@@ -72,7 +73,7 @@ public class JpegSamplesTests
         foreach (int scale in (int[])[2, 4, 8])
         {
             string expected = ScaledReference(scale)![name];
-            using Image image = JpegDecoder.Decode(File.ReadAllBytes(Path.Combine(Corpus.SamplesDir, name)), DecoderOptions.Default, scale);
+            using Image image = JpegDecoder.DecodeScaled(File.ReadAllBytes(Path.Combine(Corpus.SamplesDir, name)), DecoderOptions.Default, scale);
             Assert.True(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan())), $"{name} at 1/{scale} differs from Pillow");
         }
     }

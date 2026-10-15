@@ -1,4 +1,9 @@
 using BenchmarkDotNet.Attributes;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Formats.Png;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using static PictureSharp.Benchmarks.LosslessDecodeBenchmarks;
 
 namespace PictureSharp.Benchmarks;
@@ -39,7 +44,7 @@ public class CodecBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _image = Image.Load(File.Path);
+        _image = ImageReader.Load(File.Path);
         _png = _image.ToPng();
         _jpeg = _image.ToJpeg();
         _webp = _image.ToWebP();
@@ -54,7 +59,7 @@ public class CodecBenchmarks
     [Benchmark]
     public int PngDecode()
     {
-        using Image image = Image.Load(_png);
+        using Image image = ImageReader.Load(_png);
         return image.Width;
     }
 
@@ -64,7 +69,7 @@ public class CodecBenchmarks
     [Benchmark]
     public int JpegDecode()
     {
-        using Image image = Image.Load(_jpeg);
+        using Image image = ImageReader.Load(_jpeg);
         return image.Width;
     }
 
@@ -74,7 +79,7 @@ public class CodecBenchmarks
     [Benchmark]
     public int WebPLossyDecode()
     {
-        using Image image = Image.Load(_webp);
+        using Image image = ImageReader.Load(_webp);
         return image.Width;
     }
 

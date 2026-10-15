@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using PictureSharp.Formats.Gif;
+using PictureSharp.Infrastructure.Codecs.Gif;
 
 namespace PictureSharp.Tests.Gif;
 

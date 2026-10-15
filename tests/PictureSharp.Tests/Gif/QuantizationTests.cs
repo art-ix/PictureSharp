@@ -1,5 +1,6 @@
 using System.Text.Json;
-using PictureSharp.Processing.Quantization;
+using PictureSharp.Algorithms.Quantization;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Gif;
@@ -28,7 +29,7 @@ public class QuantizationTests
     /// <summary>The source as Pillow's convert("RGB") sees it: alpha dropped.</summary>
     internal static uint[] LoadOpaque(string name, out Rgba32[] pixels, out int width, out int height)
     {
-        using Image image = name == "many_colors" ? ManyColors() : Image.Load(Path.Combine(Corpus.CorpusDir, "src", name + ".png"));
+        using Image image = name == "many_colors" ? ManyColors() : ImageReader.Load(Path.Combine(Corpus.CorpusDir, "src", name + ".png"));
         (width, height) = (image.Width, image.Height);
         pixels = image.GetPixelSpan().ToArray();
         var packed = new uint[pixels.Length];

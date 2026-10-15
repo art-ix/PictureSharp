@@ -1,4 +1,4 @@
-using PictureSharp.Formats.WebP.Lossless;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
 
 namespace PictureSharp.Tests.WebP;
 
@@ -10,14 +10,14 @@ public class LosslessEncoderSimdTests
     {
         var rng = new Random(11);
         foreach (int greenToRed in Multipliers)
-        for (int length = 0; length <= 40; length++)
-        {
-            uint[] pixels = RandomPixels(rng, length);
-            uint[] scalar = new uint[256], simd = new uint[256];
-            Vp8LForwardTransforms.CollectColorRedTransformsScalar(pixels, greenToRed, scalar);
-            Vp8LForwardTransforms.CollectColorRedTransforms(pixels, greenToRed, simd);
-            Assert.Equal(scalar, simd);
-        }
+            for (int length = 0; length <= 40; length++)
+            {
+                uint[] pixels = RandomPixels(rng, length);
+                uint[] scalar = new uint[256], simd = new uint[256];
+                Vp8LForwardTransforms.CollectColorRedTransformsScalar(pixels, greenToRed, scalar);
+                Vp8LForwardTransforms.CollectColorRedTransforms(pixels, greenToRed, simd);
+                Assert.Equal(scalar, simd);
+            }
     }
 
     [Fact]
@@ -25,15 +25,15 @@ public class LosslessEncoderSimdTests
     {
         var rng = new Random(12);
         foreach (int greenToBlue in Multipliers)
-        foreach (int redToBlue in Multipliers)
-        foreach (int length in new[] { 0, 1, 3, 4, 7, 8, 9, 15, 16, 33 })
-        {
-            uint[] pixels = RandomPixels(rng, length);
-            uint[] scalar = new uint[256], simd = new uint[256];
-            Vp8LForwardTransforms.CollectColorBlueTransformsScalar(pixels, greenToBlue, redToBlue, scalar);
-            Vp8LForwardTransforms.CollectColorBlueTransforms(pixels, greenToBlue, redToBlue, simd);
-            Assert.Equal(scalar, simd);
-        }
+            foreach (int redToBlue in Multipliers)
+                foreach (int length in new[] { 0, 1, 3, 4, 7, 8, 9, 15, 16, 33 })
+                {
+                    uint[] pixels = RandomPixels(rng, length);
+                    uint[] scalar = new uint[256], simd = new uint[256];
+                    Vp8LForwardTransforms.CollectColorBlueTransformsScalar(pixels, greenToBlue, redToBlue, scalar);
+                    Vp8LForwardTransforms.CollectColorBlueTransforms(pixels, greenToBlue, redToBlue, simd);
+                    Assert.Equal(scalar, simd);
+                }
     }
 
     [Fact]
@@ -42,16 +42,16 @@ public class LosslessEncoderSimdTests
         var rng = new Random(13);
         const int Width = 40;
         for (int mode = 0; mode < 14; mode++)
-        for (int start = 0; start <= 2; start++)
-        for (int end = start; end <= Width; end++)
-        {
-            // Two rows one pixel wider than the image, as in the encoder; the last pixel is the top-right of the edge.
-            uint[] rows = RandomPixels(rng, 2 * (Width + 1));
-            uint[] scalar = new uint[end - start], simd = new uint[end - start];
-            Vp8LForwardTransforms.PredictBatchScalar(rows, 0, Width + 1, mode, start, end, scalar);
-            Vp8LForwardTransforms.PredictBatch(rows, 0, Width + 1, mode, start, end, simd);
-            Assert.Equal(scalar, simd);
-        }
+            for (int start = 0; start <= 2; start++)
+                for (int end = start; end <= Width; end++)
+                {
+                    // Two rows one pixel wider than the image, as in the encoder; the last pixel is the top-right of the edge.
+                    uint[] rows = RandomPixels(rng, 2 * (Width + 1));
+                    uint[] scalar = new uint[end - start], simd = new uint[end - start];
+                    Vp8LForwardTransforms.PredictBatchScalar(rows, 0, Width + 1, mode, start, end, scalar);
+                    Vp8LForwardTransforms.PredictBatch(rows, 0, Width + 1, mode, start, end, simd);
+                    Assert.Equal(scalar, simd);
+                }
     }
 
     [Fact]

@@ -3,6 +3,7 @@
     <Project Path="benchmarks/PictureSharp.Benchmarks/PictureSharp.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/PictureSharp.AotSmoke/PictureSharp.AotSmoke.csproj" />
     <Project Path="samples/PictureSharp.Cli/PictureSharp.Cli.csproj" />
   </Folder>
   <Folder Name="/src/">

@@ -1,4 +1,4 @@
-using PictureSharp.Formats.Pcx;
+using PictureSharp.Infrastructure.Codecs.Pcx;
 
 namespace PictureSharp.Tests.Pcx;
 

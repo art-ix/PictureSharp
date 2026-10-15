@@ -1,4 +1,5 @@
-using PictureSharp.Formats.WebP.Lossless;
+using PictureSharp.Algorithms.Compression;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
 
 namespace PictureSharp.Tests.WebP;
 
@@ -74,12 +75,12 @@ public class LosslessEncoderPrimitiveTests
     {
         var rng = new Random(22);
         foreach (int length in new[] { 1, 2, 3, 8, 9, 15, 40, 256, 280, 300, 1304 })
-        for (int i = 0; i < 60; i++)
-        {
-            uint[] x = RandomHistogram(rng, length, i % 5), y = RandomHistogram(rng, length, (i / 5) % 5);
-            Assert.Equal(ReferencePopulationCost(x, y), Vp8LHistogram.PopulationCost(x, y));
-            Assert.Equal(ReferencePopulationCost(x, new uint[length]), Vp8LHistogram.PopulationCost(x));
-        }
+            for (int i = 0; i < 60; i++)
+            {
+                uint[] x = RandomHistogram(rng, length, i % 5), y = RandomHistogram(rng, length, (i / 5) % 5);
+                Assert.Equal(ReferencePopulationCost(x, y), Vp8LHistogram.PopulationCost(x, y));
+                Assert.Equal(ReferencePopulationCost(x, new uint[length]), Vp8LHistogram.PopulationCost(x));
+            }
     }
 
     [Fact]

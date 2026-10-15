@@ -1,3 +1,6 @@
+using PictureSharp.Formats.Png;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 using PictureSharp.Tests.WebP;
 
@@ -12,7 +15,7 @@ public class BmpDecoderTests
 
     private static Rgba32[] Pixels(byte[] bmp, DecoderOptions? options = null)
     {
-        using Image image = Image.Load(bmp, options);
+        using Image image = ImageReader.Load(bmp, options);
         return image.GetPixelSpan().ToArray();
     }
 
@@ -21,7 +24,7 @@ public class BmpDecoderTests
     public void Decode_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = Image.Load(Corpus.PathOf(file));
+        using Image image = ImageReader.Load(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Bmp, image.SourceFormat);
         Assert.Equal(r.HasAlpha, image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
@@ -37,7 +40,7 @@ public class BmpDecoderTests
     public void Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        ImageInfo info = Image.Identify(Corpus.PathOf(file));
+        ImageInfo info = ImageReader.Identify(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Bmp, info.Format);
         Assert.Equal((r.Width, r.Height), (info.Width, info.Height));
         Assert.Equal(r.HasAlpha, info.HasAlpha);
@@ -47,10 +50,10 @@ public class BmpDecoderTests
     [Fact]
     public void Detect_RecognizesBmp()
     {
-        Assert.Equal(ImageFormat.Bmp, Image.DetectFormat(Corpus.Read("bmp/im_rgb24.bmp")));
-        Assert.Equal(ImageFormat.Bmp, ImageFormat.FromExtension("x.DIB"));
-        Assert.True(ImageFormat.Bmp.CanDecode);
-        Assert.True(ImageFormat.Bmp.CanEncode);
+        Assert.Equal(ImageFormat.Bmp, ImageFormats.DetectFormat(Corpus.Read("bmp/im_rgb24.bmp")));
+        Assert.Equal(ImageFormat.Bmp, ImageFormats.FromExtension("x.DIB"));
+        Assert.True(ImageFormats.CanDecode(ImageFormat.Bmp));
+        Assert.True(ImageFormats.CanEncode(ImageFormat.Bmp));
     }
 
     [Fact]
@@ -141,11 +144,15 @@ public class BmpDecoderTests
         // RGBA byte order: R = 0x000000FF, G = 0x0000FF00, B = 0x00FF0000, A = 0xFF000000.
         byte[] bmp = new BmpBuilder
         {
-            Width = 2, Height = 1, Bits = 32, Compression = 3, HeaderSize = 56,
+            Width = 2,
+            Height = 1,
+            Bits = 32,
+            Compression = 3,
+            HeaderSize = 56,
             Masks = [0xFF, 0xFF00, 0xFF0000, 0xFF000000],
             Rows = [[10, 20, 30, 40, 50, 60, 70, 255]],
         }.Build();
-        using Image image = Image.Load(bmp);
+        using Image image = ImageReader.Load(bmp);
         Assert.True(image.HasAlpha);
         Assert.Equal([new Rgba32(10, 20, 30, 40), new Rgba32(50, 60, 70, 255)], image.GetPixelSpan().ToArray());
     }
@@ -155,11 +162,15 @@ public class BmpDecoderTests
     {
         byte[] bmp = new BmpBuilder
         {
-            Width = 1, Height = 1, Bits = 16, Compression = 3, HeaderSize = 52,
+            Width = 1,
+            Height = 1,
+            Bits = 16,
+            Compression = 3,
+            HeaderSize = 52,
             Masks = [0xF800, 0x7E0, 0x1F],
             Rows = [[0xFF, 0xFF]],
         }.Build();
-        using Image image = Image.Load(bmp);
+        using Image image = ImageReader.Load(bmp);
         Assert.False(image.HasAlpha);
         Assert.Equal(new Rgba32(255, 255, 255, 255), image[0, 0]);
     }
@@ -169,11 +180,14 @@ public class BmpDecoderTests
     {
         byte[] bmp = new BmpBuilder
         {
-            Width = 1, Height = 1, Bits = 16, Compression = 6,
+            Width = 1,
+            Height = 1,
+            Bits = 16,
+            Compression = 6,
             Masks = [0x7C00, 0x3E0, 0x1F, 0x8000],
             Rows = [[0x1F, 0x00]],  // blue only, alpha bit clear
         }.Build();
-        using Image image = Image.Load(bmp);
+        using Image image = ImageReader.Load(bmp);
         Assert.True(image.HasAlpha);
         Assert.Equal(new Rgba32(0, 0, 255, 0), image[0, 0]);
     }
@@ -185,7 +199,11 @@ public class BmpDecoderTests
         uint p32 = (1023u << 20) | (512u << 10) | 1u | (1u << 30);
         byte[] bmp = new BmpBuilder
         {
-            Width = 1, Height = 1, Bits = 32, Compression = 3, HeaderSize = 124,
+            Width = 1,
+            Height = 1,
+            Bits = 32,
+            Compression = 3,
+            HeaderSize = 124,
             Masks = [0x3FF00000, 0xFFC00, 0x3FF, 0xC0000000],
             Rows = [BitConverter.GetBytes(p32)],
         }.Build();
@@ -194,7 +212,11 @@ public class BmpDecoderTests
         ushort p16 = (ushort)(0x8000 | (16 << 10) | (1 << 5) | 31);
         bmp = new BmpBuilder
         {
-            Width = 1, Height = 1, Bits = 16, Compression = 3, HeaderSize = 124,
+            Width = 1,
+            Height = 1,
+            Bits = 16,
+            Compression = 3,
+            HeaderSize = 124,
             Masks = [0x7C00, 0x3E0, 0x1F, 0x8000],
             Rows = [BitConverter.GetBytes(p16)],
         }.Build();
@@ -205,7 +227,7 @@ public class BmpDecoderTests
     public void Rgb32_IgnoresReservedByte()
     {
         byte[] bmp = new BmpBuilder { Width = 1, Height = 1, Bits = 32, Rows = [[1, 2, 3, 77]] }.Build();
-        using Image image = Image.Load(bmp);
+        using Image image = ImageReader.Load(bmp);
         Assert.False(image.HasAlpha);
         Assert.Equal(new Rgba32(3, 2, 1, 255), image[0, 0]);
     }
@@ -243,9 +265,9 @@ public class BmpDecoderTests
     [Fact]
     public void Resolution_ComesFromPixelsPerMeter()
     {
-        using Image image = Image.Load(new BmpBuilder { Width = 1, Height = 1, PixelsPerMeter = 11811, Rows = [[0, 0, 0]] }.Build());
+        using Image image = ImageReader.Load(new BmpBuilder { Width = 1, Height = 1, PixelsPerMeter = 11811, Rows = [[0, 0, 0]] }.Build());
         Assert.Equal(300f, image.Metadata.HorizontalResolution, 0.01f);
-        using Image unspecified = Image.Load(new BmpBuilder { Width = 1, Height = 1, Rows = [[0, 0, 0]] }.Build());
+        using Image unspecified = ImageReader.Load(new BmpBuilder { Width = 1, Height = 1, Rows = [[0, 0, 0]] }.Build());
         Assert.Equal(96f, unspecified.Metadata.HorizontalResolution);
     }
 
@@ -255,7 +277,10 @@ public class BmpDecoderTests
         byte[] icc = [1, 2, 3, 4, 5, 6, 7];
         byte[] bmp = new BmpBuilder
         {
-            Width = 1, Height = 1, HeaderSize = 124, Rows = [[0, 0, 0]],
+            Width = 1,
+            Height = 1,
+            HeaderSize = 124,
+            Rows = [[0, 0, 0]],
             PatchHeader = h =>
             {
                 BitConverter.GetBytes(0x4D424544u).CopyTo(h, 56);
@@ -264,9 +289,9 @@ public class BmpDecoderTests
             },
             Trailer = icc,
         }.Build();
-        using Image image = Image.Load(bmp);
+        using Image image = ImageReader.Load(bmp);
         Assert.Equal(icc, image.Metadata.IccProfile);
-        using Image noMeta = Image.Load(bmp, new DecoderOptions { IgnoreMetadata = true });
+        using Image noMeta = ImageReader.Load(bmp, new DecoderOptions { IgnoreMetadata = true });
         Assert.Null(noMeta.Metadata.IccProfile);
     }
 
@@ -277,11 +302,11 @@ public class BmpDecoderTests
         source[1, 1] = new Rgba32(200, 100, 50, 255);
         byte[] png = source.ToPng();
         byte[] bmp = new BmpBuilder { Width = 3, Height = 2, Bits = 0, Compression = 5, Data = png, ImageSize = (uint)png.Length }.Build();
-        using Image image = Image.Load(bmp);
+        using Image image = ImageReader.Load(bmp);
         Assert.Equal(ImageFormat.Bmp, image.SourceFormat);
         Assert.True(image.HasAlpha);
         Assert.Equal(source.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
-        Assert.True(Image.Identify(bmp).HasAlpha);
+        Assert.True(ImageReader.Identify(bmp).HasAlpha);
     }
 
     [Fact]
@@ -289,13 +314,13 @@ public class BmpDecoderTests
     {
         byte[] jpeg = Corpus.Read("jpeg/odd_420.jpg");
         byte[] bmp = new BmpBuilder { Width = 171, Height = 93, Bits = 0, Compression = 4, Data = jpeg }.Build();
-        using Image image = Image.Load(bmp);
-        using Image direct = Image.Load(jpeg);
+        using Image image = ImageReader.Load(bmp);
+        using Image direct = ImageReader.Load(jpeg);
         Assert.Equal(ImageFormat.Bmp, image.SourceFormat);
         Assert.Equal(direct.GetPixelSpan().ToArray(), image.GetPixelSpan().ToArray());
 
         byte[] broken = new BmpBuilder { Width = 1, Height = 1, Bits = 0, Compression = 4, Data = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(broken));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(broken));
     }
 
     public static TheoryData<string, byte[]> InvalidFiles() => new()
@@ -321,7 +346,7 @@ public class BmpDecoderTests
     public void Decode_InvalidFile_ThrowsFormatException(string reason, byte[] bmp)
     {
         Assert.NotNull(reason);
-        Assert.Throws<ImageFormatException>(() => Image.Load(bmp));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(bmp));
     }
 
     [Theory]
@@ -331,14 +356,14 @@ public class BmpDecoderTests
     public void Decode_UnsupportedVariant_ThrowsNotSupported(int bits, uint compression)
     {
         byte[] bmp = new BmpBuilder { Width = 1, Height = 1, Bits = bits, Compression = compression, HeaderSize = 64, Rows = [new byte[8]] }.Build();
-        Assert.Throws<NotSupportedException>(() => Image.Load(bmp));
+        Assert.Throws<NotSupportedException>(() => ImageReader.Load(bmp));
     }
 
     [Fact]
     public void Decode_RespectsMaxPixels()
     {
         byte[] bmp = new BmpBuilder { Width = 100_000, Height = 100_000, Bits = 1, Palette = Pal4[..2], Rows = [] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(bmp, new DecoderOptions { MaxPixels = 1 << 20 }));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(bmp, new DecoderOptions { MaxPixels = 1 << 20 }));
     }
 
     [Fact]
@@ -366,7 +391,7 @@ public class BmpDecoderTests
 
                 try
                 {
-                    using Image img = Image.Load(data);
+                    using Image img = ImageReader.Load(data);
                 }
                 catch (ImageFormatException)
                 {

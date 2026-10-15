@@ -8,7 +8,7 @@ dotnet run -c Release --project samples/PictureSharp.Cli -- <command> [arguments
 
 | Command | Usage | What it does |
 | --- | --- | --- |
-| `info` | `info <file>...` | Prints format, size, alpha, frame count, WebP compression and EXIF orientation without decoding pixels (`Image.Identify`). |
+| `info` | `info <file>...` | Prints format, size, alpha, frame count, WebP compression and EXIF orientation without decoding pixels (`ImageReader.Identify`). |
 | `convert` | `convert <input> <output> [-q quality] [-m method] [-lossless] [-colors n] [-octree] [-dither]` | Loads (applying EXIF orientation) and saves in the format of the output extension (`.webp`, `.png`, `.jpg`, `.bmp`, `.gif`, `.pcx`, `.ico`). `-q` and `-m` set WebP quality/method (default 75 and 4); for JPEG `-q` is an integer quality 1–100. GIF output takes `-colors` (2–256), `-octree` and `-dither`. GIF to WebP works like `gif2webp`: lossless unless `-q` or `-m` is given (`-lossless` keeps it lossless with them). PCX uses the automatic bit depth. ICO writes PNG and requires dimensions up to 256×256; use `icon` to generate sizes. |
 | `resize` | `resize <input> <output> <width> <height> [-mode stretch\|max\|crop\|pad\|min] [-filter nearest\|bilinear\|bicubic\|lanczos3\|box\|hamming] [-q quality]` | Resizes every frame; 0 for one side keeps the aspect ratio. See [resize modes](image-processing.md#resize-modes). |
 | `thumbnail` | `thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality]` | Loads already shrunk to fit inside the box with `DecoderOptions.TargetSize` (reduced JPEG decode, EXIF orientation applied); 0 for one side means no limit. `-gap` sets `TargetReducingGap` (default 2). See [thumbnails while loading](loading-and-saving.md#thumbnails-while-loading). |

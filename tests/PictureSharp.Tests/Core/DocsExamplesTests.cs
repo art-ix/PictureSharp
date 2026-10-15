@@ -1,4 +1,13 @@
 using System.Drawing;
+using PictureSharp.Formats.Bmp;
+using PictureSharp.Formats.Gif;
+using PictureSharp.Formats.Ico;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Formats.Pcx;
+using PictureSharp.Formats.Png;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
@@ -19,10 +28,10 @@ public sealed class DocsExamplesTests : IDisposable
         File.Copy(Corpus.PathOf("png/odd_rgba.png"), P("logo.png"));
         File.Copy(Corpus.PathOf("png/odd_rgba.png"), P("frame-1.png"));
         File.Copy(Corpus.PathOf("webp/anim/alpha_lossless.webp"), P("animated.webp"));
-        using (Image second = Image.Load(P("frame-1.png")))
+        using (Image second = ImageReader.Load(P("frame-1.png")))
         {
             second.Mutate(x => x.Invert());
-            second.Save(P("frame-2.png"));
+            ImageWriter.Save(second, P("frame-2.png"));
         }
 
         File.Copy(P("input.png"), P("unknown.bin"));
@@ -35,13 +44,13 @@ public sealed class DocsExamplesTests : IDisposable
     [Fact]
     public async Task Ico_IconsAndVariantOwnership()
     {
-        using Image source = Image.Load(P("logo.png"));
+        using Image source = ImageReader.Load(P("logo.png"));
         using Image small = source.Clone(x => x.Resize(16, 16, ResizeMode.Pad));
         using Image large = source.Clone(x => x.Resize(256, 256, ResizeMode.Pad));
         small.SaveAsIco(P("favicon.ico"));
         IcoFile.Save([small, large], P("app.ico"));
-        using Image preferred = Image.Load(P("app.ico"), new() { IcoPreferredSize = new(32, 32) });
-        using Image indexed = Image.Load(P("app.ico"), new() { IcoIndex = 0 });
+        using Image preferred = ImageReader.Load(P("app.ico"), new() { Ico = new() { PreferredSize = new(32, 32) }});
+        using Image indexed = ImageReader.Load(P("app.ico"), new() { Ico = new() { Index = 0 }});
         Assert.Equal(16, preferred.Width);
         Assert.Equal(16, indexed.Width);
         Assert.Equal(2, IcoFile.Identify(P("app.ico")).Count);
@@ -67,16 +76,16 @@ public sealed class DocsExamplesTests : IDisposable
         };
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        using Image image = Image.Load(upload, untrusted, timeout.Token);
+        using Image image = ImageReader.Load(upload, untrusted, timeout.Token);
         image.Mutate(x => x.Thumbnail(512, 512), timeout.Token);
-        image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
+        ImageWriter.Save(image, output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
         Assert.True(output.Length > 0);
     }
 
     [Fact]
     public void Limits_AtomicClone()
     {
-        using Image image = Image.Load(P("input.png"));
+        using Image image = ImageReader.Load(P("input.png"));
         Rgba32[] before = image.GetPixelSpan().ToArray();
         string path = P("canceled.png");
         using var source = new CancellationTokenSource();
@@ -86,7 +95,7 @@ public sealed class DocsExamplesTests : IDisposable
         try
         {
             using Image result = image.Clone(x => x.Resize(1600, 0).GaussianBlur(2f), cancellationToken);
-            result.Save(path, new PngEncoderOptions(), cancellationToken);
+            ImageWriter.Save(result, path, new PngEncoderOptions(), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -104,7 +113,7 @@ public sealed class DocsExamplesTests : IDisposable
     [Fact]
     public async Task Readme_QuickStart()
     {
-        using var image = await Image.LoadAsync(P("photo.jpg"));
+        using var image = await ImageReader.LoadAsync(P("photo.jpg"));
         image.Mutate(x => x
             .AutoOrient()
             .Resize(1600, 0)                 // 0 keeps the aspect ratio
@@ -115,10 +124,10 @@ public sealed class DocsExamplesTests : IDisposable
         thumbnail.SaveAsPng(P("thumbnail.png"));
         thumbnail.SaveAsPcx(P("thumbnail.pcx"));
 
-        Assert.Equal(1600, Image.Identify(P("photo.webp")).Width);
-        ImageInfo thumb = Image.Identify(P("thumbnail.png"));
+        Assert.Equal(1600, ImageReader.Identify(P("photo.webp")).Width);
+        ImageInfo thumb = ImageReader.Identify(P("thumbnail.png"));
         Assert.Equal((256, 256), (thumb.Width, thumb.Height));
-        using Image pcx = Image.Load(P("thumbnail.pcx"));
+        using Image pcx = ImageReader.Load(P("thumbnail.pcx"));
         Assert.Equal(thumbnail.GetPixelSpan().ToArray(), pcx.GetPixelSpan().ToArray());
     }
 
@@ -127,16 +136,16 @@ public sealed class DocsExamplesTests : IDisposable
     [Fact]
     public void GettingStarted()
     {
-        using (var image = Image.Load(P("photo.jpg")))
+        using (var image = ImageReader.Load(P("photo.jpg")))
         {
             Assert.Equal(ImageFormat.Jpeg, image.SourceFormat);
             image.Mutate(x => x.AutoOrient().Resize(800, 0).Grayscale());
-            image.Save(P("photo-small.webp"));
+            ImageWriter.Save(image, P("photo-small.webp"));
         }
 
-        Assert.Equal(800, Image.Identify(P("photo-small.webp")).Width);
+        Assert.Equal(800, ImageReader.Identify(P("photo-small.webp")).Width);
 
-        using var original = Image.Load(P("photo.jpg"));
+        using var original = ImageReader.Load(P("photo.jpg"));
         original.Mutate(x => x.AutoOrient());
         using Image small = original.Clone(x => x.Resize(640, 0));
         using Image square = original.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
@@ -149,10 +158,10 @@ public sealed class DocsExamplesTests : IDisposable
         Assert.Equal(new Rgba32(255, 0, 0, 255), pixel);
 
         byte[] upload = [1, 2, 3, 4, 5];
-        Assert.Throws<ImageFormatException>(() => Image.Load(upload, new DecoderOptions { MaxPixels = 50_000_000 }));
-        Assert.Throws<NotSupportedException>(() => canvas.Save(P("x.tiff")));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(upload, new DecoderOptions { MaxPixels = 50_000_000 }));
+        Assert.Throws<NotSupportedException>(() => ImageWriter.Save(canvas, P("x.tiff")));
         Assert.Throws<ArgumentOutOfRangeException>(() => new WebPEncoderOptions { Quality = 120 });
-        Assert.Throws<ImageFormatException>(() => Image.Load(P("photo.jpg"), new DecoderOptions { MaxPixels = 100 }));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(P("photo.jpg"), new DecoderOptions { MaxPixels = 100 }));
     }
 
     // ------------------------------------------------------------ loading-and-saving.md
@@ -164,10 +173,10 @@ public sealed class DocsExamplesTests : IDisposable
         CancellationToken cancellationToken = CancellationToken.None;
         using var stream = new MemoryStream(bytes[16..]);
 
-        using var fromStream = Image.Load(stream);
-        using var fromBytes = Image.Load(bytes[16..]);
-        using var fromSpan = Image.Load(bytes.AsSpan(16));
-        using var fromAsync = await Image.LoadAsync(P("input.png"), cancellationToken);
+        using var fromStream = ImageReader.Load(stream);
+        using var fromBytes = ImageReader.Load(bytes[16..]);
+        using var fromSpan = ImageReader.Load(bytes.AsSpan(16));
+        using var fromAsync = await ImageReader.LoadAsync(P("input.png"), cancellationToken);
         Assert.Equal(fromAsync.GetPixelSpan().ToArray(), fromSpan.GetPixelSpan().ToArray());
         Assert.Equal(fromStream.Size, fromBytes.Size);
 
@@ -178,15 +187,15 @@ public sealed class DocsExamplesTests : IDisposable
             IgnoreMetadata = true,
             MaxPixels = 40_000_000,
         };
-        using var upload = Image.Load(P("photo.jpg"), options);
+        using var upload = ImageReader.Load(P("photo.jpg"), options);
         Assert.Equal(1_000_000, (DecoderOptions.Default with { MaxPixels = 1_000_000 }).MaxPixels);
 
-        upload.Save(P("out.webp"));
-        upload.Save(P("out.bin"), new PngEncoderOptions());
+        ImageWriter.Save(upload, P("out.webp"));
+        ImageWriter.Save(upload, P("out.bin"), new PngEncoderOptions());
         using var output = new MemoryStream();
-        upload.Save(output, ImageFormat.Jpeg);
-        upload.Save(output, new WebPEncoderOptions { Lossless = true });
-        await upload.SaveAsync(P("out.png"), cancellationToken);
+        ImageWriter.Save(upload, output, ImageFormat.Jpeg);
+        ImageWriter.Save(upload, output, new WebPEncoderOptions { Lossless = true });
+        await ImageWriter.SaveAsync(upload, P("out.png"), cancellationToken);
         upload.SaveAsWebP(P("photo.webp"), new() { Quality = 82 });
         upload.SaveAsPng(output);
         await upload.SaveAsJpegAsync(P("photo.jpg2.jpg"), new() { Quality = 90, Progressive = true });
@@ -194,13 +203,13 @@ public sealed class DocsExamplesTests : IDisposable
         byte[] webp = upload.ToWebP();
         byte[] png = upload.ToPng(new() { CompressionLevel = 9 });
 
-        ImageInfo info = Image.Identify(P("photo.webp"));
+        ImageInfo info = ImageReader.Identify(P("photo.webp"));
         Assert.Equal((ImageFormat.WebP, upload.Width), (info.Format, info.Width));
-        Assert.Equal(ImageFormat.Png, Image.DetectFormat(P("unknown.bin")));
-        Assert.Equal(ImageFormat.Png, Image.DetectFormat(P("out.bin")));
-        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(webp));
-        Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
-        Assert.Equal(ImageFormat.Jpeg, ImageFormat.FromExtension("photo.JPG"));
+        Assert.Equal(ImageFormat.Png, ImageFormats.DetectFormat(P("unknown.bin")));
+        Assert.Equal(ImageFormat.Png, ImageFormats.DetectFormat(P("out.bin")));
+        Assert.Equal(ImageFormat.WebP, ImageFormats.DetectFormat(webp));
+        Assert.Equal(ImageFormat.Png, ImageFormats.DetectFormat(png));
+        Assert.Equal(ImageFormat.Jpeg, ImageFormats.FromExtension("photo.JPG"));
 
         // Convert a folder to WebP.
         string folder = P("photos");
@@ -209,12 +218,12 @@ public sealed class DocsExamplesTests : IDisposable
         File.WriteAllText(Path.Combine(folder, "notes.txt"), "skip me");
         foreach (string path in Directory.EnumerateFiles(folder))
         {
-            if (ImageFormat.FromExtension(path) is not { CanDecode: true })
+            if (ImageFormats.FromExtension(path) is not { } format || !ImageFormats.CanDecode(format))
             {
                 continue;
             }
 
-            using var image = Image.Load(path, new DecoderOptions { ApplyExifOrientation = true });
+            using var image = ImageReader.Load(path, new DecoderOptions { ApplyExifOrientation = true });
             image.Mutate(x => x.Thumbnail(2048, 2048));
             image.SaveAsWebP(Path.ChangeExtension(path, ".webp"), new() { Quality = 80 });
         }
@@ -223,25 +232,25 @@ public sealed class DocsExamplesTests : IDisposable
 
         // Thumbnails while loading; the ASP.NET Core recipe uses the same options.
         var thumbnailOptions = new DecoderOptions { TargetSize = new(256, 256), ApplyExifOrientation = true };
-        using (var thumbnail = Image.Load(P("photo.jpg"), thumbnailOptions))
+        using (var thumbnail = ImageReader.Load(P("photo.jpg"), thumbnailOptions))
         {
             Assert.True(thumbnail.Width <= 256 && thumbnail.Height <= 256);
         }
 
         int? w = 40;
         var serveOptions = new DecoderOptions { TargetSize = new(w ?? 400, 0), ApplyExifOrientation = true };
-        using (var served = await Image.LoadAsync(P("photo.jpg"), serveOptions, cancellationToken))
+        using (var served = await ImageReader.LoadAsync(P("photo.jpg"), serveOptions, cancellationToken))
         {
             Assert.Equal(40, served.Width);
-            Assert.Equal(ImageFormat.WebP, Image.DetectFormat(served.ToWebP(new() { Quality = 80 })));
+            Assert.Equal(ImageFormat.WebP, ImageFormats.DetectFormat(served.ToWebP(new() { Quality = 80 })));
         }
 
         // Choose the output format from a MIME type.
         string accept = "image/webp";
-        ImageFormat target = ImageFormat.FromMimeType(accept) ?? ImageFormat.Png;
+        ImageFormat target = ImageFormats.FromMimeType(accept) ?? ImageFormat.Png;
         using var body = new MemoryStream();
-        upload.Save(body, target);
-        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(body.ToArray()));
+        ImageWriter.Save(upload, body, target);
+        Assert.Equal(ImageFormat.WebP, ImageFormats.DetectFormat(body.ToArray()));
     }
 
     // ------------------------------------------------------------ encoder-options.md
@@ -249,7 +258,7 @@ public sealed class DocsExamplesTests : IDisposable
     [Fact]
     public void EncoderOptions()
     {
-        using var image = Image.Load(P("input.png"));
+        using var image = ImageReader.Load(P("input.png"));
         image.SaveAsWebP(P("lossy.webp"));
         image.SaveAsWebP(P("small.webp"), new() { Quality = 70, Method = 6 });
         image.SaveAsWebP(P("exact.webp"), new() { Lossless = true, Exact = true });
@@ -270,10 +279,10 @@ public sealed class DocsExamplesTests : IDisposable
         image.SaveAsGif(P("small.gif"), new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
         image.SaveAsGif(P("fast.gif"), new() { Quantizer = GifQuantizer.Octree });
         image.SaveAsGif(P("soft-edges.gif"), new() { TransparencyThreshold = 32 });
-        Assert.Equal(ImageFormat.Gif, Image.DetectFormat(P("small.gif")));
-        Assert.Equal(ImageFormat.Pcx, Image.DetectFormat(P("rgb.pcx")));
+        Assert.Equal(ImageFormat.Gif, ImageFormats.DetectFormat(P("small.gif")));
+        Assert.Equal(ImageFormat.Pcx, ImageFormats.DetectFormat(P("rgb.pcx")));
 
-        using Image exactBack = Image.Load(P("exact.webp"));
+        using Image exactBack = ImageReader.Load(P("exact.webp"));
         Assert.Equal(image.GetPixelSpan().ToArray(), exactBack.GetPixelSpan().ToArray());
 
         using Image few = new(4, 4, Color.Red);
@@ -297,8 +306,8 @@ public sealed class DocsExamplesTests : IDisposable
     [Fact]
     public void ImageProcessing()
     {
-        using var photo = Image.Load(P("photo.jpg"));
-        using var logo = Image.Load(P("logo.png"));
+        using var photo = ImageReader.Load(P("photo.jpg"));
+        using var logo = ImageReader.Load(P("logo.png"));
         photo.Mutate(x => x
             .AutoOrient()
             .Resize(new ResizeOptions { Size = new(1200, 800), Mode = ResizeMode.Crop, Position = AnchorPosition.Top })
@@ -345,7 +354,7 @@ public sealed class DocsExamplesTests : IDisposable
             .Rotate(45, ResamplingFilter.Nearest, expand: false));
         Assert.True(rotated.Width > 400);
 
-        using var watermark = Image.Load(P("logo.png"));
+        using var watermark = ImageReader.Load(P("logo.png"));
         using Image adjusted = image.Clone(x => x
             .Brightness(1.2f).Contrast(0.8f).Saturate(1.5f).Grayscale().Sepia().Invert()
             .BackgroundColor(Color.White).Opacity(0.5f).MakeTransparent(Color.Magenta)
@@ -428,9 +437,9 @@ public sealed class DocsExamplesTests : IDisposable
         // The format-independent image API and WebP converter.
         image.SaveAsWebP(P("image.webp"), new() { Lossless = true, Exact = true });
         byte[] data = File.ReadAllBytes(P("image.webp"));
-        ImageInfo info = Image.Identify(data);
+        ImageInfo info = ImageReader.Identify(data);
         Assert.Equal(WebPCompression.Lossless, info.WebPCompression);
-        using Image decoded = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
+        using Image decoded = ImageReader.Load(data, new DecoderOptions { FirstFrameOnly = true });
         (int width, int height) = (decoded.Width, decoded.Height);
         byte[] rgba = decoded.ToPixelData();
         byte[] bgraDecoded = decoded.ToPixelData(PixelFormat.Bgra32);
@@ -438,12 +447,12 @@ public sealed class DocsExamplesTests : IDisposable
         decoded.CopyPixelDataTo(target, PixelFormat.Bgra32);
         Size size = decoded.Size;
         using Image fromRgba = Image.LoadPixelData(rgba, width, height, PixelFormat.Rgba32);
-        byte[] lossless = fromRgba.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
-        using Image allFrames = Image.Load(data);
-        PictureSharp.WebPConverter.Convert(P("input.png"), P("output.webp"), new() { Quality = 80 });
+        byte[] lossless = ImageWriter.Encode(fromRgba, new WebPEncoderOptions { Lossless = true, Exact = true });
+        using Image allFrames = ImageReader.Load(data);
+        PictureSharp.Formats.WebP.WebPConverter.Convert(P("input.png"), P("output.webp"), new() { Quality = 80 });
         Assert.Equal(bgraDecoded, target);
         Assert.Equal(image.Size, size);
-        using Image roundTrip = Image.Load(lossless, new DecoderOptions { FirstFrameOnly = true });
+        using Image roundTrip = ImageReader.Load(lossless, new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(rgba, roundTrip.ToPixelData());
         Assert.Equal(image.ToPixelData(), rgba);
     }
@@ -453,7 +462,7 @@ public sealed class DocsExamplesTests : IDisposable
     [Fact]
     public void Animation()
     {
-        using (var animation = Image.Load(P("animated.webp")))
+        using (var animation = ImageReader.Load(P("animated.webp")))
         {
             Assert.True(animation.IsAnimated);
             foreach (ImageFrame frame in animation.Frames)
@@ -466,14 +475,14 @@ public sealed class DocsExamplesTests : IDisposable
             Assert.Equal(1, third.FrameCount);
         }
 
-        using var first = Image.Load(P("frame-1.png"));
-        using var second = Image.Load(P("frame-2.png"));
+        using var first = ImageReader.Load(P("frame-1.png"));
+        using var second = ImageReader.Load(P("frame-2.png"));
         using var built = Image.CreateAnimation(TimeSpan.FromMilliseconds(100), first, second);
         built.LoopCount = 0;
         built.Frames[1].Duration = TimeSpan.FromMilliseconds(150);
         built.SaveAsWebP(P("animation.webp"), new() { Lossless = true, Exact = true, MinimizeSize = true });
 
-        using Image back = Image.Load(P("animation.webp"));
+        using Image back = ImageReader.Load(P("animation.webp"));
         Assert.Equal(2, back.FrameCount);
         Assert.Equal(TimeSpan.FromMilliseconds(150), back.Frames[1].Duration);
         Assert.Equal(first.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
@@ -490,29 +499,29 @@ public sealed class DocsExamplesTests : IDisposable
         Assert.All(built.Frames, f => Assert.Equal(32, f.Width));
         built.SaveAsPng(P("animation.png"));
         built.SaveAsPng(P("poster.png"), new() { SaveAnimation = false });
-        Assert.Equal(2, Image.Identify(P("animation.png")).FrameCount);
-        Assert.Equal(1, Image.Identify(P("poster.png")).FrameCount);
+        Assert.Equal(2, ImageReader.Identify(P("animation.png")).FrameCount);
+        Assert.Equal(1, ImageReader.Identify(P("poster.png")).FrameCount);
 
         built.SaveAsGif(P("animation.gif"));
         built.SaveAsGif(P("small.gif"), new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
-        Assert.Equal(2, Image.Identify(P("animation.gif")).FrameCount);
+        Assert.Equal(2, ImageReader.Identify(P("animation.gif")).FrameCount);
 
-        PictureSharp.WebPConverter.Convert(P("animation.gif"), P("animation.webp"));
-        using (var gif = Image.Load(P("animation.gif")))
+        PictureSharp.Formats.WebP.WebPConverter.Convert(P("animation.gif"), P("animation.webp"));
+        using (var gif = ImageReader.Load(P("animation.gif")))
         {
             gif.SaveAsWebP(P("lossy.webp"), new() { Quality = 80, KeyframeMin = 3, KeyframeMax = 5 });
         }
 
-        using (var webp = Image.Load(P("animated.webp")))
+        using (var webp = ImageReader.Load(P("animated.webp")))
         {
             webp.SaveAsGif(P("animated.gif"));
         }
 
-        using Image converted = Image.Load(P("animation.webp"));
-        using Image gifBack = Image.Load(P("animation.gif"));
+        using Image converted = ImageReader.Load(P("animation.webp"));
+        using Image gifBack = ImageReader.Load(P("animation.gif"));
         Assert.Equal(gifBack.FrameCount, converted.FrameCount);
         Assert.Equal(gifBack.GetPixelSpan().ToArray(), converted.GetPixelSpan().ToArray());
-        Assert.Equal(Image.Identify(P("animated.webp")).FrameCount, Image.Identify(P("animated.gif")).FrameCount);
+        Assert.Equal(ImageReader.Identify(P("animated.webp")).FrameCount, ImageReader.Identify(P("animated.gif")).FrameCount);
     }
 
     // ------------------------------------------------------------ metadata.md
@@ -520,17 +529,17 @@ public sealed class DocsExamplesTests : IDisposable
     [Fact]
     public void Metadata()
     {
-        using var photo = Image.Load(P("photo.jpg"));
+        using var photo = ImageReader.Load(P("photo.jpg"));
         photo.Metadata.Exif = [.. "II*\0"u8, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
         photo.Metadata.Xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>"u8.ToArray();
         photo.SaveAsJpeg(P("tagged.jpg"));
 
-        using var reloaded = Image.Load(P("tagged.jpg"));
+        using var reloaded = ImageReader.Load(P("tagged.jpg"));
         ImageMetadata meta = reloaded.Metadata;
         Assert.Equal(ExifOrientation.RightTop, meta.Orientation);
         Assert.NotNull(meta.Xmp);
 
-        using var upright = Image.Load(P("tagged.jpg"), new DecoderOptions { ApplyExifOrientation = true });
+        using var upright = ImageReader.Load(P("tagged.jpg"), new DecoderOptions { ApplyExifOrientation = true });
         reloaded.Mutate(x => x.AutoOrient());
         Assert.Equal(ExifOrientation.TopLeft, reloaded.Metadata.Orientation);
         Assert.Equal(upright.Size, reloaded.Size);
@@ -538,8 +547,8 @@ public sealed class DocsExamplesTests : IDisposable
 
         reloaded.SaveAsWebP(P("share.webp"), new() { Metadata = MetadataKinds.Icc });
         reloaded.SaveAsJpeg(P("clean.jpg"), new() { Metadata = MetadataKinds.None });
-        using (Image clean = Image.Load(P("clean.jpg")))
-        using (Image shared = Image.Load(P("share.webp")))
+        using (Image clean = ImageReader.Load(P("clean.jpg")))
+        using (Image shared = ImageReader.Load(P("share.webp")))
         {
             Assert.True(clean.Metadata.IsEmpty);
             Assert.Null(shared.Metadata.Exif);

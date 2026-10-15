@@ -48,11 +48,11 @@ public class PublicApiTests
                 {
                     _ when IsCompilerGenerated(member) => null,
                     FieldInfo f when type.IsEnum => f.IsLiteral ? $"{f.Name} = {Convert.ToInt64(f.GetRawConstantValue())}" : null,
-                    FieldInfo f => $"field {Static(f.IsStatic)}{Name(f.FieldType)}{Q(Nullability.Create(f))} {f.Name}",
-                    PropertyInfo p => $"property {Static((p.GetMethod ?? p.SetMethod)!.IsStatic)}{Name(p.PropertyType)}{Q(Nullability.Create(p))} {PropertyName(p)} {{ {Accessors(p)}}}",
+                    FieldInfo f => $"field {Required(f)}{Static(f.IsStatic)}{Name(f.FieldType)}{Q(Nullability.Create(f))} {f.Name}",
+                    PropertyInfo p => $"property {Required(p)}{Static((p.GetMethod ?? p.SetMethod)!.IsStatic)}{Name(p.PropertyType)}{Q(Nullability.Create(p))} {PropertyName(p)} {{ {Accessors(p)}}}",
                     ConstructorInfo c when !type.IsValueType || c.GetParameters().Length > 0 => $"ctor({Parameters(c)})",
                     MethodInfo m when !m.IsSpecialName || m.Name.StartsWith("op_", StringComparison.Ordinal) =>
-                        $"method {Static(m.IsStatic)}{Name(m.ReturnType)}{Q(Nullability.Create(m.ReturnParameter))} {m.Name}{Generic(m)}({Parameters(m)})",
+                        $"method {MethodAttributes(m)}{Static(m.IsStatic)}{Name(m.ReturnType)}{Q(Nullability.Create(m.ReturnParameter))} {m.Name}{Generic(m)}({Parameters(m)})",
                     _ => null,
                 };
                 if (line is not null)
@@ -65,6 +65,15 @@ public class PublicApiTests
         }
 
         return string.Join('\n', lines) + "\n";
+    }
+
+    private static string Required(MemberInfo member) => member.IsDefined(typeof(RequiredMemberAttribute)) ? "required " : "";
+
+    private static string MethodAttributes(MethodInfo method)
+    {
+        string extension = method.IsDefined(typeof(ExtensionAttribute)) ? "[Extension] " : "";
+        var priority = method.GetCustomAttribute<OverloadResolutionPriorityAttribute>();
+        return extension + (priority is null ? "" : $"[OverloadPriority({priority.Priority})] ");
     }
 
     private static bool IsCompilerGenerated(MemberInfo member) =>

@@ -1,4 +1,13 @@
 using System.Diagnostics;
+using PictureSharp.Formats.Bmp;
+using PictureSharp.Formats.Gif;
+using PictureSharp.Formats.Ico;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Formats.Pcx;
+using PictureSharp.Formats.Png;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
@@ -25,22 +34,22 @@ public class CancellationTests
     public void CanceledToken_StopsEveryLoad(string file)
     {
         byte[] data = Corpus.Read(file);
-        Assert.Throws<OperationCanceledException>(() => Image.Load(data, null, Canceled));
-        Assert.Throws<OperationCanceledException>(() => Image.Load(new NonSeekableStream(data), null, Canceled));
-        Assert.Throws<OperationCanceledException>(() => Image.Load(Corpus.PathOf(file), null, Canceled));
+        Assert.Throws<OperationCanceledException>(() => ImageReader.Load(data, null, Canceled));
+        Assert.Throws<OperationCanceledException>(() => ImageReader.Load(new NonSeekableStream(data), null, Canceled));
+        Assert.Throws<OperationCanceledException>(() => ImageReader.Load(Corpus.PathOf(file), null, Canceled));
     }
 
     [Fact]
     public async Task CanceledToken_StopsAsyncPaths()
     {
         string path = Corpus.PathOf("png/rgba8.png");
-        using Image image = Image.Load(path);
+        using Image image = ImageReader.Load(path);
         string output = Path.Combine(Path.GetTempPath(), $"picturesharp-cancel-{Guid.NewGuid():N}.png");
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Image.LoadAsync(path, Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Image.LoadAsync(new NonSeekableStream(File.ReadAllBytes(path)), Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Image.IdentifyAsync(path, Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => image.SaveAsync(output, Canceled));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => image.SaveAsync(new MemoryStream(), ImageFormat.Png, Canceled));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ImageReader.LoadAsync(path, Canceled));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ImageReader.LoadAsync(new NonSeekableStream(File.ReadAllBytes(path)), Canceled));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ImageReader.IdentifyAsync(path, Canceled));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ImageWriter.SaveAsync(image, output, Canceled));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ImageWriter.SaveAsync(image, new MemoryStream(), ImageFormat.Png, Canceled));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => IcoFile.SaveAsync([image], new MemoryStream(), null, Canceled));
         Assert.False(File.Exists(output));
     }
@@ -52,12 +61,12 @@ public class CancellationTests
         using Image image = Pattern(32, 32);
         EncoderOptions options = Options(format);
         var stream = new MemoryStream();
-        Assert.Throws<OperationCanceledException>(() => image.Save(stream, options, Canceled));
+        Assert.Throws<OperationCanceledException>(() => ImageWriter.Save(image, stream, options, Canceled));
         Assert.Equal(0, stream.Length);
-        Assert.Throws<OperationCanceledException>(() => image.Encode(options, Canceled));
+        Assert.Throws<OperationCanceledException>(() => ImageWriter.Encode(image, options, Canceled));
 
         string path = Path.Combine(Path.GetTempPath(), $"picturesharp-cancel-{Guid.NewGuid():N}");
-        Assert.Throws<OperationCanceledException>(() => image.Save(path, options, Canceled));
+        Assert.Throws<OperationCanceledException>(() => ImageWriter.Save(image, path, options, Canceled));
         Assert.False(File.Exists(path));
     }
 
@@ -200,11 +209,11 @@ public class CancellationInFlightTests
         using Image source = Noise(size, size);
         byte[] data = format switch
         {
-            "jpeg-progressive" => source.Encode(new JpegEncoderOptions { Progressive = true }),
-            "png" => source.Encode(new PngEncoderOptions { CompressionLevel = 1 }),
-            _ => source.Encode(Options(format)),
+            "jpeg-progressive" => ImageWriter.Encode(source, new JpegEncoderOptions { Progressive = true }),
+            "png" => ImageWriter.Encode(source, new PngEncoderOptions { CompressionLevel = 1 }),
+            _ => ImageWriter.Encode(source, Options(format)),
         };
-        AssertCancelsPromptly(token => Image.Load(data, null, token).Dispose());
+        AssertCancelsPromptly(token => ImageReader.Load(data, null, token).Dispose());
     }
 
     [Theory]
@@ -218,7 +227,7 @@ public class CancellationInFlightTests
         int size = format is "webp-lossless" or "gif" ? 1024 : 2048;
         using Image source = Noise(size, size);
         EncoderOptions options = format == "png" ? new PngEncoderOptions { CompressionLevel = 9 } : Options(format);
-        AssertCancelsPromptly(token => source.Encode(options, token));
+        AssertCancelsPromptly(token => ImageWriter.Encode(source, options, token));
     }
 
     [Fact]
@@ -226,8 +235,8 @@ public class CancellationInFlightTests
     {
         using Image source = Animated(512, 512, frames: 12, noise: true);
         byte[] webp = source.ToWebP();
-        AssertCancelsPromptly(token => source.Encode(new WebPEncoderOptions(), token));
-        AssertCancelsPromptly(token => Image.Load(webp, null, token).Dispose());
+        AssertCancelsPromptly(token => ImageWriter.Encode(source, new WebPEncoderOptions(), token));
+        AssertCancelsPromptly(token => ImageReader.Load(webp, null, token).Dispose());
     }
 
     [Theory]

@@ -1,4 +1,6 @@
 using System.Drawing;
+using PictureSharp.Algorithms.Processing;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
@@ -178,7 +180,10 @@ public class ProcessingTests
         using var white = new Image(50, 100, Color.Red);
         white.Mutate(x => x.Resize(new ResizeOptions
         {
-            Size = new(41, 40), Mode = ResizeMode.Pad, Filter = ResamplingFilter.Bicubic, PadColor = Color.White,
+            Size = new(41, 40),
+            Mode = ResizeMode.Pad,
+            Filter = ResamplingFilter.Bicubic,
+            PadColor = Color.White,
         }));
         Assert.False(white.HasAlpha);
         Assert.Equal((41, 40), (white.Width, white.Height));

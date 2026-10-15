@@ -1,5 +1,7 @@
 using System.Text.Json;
-using PictureSharp.Formats.Jpeg;
+using PictureSharp.Infrastructure.Codecs.Jpeg;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Jpeg;
@@ -28,7 +30,7 @@ public class JpegScaledDecodeTests
     public void ScaledDecode_IsBitExactWithLibjpegTurbo(string file, int scale)
     {
         JsonElement reference = ScaledReference.Value.RootElement.GetProperty("files").GetProperty(file).GetProperty(scale.ToString());
-        using Image image = JpegDecoder.Decode(Corpus.Read(file), DecoderOptions.Default, scale);
+        using Image image = JpegDecoder.DecodeScaled(Corpus.Read(file), DecoderOptions.Default, scale);
         Assert.Equal((reference.GetProperty("width").GetInt32(), reference.GetProperty("height").GetInt32()), (image.Width, image.Height));
         if (Environment.GetEnvironmentVariable("PICTURESHARP_DUMP_SCALED") is { } dump)
         {
@@ -61,9 +63,9 @@ public class JpegScaledDecodeTests
     {
         string file = Corpus.PathOf($"jpeg/orientation_{orientation}.jpg");
         var options = new DecoderOptions { ApplyExifOrientation = apply };
-        using Image expected = Image.Load(file, options);
+        using Image expected = ImageReader.Load(file, options);
         expected.Mutate(x => x.Thumbnail(width, height));
-        using Image image = Image.Load(file, options with { TargetSize = new(width, height) });
+        using Image image = ImageReader.Load(file, options with { TargetSize = new(width, height) });
 
         Assert.Equal(expected.Size, image.Size);
         Assert.Equal(expected.Metadata.Orientation, image.Metadata.Orientation);
@@ -88,11 +90,10 @@ public class JpegScaledDecodeTests
         {
             foreach (int side in (int[])[8, 20, 33, 64])
             {
-                using Image expected = Image.Load(Corpus.PathOf(file));
+                using Image expected = ImageReader.Load(Corpus.PathOf(file));
                 expected.Mutate(x => x.Thumbnail(side, side));
-                using Image image = Image.Load(Corpus.PathOf(file), new DecoderOptions { TargetSize = new(side, side), TargetReducingGap = gap });
+                using Image image = ImageReader.Load(Corpus.PathOf(file), new DecoderOptions { TargetSize = new(side, side), TargetReducingGap = gap });
                 Assert.Equal(expected.Size, image.Size);
-                Assert.Null(image.ReducedDecode);
                 double psnr = Psnr(expected, image);
                 Assert.True(psnr > minPsnr, $"{side}, gap {gap}: PSNR {psnr:F1} dB");
             }
@@ -104,9 +105,9 @@ public class JpegScaledDecodeTests
     {
         // 256x192 to 200x150 leaves no room for a 1/2 decode, so the result is the full decode resized.
         string file = Corpus.PathOf("jpeg/q90_420.jpg");
-        using Image expected = Image.Load(file);
+        using Image expected = ImageReader.Load(file);
         expected.Mutate(x => x.Thumbnail(200, 200, ResamplingFilter.Bicubic));
-        using Image image = Image.Load(file, new DecoderOptions { TargetSize = new(200, 200), TargetResampling = ResamplingFilter.Bicubic });
+        using Image image = ImageReader.Load(file, new DecoderOptions { TargetSize = new(200, 200), TargetResampling = ResamplingFilter.Bicubic });
         Assert.Equal(expected.ToPixelData(), image.ToPixelData());
     }
 
@@ -141,9 +142,9 @@ public class JpegScaledDecodeTests
     public void TargetSize_DoesNotBypassTheSourceLimits()
     {
         var options = new DecoderOptions { TargetSize = new(8, 8), MaxPixels = (256 * 192) - 1 };
-        Assert.Throws<ImageFormatException>(() => Image.Load(Corpus.PathOf("jpeg/q90_420.jpg"), options));
-        Assert.Throws<ImageFormatException>(() => Image.Load(Corpus.PathOf("jpeg/progressive_420.jpg"), options));
-        using Image image = Image.Load(Corpus.PathOf("jpeg/q90_420.jpg"), options with { MaxPixels = 256 * 192 });
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(Corpus.PathOf("jpeg/q90_420.jpg"), options));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(Corpus.PathOf("jpeg/progressive_420.jpg"), options));
+        using Image image = ImageReader.Load(Corpus.PathOf("jpeg/q90_420.jpg"), options with { MaxPixels = 256 * 192 });
         Assert.Equal((8, 6), (image.Width, image.Height));
     }
 
@@ -153,9 +154,9 @@ public class JpegScaledDecodeTests
     [InlineData("webp/lossy/graphic_alpha_q75.webp")]
     public void TargetSize_ForOtherFormats_IsFullDecodeAndThumbnail(string file)
     {
-        using Image expected = Image.Load(Corpus.PathOf(file));
+        using Image expected = ImageReader.Load(Corpus.PathOf(file));
         expected.Mutate(x => x.Thumbnail(20, 20));
-        using Image image = Image.Load(Corpus.PathOf(file), new DecoderOptions { TargetSize = new(20, 20) });
+        using Image image = ImageReader.Load(Corpus.PathOf(file), new DecoderOptions { TargetSize = new(20, 20) });
         Assert.Equal(expected.FrameCount, image.FrameCount);
         for (int i = 0; i < image.FrameCount; i++)
         {
@@ -168,8 +169,8 @@ public class JpegScaledDecodeTests
     public void TargetSize_LargerThanTheImage_KeepsIt()
     {
         string file = Corpus.PathOf("jpeg/progressive_444.jpg");
-        using Image expected = Image.Load(file);
-        using Image image = Image.Load(file, new DecoderOptions { TargetSize = new(1000, 0), TargetReducingGap = 1 });
+        using Image expected = ImageReader.Load(file);
+        using Image image = ImageReader.Load(file, new DecoderOptions { TargetSize = new(1000, 0), TargetReducingGap = 1 });
         Assert.Equal(expected.ToPixelData(), image.ToPixelData());
     }
 
@@ -200,7 +201,7 @@ public class JpegScaledDecodeTests
 
             try
             {
-                using Image image = Image.Load(data, options);
+                using Image image = ImageReader.Load(data, options);
                 Assert.True(image.Width <= 16 && image.Height <= 16);
             }
             catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)

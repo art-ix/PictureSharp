@@ -1,4 +1,9 @@
 using BenchmarkDotNet.Attributes;
+using PictureSharp.Formats.Gif;
+using PictureSharp.Formats.Png;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using static PictureSharp.Benchmarks.LosslessDecodeBenchmarks;
 
 namespace PictureSharp.Benchmarks;
@@ -50,7 +55,7 @@ public class AnimationBenchmarks
 
         if (Op.ToString().EndsWith("Decode", StringComparison.Ordinal))
         {
-            _encoded = _animation.Encode(_options);
+            _encoded = ImageWriter.Encode(_animation, _options);
         }
     }
 
@@ -62,17 +67,17 @@ public class AnimationBenchmarks
     {
         if (!Op.ToString().EndsWith("Decode", StringComparison.Ordinal))
         {
-            return _animation.Encode(_options).Length;
+            return ImageWriter.Encode(_animation, _options).Length;
         }
 
-        using Image image = Image.Load(_encoded);
+        using Image image = ImageReader.Load(_encoded);
         return image.FrameCount;
     }
 
     // The source doubled with bicubic resampling; each frame is a window shifted by (8, 4) pixels.
     internal static Image CreatePan(string path)
     {
-        using Image source = Image.Load(path);
+        using Image source = ImageReader.Load(path);
         using Image large = source.Clone(x => x.Resize(source.Width * 2, source.Height * 2, ResamplingFilter.Bicubic));
         int width = large.Width - (8 * FrameCount);
         int height = large.Height - (4 * FrameCount);

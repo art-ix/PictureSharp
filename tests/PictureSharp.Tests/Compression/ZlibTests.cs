@@ -1,5 +1,6 @@
 using System.IO.Compression;
-using PictureSharp.Compression;
+using PictureSharp.Algorithms.Compression;
+using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Compression;
 
@@ -63,26 +64,26 @@ public class ZlibTests
             case "zeros":
                 return new byte[70_000];
             case "random":
-            {
-                var data = new byte[50_000];
-                rng.NextBytes(data);
-                return data;
-            }
+                {
+                    var data = new byte[50_000];
+                    rng.NextBytes(data);
+                    return data;
+                }
 
             case "text":
                 return System.Text.Encoding.UTF8.GetBytes(string.Concat(Enumerable.Range(0, 3000).Select(i => $"line {i % 97} lorem ipsum dolor sit amet; ")));
             case "repetitive":
                 return Enumerable.Range(0, 200_000).Select(i => (byte)((i % 7) * (i % 13))).ToArray();
             case "large":
-            {
-                var data = new byte[1_500_000];
-                for (int i = 0; i < data.Length; i++)
                 {
-                    data[i] = (byte)((i / 300) + rng.Next(3));
-                }
+                    var data = new byte[1_500_000];
+                    for (int i = 0; i < data.Length; i++)
+                    {
+                        data[i] = (byte)((i / 300) + rng.Next(3));
+                    }
 
-                return data;
-            }
+                    return data;
+                }
 
             default:
                 return Infrastructure.Corpus.Read("src/photo.png");

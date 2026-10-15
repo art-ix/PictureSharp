@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -16,31 +18,31 @@ public class LossyEncoderOptionsTests
         {
             string expectedPath = Path.Combine(directory, "expected.webp"), actualPath = Path.Combine(directory, "actual.webp");
             foreach ((WebPEncoderOptions options, string flags) in Cases())
-            foreach (string name in new[] { "photo.png", "odd_alpha.png" })
-            {
-                string source = Corpus.PathOf($"src/{name}");
-                using var image = Image.Load(source);
-                byte[] actual = image.ToWebP(options);
-                Assert.True(ReferenceTools.Run("cwebp", $"-quiet {flags} \"{source}\" -o \"{expectedPath}\"", out string output) == 0, output);
-                byte[] expected = File.ReadAllBytes(expectedPath);
-                File.WriteAllBytes(actualPath, actual);
-                byte[] actualPixels = ReferenceTools.DwebpRgba(actualPath)!;
-                Assert.NotNull(actualPixels);
-                byte[] expectedPixels = ReferenceTools.DwebpRgba(expectedPath)!;
-                bool equal = expected.AsSpan().SequenceEqual(actual);
-                if (!equal)
+                foreach (string name in new[] { "photo.png", "odd_alpha.png" })
                 {
-                    bool samePixels = expectedPixels.AsSpan().SequenceEqual(actualPixels);
-                    if (!samePixels || actual.Length > 1.01 * expected.Length)
+                    string source = Corpus.PathOf($"src/{name}");
+                    using var image = ImageReader.Load(source);
+                    byte[] actual = image.ToWebP(options);
+                    Assert.True(ReferenceTools.Run("cwebp", $"-quiet {flags} \"{source}\" -o \"{expectedPath}\"", out string output) == 0, output);
+                    byte[] expected = File.ReadAllBytes(expectedPath);
+                    File.WriteAllBytes(actualPath, actual);
+                    byte[] actualPixels = ReferenceTools.DwebpRgba(actualPath)!;
+                    Assert.NotNull(actualPixels);
+                    byte[] expectedPixels = ReferenceTools.DwebpRgba(expectedPath)!;
+                    bool equal = expected.AsSpan().SequenceEqual(actual);
+                    if (!equal)
                     {
-                        File.WriteAllBytes("/tmp/picturesharp-options-expected.webp", expected);
-                        File.WriteAllBytes("/tmp/picturesharp-options-actual.webp", actual);
+                        bool samePixels = expectedPixels.AsSpan().SequenceEqual(actualPixels);
+                        if (!samePixels || actual.Length > 1.01 * expected.Length)
+                        {
+                            File.WriteAllBytes("/tmp/picturesharp-options-expected.webp", expected);
+                            File.WriteAllBytes("/tmp/picturesharp-options-actual.webp", actual);
+                        }
+                        Assert.True(samePixels && actual.Length <= 1.01 * expected.Length, $"{name}: {flags}, expected={expected.Length}, actual={actual.Length}, samePixels={samePixels}");
                     }
-                    Assert.True(samePixels && actual.Length <= 1.01 * expected.Length, $"{name}: {flags}, expected={expected.Length}, actual={actual.Length}, samePixels={samePixels}");
+                    using var decoded = ImageReader.Load(actual.AsMemory());
+                    Assert.Equal(actualPixels, decoded.ToPixelData(PixelFormat.Rgba32));
                 }
-                using var decoded = Image.Load(actual.AsMemory());
-                Assert.Equal(actualPixels, decoded.ToPixelData(PixelFormat.Rgba32));
-            }
         }
         finally { Directory.Delete(directory, true); }
     }
@@ -64,12 +66,12 @@ public class LossyEncoderOptionsTests
             foreach (ref Rgba32 pixel in image.GetPixelSpan()) pixel = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), 255);
             File.WriteAllBytes(raw, image.ToPixelData(PixelFormat.Rgba32));
             foreach (int method in new[] { 0, 1, 2, 4, 6 })
-            foreach (int parts in Enumerable.Range(0, 4))
-            {
-                byte[] actual = image.ToWebP(new WebPEncoderOptions { Method = method, Partitions = parts });
-                Assert.True(ReferenceTools.Run(oracle, $"\"{raw}\" \"{expected}\" 65 49 {method} {parts}", out string output) == 0, output);
-                Assert.True(File.ReadAllBytes(expected).AsSpan().SequenceEqual(actual), $"method={method}, parts={parts}");
-            }
+                foreach (int parts in Enumerable.Range(0, 4))
+                {
+                    byte[] actual = image.ToWebP(new WebPEncoderOptions { Method = method, Partitions = parts });
+                    Assert.True(ReferenceTools.Run(oracle, $"\"{raw}\" \"{expected}\" 65 49 {method} {parts}", out string output) == 0, output);
+                    Assert.True(File.ReadAllBytes(expected).AsSpan().SequenceEqual(actual), $"method={method}, parts={parts}");
+                }
         }
         finally { Directory.Delete(directory, true); }
     }
@@ -80,10 +82,10 @@ public class LossyEncoderOptionsTests
         using var image = new Image(17, 19, System.Drawing.Color.CornflowerBlue);
         byte[] encoded = image.ToWebP();
         Assert.True(encoded.AsSpan(12, 4).SequenceEqual("VP8 "u8));
-        Assert.Equal(encoded, image.Encode(ImageFormat.WebP));
-        using var output = new MemoryStream(); image.Save(output, ImageFormat.WebP);
+        Assert.Equal(encoded, ImageWriter.Encode(image, ImageFormat.WebP));
+        using var output = new MemoryStream(); ImageWriter.Save(image, output, ImageFormat.WebP);
         Assert.True(output.CanWrite); Assert.Equal(encoded, output.ToArray());
-        using var decoded = Image.Load(encoded.AsMemory());
+        using var decoded = ImageReader.Load(encoded.AsMemory());
         Assert.Equal(image.Width, decoded.Width); Assert.Equal(image.Height, decoded.Height); Assert.True(decoded.IsOpaque());
     }
 
@@ -95,13 +97,13 @@ public class LossyEncoderOptionsTests
         foreach (ref Rgba32 p in image.GetPixelSpan()) p = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
         Rgba32[] before = image.GetPixelSpan().ToArray();
         foreach (int method in new[] { 0, 4, 6 })
-        foreach (bool exact in new[] { false, true })
-        {
-            byte[] encoded = image.ToWebP(new WebPEncoderOptions { Method = method, Exact = exact });
-            using var decoded = Image.Load(encoded.AsMemory());
-            Assert.Equal(before, image.GetPixelSpan().ToArray());
-            Assert.Equal(before.Select(p => p.A), decoded.GetPixelSpan().ToArray().Select(p => p.A));
-        }
+            foreach (bool exact in new[] { false, true })
+            {
+                byte[] encoded = image.ToWebP(new WebPEncoderOptions { Method = method, Exact = exact });
+                using var decoded = ImageReader.Load(encoded.AsMemory());
+                Assert.Equal(before, image.GetPixelSpan().ToArray());
+                Assert.Equal(before.Select(p => p.A), decoded.GetPixelSpan().ToArray().Select(p => p.A));
+            }
     }
 
     [Fact]
@@ -117,9 +119,9 @@ public class LossyEncoderOptionsTests
             () => new WebPEncoderOptions { Preset = (WebPPreset)6 },
             () => new WebPEncoderOptions { AlphaFilter = (WebPAlphaFilter)3 },
             () => new WebPEncoderOptions { MaxDegreeOfParallelism = 0 },
-        }) Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(output, create()));
+        }) Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, output, create()));
         using var wide = new Image(16384, 1);
-        Assert.Throws<ArgumentOutOfRangeException>(() => wide.Save(output, new WebPEncoderOptions()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(wide, output, new WebPEncoderOptions()));
         Assert.Equal(0, output.Length);
     }
 
@@ -132,8 +134,8 @@ public class LossyEncoderOptionsTests
         foreach (int strength in new[] { 0, 100 })
             yield return (new() { SnsStrength = strength }, $"-q 75 -m 4 -sns {strength}");
         foreach (int strength in new[] { 0, 100 })
-        foreach (int sharpness in new[] { 0, 7 })
-            yield return (new() { FilterStrength = strength, FilterSharpness = sharpness }, $"-q 75 -m 4 -f {strength} -sharpness {sharpness}");
+            foreach (int sharpness in new[] { 0, 7 })
+                yield return (new() { FilterStrength = strength, FilterSharpness = sharpness }, $"-q 75 -m 4 -f {strength} -sharpness {sharpness}");
         yield return (new() { AutoFilter = true }, "-q 75 -m 4 -af");
         yield return (new() { UseSharpYuv = true }, "-q 75 -m 4 -sharp_yuv");
         yield return (new() { Exact = true }, "-q 75 -m 4 -exact");
@@ -144,9 +146,9 @@ public class LossyEncoderOptionsTests
             yield return (new() { Method = method, Passes = 6, TargetPsnr = 36 }, $"-q 75 -m {method} -pass 6 -psnr 36");
         }
         foreach (WebPAlphaFilter filter in Enum.GetValues<WebPAlphaFilter>())
-        foreach (bool compression in new[] { false, true })
-        foreach (int quality in new[] { 0, 45, 70, 90, 100 })
-            yield return (new() { AlphaFilter = filter, AlphaCompression = compression, AlphaQuality = quality }, $"-q 75 -m 4 -alpha_filter {filter.ToString().ToLowerInvariant()} -alpha_method {(compression ? 1 : 0)} -alpha_q {quality}");
+            foreach (bool compression in new[] { false, true })
+                foreach (int quality in new[] { 0, 45, 70, 90, 100 })
+                    yield return (new() { AlphaFilter = filter, AlphaCompression = compression, AlphaQuality = quality }, $"-q 75 -m 4 -alpha_filter {filter.ToString().ToLowerInvariant()} -alpha_method {(compression ? 1 : 0)} -alpha_q {quality}");
     }
 
     [Theory]
@@ -161,7 +163,7 @@ public class LossyEncoderOptionsTests
         image.Metadata.IccProfile = [1, 2, 3]; image.Metadata.Exif = [4, 5, 6, 7, 8]; image.Metadata.Xmp = [9, 10, 11];
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Metadata = selection });
         Assert.Equal(encoded.Length - 8, (int)BinaryPrimitives.ReadUInt32LittleEndian(encoded.AsSpan(4)));
-        using var decoded = Image.Load(encoded.AsMemory());
+        using var decoded = ImageReader.Load(encoded.AsMemory());
         Assert.Equal(selection.HasFlag(MetadataKinds.Icc) ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
         Assert.Equal(selection.HasFlag(MetadataKinds.Exif) ? image.Metadata.Exif : null, decoded.Metadata.Exif);
         Assert.Equal(selection.HasFlag(MetadataKinds.Xmp) ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);

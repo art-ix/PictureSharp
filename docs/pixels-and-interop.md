@@ -24,6 +24,8 @@ string hex = orange.ToHex();                          // "#FF8800FF"
 ## Reading and writing pixels
 
 ```csharp
+using PictureSharp;
+
 using var image = new Image(64, 32, Color.CornflowerBlue);
 image[0, 0] = Rgba32.Parse("#ff8800");                // indexer with bounds checks
 
@@ -51,6 +53,8 @@ Pixel access on `Image` works on the first frame. Each `image.Frames[i]` exposes
 ## Raw buffers and pixel formats
 
 ```csharp
+using PictureSharp;
+
 byte[] bgra = image.ToPixelData(PixelFormat.Bgra32);                        // tightly packed copy
 using Image copy = Image.LoadPixelData(bgra, image.Width, image.Height, PixelFormat.Bgra32);
 
@@ -85,6 +89,8 @@ These snippets need the other library's package; PictureSharp itself stays depen
 ### WPF
 
 ```csharp
+using PictureSharp;
+
 byte[] pixels = image.ToPixelData(PixelFormat.Bgra32);
 BitmapSource source = BitmapSource.Create(
     image.Width, image.Height, image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution,
@@ -94,6 +100,8 @@ BitmapSource source = BitmapSource.Create(
 ### SkiaSharp
 
 ```csharp
+using PictureSharp;
+
 // PictureSharp → SkiaSharp
 var info = new SKImageInfo(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
 using var bitmap = new SKBitmap(info);
@@ -107,6 +115,8 @@ using Image fromSkia = Image.LoadPixelData(skBitmap.GetPixelSpan(), skBitmap.Wid
 ### WinForms / System.Drawing.Common
 
 ```csharp
+using PictureSharp;
+
 using SD = System.Drawing.Imaging;
 
 using var bitmap = new Bitmap(image.Width, image.Height, SD.PixelFormat.Format32bppArgb);
@@ -131,17 +141,21 @@ finally
 The same `Image` API handles every supported format. Request the first frame explicitly when exporting one pixel buffer:
 
 ```csharp
+using PictureSharp;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+
 byte[] data = File.ReadAllBytes("image.webp");
-ImageInfo info = Image.Identify(data);
-using Image decoded = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
+ImageInfo info = ImageReader.Identify(data);
+using Image decoded = ImageReader.Load(data, new DecoderOptions { FirstFrameOnly = true });
 byte[] rgba = decoded.ToPixelData();
 byte[] bgra = decoded.ToPixelData(PixelFormat.Bgra32);
 var buffer = new byte[decoded.Width * decoded.Height * 4];
 decoded.CopyPixelDataTo(buffer, PixelFormat.Bgra32);
 
 using Image fromRgba = Image.LoadPixelData(rgba, decoded.Width, decoded.Height, PixelFormat.Rgba32);
-byte[] lossless = fromRgba.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
+byte[] lossless = ImageWriter.Encode(fromRgba, new WebPEncoderOptions { Lossless = true, Exact = true });
 WebPConverter.Convert("input.png", "output.webp", new() { Quality = 80 });
 ```
 
-`Image.Load` detects the format from the contents. To require WebP, check `Image.Identify(data).Format == ImageFormat.WebP` before decoding.
+`ImageReader.Load` detects the format from the contents. To require WebP, check `ImageReader.Identify(data).Format == ImageFormat.WebP` before decoding.

@@ -3,8 +3,12 @@
 Every format has an options record: `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions`, `BmpEncoderOptions` and `GifEncoderOptions`, all deriving from `EncoderOptions`. Pass them to `Save`, `SaveAsync`, `SaveAs*`, `Encode` or `To*`:
 
 ```csharp
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+
 image.SaveAsWebP("photo.webp", new() { Quality = 85, Method = 6 });
-image.Save("photo.jpg", new JpegEncoderOptions { Quality = 90 });
+ImageWriter.Save(image, "photo.jpg", new JpegEncoderOptions { Quality = 90 });
 ```
 
 - **Checked when set.** An out-of-range value throws `ArgumentOutOfRangeException` on the line that sets it, not later during encoding.
@@ -14,6 +18,8 @@ image.Save("photo.jpg", new JpegEncoderOptions { Quality = 90 });
 ## WebP
 
 ```csharp
+using PictureSharp.Formats.WebP;
+
 image.SaveAsWebP("lossy.webp");                                              // quality 75, method 4
 image.SaveAsWebP("small.webp", new() { Quality = 70, Method = 6 });
 image.SaveAsWebP("exact.webp", new() { Lossless = true, Exact = true });
@@ -52,6 +58,8 @@ Across the test corpus, lossy output of opaque images and lossless output (every
 ## PNG
 
 ```csharp
+using PictureSharp.Formats.Png;
+
 image.SaveAsPng("out.png");                                                  // smallest lossless color type
 image.SaveAsPng("fast.png", new() { CompressionLevel = 1 });
 image.SaveAsPng("indexed.png", new() { ColorType = PngColorType.Palette });
@@ -70,6 +78,8 @@ image.SaveAsPng("interlaced.png", new() { Interlace = true });
 ## JPEG
 
 ```csharp
+using PictureSharp.Formats.Jpeg;
+
 image.SaveAsJpeg("photo.jpg", new() { Quality = 88 });
 image.SaveAsJpeg("web.jpg", new() { Quality = 80, Progressive = true });
 image.SaveAsJpeg("sharp-color.jpg", new() { Subsampling = JpegSubsampling.Ratio444 });
@@ -91,6 +101,8 @@ JPEG writes the first frame only. Grayscale images are detected and written with
 ## BMP
 
 ```csharp
+using PictureSharp.Formats.Bmp;
+
 image.SaveAsBmp("out.bmp");                                                  // automatic bit depth
 image.SaveAsBmp("rgb.bmp", new() { BitsPerPixel = 24 });
 ```
@@ -100,6 +112,8 @@ image.SaveAsBmp("rgb.bmp", new() { BitsPerPixel = 24 });
 ## GIF
 
 ```csharp
+using PictureSharp.Formats.Gif;
+
 image.SaveAsGif("out.gif");                                                  // exact colors when they fit, else median cut
 image.SaveAsGif("small.gif", new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
 image.SaveAsGif("fast.gif", new() { Quantizer = GifQuantizer.Octree });
@@ -121,6 +135,8 @@ Images whose colors fit keep them exactly: one global palette when all frames to
 ## PCX
 
 ```csharp
+using PictureSharp.Formats.Pcx;
+
 image.SaveAsPcx("out.pcx");                                                  // automatic bit depth
 image.SaveAsPcx("rgb.pcx", new() { BitsPerPixel = 24 });
 ```
@@ -134,6 +150,9 @@ Automatic mode writes 32 bits when any pixel is transparent. Otherwise it uses o
 ## Recipes
 
 ```csharp
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Formats.WebP;
+
 // Pixel-exact WebP: decodes to exactly the same RGBA values, including RGB under transparent pixels.
 var exact = new WebPEncoderOptions { Lossless = true, Exact = true };
 

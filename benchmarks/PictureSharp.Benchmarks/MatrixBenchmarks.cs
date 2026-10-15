@@ -1,4 +1,12 @@
 using BenchmarkDotNet.Attributes;
+using PictureSharp.Formats.Bmp;
+using PictureSharp.Formats.Gif;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Formats.Pcx;
+using PictureSharp.Formats.Png;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using static PictureSharp.Benchmarks.LosslessDecodeBenchmarks;
 
 namespace PictureSharp.Benchmarks;
@@ -94,7 +102,7 @@ public class MatrixBenchmarks
 
         if (Op.ToString().Contains("Decode", StringComparison.Ordinal))
         {
-            _encoded = _image.Encode(_options);
+            _encoded = ImageWriter.Encode(_image, _options);
         }
     }
 
@@ -107,22 +115,22 @@ public class MatrixBenchmarks
         switch (Op)
         {
             case Operation.ResizeLanczosHalf:
-            {
-                using Image resized = _image.Clone(x => x.Resize(Math.Max(1, _image.Width / 2), Math.Max(1, _image.Height / 2), ResamplingFilter.Lanczos3));
-                return resized.Width;
-            }
+                {
+                    using Image resized = _image.Clone(x => x.Resize(Math.Max(1, _image.Width / 2), Math.Max(1, _image.Height / 2), ResamplingFilter.Lanczos3));
+                    return resized.Width;
+                }
             case Operation.ResizeBicubicDouble:
-            {
-                using Image resized = _image.Clone(x => x.Resize(_image.Width * 2, _image.Height * 2, ResamplingFilter.Bicubic));
-                return resized.Width;
-            }
+                {
+                    using Image resized = _image.Clone(x => x.Resize(_image.Width * 2, _image.Height * 2, ResamplingFilter.Bicubic));
+                    return resized.Width;
+                }
             case var op when op.ToString().Contains("Decode", StringComparison.Ordinal):
-            {
-                using Image image = Image.Load(_encoded, _decoderOptions);
-                return image.Width;
-            }
+                {
+                    using Image image = ImageReader.Load(_encoded, _decoderOptions);
+                    return image.Width;
+                }
             default:
-                return _image.Encode(_options).Length;
+                return ImageWriter.Encode(_image, _options).Length;
         }
     }
 
@@ -130,10 +138,10 @@ public class MatrixBenchmarks
     {
         if (!path.EndsWith(GraphicScale, StringComparison.Ordinal))
         {
-            return Image.Load(path);
+            return ImageReader.Load(path);
         }
 
-        using Image source = Image.Load(path[..^GraphicScale.Length]);
+        using Image source = ImageReader.Load(path[..^GraphicScale.Length]);
         return source.Clone(x => x.Resize(source.Width * 8, source.Height * 8, ResamplingFilter.Nearest));
     }
 }

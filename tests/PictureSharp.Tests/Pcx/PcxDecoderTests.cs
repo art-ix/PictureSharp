@@ -1,3 +1,5 @@
+using PictureSharp.IO;
+
 namespace PictureSharp.Tests.Pcx;
 
 public class PcxDecoderTests
@@ -10,7 +12,7 @@ public class PcxDecoderTests
 
     private static Rgba32[] Pixels(byte[] pcx, DecoderOptions? options = null)
     {
-        using Image image = Image.Load(pcx, options);
+        using Image image = ImageReader.Load(pcx, options);
         return image.GetPixelSpan().ToArray();
     }
 
@@ -18,14 +20,14 @@ public class PcxDecoderTests
     public void Detect_RecognizesPcx()
     {
         byte[] pcx = new PcxBuilder { Rows = [[1]], BytesPerLine = 1, VgaPalette = PcxBuilder.Vga(Red) }.Build();
-        Assert.Equal(ImageFormat.Pcx, Image.DetectFormat(pcx));
-        Assert.Equal(ImageFormat.Pcx, ImageFormat.FromExtension("scan.PCX"));
-        Assert.Equal(ImageFormat.Pcx, ImageFormat.FromMimeType("image/x-pcx"));
-        Assert.True(ImageFormat.Pcx.CanDecode);
-        Assert.True(ImageFormat.Pcx.CanEncode);
-        Assert.Null(Image.DetectFormat([0x0A, 6, 1, 8]));
-        Assert.Null(Image.DetectFormat([0x0A, 5, 2, 8]));
-        Assert.Null(Image.DetectFormat([0x0A, 5, 1, 3]));
+        Assert.Equal(ImageFormat.Pcx, ImageFormats.DetectFormat(pcx));
+        Assert.Equal(ImageFormat.Pcx, ImageFormats.FromExtension("scan.PCX"));
+        Assert.Equal(ImageFormat.Pcx, ImageFormats.FromMimeType("image/x-pcx"));
+        Assert.True(ImageFormats.CanDecode(ImageFormat.Pcx));
+        Assert.True(ImageFormats.CanEncode(ImageFormat.Pcx));
+        Assert.Null(ImageFormats.DetectFormat([0x0A, 6, 1, 8]));
+        Assert.Null(ImageFormats.DetectFormat([0x0A, 5, 2, 8]));
+        Assert.Null(ImageFormats.DetectFormat([0x0A, 5, 1, 3]));
     }
 
     [Fact]
@@ -197,10 +199,10 @@ public class PcxDecoderTests
             Planes = 4,
             Rows = [[1, 2, 3, 4, 5, 6, 7, 8]],
         }.Build();
-        using Image image = Image.Load(pcx);
+        using Image image = ImageReader.Load(pcx);
         Assert.True(image.HasAlpha);
         Assert.Equal([new Rgba32(1, 3, 5, 7), new Rgba32(2, 4, 6, 8)], image.GetPixelSpan().ToArray());
-        ImageInfo info = Image.Identify(pcx);
+        ImageInfo info = ImageReader.Identify(pcx);
         Assert.True(info.HasAlpha);
         Assert.Equal(ImageFormat.Pcx, info.Format);
     }
@@ -217,7 +219,7 @@ public class PcxDecoderTests
             Rows = [[1, 2], [3, 0]],
             VgaPalette = PcxBuilder.Vga(Red, Green, Blue, White),
         }.Build();
-        using Image image = Image.Load(pcx);
+        using Image image = ImageReader.Load(pcx);
         Assert.Equal((2, 2), (image.Width, image.Height));
         Assert.Equal([Green, Blue, White, Red], image.GetPixelSpan().ToArray());
     }
@@ -283,9 +285,9 @@ public class PcxDecoderTests
     {
         byte[] both = new PcxBuilder { Width = 1, BytesPerLine = 1, Rows = [[0]], HorizontalDpi = 72, VerticalDpi = 144 }.Build();
         byte[] one = new PcxBuilder { Width = 1, BytesPerLine = 1, Rows = [[0]], HorizontalDpi = 72 }.Build();
-        using Image image = Image.Load(both);
+        using Image image = ImageReader.Load(both);
         Assert.Equal((72f, 144f), (image.Metadata.HorizontalResolution, image.Metadata.VerticalResolution));
-        using Image missing = Image.Load(one);
+        using Image missing = ImageReader.Load(one);
         Assert.Equal((96f, 96f), (missing.Metadata.HorizontalResolution, missing.Metadata.VerticalResolution));
     }
 
@@ -293,10 +295,10 @@ public class PcxDecoderTests
     public void Identify_DoesNotNeedPixelData()
     {
         byte[] pcx = new PcxBuilder { Width = 6, Height = 4, Bits = 8, Planes = 3, HorizontalDpi = 300, VerticalDpi = 300 }.Build();
-        ImageInfo info = Image.Identify(pcx);
+        ImageInfo info = ImageReader.Identify(pcx);
         Assert.Equal((6, 4, false), (info.Width, info.Height, info.HasAlpha));
         Assert.Equal((300f, 300f), (info.HorizontalResolution, info.VerticalResolution));
-        Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(pcx));
     }
 
     [Fact]
@@ -305,7 +307,7 @@ public class PcxDecoderTests
         byte[] tooSmall = new PcxBuilder { Width = 3, Bits = 8, Planes = 1, BytesPerLine = 2, Rows = [[1, 2]] }.Build();
         byte[] paddedRgb = new PcxBuilder { Width = 1, Bits = 8, Planes = 3, BytesPerLine = 8, Rows = [[7, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0]] }.Build();
         byte[] padded = new PcxBuilder { Width = 1, Bits = 8, Planes = 1, BytesPerLine = 4, Rows = [[7, 0, 0, 0]] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(tooSmall));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(tooSmall));
         Assert.Equal([new Rgba32(7, 8, 9)], Pixels(paddedRgb));
         Assert.Equal([new Rgba32(7, 7, 7)], Pixels(padded));
     }
@@ -333,7 +335,7 @@ public class PcxDecoderTests
     {
         byte[] pcx = new PcxBuilder { Width = 4096, Height = 4096, Encoding = encoding }.Build();
         long before = GC.GetAllocatedBytesForCurrentThread();
-        ImageFormatException error = Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
+        ImageFormatException error = Assert.Throws<ImageFormatException>(() => ImageReader.Load(pcx));
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Contains("truncated", error.Message);
         Assert.True(allocated < 65536, $"Allocated {allocated} bytes for a header without image data.");
@@ -360,8 +362,11 @@ public class PcxDecoderTests
     {
         byte[] pcx = new PcxBuilder
         {
-            Width = 2, Bits = 1, Version = version,
-            EgaPalette = PcxBuilder.Rgb(Red, Blue), Rows = [[0x80, 0]],
+            Width = 2,
+            Bits = 1,
+            Version = version,
+            EgaPalette = PcxBuilder.Rgb(Red, Blue),
+            Rows = [[0x80, 0]],
         }.Build();
         Assert.Equal([White, Rgba32.Black], Pixels(pcx));
     }
@@ -372,17 +377,17 @@ public class PcxDecoderTests
     public void Color_VersionWithoutPalette_IsNotSupported(int version)
     {
         byte[] pcx = new PcxBuilder { Width = 2, Bits = 1, Planes = 4, Version = version, Rows = [new byte[8]] }.Build();
-        Assert.Throws<NotSupportedException>(() => Image.Load(pcx));
-        Assert.Throws<NotSupportedException>(() => Image.Identify(pcx));
+        Assert.Throws<NotSupportedException>(() => ImageReader.Load(pcx));
+        Assert.Throws<NotSupportedException>(() => ImageReader.Identify(pcx));
     }
 
     [Fact]
     public void VersionOne_IsInvalid()
     {
         byte[] pcx = new PcxBuilder { Version = 1, Rows = [[0, 0]] }.Build();
-        Assert.Null(Image.DetectFormat(pcx));
-        Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
-        Assert.Throws<ImageFormatException>(() => Image.Identify(pcx));
+        Assert.Null(ImageFormats.DetectFormat(pcx));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(pcx));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Identify(pcx));
     }
 
     [Fact]
@@ -391,17 +396,17 @@ public class PcxDecoderTests
         byte[] overrun = new PcxBuilder { Width = 1, Bits = 8, Planes = 1, BytesPerLine = 1, Data = [0xC2, 1] }.Build();
         byte[] truncated = new PcxBuilder { Width = 2, Bits = 8, Planes = 1, Data = [1] }.Build();
         byte[] shortPalette = new PcxBuilder { Width = 1, BytesPerLine = 1, Rows = [[0]], Trailing = [0x0C, 1, 2, 3] }.Build();
-        Assert.Throws<ImageFormatException>(() => Image.Load(overrun));
-        Assert.Throws<ImageFormatException>(() => Image.Load(truncated));
-        Assert.Throws<ImageFormatException>(() => Image.Load(shortPalette));
-        Assert.Throws<ImageFormatException>(() => Image.Load(overrun[..10]));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(overrun));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(truncated));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(shortPalette));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(overrun[..10]));
     }
 
     [Fact]
     public void MaxPixels_IsCheckedBeforeDecoding()
     {
         byte[] pcx = new PcxBuilder { Width = 100, Height = 100, Bits = 8, Planes = 3 }.Build();
-        ImageFormatException ex = Assert.Throws<ImageFormatException>(() => Image.Load(pcx, new DecoderOptions { MaxPixels = 10 }));
+        ImageFormatException ex = Assert.Throws<ImageFormatException>(() => ImageReader.Load(pcx, new DecoderOptions { MaxPixels = 10 }));
         Assert.Contains("MaxPixels", ex.Message);
     }
 
@@ -417,15 +422,15 @@ public class PcxDecoderTests
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(10), 65535);
         header[65] = 1;
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(66), 8192);
-        Assert.Throws<ImageFormatException>(() => Image.Load(header, new DecoderOptions { MaxPixels = long.MaxValue }));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(header, new DecoderOptions { MaxPixels = long.MaxValue }));
     }
 
     [Fact]
     public void UnsupportedPlaneCount_IsNotSupported()
     {
         byte[] pcx = new PcxBuilder { Width = 1, Bits = 8, Planes = 2, Rows = [[1, 2]] }.Build();
-        Assert.Throws<NotSupportedException>(() => Image.Load(pcx));
-        Assert.Throws<NotSupportedException>(() => Image.Identify(pcx));
+        Assert.Throws<NotSupportedException>(() => ImageReader.Load(pcx));
+        Assert.Throws<NotSupportedException>(() => ImageReader.Identify(pcx));
     }
 
     [Fact]
@@ -434,6 +439,6 @@ public class PcxDecoderTests
         byte[] pcx = new PcxBuilder { Width = 2, Height = 1 }.Build();
         pcx[8] = 0;
         pcx[9] = 0;
-        Assert.Throws<ImageFormatException>(() => Image.Load(pcx));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(pcx));
     }
 }

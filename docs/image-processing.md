@@ -5,9 +5,12 @@ All operations run inside `Mutate` (changes the image) or `Clone` (returns a new
 ```csharp
 using System.Drawing;
 using PictureSharp;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 
-using var photo = Image.Load("photo.jpg");
-using var logo = Image.Load("logo.png");
+using var photo = ImageReader.Load("photo.jpg");
+using var logo = ImageReader.Load("logo.png");
 photo.Mutate(x => x
     .AutoOrient()
     .Resize(new ResizeOptions { Size = new(1200, 800), Mode = ResizeMode.Crop, Position = AnchorPosition.Top })
@@ -25,6 +28,8 @@ photo.SaveAsJpeg("card.jpg", new() { Quality = 88 });
 ## Resizing
 
 ```csharp
+using PictureSharp.Processing;
+
 image.Mutate(x => x.Resize(800, 600));                                   // exactly 800×600 (stretches)
 image.Mutate(x => x.Resize(800, 0));                                     // width 800, height from the aspect ratio
 image.Mutate(x => x.Resize(400, 400, ResizeMode.Max));                   // fit inside 400×400
@@ -47,6 +52,8 @@ Passing 0 for one side derives it from the aspect ratio in every mode; at least 
 ### `ResizeOptions`
 
 ```csharp
+using PictureSharp.Processing;
+
 image.Mutate(x => x.Resize(new ResizeOptions
 {
     Size = new(1080, 1080),
@@ -74,6 +81,8 @@ Resampling runs on premultiplied alpha, so transparent pixels never bleed their 
 ## Geometry
 
 ```csharp
+using PictureSharp.Processing;
+
 image.Mutate(x => x.Crop(new Rectangle(10, 10, 200, 100)));      // or Crop(10, 10, 200, 100)
 image.Mutate(x => x.Crop(300, 300));                             // centered 300×300 region
 image.Mutate(x => x.Crop(300, 300, AnchorPosition.TopRight));    // keep the top-right corner
@@ -91,6 +100,8 @@ image.Mutate(x => x.AutoOrient());                               // apply EXIF o
 ### Rotation by any angle
 
 ```csharp
+using PictureSharp.Processing;
+
 image.Mutate(x => x.Rotate(15));                                               // clockwise, canvas grows, corners transparent
 image.Mutate(x => x.Rotate(-30, ResamplingFilter.Bilinear, Color.White));      // counter-clockwise on white
 image.Mutate(x => x.Rotate(45, ResamplingFilter.Nearest, expand: false));      // keep the size, cut the corners
@@ -101,6 +112,8 @@ image.Mutate(x => x.Rotate(45, ResamplingFilter.Nearest, expand: false));      /
 ## Color
 
 ```csharp
+using PictureSharp.Processing;
+
 image.Mutate(x => x.Brightness(1.2f));      // 0 = black, 1 = unchanged, >1 brighter
 image.Mutate(x => x.Contrast(0.8f));        // 0 = flat gray (mean luma), 1 = unchanged
 image.Mutate(x => x.Saturate(1.5f));        // 0 = grayscale, 1 = unchanged
@@ -114,6 +127,8 @@ All of them keep the alpha channel. `Brightness`, `Contrast` and `Saturate` are 
 ### Transparency and fills
 
 ```csharp
+using PictureSharp.Processing;
+
 image.Mutate(x => x.BackgroundColor(Color.White));                    // composite over white: removes transparency
 image.Mutate(x => x.Opacity(0.5f));                                   // scale alpha
 image.Mutate(x => x.MakeTransparent(Color.Magenta));                  // exact color match → alpha 0
@@ -126,6 +141,8 @@ image.Mutate(x => x.Fill(Color.FromArgb(128, 255, 0, 0), new Rectangle(0, 0, 50,
 ## Blur and sharpen
 
 ```csharp
+using PictureSharp.Processing;
+
 image.Mutate(x => x.GaussianBlur(2.5f));                    // sigma (Pillow's GaussianBlur radius)
 image.Mutate(x => x.BoxBlur(3));                            // box radius; fractional values allowed
 image.Mutate(x => x.UnsharpMask());                         // radius 2, 150 %, threshold 3
@@ -138,7 +155,10 @@ Filters run on premultiplied alpha, so a blurred logo on a transparent backgroun
 ## Drawing images
 
 ```csharp
-using var watermark = Image.Load("logo.png");
+using PictureSharp.IO;
+using PictureSharp.Processing;
+
+using var watermark = ImageReader.Load("logo.png");
 image.Mutate(x => x.DrawImage(watermark, AnchorPosition.BottomRight, opacity: 0.6f));
 image.Mutate(x => x.DrawImage(watermark, new Point(20, 20)));
 ```
@@ -150,6 +170,9 @@ image.Mutate(x => x.DrawImage(watermark, new Point(20, 20)));
 `Apply` gives direct access to each frame's pixels:
 
 ```csharp
+using PictureSharp;
+using PictureSharp.Processing;
+
 image.Mutate(x => x.Apply(frame =>
 {
     foreach (ref Rgba32 p in frame.GetPixelSpan())
@@ -164,6 +187,7 @@ With C# 14 extension members, custom operations chain like built-in ones:
 ```csharp
 using System.Drawing;
 using PictureSharp;
+using PictureSharp.Processing;
 
 public static class MyOperations
 {

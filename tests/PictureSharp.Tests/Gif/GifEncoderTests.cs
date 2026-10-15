@@ -1,4 +1,7 @@
 using System.Runtime.InteropServices;
+using PictureSharp.Formats.Gif;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Gif;
@@ -34,10 +37,10 @@ public class GifEncoderTests
     [MemberData(nameof(GifFiles))]
     public void RoundTrip_CorpusGif_IsLossless(string file)
     {
-        using Image original = Image.Load(Corpus.PathOf(file));
+        using Image original = ImageReader.Load(Corpus.PathOf(file));
         foreach (GifEncoderOptions options in new GifEncoderOptions[] { new(), new() { OptimizeFrames = false, Interlace = true } })
         {
-            using Image back = Image.Load(original.ToGif(options));
+            using Image back = ImageReader.Load(original.ToGif(options));
             AssertSameFrames(original, back);
             Assert.Equal(original.LoopCount, back.LoopCount);
             Assert.Equal(original.Metadata.Xmp, back.Metadata.Xmp);
@@ -61,7 +64,7 @@ public class GifEncoderTests
             Quantizer = parts[1] == "octree" ? GifQuantizer.Octree : GifQuantizer.MedianCut,
             Dither = parts[1] == "dither" ? GifDither.FloydSteinberg : GifDither.None,
         };
-        using Image decoded = Image.Load(image.ToGif(options));
+        using Image decoded = ImageReader.Load(image.ToGif(options));
         if (pixels.Distinct().Count() <= colors)
         {
             // Unlike Image.quantize, the encoder keeps the exact colors when they fit.
@@ -78,8 +81,8 @@ public class GifEncoderTests
     [InlineData("alpha_pillow")]
     public void WebPAnimation_ToGif_KeepsPixels(string name)
     {
-        using Image webp = Image.Load(Corpus.PathOf($"webp/anim/{name}.webp"));
-        using Image gif = Image.Load(webp.ToGif());
+        using Image webp = ImageReader.Load(Corpus.PathOf($"webp/anim/{name}.webp"));
+        using Image gif = ImageReader.Load(webp.ToGif());
         Assert.Equal(webp.FrameCount, gif.FrameCount);
         Assert.Equal(webp.LoopCount, gif.LoopCount);
         for (int i = 0; i < webp.FrameCount; i++)
@@ -95,8 +98,8 @@ public class GifEncoderTests
     [InlineData("alpha_lossy")]
     public void WebPAnimation_WithManyColors_IsQuantized(string name)
     {
-        using Image webp = Image.Load(Corpus.PathOf($"webp/anim/{name}.webp"));
-        using Image gif = Image.Load(webp.ToGif());
+        using Image webp = ImageReader.Load(Corpus.PathOf($"webp/anim/{name}.webp"));
+        using Image gif = ImageReader.Load(webp.ToGif());
         Assert.Equal(webp.FrameCount, gif.FrameCount);
         Assert.Equal(webp.LoopCount, gif.LoopCount);
         double error = 0;
@@ -150,7 +153,7 @@ public class GifEncoderTests
             animation.LoopCount = random.Next(3);
             foreach (bool optimize in new[] { true, false })
             {
-                using Image back = Image.Load(animation.ToGif(new GifEncoderOptions { OptimizeFrames = optimize, Interlace = round % 2 == 0 }));
+                using Image back = ImageReader.Load(animation.ToGif(new GifEncoderOptions { OptimizeFrames = optimize, Interlace = round % 2 == 0 }));
                 Assert.Equal(animation.LoopCount, back.LoopCount);
 
                 // Identical consecutive frames are merged into one longer frame when optimizing.
@@ -180,11 +183,11 @@ public class GifEncoderTests
         using var b = new Image(4, 4, new Rgba32(4, 5, 6));
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(10), a, a, b, b, b);
         animation.Frames[1].Duration = TimeSpan.FromMilliseconds(20);
-        using Image merged = Image.Load(animation.ToGif());
+        using Image merged = ImageReader.Load(animation.ToGif());
         Assert.Equal(new[] { 30.0, 30.0 }, merged.Frames.Select(f => f.Duration.TotalMilliseconds));
-        using Image kept = Image.Load(animation.ToGif(new GifEncoderOptions { OptimizeFrames = false }));
+        using Image kept = ImageReader.Load(animation.ToGif(new GifEncoderOptions { OptimizeFrames = false }));
         Assert.Equal(5, kept.FrameCount);
-        using Image still = Image.Load(animation.ToGif(new GifEncoderOptions { SaveAnimation = false }));
+        using Image still = ImageReader.Load(animation.ToGif(new GifEncoderOptions { SaveAnimation = false }));
         Assert.Equal(1, still.FrameCount);
     }
 
@@ -200,7 +203,7 @@ public class GifEncoderTests
         using var a = new Image(2, 2, new Rgba32(1, 2, 3));
         using var b = new Image(2, 2, new Rgba32(4, 5, 6));
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(milliseconds), a, b);
-        using Image back = Image.Load(animation.ToGif());
+        using Image back = ImageReader.Load(animation.ToGif());
         Assert.All(back.Frames, f => Assert.Equal(expected, f.Duration.TotalMilliseconds));
     }
 
@@ -217,7 +220,7 @@ public class GifEncoderTests
         animation.LoopCount = loops;
         byte[] gif = animation.ToGif();
         Assert.Equal(noExtension, gif.AsSpan().IndexOf("NETSCAPE2.0"u8) < 0);
-        using Image back = Image.Load(gif);
+        using Image back = ImageReader.Load(gif);
         Assert.Equal(expected, back.LoopCount);
     }
 
@@ -230,7 +233,7 @@ public class GifEncoderTests
     {
         using var image = new Image(3, 1, new Rgba32(9, 8, 7, alpha));
         image[0, 0] = new Rgba32(1, 2, 3);
-        using Image back = Image.Load(image.ToGif(new GifEncoderOptions { TransparencyThreshold = threshold }));
+        using Image back = ImageReader.Load(image.ToGif(new GifEncoderOptions { TransparencyThreshold = threshold }));
         Assert.Equal(transparent ? default : new Rgba32(9, 8, 7), back[2, 0]);
         Assert.Equal(new Rgba32(1, 2, 3), back[0, 0]);
         Assert.Equal(transparent, back.HasAlpha);
@@ -243,10 +246,10 @@ public class GifEncoderTests
     [InlineData(128)]
     public void ColorCount_LimitsThePalette(int count)
     {
-        using Image photo = Image.Load(Corpus.PathOf("src/photo_alpha.png"));
+        using Image photo = ImageReader.Load(Corpus.PathOf("src/photo_alpha.png"));
         foreach (GifQuantizer quantizer in Enum.GetValues<GifQuantizer>())
         {
-            using Image back = Image.Load(photo.ToGif(new GifEncoderOptions { ColorCount = count, Quantizer = quantizer, Dither = GifDither.FloydSteinberg }));
+            using Image back = ImageReader.Load(photo.ToGif(new GifEncoderOptions { ColorCount = count, Quantizer = quantizer, Dither = GifDither.FloydSteinberg }));
             Assert.True(back.GetPixelSpan().ToArray().Distinct().Count() <= count);
             Assert.Equal(Binarize(photo.GetPixelSpan()).Select(p => p.A), back.GetPixelSpan().ToArray().Select(p => p.A));
         }
@@ -268,7 +271,7 @@ public class GifEncoderTests
                 image.GetRowSpan(y).Fill(new Rgba32((byte)(y * 15), 0, 0));
             }
 
-            using Image back = Image.Load(image.ToGif(new GifEncoderOptions { Interlace = true }));
+            using Image back = ImageReader.Load(image.ToGif(new GifEncoderOptions { Interlace = true }));
             Assert.Equal(image.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
         }
     }
@@ -280,12 +283,12 @@ public class GifEncoderTests
         image.Metadata.Xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>"u8.ToArray();
         image.Metadata.IccProfile = Enumerable.Range(0, 1000).Select(i => (byte)i).ToArray();
         image.Metadata.Exif = [(byte)'I', (byte)'I', 42, 0, 8, 0, 0, 0, 0, 0];
-        using Image back = Image.Load(image.ToGif());
+        using Image back = ImageReader.Load(image.ToGif());
         Assert.Equal(image.Metadata.Xmp, back.Metadata.Xmp);
         Assert.Equal(image.Metadata.IccProfile, back.Metadata.IccProfile);
         Assert.Null(back.Metadata.Exif);
 
-        using Image none = Image.Load(image.ToGif(new GifEncoderOptions { Metadata = MetadataKinds.None }));
+        using Image none = ImageReader.Load(image.ToGif(new GifEncoderOptions { Metadata = MetadataKinds.None }));
         Assert.True(none.Metadata.IsEmpty);
     }
 
@@ -296,12 +299,12 @@ public class GifEncoderTests
         using var b = new Image(2, 2, new Rgba32(4, 5, 6));
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(50), a, b);
         animation.AnimationBackgroundColor = new Rgba32(4, 5, 6);
-        using Image back = Image.Load(animation.ToGif());
+        using Image back = ImageReader.Load(animation.ToGif());
         Assert.Equal(new Rgba32(4, 5, 6), back.AnimationBackgroundColor);
 
         using var c = new Image(2, 2);
         using Image transparent = Image.CreateAnimation(TimeSpan.FromMilliseconds(50), a, c);
-        using Image back2 = Image.Load(transparent.ToGif());
+        using Image back2 = ImageReader.Load(transparent.ToGif());
         Assert.Equal(default, back2.AnimationBackgroundColor);
     }
 
@@ -312,10 +315,10 @@ public class GifEncoderTests
         string path = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.gif");
         try
         {
-            image.Save(path);
-            Assert.Equal(ImageFormat.Gif, Image.DetectFormat(path));
+            ImageWriter.Save(image, path);
+            Assert.Equal(ImageFormat.Gif, ImageFormats.DetectFormat(path));
             await image.SaveAsGifAsync(path, new GifEncoderOptions { Interlace = true });
-            using Image loaded = await Image.LoadAsync(path);
+            using Image loaded = await ImageReader.LoadAsync(path);
             Assert.Equal(new Rgba32(10, 20, 30), loaded[4, 4]);
         }
         finally
@@ -325,7 +328,7 @@ public class GifEncoderTests
 
         using var stream = new NonSeekableStream();
         image.SaveAsGif(stream);
-        image.Save(stream, ImageFormat.Gif);
+        ImageWriter.Save(image, stream, ImageFormat.Gif);
         Assert.True(stream.Length > 0);
     }
 

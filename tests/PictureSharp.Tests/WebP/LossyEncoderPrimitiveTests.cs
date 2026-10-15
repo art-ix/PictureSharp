@@ -1,7 +1,9 @@
-using PictureSharp.Formats.WebP.Alpha;
-using PictureSharp.Formats.WebP.ColorConversion;
 using System.Runtime.InteropServices;
-using PictureSharp.Formats.WebP.Lossy;
+using PictureSharp.Algorithms.ColorConversion;
+using PictureSharp.Formats.WebP;
+using PictureSharp.Infrastructure.Codecs.WebP.Alpha;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossy;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;

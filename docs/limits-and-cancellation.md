@@ -4,6 +4,11 @@ Untrusted images can be large, deeply compressed or simply slow to process. `Dec
 read and allocate, and every load, save and processing call accepts a `CancellationToken` that also stops the CPU work.
 
 ```csharp
+using PictureSharp;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
+
 var untrusted = new DecoderOptions
 {
     MaxInputBytes = 20 * 1024 * 1024,   // encoded bytes read from the file or stream
@@ -13,9 +18,9 @@ var untrusted = new DecoderOptions
 };
 
 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-using Image image = Image.Load(upload, untrusted, timeout.Token);
+using Image image = ImageReader.Load(upload, untrusted, timeout.Token);
 image.Mutate(x => x.Thumbnail(512, 512), timeout.Token);
-image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
+ImageWriter.Save(image, output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
 ```
 
 ## Limits
@@ -28,7 +33,7 @@ image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
 | `MaxMetadataBytes` | 64 MiB | As each ICC, EXIF or XMP block is read, after decompression; the total of one image. |
 
 A limit that is exceeded throws `ImageFormatException`, whose message names the option. The limits apply to
-`Image.Load`, `LoadAsync`, `Identify`, `IdentifyAsync`, `IcoFile.LoadAll` and `IcoFile.Identify`. Every `Identify`
+`ImageReader.Load`, `LoadAsync`, `Identify`, `IdentifyAsync`, `IcoFile.LoadAll` and `IcoFile.Identify`. Every `Identify`
 overload has a variant that takes `DecoderOptions`; without it the defaults apply.
 
 **Input.** Files and streams are read into memory before decoding, so `MaxInputBytes` is what bounds that buffer.
@@ -65,8 +70,8 @@ Run untrusted work with a memory limit of the process or container if a hard cap
 
 | Operation | Overload with a token |
 | --- | --- |
-| Load | `Image.Load(path \| stream \| data, options, cancellationToken)`, `LoadAsync`, `IcoFile.LoadAll(…, options, cancellationToken)` |
-| Save | `image.Save(path \| stream, options, cancellationToken)`, `image.Encode(options, cancellationToken)`, `SaveAsync`, `SaveAs*Async`, `IcoFile.Save(…, cancellationToken)` |
+| Load | `ImageReader.Load(path \| stream \| data, options, cancellationToken)`, `LoadAsync`, `IcoFile.LoadAll(…, options, cancellationToken)` |
+| Save | `ImageWriter.Save(image, path \| stream, options, cancellationToken)`, `ImageWriter.Encode(image, options, cancellationToken)`, `SaveAsync`, `SaveAs*Async`, `IcoFile.Save(…, cancellationToken)` |
 | Processing | `image.Mutate(operation, cancellationToken)`, `image.Clone(operation, cancellationToken)` |
 
 The asynchronous methods pass their token to the decoder or encoder as well as to the I/O. A canceled operation
@@ -99,15 +104,20 @@ Rented buffers are returned to the pool when the work is canceled.
   (`Encode`) or a temporary stream when the target must stay unchanged. `IcoFile.Save` assembles the icon in memory
   and writes nothing.
 - **Mutate**: the image stays valid, with consistent frame sizes, and keeps the operations that finished before the
-  cancellation. Operations that produce new buffers (resize, crop, rotation, filters) replace a frame only when it is
-  done, but in-place operations (color changes, `Apply`) may leave some frames processed and others not.
+  cancellation. Operations that produce new buffers (resize, crop, rotation, filters) publish all frames together after successful
+  preparation; cancellation before publication leaves that operation unchanged. In-place operations (color changes, `Apply`) may leave some frames processed and others not.
 - **Clone**: the partly processed copy is disposed and the source is unchanged, so `Clone` is the atomic choice.
 
 ```csharp
+using PictureSharp;
+using PictureSharp.Formats.Png;
+using PictureSharp.IO;
+using PictureSharp.Processing;
+
 try
 {
     using Image result = image.Clone(x => x.Resize(1600, 0).GaussianBlur(2f), cancellationToken);
-    result.Save(path, new PngEncoderOptions(), cancellationToken);
+    ImageWriter.Save(result, path, new PngEncoderOptions(), cancellationToken);
 }
 catch (OperationCanceledException)
 {

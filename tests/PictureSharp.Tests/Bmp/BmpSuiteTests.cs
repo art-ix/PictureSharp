@@ -1,4 +1,5 @@
 using System.Text.Json;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Bmp;
@@ -68,7 +69,7 @@ public class BmpSuiteTests
         Image? image = null;
         try
         {
-            image = Image.Load(path);
+            image = ImageReader.Load(path);
         }
         catch (Exception ex) when (!name.StartsWith("g/", StringComparison.Ordinal))
         {

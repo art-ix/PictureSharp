@@ -5,7 +5,11 @@ Animated WebP, APNG and GIF decode into an `Image` with several frames. Every fr
 ## Reading frames
 
 ```csharp
-using var animation = Image.Load("animated.webp");
+using PictureSharp;
+using PictureSharp.Formats.Png;
+using PictureSharp.IO;
+
+using var animation = ImageReader.Load("animated.webp");
 Console.WriteLine($"{animation.FrameCount} frames, loops: {animation.LoopCount}");   // 0 = forever
 
 foreach (ImageFrame frame in animation.Frames)
@@ -31,8 +35,12 @@ Pixel members on `Image` itself (`image[x, y]`, `GetPixelSpan()`, `ToPixelData()
 ## Building an animation
 
 ```csharp
-using var first = Image.Load("frame-1.png");
-using var second = Image.Load("frame-2.png");
+using PictureSharp;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+
+using var first = ImageReader.Load("frame-1.png");
+using var second = ImageReader.Load("frame-2.png");
 using var animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(100), first, second);
 animation.LoopCount = 0;                                   // forever
 animation.Frames[1].Duration = TimeSpan.FromMilliseconds(150);
@@ -42,6 +50,8 @@ animation.SaveAsWebP("animation.webp", new() { Lossless = true, Exact = true, Mi
 `CreateAnimation(duration, params images)` (or an `IEnumerable<Image>`) copies the first frame of each image; all must have the same size. Edit the frame list afterwards:
 
 ```csharp
+using PictureSharp;
+
 animation.Frames.Add(third, TimeSpan.FromMilliseconds(80));   // copy of an image's first frame
 animation.Frames.Insert(0, new ImageFrame(animation.Width, animation.Height) { Duration = TimeSpan.FromMilliseconds(40) });
 animation.Frames.Move(0, 2);
@@ -54,6 +64,8 @@ using Image extracted = animation.Frames.ExportFrame(0);       // removes the fr
 `Mutate` and `Clone` apply every operation to every frame, so an animation can be resized, cropped, rotated or filtered like a still image:
 
 ```csharp
+using PictureSharp.Processing;
+
 animation.Mutate(x => x.Resize(320, 0).Saturate(1.2f));
 ```
 
@@ -78,6 +90,8 @@ The encoder ports libwebp's `anim_encode.c`: it tries even-offset change rectang
 PNG writes animated images as APNG unless `SaveAnimation = false`, which writes only the first frame:
 
 ```csharp
+using PictureSharp.Formats.Png;
+
 animation.SaveAsPng("animation.png");
 animation.SaveAsPng("poster.png", new() { SaveAnimation = false });
 ```
@@ -89,6 +103,8 @@ JPEG and BMP always write the first frame.
 GIF keeps all frames unless `SaveAnimation = false`:
 
 ```csharp
+using PictureSharp.Formats.Gif;
+
 animation.SaveAsGif("animation.gif");
 animation.SaveAsGif("small.gif", new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
 ```
@@ -100,12 +116,16 @@ GIF frames are composited like browsers and libwebp's `gif2webp` do: the canvas 
 ## Converting between GIF and WebP
 
 ```csharp
+using PictureSharp.Formats.Gif;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+
 WebPConverter.Convert("animation.gif", "animation.webp");                 // like gif2webp: lossless, short frames get 100 ms
 
-using var gif = Image.Load("animation.gif");
+using var gif = ImageReader.Load("animation.gif");
 gif.SaveAsWebP("lossy.webp", new() { Quality = 80, KeyframeMin = 3, KeyframeMax = 5 });
 
-using var webp = Image.Load("animated.webp");
+using var webp = ImageReader.Load("animated.webp");
 webp.SaveAsGif("animated.gif");
 ```
 

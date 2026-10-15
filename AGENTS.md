@@ -1,6 +1,6 @@
 # Working on PictureSharp
 
-PictureSharp is a .NET image-processing library written entirely in C#. It reads and writes WebP, PNG, BMP, JPEG and GIF.
+PictureSharp is a .NET image-processing library written entirely in C#. It reads and writes WebP, PNG, BMP, JPEG, GIF, PCX and ICO.
 
 Before starting, read [plan.md](plan.md) to identify the current phase and its definition of done (DoD), then read the latest entries in [progres.md](progres.md). Append progress after significant steps and before ending a session: changes, decisions, test and benchmark results, remaining work, and the next step. Preserve earlier entries. `plan.md` tracks scope and phase status; `progres.md` is a local log and must stay out of commits.
 
@@ -8,9 +8,9 @@ Before starting, read [plan.md](plan.md) to identify the current phase and its d
 
 - Target `net10.0` with C# 14 (`LangVersion=14.0`); support .NET 10 and later.
 - Keep `src/PictureSharp` dependency-free: BCL only, no `PackageReference`, native libraries or P/Invoke. `System.Drawing.Primitives` (`Size`, `Rectangle`, `Point`, `Color`) is allowed. Tests, benchmarks and samples may use packages.
-- Do not use `System.IO.Compression` in the library: `ZLibStream`/`DeflateStream` call native zlib. Use our deflate/inflate implementation in `Compression/`.
+- Do not use `System.IO.Compression` in the library: `ZLibStream`/`DeflateStream` call native zlib. Use our deflate/inflate implementation in `Algorithms/Compression/`.
 - Do not use the `unsafe` keyword. Use `Span<T>`, `ref`, `Unsafe.Add` and `MemoryMarshal`; use `GCHandle` for the memory pinning required by `BitmapData.Scan0`.
-- Keep all public API in the `PictureSharp` namespace. Codecs and implementation details are `internal`.
+- Public model types use `PictureSharp`; I/O uses `PictureSharp.IO`, processing uses `PictureSharp.Processing`, and format-specific API uses `PictureSharp.Formats.<Format>`. Codecs and implementation details are `internal`.
 - Store `Image`/`ImageFrame` pixels as `Rgba32` with straight (unpremultiplied) alpha.
 - Enforce decoder limits, including `DecoderOptions.MaxPixels`. Corrupt or unrecognized input must throw `ImageFormatException`; valid input with unsupported features must throw `NotSupportedException`. Malicious input must never expose unchecked exceptions such as `IndexOutOfRangeException`.
 
@@ -20,7 +20,7 @@ Follow `.editorconfig`. Enable nullable annotations, `TreatWarningsAsErrors` and
 
 - Keep types focused. Use SOLID and Clean Code where they simplify the design: small interfaces at real boundaries and shared configuration. Add interfaces, factories or layers only for a concrete need.
 - Match filenames to the main type. Give public enums separate files; name partial files `Type.Responsibility.cs`. Small, closely related internal port types may share a file.
-- Put format options, enums and extensions in `Formats/<Format>/`, processing contexts and options in `Processing/`, and I/O helpers in `Internal/`. Public types still use the `PictureSharp` namespace.
+- Follow the layers and dependency rules in `docs/architecture.md`. Public namespaces describe functionality; internal namespaces describe their layer. Keep the model independent of I/O, orchestration, codecs and processing algorithms. Architecture tests inspect compiled signatures and IL.
 - Separate SIMD methods into partial files such as `Type.Simd.cs` or `Type.Responsibility.X86.cs` (and ARM equivalents). Keep core and scalar code readable without intrinsics; short dispatch calls are fine. Keep architecture selection and vector helpers on the SIMD side, without adding indirection in hot loops solely for this separation.
 - Prefer pattern matching, collection expressions, records and `with`, validated properties using `field`, and `extension` blocks when they improve clarity without changing semantics, allocations or port fidelity.
 - Keep hot loops allocation-free. Rent temporary buffers from `ArrayPool<T>.Shared`; allocate image pixels with `GC.AllocateUninitializedArray`. Use `[MethodImpl(MethodImplOptions.AggressiveInlining)]` for short hot-path methods.
@@ -36,7 +36,7 @@ Follow `.editorconfig`. Enable nullable annotations, `TreatWarningsAsErrors` and
 | `samples/PictureSharp.Cli/` | CLI: `convert`, `info`, `resize` |
 | `reference/` | Uncommitted reference sources and tools, outside the build |
 
-Register each format in `Formats/CodecRegistry.cs` with an `IImageFormatDetector`, `IImageDecoder` and `IImageEncoder<TOptions>` plus its options record. `CodecRegistry` selects codecs and lists formats; `ImageCodec` invokes them, normalizes exceptions and applies EXIF orientation. Split large codecs into partial files, for example `PngDecoder.Chunks.cs`.
+Register each format in `Composition/CodecRegistry.cs` through application codec contracts. `Composition/LibraryServices.cs` constructs services and supplies concrete adapters. Decode, identify and encode services invoke codecs; shared errors and thumbnail policies do not depend on orchestration. Keep algorithm ports unchanged during structural refactoring. Split large codecs into partial files, for example `PngDecoder.Chunks.cs`.
 
 ## Porting reference code
 
@@ -82,3 +82,11 @@ Oracle tests compare with external tools and skip when those tools are missing. 
 - Commit and push only when the user explicitly asks.
 - `VERSION` contains the SemVer version; `Directory.Build.props` applies it to all projects.
 - Never commit `progres.md`, `reference/`, `tests/assets/external/`, `bin/` or `obj/`.
+
+## Domain changes and C# 14
+
+- `Image` owns common-canvas validation and complete buffer publication. Application prepares outputs and handles cancellation/pooling. Call `ProcessingState.ReplaceFrames`; do not call `ImageFrame.Publish` outside the aggregate. Use `ReplaceFramePixels` only for same-canvas copy-on-write.
+- Attach/detach frames only through the collection or sequential read session using owner tokens. Negative durations are rejected by the model; format limits stay in codecs. ICO variants remain independent images.
+- Public metadata arrays are copied snapshots. Internal codecs use owned blocks; `GetBlockLength`/`CopyBlockTo` avoid read allocations. Preserve unknown EXIF data and failed-edit atomicity.
+- Use C# 14 `field` and extension blocks where appropriate; records/with are for immutable options. Keep public Size/Rectangle/TimeSpan and test span overload resolution with `ConsumerCompilationTests`.
+- Run `bash scripts/verify-package-consumer.sh` to verify the local package under full trimming and linux-x64 Native AOT. See docs/extending-picturesharp.md. CI gates push/PR and release; actual ARM64 testing remains required separately.

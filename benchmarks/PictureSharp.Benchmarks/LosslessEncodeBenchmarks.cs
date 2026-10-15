@@ -1,4 +1,6 @@
 using BenchmarkDotNet.Attributes;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
 using static PictureSharp.Benchmarks.LosslessDecodeBenchmarks;
 
 namespace PictureSharp.Benchmarks;
@@ -37,7 +39,7 @@ public class LosslessEncodeBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _image = Image.Load(File.Path);
+        _image = ImageReader.Load(File.Path);
         _options = new WebPEncoderOptions { Lossless = true, Method = EncoderMethod, Quality = 75 };
     }
 

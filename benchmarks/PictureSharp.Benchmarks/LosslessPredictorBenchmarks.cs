@@ -1,5 +1,5 @@
 using BenchmarkDotNet.Attributes;
-using PictureSharp.Formats.WebP.Lossless;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
 
 namespace PictureSharp.Benchmarks;
 

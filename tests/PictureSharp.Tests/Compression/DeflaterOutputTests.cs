@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using PictureSharp.Compression;
+using PictureSharp.Algorithms.Compression;
 
 namespace PictureSharp.Tests.Compression;
 

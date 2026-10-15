@@ -16,7 +16,7 @@ The library version comes from the [VERSION](../VERSION) file, read by `Director
 
 | Path | Contents |
 | --- | --- |
-| `src/PictureSharp/` | The library: `Image`, options, the `WebPConverter`, `Formats/` (codecs), `Compression/` (deflate/inflate), `Processing/`, `Internal/` |
+| `src/PictureSharp/` | Layered library: `Domain/`, `Application/`, `Infrastructure/`, `Algorithms/`, `Primitives/`, `PublicApi/`, `Composition/`; see [architecture](architecture.md) |
 | `tests/PictureSharp.Tests/` | xUnit tests |
 | `tests/assets/` | Corpus, reference hashes, oracle scripts, public API snapshot |
 | `benchmarks/` | BenchmarkDotNet |
@@ -65,7 +65,7 @@ In version 0.4.7, all 4018 tests pass, including the Oracle tests against libweb
 - **VP8L predictors in 0.4.3:** modes 10–12 add SSE2/AVX2 paths. Tests cover tile bits 2–9, vector and tile boundaries, nested rounding, selection ties, clamping and residual wraparound. The predictor and decoder tests also run with AVX2 disabled and with all hardware intrinsics disabled. See [Performance](performance.md) for timings and benchmark commands.
 - **VP8L decoding in 0.4.4:** word-based bit-window refill, two-level Huffman lookup and short repeating backward references are optimized; predictor modes 5–7 and 13 use SSE2. Tests cover bit reads across window/slice boundaries, overlapping copies, negative division rounding, saturation and pixel wraparound. Core/scalar routines are kept separate from SIMD implementations in partial files. The same separation now covers VP8 TrueMotion and last-coefficient lookup.
 - **VP8L encoding in 0.4.5:** predictor residuals, cross-color histograms, combined entropy, histogram population costs and the hash chain are optimized while every output stays byte-identical. Tests compare `PredictorSub` (all 14 modes), the cross-color collectors and the non-zero mask with scalar code, the prepared combined entropy and `PopulationCost` with reference implementations, the bit writer with a bit-by-bit writer, and the parallel hash chain search with the single-threaded one for 2–16 threads. See [Performance](performance.md).
-- **ARM64 in 0.4.8:** the 128-bit SSE2/SSSE3/SSE4.1 bodies go through `Internal/Simd` helpers that emit the same instruction on x86 and the equivalent AdvSimd sequence on ARM64 (zip, sqxtn/sqxtun, widening multiplies, ext, tbl, uaddlp, uhadd), so one vector body serves both architectures and gives identical results. AVX2-only code has ARM64 versions in `*.Arm.cs` partial files: VP8 loop filters, `Disto` and quantization, the JPEG forward and inverse DCTs (8×8 blocks as pairs of 128-bit halves), CRC-32 with the ARMv8 CRC32 instructions and Adler-32 with NEON. The SIMD-versus-scalar tests run unchanged on ARM64; verify on real hardware with the full suite, with `DOTNET_EnableHWIntrinsic=0`, and on x64 also with `DOTNET_EnableAVX2=0`.
+- **ARM64 in 0.4.8:** the 128-bit SSE2/SSSE3/SSE4.1 bodies go through `Primitives/Numerics/Simd` helpers that emit the same instruction on x86 and the equivalent AdvSimd sequence on ARM64 (zip, sqxtn/sqxtun, widening multiplies, ext, tbl, uaddlp, uhadd), so one vector body serves both architectures and gives identical results. AVX2-only code has ARM64 versions in `*.Arm.cs` partial files: VP8 loop filters, `Disto` and quantization, the JPEG forward and inverse DCTs (8×8 blocks as pairs of 128-bit halves), CRC-32 with the ARMv8 CRC32 instructions and Adler-32 with NEON. The SIMD-versus-scalar tests run unchanged on ARM64; verify on real hardware with the full suite, with `DOTNET_EnableHWIntrinsic=0`, and on x64 also with `DOTNET_EnableAVX2=0`.
 - **Robustness:** every corpus file is truncated at over a hundred lengths and mutated 120 times (bit flips, extreme length fields, inserted and removed blocks); decoding and identification may only throw `ImageFormatException` or `NotSupportedException`, and `MaxPixels` is enforced for every file, for animations (GIF, APNG, WebP) over all decoded frames together.
 - **Hot paths in 0.4.6:** deflate (sequential and segmented parallel parse), PNG filters, CRC-32, Adler-32, resampling, premultiplication and the JPEG DCTs, quantization, coefficient masks and bit writer are checked against scalar or reference implementations; the inverse DCT tests include blocks outside the 32-bit vector range and 16-bit quantization tables. Parallel deflate, PNG and JPEG encoding and pipelined PNG decoding match the single-threaded results, and damaged PNG data decoded through the pipeline only throws `ImageFormatException`. The 40 outputs of the 0.4.6 benchmark matrix are identical to 0.4.5 with AVX2 and with all hardware intrinsics disabled. See [Performance](performance.md).
 - **Image processing:** 140 tests. The Pillow 10.2.0 oracle (`tests/assets/processing_reference.py`) checks 569 results for exact pixel equality: resizing with all filters, modes and anchors, compositing, background flattening, grayscale, enhancement, blur and sharpening, rotation, sepia and EXIF orientation. The oracle runs on x64 only: Pillow 10.2.0 built for ARM64 rounds some enhancement and rotation results differently, while PictureSharp gives the same pixels on both. `ProcessingDeterminismTests` pins those float-sensitive results on every architecture without external tools.
@@ -85,3 +85,18 @@ mv tests/assets/PublicApi.received.txt tests/assets/PublicApi.approved.txt
 ## Releasing
 
 Set the version in `VERSION`, commit, and push a `v<VERSION>` tag. Publishing a GitHub Release for that tag runs `.github/workflows/release.yml`: it checks that the tag matches `VERSION`, builds, runs the tests except `Local` and `External`, packs the library, pushes the package to nuget.org through Trusted Publishing and attaches the `.nupkg` to the release. The README is packed into the package, so keep its links absolute.
+
+## Trimming and Native AOT
+
+The smoke consumer covers every codec, fluent processing, async stream I/O, PNG pixels, ICO variants, animation and reduced JPEG decoding:
+
+```bash
+dotnet publish samples/PictureSharp.AotSmoke -c Release -r linux-x64 --self-contained true -o artifacts/trimmed
+./artifacts/trimmed/PictureSharp.AotSmoke
+dotnet publish samples/PictureSharp.AotSmoke -c Release -r linux-x64 --self-contained true -p:PublishAot=true -o artifacts/aot
+./artifacts/aot/PictureSharp.AotSmoke
+```
+
+Native AOT requires the platform linker/toolchain. Repeat the full tests and smoke consumer on ARM64 hardware before claiming ARM64 runtime verification. See [API migration](migration-layered-api.md).
+
+See [Extending PictureSharp](extending-picturesharp.md) for model invariants, codec contracts, processing and C# 14 consumer checks. Push/PR and release use the same validation workflow; `bash scripts/verify-package-consumer.sh` verifies the local package with full trimming and Native AOT on linux-x64.

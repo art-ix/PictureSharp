@@ -1,4 +1,8 @@
-using PictureSharp.Formats.WebP.Lossless;
+using PictureSharp.Formats.Png;
+using PictureSharp.Formats.WebP;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -9,7 +13,7 @@ public class ParallelDeterminismTests
     private static Image Source(bool alpha = false)
     {
         // Large enough for the parallel paths (wavefront rows, filter threshold, several cost refreshes).
-        using Image photo = Image.Load(Corpus.PathOf(alpha ? "src/photo_alpha.png" : "src/photo.png"));
+        using Image photo = ImageReader.Load(Corpus.PathOf(alpha ? "src/photo_alpha.png" : "src/photo.png"));
         return photo.Clone(x => x.Resize(400, 336, ResamplingFilter.Bicubic));
     }
 
@@ -87,10 +91,10 @@ public class ParallelDeterminismTests
 
     private static void AssertSameDecode(byte[] encoded, bool fancy)
     {
-        var options = new DecoderOptions { WebPFancyUpsampling = fancy };
-        using Image single = Image.Load(encoded, options with { MaxDegreeOfParallelism = 1 });
-        using Image parallel = Image.Load(encoded, options with { MaxDegreeOfParallelism = -1 });
-        using Image three = Image.Load(encoded, options with { MaxDegreeOfParallelism = 3 });
+        var options = new DecoderOptions { WebP = new() { FancyUpsampling = fancy }};
+        using Image single = ImageReader.Load(encoded, options with { MaxDegreeOfParallelism = 1 });
+        using Image parallel = ImageReader.Load(encoded, options with { MaxDegreeOfParallelism = -1 });
+        using Image three = ImageReader.Load(encoded, options with { MaxDegreeOfParallelism = 3 });
         Assert.Equal(single.ToPixelData(), parallel.ToPixelData());
         Assert.Equal(single.ToPixelData(), three.ToPixelData());
     }

@@ -1,3 +1,4 @@
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -42,12 +43,12 @@ public class ExternalConformanceTests
         if (expected is null)
         {
             // dwebp rejects the file: we must reject it too, with a format exception.
-            Exception ex = Assert.ThrowsAny<Exception>(() => Image.Load(path));
+            Exception ex = Assert.ThrowsAny<Exception>(() => ImageReader.Load(path));
             Assert.True(ex is ImageFormatException or NotSupportedException, ex.ToString());
             return;
         }
 
-        using Image image = Image.Load(path, new DecoderOptions { FirstFrameOnly = true });
+        using Image image = ImageReader.Load(path, new DecoderOptions { FirstFrameOnly = true });
         Assert.True(expected.AsSpan().SequenceEqual(image.ToPixelData()), $"{name} differs from dwebp");
     }
 }

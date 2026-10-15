@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using PictureSharp.Formats.Bmp;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Bmp;
@@ -43,7 +45,7 @@ public class BmpEncoderTests
         using Image image = WithColors(colors);
         byte[] bmp = image.ToBmp();
         Assert.Equal((40, expectedBits), Header(bmp));
-        using Image back = Image.Load(bmp);
+        using Image back = ImageReader.Load(bmp);
         Assert.Equal(image.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
         Assert.False(back.HasAlpha);
     }
@@ -51,10 +53,10 @@ public class BmpEncoderTests
     [Fact]
     public void Auto_WithAlpha_Writes32BitV5()
     {
-        using Image image = Image.Load(Corpus.PathOf("png/odd_rgba.png"));
+        using Image image = ImageReader.Load(Corpus.PathOf("png/odd_rgba.png"));
         byte[] bmp = image.ToBmp();
         Assert.Equal((124, 32), Header(bmp));
-        using Image back = Image.Load(bmp);
+        using Image back = ImageReader.Load(bmp);
         Assert.True(back.HasAlpha);
         Assert.Equal(image.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
     }
@@ -67,10 +69,10 @@ public class BmpEncoderTests
     [InlineData(32)]
     public void ForcedDepth_RoundTrips(int bits)
     {
-        using Image image = bits <= 8 ? WithColors(1 << bits) : Opaque(Image.Load(Corpus.PathOf("png/odd_rgba.png")));
+        using Image image = bits <= 8 ? WithColors(1 << bits) : Opaque(ImageReader.Load(Corpus.PathOf("png/odd_rgba.png")));
         byte[] bmp = image.ToBmp(new BmpEncoderOptions { BitsPerPixel = bits });
         Assert.Equal(bits, Header(bmp).Bits);
-        using Image back = Image.Load(bmp);
+        using Image back = ImageReader.Load(bmp);
         Assert.Equal(image.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
     }
 
@@ -78,9 +80,9 @@ public class BmpEncoderTests
     public void ForcedOpaqueDepth_DropsAlpha()
     {
         using Image image = new(2, 1, System.Drawing.Color.FromArgb(10, 1, 2, 3));
-        using Image back = Image.Load(image.ToBmp(new BmpEncoderOptions { BitsPerPixel = 24 }));
+        using Image back = ImageReader.Load(image.ToBmp(new BmpEncoderOptions { BitsPerPixel = 24 }));
         Assert.Equal(new Rgba32(1, 2, 3, 255), back[1, 0]);
-        using Image pal = Image.Load(image.ToBmp(new BmpEncoderOptions { BitsPerPixel = 1 }));
+        using Image pal = ImageReader.Load(image.ToBmp(new BmpEncoderOptions { BitsPerPixel = 1 }));
         Assert.Equal(new Rgba32(1, 2, 3, 255), pal[0, 0]);
     }
 
@@ -101,7 +103,7 @@ public class BmpEncoderTests
         image.Metadata.IccProfile = [9, 8, 7, 6, 5];
         byte[] bmp = image.ToBmp();
         Assert.Equal((124, 24), Header(bmp));
-        using Image back = Image.Load(bmp);
+        using Image back = ImageReader.Load(bmp);
         Assert.Equal(image.Metadata.IccProfile, back.Metadata.IccProfile);
         Assert.Equal(300f, back.Metadata.HorizontalResolution, 0.05f);
         Assert.Equal(72f, back.Metadata.VerticalResolution, 0.05f);
@@ -118,8 +120,8 @@ public class BmpEncoderTests
         try
         {
             using Image image = WithColors(5);
-            image.Save(path);
-            Assert.Equal(ImageFormat.Bmp, Image.Identify(path).Format);
+            ImageWriter.Save(image, path);
+            Assert.Equal(ImageFormat.Bmp, ImageReader.Identify(path).Format);
         }
         finally
         {
@@ -131,8 +133,8 @@ public class BmpEncoderTests
     [MemberData(nameof(BmpDecoderTests.BmpFiles), MemberType = typeof(BmpDecoderTests))]
     public void Corpus_RoundTrip_IsLossless(string file)
     {
-        using Image image = Image.Load(Corpus.PathOf(file));
-        using Image back = Image.Load(image.ToBmp());
+        using Image image = ImageReader.Load(Corpus.PathOf(file));
+        using Image back = ImageReader.Load(image.ToBmp());
         Assert.Equal(image.GetPixelSpan().ToArray(), back.GetPixelSpan().ToArray());
     }
 
@@ -147,7 +149,7 @@ public class BmpEncoderTests
             var expected = new Dictionary<string, string>();
             void Add(string name, Image image, BmpEncoderOptions options)
             {
-                image.Save(Path.Combine(dir, name), options);
+                ImageWriter.Save(image, Path.Combine(dir, name), options);
                 expected[name] = Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()));
             }
 
@@ -157,12 +159,12 @@ public class BmpEncoderTests
                 Add($"pal{bits}.bmp", image, new BmpEncoderOptions { BitsPerPixel = bits });
             }
 
-            using (Image photo = Image.Load(Corpus.PathOf("png/rgb8.png")))
+            using (Image photo = ImageReader.Load(Corpus.PathOf("png/rgb8.png")))
             {
                 Add("rgb24.bmp", photo, new BmpEncoderOptions());
             }
 
-            using (Image alpha = Image.Load(Corpus.PathOf("png/odd_rgba.png")))
+            using (Image alpha = ImageReader.Load(Corpus.PathOf("png/odd_rgba.png")))
             {
                 alpha.Metadata.IccProfile = null;
                 Add("rgba32.bmp", alpha, new BmpEncoderOptions());

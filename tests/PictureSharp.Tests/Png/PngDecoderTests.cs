@@ -1,3 +1,6 @@
+using PictureSharp.Infrastructure.Codecs.Png;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 using PictureSharp.Tests.WebP;
 
@@ -12,7 +15,7 @@ public class PngDecoderTests
     public void Decode_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        using Image image = Image.Load(Corpus.PathOf(file));
+        using Image image = ImageReader.Load(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Png, image.SourceFormat);
         Assert.Equal(r.HasAlpha, image.HasAlpha);
         LosslessDecoderTests.AssertMatchesReference(file, image);
@@ -37,7 +40,7 @@ public class PngDecoderTests
     public void Identify_MatchesReference(string file)
     {
         ReferenceEntry r = Corpus.References[file];
-        ImageInfo info = Image.Identify(Corpus.PathOf(file));
+        ImageInfo info = ImageReader.Identify(Corpus.PathOf(file));
         Assert.Equal(ImageFormat.Png, info.Format);
         Assert.Equal((r.Width, r.Height), (info.Width, info.Height));
         Assert.Equal(r.HasAlpha, info.HasAlpha);
@@ -50,14 +53,14 @@ public class PngDecoderTests
     [Fact]
     public void Decode_ExifOrientation()
     {
-        using Image image = Image.Load(Corpus.PathOf("png/exif.png"));
+        using Image image = ImageReader.Load(Corpus.PathOf("png/exif.png"));
         Assert.Equal(ExifOrientation.BottomRight, image.Metadata.Orientation);
     }
 
     [Fact]
     public void Decode_FirstFrameOnly_Apng()
     {
-        using Image image = Image.Load(Corpus.PathOf("png/apng_alpha.png"), new DecoderOptions { FirstFrameOnly = true });
+        using Image image = ImageReader.Load(Corpus.PathOf("png/apng_alpha.png"), new DecoderOptions { FirstFrameOnly = true });
         Assert.Equal(1, image.FrameCount);
         Assert.Equal(Corpus.References["png/apng_alpha.png"].Frames[0].Sha256,
             Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan())));
@@ -68,20 +71,20 @@ public class PngDecoderTests
     {
         byte[] data = Corpus.Read("png/rgb8.png");
         data[^20] ^= 0x40;  // inside the last IDAT, before IEND
-        Assert.Throws<ImageFormatException>(() => Image.Load(data, new DecoderOptions { StrictChecksums = true }));
+        Assert.Throws<ImageFormatException>(() => ImageReader.Load(data, new DecoderOptions { Png = new() { StrictChecksums = true }}));
     }
 
     [Fact]
     public void BlendOver_FollowsPorterDuff()
     {
         var dst = new Rgba32(0, 0, 255, 255);
-        Assert.Equal(new Rgba32(10, 20, 30, 255), Formats.Png.PngDecoder.BlendOver(new Rgba32(10, 20, 30, 255), dst));
-        Assert.Equal(dst, Formats.Png.PngDecoder.BlendOver(new Rgba32(10, 20, 30, 0), dst));
-        Rgba32 half = Formats.Png.PngDecoder.BlendOver(new Rgba32(255, 0, 0, 128), dst);
+        Assert.Equal(new Rgba32(10, 20, 30, 255), PictureSharp.Infrastructure.Codecs.Png.PngDecoder.BlendOver(new Rgba32(10, 20, 30, 255), dst));
+        Assert.Equal(dst, PictureSharp.Infrastructure.Codecs.Png.PngDecoder.BlendOver(new Rgba32(10, 20, 30, 0), dst));
+        Rgba32 half = PictureSharp.Infrastructure.Codecs.Png.PngDecoder.BlendOver(new Rgba32(255, 0, 0, 128), dst);
         Assert.Equal(255, half.A);
         Assert.InRange(half.R, 127, 129);
         Assert.InRange(half.B, 126, 128);
-        Rgba32 overTransparent = Formats.Png.PngDecoder.BlendOver(new Rgba32(255, 0, 0, 128), default);
+        Rgba32 overTransparent = PictureSharp.Infrastructure.Codecs.Png.PngDecoder.BlendOver(new Rgba32(255, 0, 0, 128), default);
         Assert.Equal(new Rgba32(255, 0, 0, 128), overTransparent);
     }
 
@@ -108,7 +111,7 @@ public class PngDecoderTests
 
                 try
                 {
-                    using Image img = Image.Load(data);
+                    using Image img = ImageReader.Load(data);
                 }
                 catch (ImageFormatException)
                 {

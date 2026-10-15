@@ -1,6 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
 using PictureSharp;
+using PictureSharp.Formats.Gif;
+using PictureSharp.Formats.Ico;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 
 // picturesharp-cli: small front-end for the PictureSharp library.
 //   info <file>...
@@ -21,7 +27,7 @@ try
         case "info":
             foreach (string file in args.Skip(1))
             {
-                ImageInfo info = Image.Identify(file);
+                ImageInfo info = ImageReader.Identify(file);
                 Console.WriteLine($"{file}: {info.Format.Name} {info.Width}x{info.Height}, alpha: {info.HasAlpha}, " +
                                   $"frames: {info.FrameCount}{(info.WebPCompression != WebPCompression.None ? ", " + info.WebPCompression : "")}, " +
                                   $"orientation: {info.Orientation}");
@@ -37,178 +43,180 @@ try
             return 0;
 
         case "icon" when args.Length is 4 or 5:
-        {
-            if (args.Length == 5 && args[4] != "-dib")
             {
-                throw new ArgumentException($"Unknown option {args[4]}");
-            }
-
-            int[] sizes = [.. args[3].Split(',').Select(s => int.Parse(s, CultureInfo.InvariantCulture))];
-            if (sizes.Any(s => s is < 1 or > 256))
-            {
-                throw new ArgumentException("Icon sizes must be 1–256.");
-            }
-
-            using Image source = Image.Load(args[1], new() { ApplyExifOrientation = true });
-            var variants = new List<Image>();
-            try
-            {
-                foreach (int size in sizes)
+                if (args.Length == 5 && args[4] != "-dib")
                 {
-                    variants.Add(source.Clone(x => x.Resize(size, size, ResizeMode.Pad, ResamplingFilter.Lanczos3)));
+                    throw new ArgumentException($"Unknown option {args[4]}");
                 }
 
-                IcoFile.Save(variants, args[2], new() { Encoding = args.Length == 5 ? IcoEncoding.Dib : IcoEncoding.Png });
-            }
-            finally
-            {
-                foreach (Image variant in variants)
+                int[] sizes = [.. args[3].Split(',').Select(s => int.Parse(s, CultureInfo.InvariantCulture))];
+                if (sizes.Any(s => s is < 1 or > 256))
                 {
-                    variant.Dispose();
+                    throw new ArgumentException("Icon sizes must be 1–256.");
                 }
+
+                using Image source = ImageReader.Load(args[1], new() { ApplyExifOrientation = true });
+                var variants = new List<Image>();
+                try
+                {
+                    foreach (int size in sizes)
+                    {
+                        variants.Add(source.Clone(x => x.Resize(size, size, ResizeMode.Pad, ResamplingFilter.Lanczos3)));
+                    }
+
+                    IcoFile.Save(variants, args[2], new() { Encoding = args.Length == 5 ? IcoEncoding.Dib : IcoEncoding.Png });
+                }
+                finally
+                {
+                    foreach (Image variant in variants)
+                    {
+                        variant.Dispose();
+                    }
+                }
+
+                Console.WriteLine($"{args[1]} -> {args[2]}: {sizes.Length} icon variants");
+                return 0;
             }
-
-            Console.WriteLine($"{args[1]} -> {args[2]}: {sizes.Length} icon variants");
-            return 0;
-        }
-
 
         case "decode" when args.Length >= 2:
-        {
-            int iterations = args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 5;
-            byte[] data = File.ReadAllBytes(args[1]);
-            using (Image warmup = Image.Load(data.AsMemory()))
             {
-                Console.WriteLine($"{args[1]}: {warmup}");
-            }
+                int iterations = args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 5;
+                byte[] data = File.ReadAllBytes(args[1]);
+                using (Image warmup = ImageReader.Load(data.AsMemory()))
+                {
+                    Console.WriteLine($"{args[1]}: {warmup}");
+                }
 
-            var times = new List<double>();
-            for (int i = 0; i < iterations; i++)
-            {
-                var watch = Stopwatch.StartNew();
-                using Image image = Image.Load(data.AsMemory());
-                times.Add(watch.Elapsed.TotalMilliseconds);
-            }
+                var times = new List<double>();
+                for (int i = 0; i < iterations; i++)
+                {
+                    var watch = Stopwatch.StartNew();
+                    using Image image = ImageReader.Load(data.AsMemory());
+                    times.Add(watch.Elapsed.TotalMilliseconds);
+                }
 
-            Console.WriteLine($"decode: min {times.Min():F1} ms, avg {times.Average():F1} ms over {iterations} runs");
-            return 0;
-        }
+                Console.WriteLine($"decode: min {times.Min():F1} ms, avg {times.Average():F1} ms over {iterations} runs");
+                return 0;
+            }
 
         case "raw" when args.Length >= 3:
-        {
-            // Writes the decoded RGBA pixels of the first frame (for comparisons with other decoders).
-            using Image image = Image.Load(args[1]);
-            File.WriteAllBytes(args[2], image.ToPixelData(PixelFormat.Rgba32));
-            Console.WriteLine($"{image.Width}x{image.Height} RGBA -> {args[2]}");
-            return 0;
-        }
+            {
+                // Writes the decoded RGBA pixels of the first frame (for comparisons with other decoders).
+                using Image image = ImageReader.Load(args[1]);
+                File.WriteAllBytes(args[2], image.ToPixelData(PixelFormat.Rgba32));
+                Console.WriteLine($"{image.Width}x{image.Height} RGBA -> {args[2]}");
+                return 0;
+            }
 
         case "convert" when args.Length >= 3:
-        {
-            float? quality = null;
-            int? method = null;
-            bool lossless = false;
-            var gif = new GifEncoderOptions();
-            for (int i = 3; i < args.Length; i++)
             {
-                switch (args[i])
+                float? quality = null;
+                int? method = null;
+                bool lossless = false;
+                var gif = new GifEncoderOptions();
+                for (int i = 3; i < args.Length; i++)
                 {
-                    case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
-                    case "-m": method = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
-                    case "-lossless": lossless = true; break;
-                    case "-colors": gif = gif with { ColorCount = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
-                    case "-octree": gif = gif with { Quantizer = GifQuantizer.Octree }; break;
-                    case "-dither": gif = gif with { Dither = GifDither.FloydSteinberg }; break;
-                    default: throw new ArgumentException($"Unknown option {args[i]}");
+                    switch (args[i])
+                    {
+                        case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                        case "-m": method = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                        case "-lossless": lossless = true; break;
+                        case "-colors": gif = gif with { ColorCount = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-octree": gif = gif with { Quantizer = GifQuantizer.Octree }; break;
+                        case "-dither": gif = gif with { Dither = GifDither.FloydSteinberg }; break;
+                        default: throw new ArgumentException($"Unknown option {args[i]}");
+                    }
                 }
-            }
 
-            var sw = Stopwatch.StartNew();
-            using Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
-            long decodeMs = sw.ElapsedMilliseconds;
-            sw.Restart();
-            ImageFormat target = ImageFormat.FromExtension(args[2]) ?? throw new ArgumentException("Unknown output extension.");
-            if (target == ImageFormat.Gif)
-            {
-                image.SaveAsGif(args[2], gif);
-            }
-            else if (target == ImageFormat.WebP && image.SourceFormat == ImageFormat.Gif)
-            {
-                // Like gif2webp: lossless unless a quality is given, with its keyframe distances for each mode.
-                bool lossy = !lossless && (quality is not null || method is not null);
-                WebPConverter.Convert(args[1], args[2], !lossy && method is null ? null : new()
+                var sw = Stopwatch.StartNew();
+                using Image image = ImageReader.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
+                long decodeMs = sw.ElapsedMilliseconds;
+                sw.Restart();
+                ImageFormat target = ImageFormats.FromExtension(args[2]) ?? throw new ArgumentException("Unknown output extension.");
+                if (target == ImageFormat.Gif)
                 {
-                    Lossless = !lossy, Quality = quality ?? 75, Method = method ?? 4,
-                    KeyframeMin = lossy ? 3 : 9, KeyframeMax = lossy ? 5 : 17,
-                });
-            }
-            else
-            {
-                Save(image, args[2], quality ?? 75, method ?? 4, lossless);
-            }
+                    image.SaveAsGif(args[2], gif);
+                }
+                else if (target == ImageFormat.WebP && image.SourceFormat == ImageFormat.Gif)
+                {
+                    // Like gif2webp: lossless unless a quality is given, with its keyframe distances for each mode.
+                    bool lossy = !lossless && (quality is not null || method is not null);
+                    WebPConverter.Convert(args[1], args[2], !lossy && method is null ? null : new()
+                    {
+                        Lossless = !lossy,
+                        Quality = quality ?? 75,
+                        Method = method ?? 4,
+                        KeyframeMin = lossy ? 3 : 9,
+                        KeyframeMax = lossy ? 5 : 17,
+                    });
+                }
+                else
+                {
+                    Save(image, args[2], quality ?? 75, method ?? 4, lossless);
+                }
 
-            Console.WriteLine($"{args[1]} -> {args[2]}: {image.Width}x{image.Height}, decode {decodeMs} ms, encode {sw.ElapsedMilliseconds} ms, " +
-                              $"{new FileInfo(args[2]).Length} bytes");
-            return 0;
-        }
+                Console.WriteLine($"{args[1]} -> {args[2]}: {image.Width}x{image.Height}, decode {decodeMs} ms, encode {sw.ElapsedMilliseconds} ms, " +
+                                  $"{new FileInfo(args[2]).Length} bytes");
+                return 0;
+            }
 
         case "resize" when args.Length >= 5:
-        {
-            int width = int.Parse(args[3], CultureInfo.InvariantCulture);
-            int height = int.Parse(args[4], CultureInfo.InvariantCulture);
-            var mode = ResizeMode.Stretch;
-            var filter = ResamplingFilter.Lanczos3;
-            float quality = 75;
-            for (int i = 5; i < args.Length; i++)
             {
-                switch (args[i])
+                int width = int.Parse(args[3], CultureInfo.InvariantCulture);
+                int height = int.Parse(args[4], CultureInfo.InvariantCulture);
+                var mode = ResizeMode.Stretch;
+                var filter = ResamplingFilter.Lanczos3;
+                float quality = 75;
+                for (int i = 5; i < args.Length; i++)
                 {
-                    case "-mode": mode = Enum.Parse<ResizeMode>(args[++i], ignoreCase: true); break;
-                    case "-filter": filter = Enum.Parse<ResamplingFilter>(args[++i], ignoreCase: true); break;
-                    case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
-                    default: throw new ArgumentException($"Unknown option {args[i]}");
+                    switch (args[i])
+                    {
+                        case "-mode": mode = Enum.Parse<ResizeMode>(args[++i], ignoreCase: true); break;
+                        case "-filter": filter = Enum.Parse<ResamplingFilter>(args[++i], ignoreCase: true); break;
+                        case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                        default: throw new ArgumentException($"Unknown option {args[i]}");
+                    }
                 }
-            }
 
-            using Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
-            var sourceSize = image.Size;
-            var sw = Stopwatch.StartNew();
-            image.Mutate(x => x.Resize(width, height, mode, filter));
-            long resizeMs = sw.ElapsedMilliseconds;
-            Save(image, args[2], quality, 4, lossless: false);
-            Console.WriteLine($"{args[1]} -> {args[2]}: {sourceSize.Width}x{sourceSize.Height} -> {image.Width}x{image.Height} " +
-                              $"({mode}, {filter}), frames: {image.FrameCount}, resize {resizeMs} ms, {new FileInfo(args[2]).Length} bytes");
-            return 0;
-        }
+                using Image image = ImageReader.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
+                var sourceSize = image.Size;
+                var sw = Stopwatch.StartNew();
+                image.Mutate(x => x.Resize(width, height, mode, filter));
+                long resizeMs = sw.ElapsedMilliseconds;
+                Save(image, args[2], quality, 4, lossless: false);
+                Console.WriteLine($"{args[1]} -> {args[2]}: {sourceSize.Width}x{sourceSize.Height} -> {image.Width}x{image.Height} " +
+                                  $"({mode}, {filter}), frames: {image.FrameCount}, resize {resizeMs} ms, {new FileInfo(args[2]).Length} bytes");
+                return 0;
+            }
 
         case "thumbnail" when args.Length >= 5:
-        {
-            var options = new DecoderOptions
             {
-                ApplyExifOrientation = true,
-                TargetSize = new(int.Parse(args[3], CultureInfo.InvariantCulture), int.Parse(args[4], CultureInfo.InvariantCulture)),
-            };
-            float quality = 75;
-            for (int i = 5; i < args.Length; i++)
-            {
-                switch (args[i])
+                var options = new DecoderOptions
                 {
-                    case "-gap": options = options with { TargetReducingGap = double.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
-                    case "-filter": options = options with { TargetResampling = Enum.Parse<ResamplingFilter>(args[++i], ignoreCase: true) }; break;
-                    case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
-                    default: throw new ArgumentException($"Unknown option {args[i]}");
+                    ApplyExifOrientation = true,
+                    TargetSize = new(int.Parse(args[3], CultureInfo.InvariantCulture), int.Parse(args[4], CultureInfo.InvariantCulture)),
+                };
+                float quality = 75;
+                for (int i = 5; i < args.Length; i++)
+                {
+                    switch (args[i])
+                    {
+                        case "-gap": options = options with { TargetReducingGap = double.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-filter": options = options with { TargetResampling = Enum.Parse<ResamplingFilter>(args[++i], ignoreCase: true) }; break;
+                        case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                        default: throw new ArgumentException($"Unknown option {args[i]}");
+                    }
                 }
-            }
 
-            ImageInfo info = Image.Identify(args[1]);
-            var sw = Stopwatch.StartNew();
-            using Image image = Image.Load(args[1], options);
-            long loadMs = sw.ElapsedMilliseconds;
-            Save(image, args[2], quality, 4, lossless: false);
-            Console.WriteLine($"{args[1]} -> {args[2]}: {info.Width}x{info.Height} -> {image.Width}x{image.Height}, " +
-                              $"load {loadMs} ms, {new FileInfo(args[2]).Length} bytes");
-            return 0;
-        }
+                ImageInfo info = ImageReader.Identify(args[1]);
+                var sw = Stopwatch.StartNew();
+                using Image image = ImageReader.Load(args[1], options);
+                long loadMs = sw.ElapsedMilliseconds;
+                Save(image, args[2], quality, 4, lossless: false);
+                Console.WriteLine($"{args[1]} -> {args[2]}: {info.Width}x{info.Height} -> {image.Width}x{image.Height}, " +
+                                  $"load {loadMs} ms, {new FileInfo(args[2]).Length} bytes");
+                return 0;
+            }
 
         default:
             PrintUsage();
@@ -223,7 +231,7 @@ catch (Exception ex) when (ex is IOException or FormatException or NotSupportedE
 
 static void Save(Image image, string path, float quality, int method, bool lossless)
 {
-    ImageFormat target = ImageFormat.FromExtension(path) ?? throw new ArgumentException("Unknown output extension.");
+    ImageFormat target = ImageFormats.FromExtension(path) ?? throw new ArgumentException("Unknown output extension.");
     if (target == ImageFormat.WebP)
     {
         image.SaveAsWebP(path, new() { Quality = quality, Method = method, Lossless = lossless });
@@ -236,7 +244,7 @@ static void Save(Image image, string path, float quality, int method, bool lossl
     }
     else
     {
-        image.Save(path);
+        ImageWriter.Save(image, path);
     }
 }
 

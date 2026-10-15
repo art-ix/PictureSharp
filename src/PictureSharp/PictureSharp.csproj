@@ -8,6 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
+    <PackageReleaseNotes>0.5.5 has breaking API changes from 0.5.4: ImageReader/ImageWriter/ImageFormats, functional namespaces, grouped decoder options and explicit frame/metadata ownership. Migration: https://github.com/art-ix/PictureSharp/blob/v0.5.5/docs/migration-layered-api.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

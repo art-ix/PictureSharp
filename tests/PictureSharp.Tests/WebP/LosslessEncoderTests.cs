@@ -1,3 +1,5 @@
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.WebP;
@@ -18,9 +20,9 @@ public class LosslessEncoderTests
     [MemberData(nameof(Sources))]
     public void Corpus_RoundTripsExactly(string source)
     {
-        using Image image = Image.Load(Corpus.PathOf(source));
+        using Image image = ImageReader.Load(Corpus.PathOf(source));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true });
-        using Image decoded = Image.Load(encoded.AsMemory());
+        using Image decoded = ImageReader.Load(encoded.AsMemory());
         Assert.Equal(image.ToPixelData(PixelFormat.Rgba32), decoded.ToPixelData(PixelFormat.Rgba32));
     }
 
@@ -30,7 +32,7 @@ public class LosslessEncoderTests
     public void Corpus_OpensInDwebp_AndMeetsSizeTarget(string source)
     {
         if (!ReferenceTools.HasDwebp || !ReferenceTools.HasCwebp) return;
-        using Image image = Image.Load(Corpus.PathOf(source));
+        using Image image = ImageReader.Load(Corpus.PathOf(source));
         string output = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.webp");
         string reference = output + ".ref.webp";
         try
@@ -70,7 +72,7 @@ public class LosslessEncoderTests
             NearLossless = Value("-near_lossless", 100),
             Exact = args.Contains("-exact"),
         };
-        using Image image = Image.Load(Corpus.PathOf(source));
+        using Image image = ImageReader.Load(Corpus.PathOf(source));
         string reference = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.webp");
         try
         {

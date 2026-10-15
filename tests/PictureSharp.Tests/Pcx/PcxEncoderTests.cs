@@ -1,10 +1,13 @@
+using PictureSharp.Formats.Pcx;
+using PictureSharp.IO;
+
 namespace PictureSharp.Tests.Pcx;
 
 public class PcxEncoderTests
 {
     private static Image Load(byte[] pcx)
     {
-        return Image.Load(pcx);
+        return ImageReader.Load(pcx);
     }
 
     private static Rgba32[] RoundTrip(Image image, PcxEncoderOptions? options = null)
@@ -168,7 +171,7 @@ public class PcxEncoderTests
     {
         using var image = new Image(1, 1, new Rgba32(0, 0, 0));
         image.Metadata.IccProfile = [1, 2, 3, 4];
-        image.Metadata.Exif = [.."II*\0"u8, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        image.Metadata.Exif = [.. "II*\0"u8, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         image.Metadata.Xmp = "<xmp/>"u8.ToArray();
         using Image decoded = Load(image.ToPcx(new() { Metadata = MetadataKinds.All }));
         Assert.Null(decoded.Metadata.IccProfile);
@@ -192,8 +195,8 @@ public class PcxEncoderTests
         string path = Path.Combine(Path.GetTempPath(), $"picturesharp-{Guid.NewGuid():N}.pcx");
         try
         {
-            image.Save(path);
-            using Image loaded = Image.Load(path);
+            ImageWriter.Save(image, path);
+            using Image loaded = ImageReader.Load(path);
             Assert.Equal(ImageFormat.Pcx, loaded.SourceFormat);
             Assert.Equal(image.GetPixelSpan().ToArray(), loaded.GetPixelSpan().ToArray());
         }

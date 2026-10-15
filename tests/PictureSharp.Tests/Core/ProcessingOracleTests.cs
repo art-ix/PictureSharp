@@ -3,6 +3,9 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using PictureSharp.Formats.Png;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Core;
@@ -75,8 +78,8 @@ public class ProcessingOracleTests
             {
                 ["noise.png"] = Noise(41, 29, 1),
                 ["gradient.png"] = Gradient(100, 3),
-                ["photo.png"] = Image.Load(Corpus.PathOf("jpeg/q90_444.jpg")),
-                ["alpha.png"] = Image.Load(Corpus.PathOf("png/odd_rgba.png")),
+                ["photo.png"] = ImageReader.Load(Corpus.PathOf("jpeg/q90_444.jpg")),
+                ["alpha.png"] = ImageReader.Load(Corpus.PathOf("png/odd_rgba.png")),
                 ["overlay.png"] = Noise(23, 17, 2),
             };
 
@@ -85,7 +88,7 @@ public class ProcessingOracleTests
             foreach ((string file, Image image) in inputs)
             {
                 image.Metadata.Clear();
-                image.Save(Path.Combine(dir, file), new PngEncoderOptions());
+                ImageWriter.Save(image, Path.Combine(dir, file), new PngEncoderOptions());
             }
 
             void AddResize(string input, int w, int h, string filter, ResamplingFilter f, string mode, ResizeMode m)
@@ -114,12 +117,21 @@ public class ProcessingOracleTests
                 string name = $"{Path.GetFileNameWithoutExtension(input)}_{w}x{h}_{mode}_{position}";
                 jobs.Add(new()
                 {
-                    ["name"] = name, ["input"] = input, ["op"] = "resize", ["width"] = w, ["height"] = h,
-                    ["filter"] = "bicubic", ["mode"] = mode, ["centering"] = new[] { cx, cy },
+                    ["name"] = name,
+                    ["input"] = input,
+                    ["op"] = "resize",
+                    ["width"] = w,
+                    ["height"] = h,
+                    ["filter"] = "bicubic",
+                    ["mode"] = mode,
+                    ["centering"] = new[] { cx, cy },
                 });
                 expected[name] = () => inputs[input].Clone(x => x.Resize(new ResizeOptions
                 {
-                    Size = new(w, h), Mode = m, Filter = ResamplingFilter.Bicubic, Position = position,
+                    Size = new(w, h),
+                    Mode = m,
+                    Filter = ResamplingFilter.Bicubic,
+                    Position = position,
                 }));
             }
 
@@ -249,7 +261,7 @@ public class ProcessingOracleTests
                 jobs.Add(new() { ["name"] = name, ["input"] = file, ["op"] = "exif_transpose" });
                 expected[name] = () =>
                 {
-                    Image image = Image.Load(Path.Combine(dir, file));
+                    Image image = ImageReader.Load(Path.Combine(dir, file));
                     image.Mutate(x => x.AutoOrient());
                     return image;
                 };

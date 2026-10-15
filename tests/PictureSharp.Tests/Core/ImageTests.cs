@@ -1,4 +1,6 @@
 using System.Drawing;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Core;
 
@@ -215,6 +217,6 @@ public class ImageTests
     public void Save_UnknownExtension_Throws()
     {
         using var img = new Image(1, 1);
-        Assert.Throws<NotSupportedException>(() => img.Save("x.tiff"));
+        Assert.Throws<NotSupportedException>(() => ImageWriter.Save(img, "x.tiff"));
     }
 }

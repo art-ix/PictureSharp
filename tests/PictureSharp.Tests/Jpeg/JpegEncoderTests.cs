@@ -1,5 +1,7 @@
 using System.Drawing;
 using System.Text.Json;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Jpeg;
@@ -26,17 +28,20 @@ public class JpegEncoderTests
     public void Encode_IsByteExactWithPillow(string source, int quality, int sampling, bool optimize, bool progressive,
         string expected, int size, string pixels)
     {
-        using Image image = Image.Load(Corpus.PathOf(source));
+        using Image image = ImageReader.Load(Corpus.PathOf(source));
         image.Metadata.HorizontalResolution = 96;
         image.Metadata.VerticalResolution = 96;
         byte[] encoded = image.ToJpeg(new JpegEncoderOptions
         {
-            Quality = quality, Subsampling = (JpegSubsampling)sampling, OptimizeCoding = optimize,
-            Progressive = progressive, Metadata = MetadataKinds.None,
+            Quality = quality,
+            Subsampling = (JpegSubsampling)sampling,
+            OptimizeCoding = optimize,
+            Progressive = progressive,
+            Metadata = MetadataKinds.None,
         });
         Assert.Equal(size, encoded.Length);
         Assert.Equal(expected, Corpus.Sha256(encoded));
-        using Image decoded = Image.Load(encoded.AsMemory());
+        using Image decoded = ImageReader.Load(encoded.AsMemory());
         Assert.Equal(pixels, Corpus.Sha256(decoded.ToPixelData(PixelFormat.Rgba32)));
     }
 
@@ -53,7 +58,7 @@ public class JpegEncoderTests
         image.Metadata.IccProfile = Enumerable.Range(0, 140000).Select(i => (byte)i).ToArray();
         image.Metadata.Exif = [.. "II*\0"u8, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
         image.Metadata.Xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>"u8.ToArray();
-        using Image decoded = Image.Load(image.ToJpeg(new JpegEncoderOptions { Progressive = progressive }));
+        using Image decoded = ImageReader.Load(image.ToJpeg(new JpegEncoderOptions { Progressive = progressive }));
         Assert.Equal(1, decoded.FrameCount);
         Assert.True(decoded[0, 0].R > 250 && decoded[0, 0].B < 5);
         Assert.Equal(300, decoded.Metadata.HorizontalResolution);
@@ -64,7 +69,7 @@ public class JpegEncoderTests
         Assert.Equal(ExifOrientation.RightTop, decoded.Metadata.Orientation);
         foreach (MetadataKinds kind in new[] { MetadataKinds.None, MetadataKinds.Icc, MetadataKinds.Exif, MetadataKinds.Xmp })
         {
-            using Image selected = Image.Load(image.ToJpeg(new JpegEncoderOptions { Metadata = kind }));
+            using Image selected = ImageReader.Load(image.ToJpeg(new JpegEncoderOptions { Metadata = kind }));
             Assert.Equal(kind == MetadataKinds.Icc ? image.Metadata.IccProfile : null, selected.Metadata.IccProfile);
             Assert.Equal(kind == MetadataKinds.Exif ? image.Metadata.Exif : null, selected.Metadata.Exif);
             Assert.Equal(kind == MetadataKinds.Xmp ? image.Metadata.Xmp : null, selected.Metadata.Xmp);
@@ -82,13 +87,13 @@ public class JpegEncoderTests
         Color background = Color.FromArgb(17, 93, 201);
         using var flat = new Image(image.Width, image.Height);
         for (int y = 0; y < image.Height; y++)
-        for (int x = 0; x < image.Width; x++)
-        {
-            Rgba32 p = image[x, y];
-            flat[x, y] = new Rgba32((byte)((p.R * p.A + background.R * (255 - p.A) + 127) / 255),
-                (byte)((p.G * p.A + background.G * (255 - p.A) + 127) / 255),
-                (byte)((p.B * p.A + background.B * (255 - p.A) + 127) / 255), 255);
-        }
+            for (int x = 0; x < image.Width; x++)
+            {
+                Rgba32 p = image[x, y];
+                flat[x, y] = new Rgba32((byte)((p.R * p.A + background.R * (255 - p.A) + 127) / 255),
+                    (byte)((p.G * p.A + background.G * (255 - p.A) + 127) / 255),
+                    (byte)((p.B * p.A + background.B * (255 - p.A) + 127) / 255), 255);
+            }
         Assert.Equal(flat.ToJpeg(), image.ToJpeg(new JpegEncoderOptions { BackgroundColor = background }));
         Assert.Equal(original, image.ToPixelData(PixelFormat.Rgba32));
     }
@@ -104,18 +109,18 @@ public class JpegEncoderTests
             foreach (string extension in new[] { ".jpg", ".jpeg", ".JPG", ".jpe", ".jfif" })
             {
                 string path = Path.Combine(directory, "image" + extension);
-                image.Save(path);
+                ImageWriter.Save(image, path);
                 Assert.Equal(image.ToJpeg(), File.ReadAllBytes(path));
             }
             string explicitPath = Path.Combine(directory, "explicit.jpg");
             image.SaveAsJpeg(explicitPath, new() { Quality = 90 });
             Assert.Equal(image.ToJpeg(new JpegEncoderOptions { Quality = 90 }), File.ReadAllBytes(explicitPath));
             using var stream = new MemoryStream();
-            image.Save(stream, ImageFormat.Jpeg);
+            ImageWriter.Save(image, stream, ImageFormat.Jpeg);
             Assert.True(stream.CanWrite);
             Assert.Equal(image.ToJpeg(), stream.ToArray());
             stream.SetLength(0);
-            await image.SaveAsync(stream, new JpegEncoderOptions { Progressive = true });
+            await ImageWriter.SaveAsync(image, stream, new JpegEncoderOptions { Progressive = true });
             Assert.Equal(image.ToJpeg(new JpegEncoderOptions { Progressive = true }), stream.ToArray());
         }
         finally { Directory.Delete(directory, true); }
@@ -143,7 +148,7 @@ public class JpegEncoderTests
         foreach (Func<JpegEncoderOptions> create in options)
         {
             using var stream = new MemoryStream();
-            Assert.Throws<ArgumentOutOfRangeException>(() => image.Save(stream, create()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => ImageWriter.Save(image, stream, create()));
             Assert.Equal(0, stream.Length);
         }
     }
@@ -159,7 +164,7 @@ public class JpegEncoderTests
             if (kind == MetadataKinds.Xmp) image.Metadata.Xmp = new byte[65505];
             if (kind == MetadataKinds.Icc) image.Metadata.IccProfile = new byte[65519 * 255 + 1];
             using var stream = new MemoryStream();
-            Assert.Throws<ArgumentException>(() => image.Save(stream, new JpegEncoderOptions()));
+            Assert.Throws<ArgumentException>(() => ImageWriter.Save(image, stream, new JpegEncoderOptions()));
             Assert.Equal(0, stream.Length);
             Assert.NotEmpty(image.ToJpeg(new JpegEncoderOptions { Metadata = MetadataKinds.None }));
         }
@@ -171,7 +176,7 @@ public class JpegEncoderTests
         using var image = new Image(1, 1);
         image.Metadata.HorizontalResolution = float.MaxValue;
         image.Metadata.VerticalResolution = 0.25f;
-        using Image decoded = Image.Load(image.ToJpeg());
+        using Image decoded = ImageReader.Load(image.ToJpeg());
         Assert.Equal(65535, decoded.Metadata.HorizontalResolution);
         Assert.Equal(1, decoded.Metadata.VerticalResolution);
     }

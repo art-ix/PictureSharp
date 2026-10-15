@@ -1,45 +1,3 @@
-enum AnchorPosition
-    Center = 0
-    Top = 1
-    Bottom = 2
-    Left = 3
-    Right = 4
-    TopLeft = 5
-    TopRight = 6
-    BottomLeft = 7
-    BottomRight = 8
-sealed record BmpEncoderOptions : EncoderOptions, System.IEquatable<BmpEncoderOptions>, System.IEquatable<EncoderOptions>
-    ctor()
-    property ImageFormat Format { get; }
-    property System.Int32 BitsPerPixel { get; init; }
-static class BmpImageExtensions
-    method static System.Byte[] ToBmp(Image image, BmpEncoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsBmpAsync(Image image, System.IO.Stream stream, BmpEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsBmpAsync(Image image, System.String path, BmpEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void SaveAsBmp(Image image, System.IO.Stream stream, BmpEncoderOptions? options = null)
-    method static System.Void SaveAsBmp(Image image, System.String path, BmpEncoderOptions? options = null)
-sealed record DecoderOptions : System.IEquatable<DecoderOptions>
-    ctor()
-    property ResamplingFilter TargetResampling { get; init; }
-    property System.Boolean ApplyExifOrientation { get; init; }
-    property System.Boolean FirstFrameOnly { get; init; }
-    property System.Boolean IgnoreMetadata { get; init; }
-    property System.Boolean StrictChecksums { get; init; }
-    property System.Boolean WebPBypassFiltering { get; init; }
-    property System.Boolean WebPFancyUpsampling { get; init; }
-    property System.Double TargetReducingGap { get; init; }
-    property System.Drawing.Size? IcoPreferredSize { get; init; }
-    property System.Drawing.Size? TargetSize { get; init; }
-    property System.Int32 MaxDegreeOfParallelism { get; init; }
-    property System.Int32 MaxFrames { get; init; }
-    property System.Int32? IcoIndex { get; init; }
-    property System.Int64 MaxInputBytes { get; init; }
-    property System.Int64 MaxMetadataBytes { get; init; }
-    property System.Int64 MaxPixels { get; init; }
-    property static DecoderOptions Default { get; }
-abstract record EncoderOptions : System.IEquatable<EncoderOptions>
-    property ImageFormat Format { get; }
-    property MetadataKinds Metadata { get; init; }
 enum ExifOrientation
     Unknown = 0
     TopLeft = 1
@@ -50,139 +8,304 @@ enum ExifOrientation
     RightTop = 6
     RightBottom = 7
     LeftBottom = 8
-enum FlipMode
-    None = 0
-    Horizontal = 1
-    Vertical = 2
-enum GifDither
+sealed record PictureSharp.Formats.Bmp.BmpEncoderOptions : PictureSharp.IO.EncoderOptions, System.IEquatable<PictureSharp.Formats.Bmp.BmpEncoderOptions>, System.IEquatable<PictureSharp.IO.EncoderOptions>
+    ctor()
+    property ImageFormat Format { get; }
+    property System.Int32 BitsPerPixel { get; init; }
+static class PictureSharp.Formats.Bmp.BmpImageExtensions
+    method [Extension] static System.Byte[] ToBmp(Image image, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null)
+    method [Extension] static System.Threading.Tasks.Task SaveAsBmpAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Threading.Tasks.Task SaveAsBmpAsync(Image image, System.String path, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Void SaveAsBmp(Image image, System.IO.Stream stream, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null)
+    method [Extension] static System.Void SaveAsBmp(Image image, System.String path, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null)
+enum PictureSharp.Formats.Gif.GifDither
     None = 0
     FloydSteinberg = 1
-sealed record GifEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<GifEncoderOptions>
+sealed record PictureSharp.Formats.Gif.GifEncoderOptions : PictureSharp.IO.EncoderOptions, System.IEquatable<PictureSharp.Formats.Gif.GifEncoderOptions>, System.IEquatable<PictureSharp.IO.EncoderOptions>
     ctor()
-    property GifDither Dither { get; init; }
-    property GifQuantizer Quantizer { get; init; }
     property ImageFormat Format { get; }
+    property PictureSharp.Formats.Gif.GifDither Dither { get; init; }
+    property PictureSharp.Formats.Gif.GifQuantizer Quantizer { get; init; }
     property System.Boolean Interlace { get; init; }
     property System.Boolean OptimizeFrames { get; init; }
     property System.Boolean SaveAnimation { get; init; }
     property System.Int32 ColorCount { get; init; }
     property System.Int32 TransparencyThreshold { get; init; }
-static class GifImageExtensions
-    method static System.Byte[] ToGif(Image image, GifEncoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsGifAsync(Image image, System.IO.Stream stream, GifEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsGifAsync(Image image, System.String path, GifEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void SaveAsGif(Image image, System.IO.Stream stream, GifEncoderOptions? options = null)
-    method static System.Void SaveAsGif(Image image, System.String path, GifEncoderOptions? options = null)
-enum GifQuantizer
+static class PictureSharp.Formats.Gif.GifImageExtensions
+    method [Extension] static System.Byte[] ToGif(Image image, PictureSharp.Formats.Gif.GifEncoderOptions? options = null)
+    method [Extension] static System.Threading.Tasks.Task SaveAsGifAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.Gif.GifEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Threading.Tasks.Task SaveAsGifAsync(Image image, System.String path, PictureSharp.Formats.Gif.GifEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Void SaveAsGif(Image image, System.IO.Stream stream, PictureSharp.Formats.Gif.GifEncoderOptions? options = null)
+    method [Extension] static System.Void SaveAsGif(Image image, System.String path, PictureSharp.Formats.Gif.GifEncoderOptions? options = null)
+enum PictureSharp.Formats.Gif.GifQuantizer
     Auto = 0
     MedianCut = 1
     Octree = 2
-sealed record IcoEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<IcoEncoderOptions>
+sealed record PictureSharp.Formats.Ico.IcoDecoderOptions : System.IEquatable<PictureSharp.Formats.Ico.IcoDecoderOptions>
     ctor()
-    property IcoEncoding Encoding { get; init; }
+    property System.Drawing.Size? PreferredSize { get; init; }
+    property System.Int32? Index { get; init; }
+sealed record PictureSharp.Formats.Ico.IcoEncoderOptions : PictureSharp.IO.EncoderOptions, System.IEquatable<PictureSharp.Formats.Ico.IcoEncoderOptions>, System.IEquatable<PictureSharp.IO.EncoderOptions>
+    ctor()
     property ImageFormat Format { get; }
-enum IcoEncoding
+    property PictureSharp.Formats.Ico.IcoEncoding Encoding { get; init; }
+enum PictureSharp.Formats.Ico.IcoEncoding
     Png = 0
     Dib = 1
-sealed record IcoEntryInfo : System.IEquatable<IcoEntryInfo>
-    property IcoEncoding Encoding { get; }
+sealed record PictureSharp.Formats.Ico.IcoEntryInfo : System.IEquatable<PictureSharp.Formats.Ico.IcoEntryInfo>
+    property PictureSharp.Formats.Ico.IcoEncoding Encoding { get; }
     property System.Boolean IsSupported { get; }
     property System.Int32 BitsPerPixel { get; }
     property System.Int32 Height { get; }
     property System.Int32 Index { get; }
     property System.Int32 Width { get; }
-static class IcoFile
-    method static IcoImageCollection LoadAll(System.IO.Stream stream, DecoderOptions? options = null)
-    method static IcoImageCollection LoadAll(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
-    method static IcoImageCollection LoadAll(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
-    method static IcoImageCollection LoadAll(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
-    method static IcoImageCollection LoadAll(System.String path, DecoderOptions? options = null)
-    method static IcoImageCollection LoadAll(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
-    method static ImageInfo IdentifySelected(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
-    method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.IO.Stream stream, DecoderOptions? options = null)
-    method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
-    method static System.Collections.Generic.IReadOnlyList<IcoEntryInfo> Identify(System.String path, DecoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options = null)
-    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, IcoEncoderOptions? options, System.Threading.CancellationToken cancellationToken)
-    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options = null)
-    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, IcoEncoderOptions? options, System.Threading.CancellationToken cancellationToken)
-sealed class IcoImageCollection : System.Collections.Generic.IEnumerable<Image>, System.Collections.Generic.IReadOnlyCollection<Image>, System.Collections.Generic.IReadOnlyList<Image>, System.Collections.IEnumerable, System.IDisposable
+static class PictureSharp.Formats.Ico.IcoFile
+    method static PictureSharp.Formats.Ico.IcoImageCollection LoadAll(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options = null)
+    method static PictureSharp.Formats.Ico.IcoImageCollection LoadAll(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static PictureSharp.Formats.Ico.IcoImageCollection LoadAll(System.ReadOnlyMemory<System.Byte> data, PictureSharp.IO.DecoderOptions? options = null)
+    method static PictureSharp.Formats.Ico.IcoImageCollection LoadAll(System.ReadOnlyMemory<System.Byte> data, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static PictureSharp.Formats.Ico.IcoImageCollection LoadAll(System.String path, PictureSharp.IO.DecoderOptions? options = null)
+    method static PictureSharp.Formats.Ico.IcoImageCollection LoadAll(System.String path, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static PictureSharp.IO.ImageInfo IdentifySelected(System.ReadOnlyMemory<System.Byte> data, PictureSharp.IO.DecoderOptions? options = null)
+    method static System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.Ico.IcoEntryInfo> Identify(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options = null)
+    method static System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.Ico.IcoEntryInfo> Identify(System.ReadOnlyMemory<System.Byte> data, PictureSharp.IO.DecoderOptions? options = null)
+    method static System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.Ico.IcoEntryInfo> Identify(System.String path, PictureSharp.IO.DecoderOptions? options = null)
+    method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsync(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.IO.Stream output, PictureSharp.Formats.Ico.IcoEncoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null)
+    method static System.Void Save(System.Collections.Generic.IReadOnlyList<Image> images, System.String path, PictureSharp.Formats.Ico.IcoEncoderOptions? options, System.Threading.CancellationToken cancellationToken)
+sealed class PictureSharp.Formats.Ico.IcoImageCollection : System.Collections.Generic.IEnumerable<Image>, System.Collections.Generic.IReadOnlyCollection<Image>, System.Collections.Generic.IReadOnlyList<Image>, System.Collections.IEnumerable, System.IDisposable
     method System.Collections.Generic.IEnumerator<Image> GetEnumerator()
     method System.Void Dispose()
     property Image this[System.Int32 index] { get; }
     property System.Int32 Count { get; }
-static class IcoImageExtensions
-    method static System.Byte[] ToIco(Image image, IcoEncoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsIcoAsync(Image image, System.IO.Stream stream, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsIcoAsync(Image image, System.String path, IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void SaveAsIco(Image image, System.IO.Stream stream, IcoEncoderOptions? options = null)
-    method static System.Void SaveAsIco(Image image, System.String path, IcoEncoderOptions? options = null)
+static class PictureSharp.Formats.Ico.IcoImageExtensions
+    method [Extension] static System.Byte[] ToIco(Image image, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null)
+    method [Extension] static System.Threading.Tasks.Task SaveAsIcoAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Threading.Tasks.Task SaveAsIcoAsync(Image image, System.String path, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Void SaveAsIco(Image image, System.IO.Stream stream, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null)
+    method [Extension] static System.Void SaveAsIco(Image image, System.String path, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null)
+sealed record PictureSharp.Formats.Jpeg.JpegEncoderOptions : PictureSharp.IO.EncoderOptions, System.IEquatable<PictureSharp.Formats.Jpeg.JpegEncoderOptions>, System.IEquatable<PictureSharp.IO.EncoderOptions>
+    ctor()
+    property ImageFormat Format { get; }
+    property PictureSharp.Formats.Jpeg.JpegSubsampling Subsampling { get; init; }
+    property Rgba32 BackgroundColor { get; init; }
+    property System.Boolean OptimizeCoding { get; init; }
+    property System.Boolean Progressive { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
+    property System.Int32 Quality { get; init; }
+    property System.Int32 RestartInterval { get; init; }
+static class PictureSharp.Formats.Jpeg.JpegImageExtensions
+    method [Extension] static System.Byte[] ToJpeg(Image image, PictureSharp.Formats.Jpeg.JpegEncoderOptions? options = null)
+    method [Extension] static System.Threading.Tasks.Task SaveAsJpegAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.Jpeg.JpegEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Threading.Tasks.Task SaveAsJpegAsync(Image image, System.String path, PictureSharp.Formats.Jpeg.JpegEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Void SaveAsJpeg(Image image, System.IO.Stream stream, PictureSharp.Formats.Jpeg.JpegEncoderOptions? options = null)
+    method [Extension] static System.Void SaveAsJpeg(Image image, System.String path, PictureSharp.Formats.Jpeg.JpegEncoderOptions? options = null)
+enum PictureSharp.Formats.Jpeg.JpegSubsampling
+    Ratio444 = 0
+    Ratio422 = 1
+    Ratio420 = 2
+    Ratio440 = 3
+sealed record PictureSharp.Formats.Pcx.PcxEncoderOptions : PictureSharp.IO.EncoderOptions, System.IEquatable<PictureSharp.Formats.Pcx.PcxEncoderOptions>, System.IEquatable<PictureSharp.IO.EncoderOptions>
+    ctor()
+    property ImageFormat Format { get; }
+    property System.Int32 BitsPerPixel { get; init; }
+static class PictureSharp.Formats.Pcx.PcxImageExtensions
+    method [Extension] static System.Byte[] ToPcx(Image image, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null)
+    method [Extension] static System.Threading.Tasks.Task SaveAsPcxAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Threading.Tasks.Task SaveAsPcxAsync(Image image, System.String path, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Void SaveAsPcx(Image image, System.IO.Stream stream, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null)
+    method [Extension] static System.Void SaveAsPcx(Image image, System.String path, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null)
+enum PictureSharp.Formats.Png.PngColorType
+    Auto = 0
+    Grayscale = 1
+    GrayscaleAlpha = 2
+    Rgb = 3
+    Rgba = 4
+    Palette = 5
+sealed record PictureSharp.Formats.Png.PngDecoderOptions : System.IEquatable<PictureSharp.Formats.Png.PngDecoderOptions>
+    ctor()
+    property System.Boolean StrictChecksums { get; init; }
+sealed record PictureSharp.Formats.Png.PngEncoderOptions : PictureSharp.IO.EncoderOptions, System.IEquatable<PictureSharp.Formats.Png.PngEncoderOptions>, System.IEquatable<PictureSharp.IO.EncoderOptions>
+    ctor()
+    property ImageFormat Format { get; }
+    property PictureSharp.Formats.Png.PngColorType ColorType { get; init; }
+    property PictureSharp.Formats.Png.PngFilterStrategy FilterStrategy { get; init; }
+    property System.Boolean Interlace { get; init; }
+    property System.Boolean SaveAnimation { get; init; }
+    property System.Int32 CompressionLevel { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
+enum PictureSharp.Formats.Png.PngFilterStrategy
+    Adaptive = 0
+    None = 1
+    Sub = 2
+    Up = 3
+    Average = 4
+    Paeth = 5
+static class PictureSharp.Formats.Png.PngImageExtensions
+    method [Extension] static System.Byte[] ToPng(Image image, PictureSharp.Formats.Png.PngEncoderOptions? options = null)
+    method [Extension] static System.Threading.Tasks.Task SaveAsPngAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.Png.PngEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Threading.Tasks.Task SaveAsPngAsync(Image image, System.String path, PictureSharp.Formats.Png.PngEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Void SaveAsPng(Image image, System.IO.Stream stream, PictureSharp.Formats.Png.PngEncoderOptions? options = null)
+    method [Extension] static System.Void SaveAsPng(Image image, System.String path, PictureSharp.Formats.Png.PngEncoderOptions? options = null)
+enum PictureSharp.Formats.WebP.WebPAlphaFilter
+    None = 0
+    Fast = 1
+    Best = 2
+enum PictureSharp.Formats.WebP.WebPCompression
+    None = 0
+    Lossy = 1
+    Lossless = 2
+    Mixed = 3
+static class PictureSharp.Formats.WebP.WebPConverter
+    method static System.Void Convert(System.String inputPath, System.String outputPath, PictureSharp.Formats.WebP.WebPEncoderOptions? options = null)
+sealed record PictureSharp.Formats.WebP.WebPDecoderOptions : System.IEquatable<PictureSharp.Formats.WebP.WebPDecoderOptions>
+    ctor()
+    property System.Boolean BypassFiltering { get; init; }
+    property System.Boolean FancyUpsampling { get; init; }
+sealed record PictureSharp.Formats.WebP.WebPEncoderOptions : PictureSharp.IO.EncoderOptions, System.IEquatable<PictureSharp.Formats.WebP.WebPEncoderOptions>, System.IEquatable<PictureSharp.IO.EncoderOptions>
+    ctor()
+    property ImageFormat Format { get; }
+    property PictureSharp.Formats.WebP.WebPAlphaFilter AlphaFilter { get; init; }
+    property PictureSharp.Formats.WebP.WebPPreset Preset { get; init; }
+    property System.Boolean AllowMixed { get; init; }
+    property System.Boolean AlphaCompression { get; init; }
+    property System.Boolean AutoFilter { get; init; }
+    property System.Boolean Exact { get; init; }
+    property System.Boolean Lossless { get; init; }
+    property System.Boolean MinimizeSize { get; init; }
+    property System.Boolean UseSharpYuv { get; init; }
+    property System.Int32 AlphaQuality { get; init; }
+    property System.Int32 KeyframeMax { get; init; }
+    property System.Int32 KeyframeMin { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
+    property System.Int32 Method { get; init; }
+    property System.Int32 NearLossless { get; init; }
+    property System.Int32 Partitions { get; init; }
+    property System.Int32 Passes { get; init; }
+    property System.Int32 TargetSize { get; init; }
+    property System.Int32? FilterSharpness { get; init; }
+    property System.Int32? FilterStrength { get; init; }
+    property System.Int32? Segments { get; init; }
+    property System.Int32? SnsStrength { get; init; }
+    property System.Single Quality { get; init; }
+    property System.Single TargetPsnr { get; init; }
+static class PictureSharp.Formats.WebP.WebPImageExtensions
+    method [Extension] static System.Byte[] ToWebP(Image image, PictureSharp.Formats.WebP.WebPEncoderOptions? options = null)
+    method [Extension] static System.Threading.Tasks.Task SaveAsWebPAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.WebP.WebPEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Threading.Tasks.Task SaveAsWebPAsync(Image image, System.String path, PictureSharp.Formats.WebP.WebPEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static System.Void SaveAsWebP(Image image, System.IO.Stream stream, PictureSharp.Formats.WebP.WebPEncoderOptions? options = null)
+    method [Extension] static System.Void SaveAsWebP(Image image, System.String path, PictureSharp.Formats.WebP.WebPEncoderOptions? options = null)
+enum PictureSharp.Formats.WebP.WebPPreset
+    Default = 0
+    Picture = 1
+    Photo = 2
+    Drawing = 3
+    Icon = 4
+    Text = 5
+sealed record PictureSharp.IO.DecoderOptions : System.IEquatable<PictureSharp.IO.DecoderOptions>
+    ctor()
+    property PictureSharp.Formats.Ico.IcoDecoderOptions Ico { get; init; }
+    property PictureSharp.Formats.Png.PngDecoderOptions Png { get; init; }
+    property PictureSharp.Formats.WebP.WebPDecoderOptions WebP { get; init; }
+    property PictureSharp.Processing.ResamplingFilter TargetResampling { get; init; }
+    property System.Boolean ApplyExifOrientation { get; init; }
+    property System.Boolean FirstFrameOnly { get; init; }
+    property System.Boolean IgnoreMetadata { get; init; }
+    property System.Double TargetReducingGap { get; init; }
+    property System.Drawing.Size? TargetSize { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
+    property System.Int32 MaxFrames { get; init; }
+    property System.Int64 MaxInputBytes { get; init; }
+    property System.Int64 MaxMetadataBytes { get; init; }
+    property System.Int64 MaxPixels { get; init; }
+    property static PictureSharp.IO.DecoderOptions Default { get; }
+abstract record PictureSharp.IO.EncoderOptions : System.IEquatable<PictureSharp.IO.EncoderOptions>
+    property ImageFormat Format { get; }
+    property MetadataKinds Metadata { get; init; }
+static class PictureSharp.IO.ImageFormats
+    method static ImageFormat? DetectFormat(System.IO.Stream stream)
+    method static ImageFormat? DetectFormat(System.ReadOnlySpan<System.Byte> header)
+    method static ImageFormat? DetectFormat(System.String path)
+    method static ImageFormat? FromExtension(System.String extensionOrPath)
+    method static ImageFormat? FromMimeType(System.String mimeType)
+    method static System.Boolean CanDecode(ImageFormat format)
+    method static System.Boolean CanEncode(ImageFormat format)
+    property static System.Collections.Generic.IReadOnlyList<ImageFormat> All { get; }
+sealed record PictureSharp.IO.ImageInfo : System.IEquatable<PictureSharp.IO.ImageInfo>
+    ctor()
+    property ExifOrientation Orientation { get; init; }
+    property PictureSharp.Formats.WebP.WebPCompression WebPCompression { get; init; }
+    property System.Boolean HasAlpha { get; init; }
+    property System.Boolean IsAnimated { get; init; }
+    property System.Int32 BitsPerChannel { get; init; }
+    property System.Int32 FrameCount { get; init; }
+    property System.Single HorizontalResolution { get; init; }
+    property System.Single VerticalResolution { get; init; }
+    property required ImageFormat Format { get; init; }
+    property required System.Int32 Height { get; init; }
+    property required System.Int32 Width { get; init; }
+static class PictureSharp.IO.ImageReader
+    method [OverloadPriority(1)] static Image Load(System.ReadOnlyMemory<System.Byte> data, PictureSharp.IO.DecoderOptions? options = null)
+    method [OverloadPriority(1)] static Image Load(System.ReadOnlyMemory<System.Byte> data, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method [OverloadPriority(1)] static PictureSharp.IO.ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data)
+    method [OverloadPriority(1)] static PictureSharp.IO.ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data, PictureSharp.IO.DecoderOptions? options)
+    method static Image Load(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options = null)
+    method static Image Load(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static Image Load(System.ReadOnlySpan<System.Byte> data, PictureSharp.IO.DecoderOptions? options = null)
+    method static Image Load(System.ReadOnlySpan<System.Byte> data, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static Image Load(System.String path, PictureSharp.IO.DecoderOptions? options = null)
+    method static Image Load(System.String path, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
+    method static PictureSharp.IO.ImageInfo Identify(System.IO.Stream stream)
+    method static PictureSharp.IO.ImageInfo Identify(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options)
+    method static PictureSharp.IO.ImageInfo Identify(System.ReadOnlySpan<System.Byte> data)
+    method static PictureSharp.IO.ImageInfo Identify(System.ReadOnlySpan<System.Byte> data, PictureSharp.IO.DecoderOptions? options)
+    method static PictureSharp.IO.ImageInfo Identify(System.String path)
+    method static PictureSharp.IO.ImageInfo Identify(System.String path, PictureSharp.IO.DecoderOptions? options)
+    method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<PictureSharp.IO.ImageInfo> IdentifyAsync(System.IO.Stream stream, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<PictureSharp.IO.ImageInfo> IdentifyAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<PictureSharp.IO.ImageInfo> IdentifyAsync(System.String path, PictureSharp.IO.DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task<PictureSharp.IO.ImageInfo> IdentifyAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
+static class PictureSharp.IO.ImageWriter
+    method static System.Byte[] Encode(Image image, ImageFormat format)
+    method static System.Byte[] Encode(Image image, PictureSharp.IO.EncoderOptions options)
+    method static System.Byte[] Encode(Image image, PictureSharp.IO.EncoderOptions options, System.Threading.CancellationToken cancellationToken)
+    method static System.Threading.Tasks.Task SaveAsync(Image image, System.IO.Stream stream, ImageFormat format, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsync(Image image, System.IO.Stream stream, PictureSharp.IO.EncoderOptions options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsync(Image image, System.String path, PictureSharp.IO.EncoderOptions options, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Threading.Tasks.Task SaveAsync(Image image, System.String path, System.Threading.CancellationToken cancellationToken = default)
+    method static System.Void Save(Image image, System.IO.Stream stream, ImageFormat format)
+    method static System.Void Save(Image image, System.IO.Stream stream, PictureSharp.IO.EncoderOptions options)
+    method static System.Void Save(Image image, System.IO.Stream stream, PictureSharp.IO.EncoderOptions options, System.Threading.CancellationToken cancellationToken)
+    method static System.Void Save(Image image, System.String path)
+    method static System.Void Save(Image image, System.String path, PictureSharp.IO.EncoderOptions options)
+    method static System.Void Save(Image image, System.String path, PictureSharp.IO.EncoderOptions options, System.Threading.CancellationToken cancellationToken)
 sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height)
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
     method Image Clone()
-    method Image Clone(System.Action<ImageProcessingContext> operation)
-    method Image Clone(System.Action<ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
     method System.Boolean IsOpaque()
-    method System.Byte[] Encode(EncoderOptions options)
-    method System.Byte[] Encode(EncoderOptions options, System.Threading.CancellationToken cancellationToken)
-    method System.Byte[] Encode(ImageFormat format)
     method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
     method System.Memory<Rgba32> GetPixelMemory()
     method System.Span<Rgba32> GetPixelSpan()
     method System.Span<Rgba32> GetRowSpan(System.Int32 y)
     method System.Span<System.Byte> GetPixelByteSpan()
     method System.String ToString()
-    method System.Threading.Tasks.Task SaveAsync(System.IO.Stream stream, EncoderOptions options, System.Threading.CancellationToken cancellationToken = default)
-    method System.Threading.Tasks.Task SaveAsync(System.IO.Stream stream, ImageFormat format, System.Threading.CancellationToken cancellationToken = default)
-    method System.Threading.Tasks.Task SaveAsync(System.String path, EncoderOptions options, System.Threading.CancellationToken cancellationToken = default)
-    method System.Threading.Tasks.Task SaveAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
     method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
     method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
     method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
     method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
     method System.Void Dispose()
-    method System.Void Mutate(System.Action<ImageProcessingContext> operation)
-    method System.Void Mutate(System.Action<ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
-    method System.Void Save(System.IO.Stream stream, EncoderOptions options)
-    method System.Void Save(System.IO.Stream stream, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
-    method System.Void Save(System.IO.Stream stream, ImageFormat format)
-    method System.Void Save(System.String path)
-    method System.Void Save(System.String path, EncoderOptions options)
-    method System.Void Save(System.String path, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
+    method [OverloadPriority(1)] static Image CreateAnimation(System.TimeSpan frameDuration, params System.ReadOnlySpan<Image> frames)
     method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
-    method static Image CreateAnimation(System.TimeSpan frameDuration, params System.ReadOnlySpan<Image> frames)
-    method static Image Load(System.IO.Stream stream, DecoderOptions? options = null)
-    method static Image Load(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
-    method static Image Load(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options = null)
-    method static Image Load(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
-    method static Image Load(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options = null)
-    method static Image Load(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
-    method static Image Load(System.String path, DecoderOptions? options = null)
-    method static Image Load(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken)
     method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
     method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
-    method static ImageFormat? DetectFormat(System.IO.Stream stream)
-    method static ImageFormat? DetectFormat(System.ReadOnlySpan<System.Byte> header)
-    method static ImageFormat? DetectFormat(System.String path)
-    method static ImageInfo Identify(System.IO.Stream stream)
-    method static ImageInfo Identify(System.IO.Stream stream, DecoderOptions? options)
-    method static ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data)
-    method static ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions? options)
-    method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data)
-    method static ImageInfo Identify(System.ReadOnlySpan<System.Byte> data, DecoderOptions? options)
-    method static ImageInfo Identify(System.String path)
-    method static ImageInfo Identify(System.String path, DecoderOptions? options)
-    method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<Image> LoadAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<Image> LoadAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.IO.Stream stream, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.IO.Stream stream, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.String path, DecoderOptions? options, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task<ImageInfo> IdentifyAsync(System.String path, System.Threading.CancellationToken cancellationToken = default)
     property ImageFormat? SourceFormat { get; }
     property ImageFrameCollection Frames { get; }
     property ImageMetadata Metadata { get; }
@@ -201,10 +324,6 @@ sealed class ImageFormat : System.IEquatable<ImageFormat>
     method System.Boolean Equals(System.Object? obj)
     method System.Int32 GetHashCode()
     method System.String ToString()
-    method static ImageFormat? FromExtension(System.String extensionOrPath)
-    method static ImageFormat? FromMimeType(System.String mimeType)
-    property System.Boolean CanDecode { get; }
-    property System.Boolean CanEncode { get; }
     property System.Collections.Generic.IReadOnlyList<System.String> FileExtensions { get; }
     property System.String MimeType { get; }
     property System.String Name { get; }
@@ -215,7 +334,6 @@ sealed class ImageFormat : System.IEquatable<ImageFormat>
     property static ImageFormat Pcx { get; }
     property static ImageFormat Png { get; }
     property static ImageFormat WebP { get; }
-    property static System.Collections.Generic.IReadOnlyList<ImageFormat> All { get; }
 class ImageFormatException : System.FormatException, System.Runtime.Serialization.ISerializable
     ctor(ImageFormat? format, System.String message, System.Exception? innerException = null)
     ctor(System.String message)
@@ -244,6 +362,7 @@ sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<Image
     method Image CloneFrame(System.Int32 index)
     method Image ExportFrame(System.Int32 index)
     method ImageFrame Add(Image image, System.TimeSpan duration)
+    method ImageFrame AddClone(ImageFrame frame)
     method System.Collections.Generic.IEnumerator<ImageFrame> GetEnumerator()
     method System.Int32 IndexOf(ImageFrame frame)
     method System.Void Add(ImageFrame frame)
@@ -253,23 +372,15 @@ sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<Image
     property ImageFrame RootFrame { get; }
     property ImageFrame this[System.Int32 index] { get; }
     property System.Int32 Count { get; }
-sealed record ImageInfo : System.IEquatable<ImageInfo>
-    ctor()
-    property ExifOrientation Orientation { get; init; }
-    property ImageFormat Format { get; init; }
-    property System.Boolean HasAlpha { get; init; }
-    property System.Boolean IsAnimated { get; init; }
-    property System.Int32 BitsPerChannel { get; init; }
-    property System.Int32 FrameCount { get; init; }
-    property System.Int32 Height { get; init; }
-    property System.Int32 Width { get; init; }
-    property System.Single HorizontalResolution { get; init; }
-    property System.Single VerticalResolution { get; init; }
-    property WebPCompression WebPCompression { get; init; }
 sealed class ImageMetadata
     ctor()
     method ImageMetadata Clone()
+    method System.Boolean TrySetOrientation(ExifOrientation orientation)
+    method System.Int32 CopyBlockTo(MetadataKinds kind, System.Span<System.Byte> destination)
+    method System.Int32 GetBlockLength(MetadataKinds kind)
     method System.Void Clear()
+    method System.Void RemoveBlocks(MetadataKinds kinds)
+    method System.Void SetBlock(MetadataKinds kind, System.ReadOnlySpan<System.Byte> data)
     property ExifOrientation Orientation { get; set; }
     property System.Boolean IsEmpty { get; }
     property System.Byte[]? Exif { get; set; }
@@ -277,80 +388,12 @@ sealed class ImageMetadata
     property System.Byte[]? Xmp { get; set; }
     property System.Single HorizontalResolution { get; set; }
     property System.Single VerticalResolution { get; set; }
-readonly ref struct ImageProcessingContext
-    method ImageProcessingContext Apply(System.Action<ImageFrame> operation)
-    method ImageProcessingContext AutoOrient()
-    method ImageProcessingContext BackgroundColor(Rgba32 color)
-    method ImageProcessingContext BoxBlur(System.Single radius)
-    method ImageProcessingContext Brightness(System.Single amount)
-    method ImageProcessingContext Contrast(System.Single amount)
-    method ImageProcessingContext Crop(System.Drawing.Rectangle rectangle)
-    method ImageProcessingContext Crop(System.Int32 width, System.Int32 height, AnchorPosition position = Center)
-    method ImageProcessingContext Crop(System.Int32 x, System.Int32 y, System.Int32 width, System.Int32 height)
-    method ImageProcessingContext DrawImage(Image source, AnchorPosition position, System.Single opacity = 1)
-    method ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, System.Single opacity = 1)
-    method ImageProcessingContext Fill(Rgba32 color)
-    method ImageProcessingContext Fill(Rgba32 color, System.Drawing.Rectangle region)
-    method ImageProcessingContext Flip(FlipMode flipMode)
-    method ImageProcessingContext GaussianBlur(System.Single sigma)
-    method ImageProcessingContext Grayscale()
-    method ImageProcessingContext Invert()
-    method ImageProcessingContext MakeTransparent(Rgba32 color)
-    method ImageProcessingContext Opacity(System.Single opacity)
-    method ImageProcessingContext Pad(System.Int32 width, System.Int32 height, Rgba32 color = default, AnchorPosition position = Center)
-    method ImageProcessingContext Resize(ResizeOptions options)
-    method ImageProcessingContext Resize(System.Drawing.Size size)
-    method ImageProcessingContext Resize(System.Int32 width, System.Int32 height)
-    method ImageProcessingContext Resize(System.Int32 width, System.Int32 height, ResamplingFilter filter)
-    method ImageProcessingContext Resize(System.Int32 width, System.Int32 height, ResizeMode mode, ResamplingFilter filter = Lanczos3)
-    method ImageProcessingContext Rotate(RotateMode rotateMode)
-    method ImageProcessingContext Rotate(System.Single degrees, ResamplingFilter filter = Bicubic, Rgba32 background = default, System.Boolean expand = true)
-    method ImageProcessingContext RotateFlip(RotateMode rotateMode, FlipMode flipMode)
-    method ImageProcessingContext Saturate(System.Single amount)
-    method ImageProcessingContext Sepia()
-    method ImageProcessingContext Sharpen()
-    method ImageProcessingContext Thumbnail(System.Int32 maxWidth, System.Int32 maxHeight, ResamplingFilter filter = Lanczos3)
-    method ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Int32 threshold = 3)
-    property System.Drawing.Size Size { get; }
-    property System.Int32 FrameCount { get; }
-    property System.Threading.CancellationToken CancellationToken { get; }
-sealed record JpegEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<JpegEncoderOptions>
-    ctor()
-    property ImageFormat Format { get; }
-    property JpegSubsampling Subsampling { get; init; }
-    property Rgba32 BackgroundColor { get; init; }
-    property System.Boolean OptimizeCoding { get; init; }
-    property System.Boolean Progressive { get; init; }
-    property System.Int32 MaxDegreeOfParallelism { get; init; }
-    property System.Int32 Quality { get; init; }
-    property System.Int32 RestartInterval { get; init; }
-static class JpegImageExtensions
-    method static System.Byte[] ToJpeg(Image image, JpegEncoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsJpegAsync(Image image, System.IO.Stream stream, JpegEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsJpegAsync(Image image, System.String path, JpegEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void SaveAsJpeg(Image image, System.IO.Stream stream, JpegEncoderOptions? options = null)
-    method static System.Void SaveAsJpeg(Image image, System.String path, JpegEncoderOptions? options = null)
-enum JpegSubsampling
-    Ratio444 = 0
-    Ratio422 = 1
-    Ratio420 = 2
-    Ratio440 = 3
 [Flags] enum MetadataKinds
     None = 0
     Icc = 1
     Exif = 2
     Xmp = 4
     All = 7
-sealed record PcxEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PcxEncoderOptions>
-    ctor()
-    property ImageFormat Format { get; }
-    property System.Int32 BitsPerPixel { get; init; }
-static class PcxImageExtensions
-    method static System.Byte[] ToPcx(Image image, PcxEncoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsPcxAsync(Image image, System.IO.Stream stream, PcxEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsPcxAsync(Image image, System.String path, PcxEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void SaveAsPcx(Image image, System.IO.Stream stream, PcxEncoderOptions? options = null)
-    method static System.Void SaveAsPcx(Image image, System.String path, PcxEncoderOptions? options = null)
 enum PixelFormat
     Rgba32 = 0
     Bgra32 = 1
@@ -361,58 +404,90 @@ enum PixelFormat
     Rgba32Premultiplied = 6
     Bgra32Premultiplied = 7
 static class PixelFormatExtensions
-    method static System.Boolean HasAlpha(PixelFormat format)
-    method static System.Int32 BytesPerPixel(PixelFormat format)
-enum PngColorType
-    Auto = 0
-    Grayscale = 1
-    GrayscaleAlpha = 2
-    Rgb = 3
-    Rgba = 4
-    Palette = 5
-sealed record PngEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PngEncoderOptions>
-    ctor()
-    property ImageFormat Format { get; }
-    property PngColorType ColorType { get; init; }
-    property PngFilterStrategy FilterStrategy { get; init; }
-    property System.Boolean Interlace { get; init; }
-    property System.Boolean SaveAnimation { get; init; }
-    property System.Int32 CompressionLevel { get; init; }
-    property System.Int32 MaxDegreeOfParallelism { get; init; }
-enum PngFilterStrategy
-    Adaptive = 0
-    None = 1
-    Sub = 2
-    Up = 3
-    Average = 4
-    Paeth = 5
-static class PngImageExtensions
-    method static System.Byte[] ToPng(Image image, PngEncoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsPngAsync(Image image, System.IO.Stream stream, PngEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsPngAsync(Image image, System.String path, PngEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void SaveAsPng(Image image, System.IO.Stream stream, PngEncoderOptions? options = null)
-    method static System.Void SaveAsPng(Image image, System.String path, PngEncoderOptions? options = null)
-enum ResamplingFilter
+    method [Extension] static System.Boolean HasAlpha(PixelFormat format)
+    method [Extension] static System.Int32 BytesPerPixel(PixelFormat format)
+enum PictureSharp.Processing.AnchorPosition
+    Center = 0
+    Top = 1
+    Bottom = 2
+    Left = 3
+    Right = 4
+    TopLeft = 5
+    TopRight = 6
+    BottomLeft = 7
+    BottomRight = 8
+enum PictureSharp.Processing.FlipMode
+    None = 0
+    Horizontal = 1
+    Vertical = 2
+readonly ref struct PictureSharp.Processing.ImageProcessingContext
+    method PictureSharp.Processing.ImageProcessingContext Apply(System.Action<ImageFrame> operation)
+    method PictureSharp.Processing.ImageProcessingContext AutoOrient()
+    method PictureSharp.Processing.ImageProcessingContext BackgroundColor(Rgba32 color)
+    method PictureSharp.Processing.ImageProcessingContext BoxBlur(System.Single radius)
+    method PictureSharp.Processing.ImageProcessingContext Brightness(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext Contrast(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext Crop(System.Drawing.Rectangle rectangle)
+    method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 width, System.Int32 height, PictureSharp.Processing.AnchorPosition position = Center)
+    method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 x, System.Int32 y, System.Int32 width, System.Int32 height)
+    method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, System.Single opacity = 1)
+    method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, System.Single opacity = 1)
+    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color)
+    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color, System.Drawing.Rectangle region)
+    method PictureSharp.Processing.ImageProcessingContext Flip(PictureSharp.Processing.FlipMode flipMode)
+    method PictureSharp.Processing.ImageProcessingContext GaussianBlur(System.Single sigma)
+    method PictureSharp.Processing.ImageProcessingContext Grayscale()
+    method PictureSharp.Processing.ImageProcessingContext Invert()
+    method PictureSharp.Processing.ImageProcessingContext MakeTransparent(Rgba32 color)
+    method PictureSharp.Processing.ImageProcessingContext Opacity(System.Single opacity)
+    method PictureSharp.Processing.ImageProcessingContext Pad(System.Int32 width, System.Int32 height, Rgba32 color = default, PictureSharp.Processing.AnchorPosition position = Center)
+    method PictureSharp.Processing.ImageProcessingContext Resize(PictureSharp.Processing.ResizeOptions options)
+    method PictureSharp.Processing.ImageProcessingContext Resize(System.Drawing.Size size)
+    method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height)
+    method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height, PictureSharp.Processing.ResamplingFilter filter)
+    method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height, PictureSharp.Processing.ResizeMode mode, PictureSharp.Processing.ResamplingFilter filter = Lanczos3)
+    method PictureSharp.Processing.ImageProcessingContext Rotate(PictureSharp.Processing.RotateMode rotateMode)
+    method PictureSharp.Processing.ImageProcessingContext Rotate(System.Single degrees, PictureSharp.Processing.ResamplingFilter filter = Bicubic, Rgba32 background = default, System.Boolean expand = true)
+    method PictureSharp.Processing.ImageProcessingContext RotateFlip(PictureSharp.Processing.RotateMode rotateMode, PictureSharp.Processing.FlipMode flipMode)
+    method PictureSharp.Processing.ImageProcessingContext Saturate(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext Sepia()
+    method PictureSharp.Processing.ImageProcessingContext Sharpen()
+    method PictureSharp.Processing.ImageProcessingContext Thumbnail(System.Int32 maxWidth, System.Int32 maxHeight, PictureSharp.Processing.ResamplingFilter filter = Lanczos3)
+    method PictureSharp.Processing.ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Int32 threshold = 3)
+    property System.Drawing.Size Size { get; }
+    property System.Int32 FrameCount { get; }
+    property System.Threading.CancellationToken CancellationToken { get; }
+static class PictureSharp.Processing.ImageProcessingExtensions
+    method [Extension] static Image Clone(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation)
+    method [Extension] static Image Clone(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
+    method [Extension] static System.Void Mutate(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation)
+    method [Extension] static System.Void Mutate(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
+enum PictureSharp.Processing.ResamplingFilter
     Nearest = 0
     Bilinear = 1
     Bicubic = 2
     Lanczos3 = 3
     Box = 4
     Hamming = 5
-enum ResizeMode
+enum PictureSharp.Processing.ResizeMode
     Stretch = 0
     Max = 1
     Crop = 2
     Pad = 3
     Min = 4
-sealed record ResizeOptions : System.IEquatable<ResizeOptions>
+sealed record PictureSharp.Processing.ResizeOptions : System.IEquatable<PictureSharp.Processing.ResizeOptions>
     ctor()
-    property AnchorPosition Position { get; init; }
-    property ResamplingFilter Filter { get; init; }
-    property ResizeMode Mode { get; init; }
+    property PictureSharp.Processing.AnchorPosition Position { get; init; }
+    property PictureSharp.Processing.ResamplingFilter Filter { get; init; }
+    property PictureSharp.Processing.ResizeMode Mode { get; init; }
     property Rgba32 PadColor { get; init; }
     property System.Boolean AllowUpscale { get; init; }
-    property System.Drawing.Size Size { get; init; }
+    property required System.Drawing.Size Size { get; init; }
+enum PictureSharp.Processing.RotateMode
+    None = 0
+    Rotate90 = 90
+    Rotate180 = 180
+    Rotate270 = 270
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32>
     ctor(System.Byte r, System.Byte g, System.Byte b, System.Byte a = 255)
     field System.Byte A
@@ -444,59 +519,3 @@ struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpa
     property static Rgba32 Black { get; }
     property static Rgba32 Transparent { get; }
     property static Rgba32 White { get; }
-enum RotateMode
-    None = 0
-    Rotate90 = 90
-    Rotate180 = 180
-    Rotate270 = 270
-enum WebPAlphaFilter
-    None = 0
-    Fast = 1
-    Best = 2
-enum WebPCompression
-    None = 0
-    Lossy = 1
-    Lossless = 2
-    Mixed = 3
-static class WebPConverter
-    method static System.Void Convert(System.String inputPath, System.String outputPath, WebPEncoderOptions? options = null)
-sealed record WebPEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<WebPEncoderOptions>
-    ctor()
-    property ImageFormat Format { get; }
-    property System.Boolean AllowMixed { get; init; }
-    property System.Boolean AlphaCompression { get; init; }
-    property System.Boolean AutoFilter { get; init; }
-    property System.Boolean Exact { get; init; }
-    property System.Boolean Lossless { get; init; }
-    property System.Boolean MinimizeSize { get; init; }
-    property System.Boolean UseSharpYuv { get; init; }
-    property System.Int32 AlphaQuality { get; init; }
-    property System.Int32 KeyframeMax { get; init; }
-    property System.Int32 KeyframeMin { get; init; }
-    property System.Int32 MaxDegreeOfParallelism { get; init; }
-    property System.Int32 Method { get; init; }
-    property System.Int32 NearLossless { get; init; }
-    property System.Int32 Partitions { get; init; }
-    property System.Int32 Passes { get; init; }
-    property System.Int32 TargetSize { get; init; }
-    property System.Int32? FilterSharpness { get; init; }
-    property System.Int32? FilterStrength { get; init; }
-    property System.Int32? Segments { get; init; }
-    property System.Int32? SnsStrength { get; init; }
-    property System.Single Quality { get; init; }
-    property System.Single TargetPsnr { get; init; }
-    property WebPAlphaFilter AlphaFilter { get; init; }
-    property WebPPreset Preset { get; init; }
-static class WebPImageExtensions
-    method static System.Byte[] ToWebP(Image image, WebPEncoderOptions? options = null)
-    method static System.Threading.Tasks.Task SaveAsWebPAsync(Image image, System.IO.Stream stream, WebPEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Threading.Tasks.Task SaveAsWebPAsync(Image image, System.String path, WebPEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
-    method static System.Void SaveAsWebP(Image image, System.IO.Stream stream, WebPEncoderOptions? options = null)
-    method static System.Void SaveAsWebP(Image image, System.String path, WebPEncoderOptions? options = null)
-enum WebPPreset
-    Default = 0
-    Picture = 1
-    Photo = 2
-    Drawing = 3
-    Icon = 4
-    Text = 5

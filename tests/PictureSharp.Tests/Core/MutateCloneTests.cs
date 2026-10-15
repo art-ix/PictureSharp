@@ -1,4 +1,9 @@
 using System.Drawing;
+using PictureSharp.Formats.Bmp;
+using PictureSharp.Formats.Png;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
+using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Core;
 
@@ -146,7 +151,10 @@ public class MutateCloneTests
         using Image img = ImageTests.Pattern(10, 4);
         using Image result = img.Clone(x => x.Resize(new ResizeOptions
         {
-            Size = new(6, 8), Mode = ResizeMode.Crop, Position = AnchorPosition.Right, AllowUpscale = false,
+            Size = new(6, 8),
+            Mode = ResizeMode.Crop,
+            Position = AnchorPosition.Right,
+            AllowUpscale = false,
         }));
         Assert.Equal(new Size(6, 4), result.Size);
         Assert.Equal(img[4, 0], result[0, 0]);
@@ -159,7 +167,10 @@ public class MutateCloneTests
         using Image img = new(4, 2, Color.Red);
         using Image result = img.Clone(x => x.Resize(new ResizeOptions
         {
-            Size = new(8, 6), Mode = ResizeMode.Pad, PadColor = Color.White, AllowUpscale = false,
+            Size = new(8, 6),
+            Mode = ResizeMode.Pad,
+            PadColor = Color.White,
+            AllowUpscale = false,
         }));
         Assert.Equal(new Size(8, 6), result.Size);
         Assert.Equal(Rgba32.White, result[1, 2]);
@@ -273,20 +284,20 @@ public class MutateCloneTests
     {
         using Image img = ImageTests.Pattern(5, 4);
         byte[] png = img.ToPng();
-        using Image fromArray = Image.Load(png);
-        using Image fromSpan = Image.Load(png.AsSpan());
-        using Image fromStream = Image.Load(new MemoryStream(png));
+        using Image fromArray = ImageReader.Load(png);
+        using Image fromSpan = ImageReader.Load(png.AsSpan());
+        using Image fromStream = ImageReader.Load(new MemoryStream(png));
         Assert.Equal(ImageFormat.Png, fromArray.SourceFormat);
         Assert.Equal(Pixels(fromArray), Pixels(fromSpan));
         Assert.Equal(Pixels(fromArray), Pixels(fromStream));
-        Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
+        Assert.Equal(ImageFormat.Png, ImageFormats.DetectFormat(png));
 
         using var stream = new MemoryStream();
         img.SaveAsWebP(stream, new() { Lossless = true, Exact = true });
         stream.Position = 0;
-        Assert.Equal(ImageFormat.WebP, Image.DetectFormat(stream));
+        Assert.Equal(ImageFormat.WebP, ImageFormats.DetectFormat(stream));
         Assert.Equal(0, stream.Position);
-        using Image webp = Image.Load(stream);
+        using Image webp = ImageReader.Load(stream);
         Assert.Equal(Pixels(img), Pixels(webp));
     }
 
@@ -300,14 +311,14 @@ public class MutateCloneTests
             using Image img = ImageTests.Pattern(6, 3);
             string png = Path.Combine(dir, "a.png");
             string webp = Path.Combine(dir, "a.webp");
-            await img.SaveAsync(png);
+            await ImageWriter.SaveAsync(img, png);
             await img.SaveAsWebPAsync(webp, new() { Lossless = true, Exact = true });
-            Assert.Equal(ImageFormat.Png, Image.DetectFormat(png));
-            ImageInfo info = await Image.IdentifyAsync(webp);
+            Assert.Equal(ImageFormat.Png, ImageFormats.DetectFormat(png));
+            ImageInfo info = await ImageReader.IdentifyAsync(webp);
             Assert.Equal((6, 3), (info.Width, info.Height));
-            using Image back = await Image.LoadAsync(webp);
+            using Image back = await ImageReader.LoadAsync(webp);
             Assert.Equal(Pixels(img), Pixels(back));
-            using Image limited = await Image.LoadAsync(png, new DecoderOptions { FirstFrameOnly = true });
+            using Image limited = await ImageReader.LoadAsync(png, new DecoderOptions { FirstFrameOnly = true });
             Assert.Equal(Pixels(img), Pixels(limited));
         }
         finally

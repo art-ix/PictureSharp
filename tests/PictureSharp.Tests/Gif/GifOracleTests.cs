@@ -1,4 +1,7 @@
 using System.Runtime.InteropServices;
+using PictureSharp.Formats.Gif;
+using PictureSharp.Formats.WebP;
+using PictureSharp.IO;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Gif;
@@ -21,15 +24,15 @@ public class GifOracleTests
     {
         foreach (string file in Directory.GetFiles(Path.Combine(Corpus.CorpusDir, "webp", "anim")).Order(StringComparer.Ordinal))
         {
-            yield return (Path.GetFileName(file), Image.Load(file));
+            yield return (Path.GetFileName(file), ImageReader.Load(file));
         }
 
         foreach (string key in Corpus.References.Keys.Where(k => k.StartsWith("gif/", StringComparison.Ordinal)).Order(StringComparer.Ordinal))
         {
-            yield return (key, Image.Load(Corpus.PathOf(key)));
+            yield return (key, ImageReader.Load(Corpus.PathOf(key)));
         }
 
-        yield return ("photo_alpha", Image.Load(Corpus.PathOf("src/photo_alpha.png")));
+        yield return ("photo_alpha", ImageReader.Load(Corpus.PathOf("src/photo_alpha.png")));
         yield return ("many_colors", QuantizationTests.ManyColors());
     }
 
@@ -58,7 +61,7 @@ public class GifOracleTests
                         byte[] gif = image.ToGif(options);
                         string path = Path.Combine(directory, "out.gif");
                         File.WriteAllBytes(path, gif);
-                        using Image ours = Image.Load(gif);
+                        using Image ours = ImageReader.Load(gif);
                         byte[][] expected = ours.Frames.Select(f => MemoryMarshal.AsBytes(f.GetPixelSpan()).ToArray()).ToArray();
 
                         List<byte[]>? dumped = ReferenceTools.AnimDump(path);
@@ -112,9 +115,9 @@ public class GifOracleTests
                     continue;   // gif2webp rejects files PictureSharp reads tolerantly
                 }
 
-                PictureSharp.WebPConverter.Convert(Corpus.PathOf(key), actualPath);
-                using Image expected = Image.Load(expectedPath);
-                using Image actual = Image.Load(actualPath);
+                PictureSharp.Formats.WebP.WebPConverter.Convert(Corpus.PathOf(key), actualPath);
+                using Image expected = ImageReader.Load(expectedPath);
+                using Image actual = ImageReader.Load(actualPath);
                 Assert.Equal(expected.FrameCount, actual.FrameCount);
                 Assert.Equal(expected.LoopCount, actual.LoopCount);
                 Assert.Equal(expected.AnimationBackgroundColor, actual.AnimationBackgroundColor);
@@ -132,8 +135,8 @@ public class GifOracleTests
                 }
 
                 // The lossless WebP converts back to the same GIF frames.
-                using Image gif = Image.Load(Corpus.PathOf(key));
-                using Image back = Image.Load(actual.ToGif());
+                using Image gif = ImageReader.Load(Corpus.PathOf(key));
+                using Image back = ImageReader.Load(actual.ToGif());
                 Assert.Equal(actual.FrameCount, back.FrameCount);
                 Assert.Equal(actual.LoopCount, back.LoopCount);
                 for (int i = 0; i < back.FrameCount; i++)
@@ -168,12 +171,12 @@ public class GifOracleTests
         {
             foreach (string file in Directory.GetFiles(Path.Combine(Corpus.CorpusDir, "webp", "anim")))
             {
-                using Image source = Image.Load(file);
+                using Image source = ImageReader.Load(file);
                 string gifPath = Path.Combine(directory, "ours.gif"), webpPath = Path.Combine(directory, "ours.webp");
                 File.WriteAllBytes(gifPath, source.ToGif());
                 Assert.True(ReferenceTools.Run("gif2webp", $"-quiet \"{gifPath}\" -o \"{webpPath}\"", out string error) == 0, error);
-                using Image gif = Image.Load(gifPath);
-                using Image webp = Image.Load(webpPath);
+                using Image gif = ImageReader.Load(gifPath);
+                using Image webp = ImageReader.Load(webpPath);
                 Assert.Equal(gif.FrameCount, webp.FrameCount);
                 Assert.Equal(gif.LoopCount, webp.LoopCount);
                 for (int i = 0; i < gif.FrameCount; i++)

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using PictureSharp.Algorithms.Processing;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Core;
@@ -31,19 +32,19 @@ public class ResizeSimdTests
     {
         var rng = new Random(50);
         foreach (int inWidth in new[] { 1, 3, 17, 200 })
-        foreach (int outWidth in new[] { 1, 5, 64, 333 })
-        foreach (int ksize in new[] { 1, 3, 7, 19 })
-        {
-            var row = new byte[inWidth * 4];
-            rng.NextBytes(row);
-            (_, int[] bounds, int[] kk) = Coefficients(rng, inWidth, outWidth, ksize);
-            var scalar = new Rgba32[outWidth];
-            var simd = new Rgba32[outWidth];
-            Resizer.HorizontalRowScalar(row, scalar, ksize, bounds, kk, 0);
-            int done = Resizer.HorizontalRowSimd(row, simd, ksize, bounds, kk);
-            Resizer.HorizontalRowScalar(row, simd, ksize, bounds, kk, done);
-            Assert.Equal(scalar, simd);
-        }
+            foreach (int outWidth in new[] { 1, 5, 64, 333 })
+                foreach (int ksize in new[] { 1, 3, 7, 19 })
+                {
+                    var row = new byte[inWidth * 4];
+                    rng.NextBytes(row);
+                    (_, int[] bounds, int[] kk) = Coefficients(rng, inWidth, outWidth, ksize);
+                    var scalar = new Rgba32[outWidth];
+                    var simd = new Rgba32[outWidth];
+                    Resizer.HorizontalRowScalar(row, scalar, ksize, bounds, kk, 0);
+                    int done = Resizer.HorizontalRowSimd(row, simd, ksize, bounds, kk);
+                    Resizer.HorizontalRowScalar(row, simd, ksize, bounds, kk, done);
+                    Assert.Equal(scalar, simd);
+                }
     }
 
     [Fact]
@@ -51,19 +52,19 @@ public class ResizeSimdTests
     {
         var rng = new Random(51);
         foreach (int width in new[] { 1, 3, 4, 5, 8, 33, 250 })
-        foreach (int taps in new[] { 1, 2, 5, 13 })
-        {
-            int stride = width * 4;
-            var rows = new byte[stride * taps];
-            rng.NextBytes(rows);
-            int[] k = Enumerable.Range(0, taps).Select(_ => rng.Next(-(1 << 21), 1 << 22)).ToArray();
-            var scalar = new byte[stride];
-            var simd = new byte[stride];
-            Resizer.VerticalRowScalar(rows, stride, k, scalar, 0);
-            int done = Resizer.VerticalRowSimd(rows, stride, k, simd);
-            Resizer.VerticalRowScalar(rows, stride, k, simd, done);
-            Assert.Equal(scalar, simd);
-        }
+            foreach (int taps in new[] { 1, 2, 5, 13 })
+            {
+                int stride = width * 4;
+                var rows = new byte[stride * taps];
+                rng.NextBytes(rows);
+                int[] k = Enumerable.Range(0, taps).Select(_ => rng.Next(-(1 << 21), 1 << 22)).ToArray();
+                var scalar = new byte[stride];
+                var simd = new byte[stride];
+                Resizer.VerticalRowScalar(rows, stride, k, scalar, 0);
+                int done = Resizer.VerticalRowSimd(rows, stride, k, simd);
+                Resizer.VerticalRowScalar(rows, stride, k, simd, done);
+                Assert.Equal(scalar, simd);
+            }
     }
 
     [Fact]

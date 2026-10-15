@@ -1,4 +1,6 @@
 using BenchmarkDotNet.Attributes;
+using PictureSharp.Formats.Ico;
+using PictureSharp.IO;
 
 namespace PictureSharp.Benchmarks;
 
@@ -41,7 +43,7 @@ public class IcoBenchmarks
     [Benchmark]
     public int Decode()
     {
-        using Image image = Image.Load(_encoded);
+        using Image image = ImageReader.Load(_encoded);
         return image.Width;
     }
 }

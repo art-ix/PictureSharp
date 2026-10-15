@@ -1,8 +1,9 @@
-using PictureSharp.Formats.Png;
-using PictureSharp.Formats.WebP;
-using PictureSharp.Formats.WebP.Alpha;
-using PictureSharp.Formats.WebP.Lossless;
-using PictureSharp.Internal;
+using PictureSharp.Infrastructure.Codecs.Png;
+using PictureSharp.Infrastructure.Codecs.WebP;
+using PictureSharp.Infrastructure.Codecs.WebP.Alpha;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
+using PictureSharp.Primitives.Numerics;
+using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.WebP;
 
@@ -30,15 +31,15 @@ public class LosslessSimdTests
     {
         var rng = new Random(3);
         foreach (sbyte greenToRed in Sweep)
-        foreach (sbyte greenToBlue in Anchors)
-        foreach (sbyte redToBlue in Anchors)
-        {
-            uint[] scalar = RandomPixels(rng, 24);
-            uint[] simd = (uint[])scalar.Clone();
-            LosslessTransforms.TransformColorScalar(greenToRed, greenToBlue, redToBlue, scalar);
-            LosslessTransforms.TransformColor(greenToRed, greenToBlue, redToBlue, simd);
-            Assert.Equal(scalar, simd);
-        }
+            foreach (sbyte greenToBlue in Anchors)
+                foreach (sbyte redToBlue in Anchors)
+                {
+                    uint[] scalar = RandomPixels(rng, 24);
+                    uint[] simd = (uint[])scalar.Clone();
+                    LosslessTransforms.TransformColorScalar(greenToRed, greenToBlue, redToBlue, scalar);
+                    LosslessTransforms.TransformColor(greenToRed, greenToBlue, redToBlue, simd);
+                    Assert.Equal(scalar, simd);
+                }
     }
 
     [Fact]
@@ -46,15 +47,15 @@ public class LosslessSimdTests
     {
         var rng = new Random(4);
         foreach (sbyte greenToRed in Sweep)
-        foreach (sbyte greenToBlue in Anchors)
-        foreach (sbyte redToBlue in Anchors)
-        {
-            uint[] scalar = RandomPixels(rng, 24);
-            uint[] simd = (uint[])scalar.Clone();
-            LosslessTransforms.TransformColorInverseScalar(greenToRed, greenToBlue, redToBlue, scalar);
-            LosslessTransforms.TransformColorInverse(greenToRed, greenToBlue, redToBlue, simd);
-            Assert.Equal(scalar, simd);
-        }
+            foreach (sbyte greenToBlue in Anchors)
+                foreach (sbyte redToBlue in Anchors)
+                {
+                    uint[] scalar = RandomPixels(rng, 24);
+                    uint[] simd = (uint[])scalar.Clone();
+                    LosslessTransforms.TransformColorInverseScalar(greenToRed, greenToBlue, redToBlue, scalar);
+                    LosslessTransforms.TransformColorInverse(greenToRed, greenToBlue, redToBlue, simd);
+                    Assert.Equal(scalar, simd);
+                }
     }
 
     [Fact]
@@ -64,16 +65,16 @@ public class LosslessSimdTests
         int[] widths = [1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 511, 512, 513];
         int[] heights = [1, 2, 3, 8];
         foreach (int width in widths)
-        foreach (int height in heights)
-        foreach (int bits in Enumerable.Range(0, 10))
-        {
-            for (int mode = 0; mode < 16; mode++)
-            {
-                AssertPredictor(rng, width, height, bits, mode);
-            }
+            foreach (int height in heights)
+                foreach (int bits in Enumerable.Range(0, 10))
+                {
+                    for (int mode = 0; mode < 16; mode++)
+                    {
+                        AssertPredictor(rng, width, height, bits, mode);
+                    }
 
-            AssertPredictor(rng, width, height, bits, mode: -1);
-        }
+                    AssertPredictor(rng, width, height, bits, mode: -1);
+                }
 
         AssertPredictor(rng, 320, 6, 3, mode: -1);
         foreach (int bits in Enumerable.Range(2, 8))
@@ -101,36 +102,36 @@ public class LosslessSimdTests
     {
         const int width = 33;
         foreach (int bits in new[] { 2, 3, 5 })
-        foreach (int x in new[] { 1, 4, 5, 8, 9, 16, 17, 31, 32 })
-        {
-            uint[] desired = new uint[width * 2];
-            Array.Fill(desired, 0x12345678u);
-            desired[x - 1] = Repeat(topLeft);
-            desired[x] = Repeat(top);
-            // At the right edge top-right wraps to the reconstructed first pixel of this row.
-            desired[x == width - 1 ? width : x + 1] = Repeat(topRight);
-            desired[width + x - 1] = Repeat(left);
-            desired[width + x] = Repeat(expected);
-            uint[] encoded = new uint[desired.Length];
-            encoded[0] = LosslessTransforms.SubPixels(desired[0], WebPConstants.ArgbBlack);
-            for (int i = 1; i < width; i++)
+            foreach (int x in new[] { 1, 4, 5, 8, 9, 16, 17, 31, 32 })
             {
-                encoded[i] = LosslessTransforms.SubPixels(desired[i], desired[i - 1]);
-            }
+                uint[] desired = new uint[width * 2];
+                Array.Fill(desired, 0x12345678u);
+                desired[x - 1] = Repeat(topLeft);
+                desired[x] = Repeat(top);
+                // At the right edge top-right wraps to the reconstructed first pixel of this row.
+                desired[x == width - 1 ? width : x + 1] = Repeat(topRight);
+                desired[width + x - 1] = Repeat(left);
+                desired[width + x] = Repeat(expected);
+                uint[] encoded = new uint[desired.Length];
+                encoded[0] = LosslessTransforms.SubPixels(desired[0], WebPConstants.ArgbBlack);
+                for (int i = 1; i < width; i++)
+                {
+                    encoded[i] = LosslessTransforms.SubPixels(desired[i], desired[i - 1]);
+                }
 
-            encoded[width] = LosslessTransforms.SubPixels(desired[width], desired[0]);
-            for (int i = width + 1; i < desired.Length; i++)
-            {
-                encoded[i] = LosslessTransforms.SubPixels(desired[i], LosslessTransforms.Predict(mode, desired, i, width));
-            }
+                encoded[width] = LosslessTransforms.SubPixels(desired[width], desired[0]);
+                for (int i = width + 1; i < desired.Length; i++)
+                {
+                    encoded[i] = LosslessTransforms.SubPixels(desired[i], LosslessTransforms.Predict(mode, desired, i, width));
+                }
 
-            Assert.Equal(Repeat(residual), encoded[width + x]);
-            uint[] modes = new uint[Vp8LDecoder.SubSampleSize(width, bits) * Vp8LDecoder.SubSampleSize(2, bits)];
-            Array.Fill(modes, WebPConstants.ArgbBlack | (uint)(mode << 8));
-            var transform = new Vp8LTransform { XSize = width, YSize = 2, Bits = bits, Data = modes };
-            LosslessTransforms.PredictorInverseTransform(transform, encoded);
-            Assert.Equal(desired, encoded);
-        }
+                Assert.Equal(Repeat(residual), encoded[width + x]);
+                uint[] modes = new uint[Vp8LDecoder.SubSampleSize(width, bits) * Vp8LDecoder.SubSampleSize(2, bits)];
+                Array.Fill(modes, WebPConstants.ArgbBlack | (uint)(mode << 8));
+                var transform = new Vp8LTransform { XSize = width, YSize = 2, Bits = bits, Data = modes };
+                LosslessTransforms.PredictorInverseTransform(transform, encoded);
+                Assert.Equal(desired, encoded);
+            }
 
         static uint Repeat(byte value) => value * 0x01010101u;
     }
@@ -140,20 +141,20 @@ public class LosslessSimdTests
     {
         var rng = new Random(11);
         foreach (int length in new[] { 0, 1, 3, 4, 5, 6, 7, 9, 12, 15, 17, 31 })
-        foreach (sbyte greenToRed in Anchors)
-        foreach (sbyte greenToBlue in Anchors)
-        foreach (sbyte redToBlue in Anchors)
-        {
-            uint[] pixels = RandomPixels(rng, length);
-            uint[] forwardScalar = (uint[])pixels.Clone(), forwardSimd = (uint[])pixels.Clone();
-            LosslessTransforms.TransformColorScalar(greenToRed, greenToBlue, redToBlue, forwardScalar);
-            LosslessTransforms.TransformColor(greenToRed, greenToBlue, redToBlue, forwardSimd);
-            Assert.Equal(forwardScalar, forwardSimd);
-            uint[] inverseScalar = (uint[])pixels.Clone(), inverseSimd = (uint[])pixels.Clone();
-            LosslessTransforms.TransformColorInverseScalar(greenToRed, greenToBlue, redToBlue, inverseScalar);
-            LosslessTransforms.TransformColorInverse(greenToRed, greenToBlue, redToBlue, inverseSimd);
-            Assert.Equal(inverseScalar, inverseSimd);
-        }
+            foreach (sbyte greenToRed in Anchors)
+                foreach (sbyte greenToBlue in Anchors)
+                    foreach (sbyte redToBlue in Anchors)
+                    {
+                        uint[] pixels = RandomPixels(rng, length);
+                        uint[] forwardScalar = (uint[])pixels.Clone(), forwardSimd = (uint[])pixels.Clone();
+                        LosslessTransforms.TransformColorScalar(greenToRed, greenToBlue, redToBlue, forwardScalar);
+                        LosslessTransforms.TransformColor(greenToRed, greenToBlue, redToBlue, forwardSimd);
+                        Assert.Equal(forwardScalar, forwardSimd);
+                        uint[] inverseScalar = (uint[])pixels.Clone(), inverseSimd = (uint[])pixels.Clone();
+                        LosslessTransforms.TransformColorInverseScalar(greenToRed, greenToBlue, redToBlue, inverseScalar);
+                        LosslessTransforms.TransformColorInverse(greenToRed, greenToBlue, redToBlue, inverseSimd);
+                        Assert.Equal(inverseScalar, inverseSimd);
+                    }
     }
 
     [Fact]
@@ -175,23 +176,23 @@ public class LosslessSimdTests
     {
         var rng = new Random(7);
         foreach (int bpp in new[] { 1, 2, 3, 4, 6, 8 })
-        foreach (int width in new[] { 1, 2, 3, 4, 5, 7, 8, 15, 16, 17, 31, 32 })
-        foreach (int filter in new[] { 0, 1, 2, 3, 4 })
-        {
-            int rowBytes = width * bpp;
-            int height = 3;
-            byte[] scalar = new byte[(rowBytes + 1) * height];
-            rng.NextBytes(scalar);
-            for (int y = 0; y < height; y++)
-            {
-                scalar[y * (rowBytes + 1)] = (byte)filter;
-            }
+            foreach (int width in new[] { 1, 2, 3, 4, 5, 7, 8, 15, 16, 17, 31, 32 })
+                foreach (int filter in new[] { 0, 1, 2, 3, 4 })
+                {
+                    int rowBytes = width * bpp;
+                    int height = 3;
+                    byte[] scalar = new byte[(rowBytes + 1) * height];
+                    rng.NextBytes(scalar);
+                    for (int y = 0; y < height; y++)
+                    {
+                        scalar[y * (rowBytes + 1)] = (byte)filter;
+                    }
 
-            byte[] simd = (byte[])scalar.Clone();
-            PngDecoder.UnfilterScalar(scalar, 0, width, height, bpp * 8);
-            PngDecoder.Unfilter(simd, 0, width, height, bpp * 8);
-            Assert.Equal(scalar, simd);
-        }
+                    byte[] simd = (byte[])scalar.Clone();
+                    PngDecoder.UnfilterScalar(scalar, 0, width, height, bpp * 8);
+                    PngDecoder.Unfilter(simd, 0, width, height, bpp * 8);
+                    Assert.Equal(scalar, simd);
+                }
     }
 
     [Fact]
@@ -199,15 +200,15 @@ public class LosslessSimdTests
     {
         var rng = new Random(8);
         foreach (AlphaFilterType filter in new[] { AlphaFilterType.None, AlphaFilterType.Horizontal, AlphaFilterType.Vertical, AlphaFilterType.Gradient })
-        foreach (int width in new[] { 1, 2, 3, 7, 8, 15, 16, 17, 31, 32, 33 })
-        {
-            byte[] scalar = new byte[width * 4];
-            rng.NextBytes(scalar);
-            byte[] simd = (byte[])scalar.Clone();
-            AlphaDecoder.UnfilterScalar(filter, scalar, width, 4);
-            AlphaDecoder.Unfilter(filter, simd, width, 4);
-            Assert.Equal(scalar, simd);
-        }
+            foreach (int width in new[] { 1, 2, 3, 7, 8, 15, 16, 17, 31, 32, 33 })
+            {
+                byte[] scalar = new byte[width * 4];
+                rng.NextBytes(scalar);
+                byte[] simd = (byte[])scalar.Clone();
+                AlphaDecoder.UnfilterScalar(filter, scalar, width, 4);
+                AlphaDecoder.Unfilter(filter, simd, width, 4);
+                Assert.Equal(scalar, simd);
+            }
     }
 
     [Fact]

@@ -354,7 +354,7 @@ The graphic z6 result is effectively unchanged: the small slowdown was not repea
 For the large inputs, batch-2 10th–90th percentile intervals were 51.78–57.71 → 46.69–53.36 ms
 and 202.62–208.37 → 188.65–198.58 ms. Corpus allocations were exactly unchanged; large-input
 allocations stayed approximately 21.6 / 92.7 MiB, with less than 256 bytes of per-call measurement noise.
-These are full `Image.Load` API measurements from memory, not a comparison against native process time.
+These are full `ImageReader.Load` API measurements from memory, not a comparison against native process time.
 
 A separate default-JIT batch measured 49.19 → 45.34 ms (7.8%) and 187.63 → 169.17 ms (9.8%)
 for the two large inputs. On the seven corpus inputs, changes ranged from a 0.4% slowdown to a
@@ -406,7 +406,7 @@ These are transform timings, not complete image decoding timings. In particular,
 
 ### Complete decoding
 
-The before/after comparison used a saved copy of the initial 0.4.2 working-tree library, including its pre-existing changes, and the same encoded bytes after adding the new predictors. The large inputs are lossless WebP files generated once from a local photograph, with `Exact=true`, method 4 and quality 75. They are not committed. Each batch used eight warmups and 21 measured calls to `Image.Load` from a byte array, with default tiered compilation. The table shows medians from two independent batches:
+The before/after comparison used a saved copy of the initial 0.4.2 working-tree library, including its pre-existing changes, and the same encoded bytes after adding the new predictors. The large inputs are lossless WebP files generated once from a local photograph, with `Exact=true`, method 4 and quality 75. They are not committed. Each batch used eight warmups and 21 measured calls to `ImageReader.Load` from a byte array, with default tiered compilation. The table shows medians from two independent batches:
 
 | Image | Before, batches 1 / 2 | After, batches 1 / 2 | Reduction |
 | --- | ---: | ---: | ---: |
@@ -603,3 +603,15 @@ Linux peak resident set (`VmHWM`) after reading the input and warming up on a sm
   `Load` + `Thumbnail`; gap 1 decodes at 1/2 and saves 45–60% of the peak.
 - No SIMD path was added: the reduced IDCTs are short scalar loops that do not appear in the profile next to entropy
   decoding. The full-size path is unchanged (bit-exact references, same timings).
+
+## Layered architecture refactoring (2026-10-15)
+
+The post-0.5.4 refactoring was compared against `ca427ea` over all 80 existing matrix cases. Two pinned full sweeps per version, in ABBA order, had a median per-case change of −0.79%; three aggregates above +5% were checked in a longer, alternating same-process comparison and did not reproduce (−1.43% to +0.85%). No confirmed repeatable regression exceeded 5%; allocation differences were below 0.3%. These are lightweight regression measurements, not a full BenchmarkDotNet statistical study or a claimed speedup. See [method and verification](refactoring-verification.md) and [raw matrix](architecture-benchmarks.csv).
+
+The complete current-tree regression probe can be run with:
+
+```bash
+taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- matrix-probe /tmp/picturesharp-matrix.json
+```
+
+It uses the existing `MatrixBenchmarks` setup, operations and cleanup, with seven ≥120 ms samples per case. Use the standard BenchmarkDotNet modes above for deeper investigation.

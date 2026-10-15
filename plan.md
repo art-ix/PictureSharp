@@ -2,9 +2,9 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.5.4. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.5.5. Fazy 0–10, obsługa ICO, kontrola zasobów i anulowanie oraz miniatury JPEG ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Dalsze wydania poniżej są planowane; ich zakres nie oznacza istniejącej funkcjonalności.
 
-PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `SaveAs*`.
+PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `ImageReader.Load` / `Mutate` / `Clone` / `SaveAs*`.
 
 Do 0.7.0 dodajemy odczyt i zapis ICO oraz rozwijamy sześć obszarów: miniatury przy dekodowaniu, kontrolę zasobów, sekwencyjne animacje, zarządzanie kolorem, metadane i operacje graficzne. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL) pozostają poza tym planem.
 
@@ -12,8 +12,8 @@ Szczegóły istniejącego API i ograniczeń: `README.md`, `docs/`, XML docs oraz
 
 ## Zasady obowiązujące we wszystkich wydaniach
 
-- `net10.0`, `LangVersion=14.0`, nullable, warnings as errors i XML docs. Publiczne API w przestrzeni `PictureSharp`; kodeki i szczegóły implementacji są `internal`.
-- Biblioteka używa wyłącznie BCL: bez `PackageReference`, P/Invoke, `unsafe` oraz `System.IO.Compression`. Deflate/inflate pochodzi z `Compression/`. `System.Drawing.Primitives` jest dozwolone.
+- `net10.0`, `LangVersion=14.0`, nullable, warnings as errors i XML docs. Publiczne API w `PictureSharp`, `PictureSharp.IO`, `PictureSharp.Processing` i `PictureSharp.Formats.<Format>`; implementacja jest `internal`.
+- Biblioteka używa wyłącznie BCL: bez `PackageReference`, P/Invoke, `unsafe` oraz `System.IO.Compression`. Deflate/inflate pochodzi z `Algorithms/Compression/`. `System.Drawing.Primitives` jest dozwolone.
 - `Image` i `ImageFrame` przechowują `Rgba32` z prostą alfą. Bufory robocze z `ArrayPool<T>`, piksele z `GC.AllocateUninitializedArray`; gorące pętle bez alokacji.
 - Zachowujemy dotychczasowe wyniki i domyślne zachowanie. Nowe przekształcenia obrazu wymagają jawnej opcji. Ewentualne nowe domyślne limity zasobów muszą być opisane jako zmiana zachowania.
 - Uszkodzone dane: `ImageFormatException`; poprawne, nieobsługiwane warianty: `NotSupportedException`. Anulowanie: `OperationCanceledException`. Błędy I/O zachowują właściwy typ. Żadne złośliwe wejście nie może powodować niekontrolowanych wyjątków indeksowania lub przepełnienia.
@@ -21,6 +21,14 @@ Szczegóły istniejącego API i ograniczeń: `README.md`, `docs/`, XML docs oraz
 - Najpierw poprawna wersja skalarna. SIMD x64/ARM64 i równoległość dodajemy po pomiarach; wyniki muszą być identyczne ze skalarem i niezależne od liczby wątków.
 - Testy, benchmarki i wyrocznie mogą używać zewnętrznych pakietów. Pobieranie zewnętrznych korpusów wymaga zgody użytkownika. Prywatne zdjęcia pozostają lokalne.
 - Commit, push i publikacja wyłącznie na polecenie użytkownika. `VERSION` zmieniamy przy przygotowaniu wydania, nie przy rozpoczęciu etapu.
+
+## Przebudowa architektury — wydanie 0.5.5
+
+Zatwierdzony zakres: jeden projekt i pakiet, czysty model obrazu, wydzielone operacje I/O i przetwarzania, funkcjonalne namespace, migracja API bez fasady zgodności. Szczegóły: [architektura](docs/architecture.md) i [migracja](docs/migration-layered-api.md).
+
+DoD: build Release bez ostrzeżeń; testy regresji i dostępne Oracle; testy zależności IL i braku cykli warstw; nowa migawka API; pomiary istniejącej macierzy przed/po; pakiet NuGet i konsument trimming/Native AOT. Zmiana nie dodaje funkcjonalności kolejnych wydań. Wydanie 0.5.5 obejmuje te zmiany i celowo łamie zgodność API z 0.5.4; migracja jest opisana w przewodniku.
+
+Weryfikacja linux-x64: build bez ostrzeżeń, 5081/5081 Release, 150/150 Oracle, 113/113 testów SIMD bez intrinsics, poprawne pakowanie oraz konsumenci trimming/Native AOT (także z lokalnej paczki). Macierz 80 przypadków: brak potwierdzonej powtarzalnej regresji >5%. ARM64 wymaga osobnego wykonania. [Pełne wyniki](docs/refactoring-verification.md).
 
 ## Ukończona baza: 0.5.0
 
@@ -39,6 +47,7 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.5.2 | Zmiana nazwy RasterSharp → PictureSharp | Ukończona — opublikowana |
 | 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Ukończona — opublikowana |
 | 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Ukończona — opublikowana |
+| 0.5.5 | Warstwy, model domenowy, własność buforów i API C# 14 | Ukończona — wydanie 0.5.5 |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Planowana — następny etap |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
@@ -53,7 +62,7 @@ Zakres:
 - Zarejestrować ICO w `CodecRegistry`: detektor, dekoder, enkoder, `ImageFormat.Ico`, opcje w `Formats/Ico/` i rozszerzenia `SaveAsIco` / `ToIco`, także zapis async. Obsługa w `Identify`, CLI i dokumentacji.
 - Odczytywać kontener z pojedynczymi lub wieloma wariantami: osadzony PNG oraz nieskompresowany DIB z paletą 1/4/8-bit i truecolor 24/32-bit. Wykorzystać istniejące kodeki i wspólne helpery, uwzględniając specyfikę DIB w ICO.
 - Poprawnie interpretować maskę AND, kanał alfa 32-bit, padding wierszy i orientację rastera. Jawnie ustalić regułę dla starszych ikon z zerowym kanałem alfa oraz sprzeczności maski i alfy.
-- `Image.Load` zwraca jeden wybrany wariant, domyślnie największy obsługiwany, z deterministycznym rozstrzyganiem remisów; umożliwić wybór indeksu lub preferowanego rozmiaru. `Identify` opisuje ten sam wybór. Ikona nie jest animacją.
+- `ImageReader.Load` zwraca jeden wybrany wariant, domyślnie największy obsługiwany, z deterministycznym rozstrzyganiem remisów; umożliwić wybór indeksu lub preferowanego rozmiaru. `Identify` opisuje ten sam wybór. Ikona nie jest animacją.
 - Osobne API do listowania wariantów (rozmiar, głębia, sposób kodowania), odczytu wybranego wariantu i zapisu kolekcji obrazów o różnych rozmiarach. Nie wykorzystywać `Image.Frames` jako kolekcji wariantów ICO; przed implementacją ustalić własność i zwalnianie obrazów.
 - Zapis pojedynczego obrazu i zestawu wariantów 1–256 px w każdej osi; tryb PNG oraz DIB 32-bit z maską AND. Generowanie typowych rozmiarów ikon przez jawnie wybrany resize. Nie kwantyzować kolorów bez żądania użytkownika.
 - Sprawdzać katalog, offsety, długości, wymiary i rozmiary alokacji przed dekodem, także wewnątrz osadzonego PNG/DIB. `MaxPixels` obejmuje wybrany obraz, a przy ładowaniu kolekcji sumę ładowanych wariantów. Uszkodzone dane nie mogą być po cichu pomijane jako nieobsługiwane.
@@ -211,3 +220,10 @@ dotnet build -c Release
 dotnet test -c Release
 dotnet test -c Release --filter Category=Oracle
 ```
+
+## Wzmocnienie domeny i C# 14 — zakończone lokalnie (2026-10-15)
+
+- ImageDimensions, atomowe zatwierdzanie wspólnego płótna przez Image, kontrolowana własność, nieujemne czasy klatek i spójne Dispose.
+- Migawki metadanych i jawna edycja orientacji; grupy opcji i wspólne budżety zagnieżdżonych dekoderów; wewnętrzne kontrakty sesji bez implementacji kodeków sekwencyjnych.
+- Testy reguł domeny, kontraktów kodeków i sesji, wywołań IL oraz kompilacji konsumenta C# 14. CI push/PR i bramka przed publikacją z wyroczniami i konsumentem pakietu trim/AOT.
+- DoD lokalne: Release 0 ostrzeżeń/błędów, 5134/5134, Oracle 150/150, scalar 113/113; paczka i isolated-cache konsument z pełnym trimmingiem oraz Native AOT linux-x64. Macierz 80 przypadków ABBA i 10 naprzemiennych kontroli nie potwierdziła regresji >5%; dokumentacja w docs/ddd-verification.md. ARM64 i zdalny GitHub CI niesprawdzone. Wydanie 0.5.5 przygotowane na polecenie użytkownika. Kodeki sekwencyjne pozostają częścią 0.6.0.

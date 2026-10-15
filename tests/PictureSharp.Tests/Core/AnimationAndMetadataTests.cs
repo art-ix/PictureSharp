@@ -1,4 +1,5 @@
-using PictureSharp.Formats.Metadata;
+using PictureSharp.Domain.Metadata;
+using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Core;
 

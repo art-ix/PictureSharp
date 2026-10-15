@@ -1,4 +1,7 @@
-using PictureSharp.Formats.WebP.Lossy;
+using PictureSharp.Algorithms.ColorConversion;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossy;
+using PictureSharp.Primitives.Numerics;
+using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.WebP;
 
@@ -136,20 +139,25 @@ public class YuvToRgbSimdTests
     {
         var rng = new Random(fancy ? 7 : 8);
         foreach (int width in new[] { 1, 2, 15, 16, 17, 18, 31, 33, 34, 35, 64, 67 })
-        foreach (int height in new[] { 1, 2, 3, 4, 9 })
-        {
-            int uvWidth = (width + 1) / 2, uvHeight = (height + 1) / 2;
-            var frame = new PictureSharp.Formats.WebP.Lossy.Vp8Frame
+            foreach (int height in new[] { 1, 2, 3, 4, 9 })
             {
-                Width = width, Height = height, YStride = width + 3, UvStride = uvWidth + 1,
-                Y = Fill(rng, (width + 3) * height), U = Fill(rng, (uvWidth + 1) * uvHeight), V = Fill(rng, (uvWidth + 1) * uvHeight),
-            };
-            var expected = new Rgba32[width * height];
-            var actual = new Rgba32[width * height];
-            PictureSharp.Formats.WebP.ColorConversion.YuvToRgb.Convert(frame, expected, fancy, allowSimd: false);
-            PictureSharp.Formats.WebP.ColorConversion.YuvToRgb.Convert(frame, actual, fancy, allowSimd: true);
-            Assert.Equal(expected, actual);
-        }
+                int uvWidth = (width + 1) / 2, uvHeight = (height + 1) / 2;
+                var frame = new PictureSharp.Algorithms.ColorConversion.Yuv420Frame
+                {
+                    Width = width,
+                    Height = height,
+                    YStride = width + 3,
+                    UvStride = uvWidth + 1,
+                    Y = Fill(rng, (width + 3) * height),
+                    U = Fill(rng, (uvWidth + 1) * uvHeight),
+                    V = Fill(rng, (uvWidth + 1) * uvHeight),
+                };
+                var expected = new Rgba32[width * height];
+                var actual = new Rgba32[width * height];
+                PictureSharp.Algorithms.ColorConversion.YuvToRgb.Convert(frame, expected, fancy, allowSimd: false);
+                PictureSharp.Algorithms.ColorConversion.YuvToRgb.Convert(frame, actual, fancy, allowSimd: true);
+                Assert.Equal(expected, actual);
+            }
     }
 
     private static byte[] Fill(Random rng, int length)

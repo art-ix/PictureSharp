@@ -1,0 +1,61 @@
+name: Validate
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  managed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build -c Release
+      - run: dotnet test -c Release --no-build --filter "Category!=Local&Category!=External&Category!=Oracle"
+      - name: Scalar fallbacks
+        run: dotnet test -c Release --no-build --filter "FullyQualifiedName~SimdTests"
+        env:
+          DOTNET_EnableHWIntrinsic: 0
+
+  oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install reference prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libgif-dev libpng-dev libjpeg-dev imagemagick
+          python -m pip install Pillow==10.2.0 numpy==1.26.4
+      - run: bash scripts/build-webp-reference.sh
+      - name: Require reference tools
+        run: |
+          test -x reference/libwebp-1.6.0-build/cwebp
+          test -x reference/libwebp-1.6.0-build/dwebp
+          test -x reference/libwebp-1.6.0-build/gif2webp
+          test -x reference/libwebp-1.6.0-build/anim_dump
+          python -c 'import numpy; from PIL import Image, features; assert Image.__version__ == "10.2.0"; assert features.check("webp")'
+      - run: dotnet test -c Release --filter "Category=Oracle"
+
+  package-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+      - name: Package, trim and compile Native AOT consumer
+        run: bash scripts/verify-package-consumer.sh
