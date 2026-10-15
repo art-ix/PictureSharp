@@ -1,0 +1,37 @@
+[
+  {
+    "File": "photo.png",
+    "Operation": "JpegEncode",
+    "BaselineNs": 388104.525862069,
+    "CurrentNs": 401323.16258351895,
+    "TimeChangePercent": 3.4059475838598807
+  },
+  {
+    "File": "photo.png",
+    "Operation": "GifEncode",
+    "BaselineNs": 79396766.66666667,
+    "CurrentNs": 80633033.33333333,
+    "TimeChangePercent": 1.5570743225059802
+  },
+  {
+    "File": "photo_alpha.png",
+    "Operation": "ResizeLanczosHalf",
+    "BaselineNs": 274630.48780487804,
+    "CurrentNs": 275951.1485451761,
+    "TimeChangePercent": 0.48088642701473727
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "WebPLosslessDecode",
+    "BaselineNs": 2479569.8630136987,
+    "CurrentNs": 2472428.7671232875,
+    "TimeChangePercent": -0.28799736587101776
+  },
+  {
+    "File": "graphic.png#8x",
+    "Operation": "PcxDecode",
+    "BaselineNs": 5819829.0322580645,
+    "CurrentNs": 5765996.875,
+    "TimeChangePercent": -0.9249783277083257
+  }
+]

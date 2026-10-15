@@ -8,7 +8,7 @@ Callers start from `Image` with one `using PictureSharp;`: `Image.Load`, `Image.
 
 `Image` owns its frames and pixel buffers. `ImageFrameCollection` enforces frame dimensions and ownership; metadata and pixel layouts are model concepts. Animations contain full-canvas frames of a common size. ICO variants are independent images held by an owning `IcoImageCollection`, not animation frames.
 
-The model has no codec registry, filesystem access or processing orchestration. `Clone()` makes a deep copy; fluent `Clone(operation)` belongs to the processing API and preserves the existing copy-on-write optimization. Pure pixel conversion and the minimal EXIF value reader/patcher belong to the model because pixel layout and metadata orientation are model behavior. This EXIF helper performs no I/O. Codec metadata selection belongs to infrastructure.
+The model has no codec registry, filesystem access or processing orchestration. `Clone()` makes a deep copy; fluent `Clone(operation)` belongs to the processing API and preserves the existing copy-on-write optimization. Pure pixel conversion and the typed EXIF reader/editor belong to the model because pixel layout and metadata orientation are model behavior. The EXIF parser and editor perform no I/O. Codec metadata selection belongs to infrastructure.
 
 | Folder | Responsibility | Allowed dependencies |
 | --- | --- | --- |
@@ -70,3 +70,16 @@ enables a temporary file through the output port. Application owns the temporary
 operations remain in infrastructure. Aborting a path writer removes its partial file. Caller streams remain open.
 
 Use C# 14 `field` for local property validation and `extension` blocks for facade operations. Keep required invariants as model methods, mutable models as classes, immutable options as records and small internal values as readonly structs. C# 14 span overload resolution is verified by compiling a consumer with the actual SDK compiler. See [extension guide](extending-picturesharp.md).
+
+## Metadata-only operations
+
+`Image.ReadMetadata` and `Image.EditMetadata` use an application metadata service and the internal
+`IImageMetadataCodec` port registered per built-in format. JPEG, PNG/APNG and WebP implementations rewrite
+containers while copying compressed image/animation data unchanged. No pixel decoder or image encoder is invoked;
+an architecture test guards this boundary. Compression is used only for PNG metadata. Existing Identify behavior
+is unchanged. The output adapter owns temporary-file creation and atomic replacement in the destination directory.
+
+`ImageMetadata.ExifProfile` owns no independent copy of the EXIF state. The domain TIFF parser validates directory
+graphs and values lazily; an edit prepares a complete replacement block before publication. Unknown retained data
+keeps its original absolute offsets. Explicit allowlisting rebuilds only selected known fields, and GPS removal
+scrubs the known directory and values rather than just removing a pointer.

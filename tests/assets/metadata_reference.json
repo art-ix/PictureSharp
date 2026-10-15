@@ -1,0 +1,54 @@
+{
+  "little": {
+    "make": "PictureSharp Synthetic",
+    "model": "Test Camera",
+    "orientation": 6,
+    "dpi": [
+      300.0,
+      240.0
+    ],
+    "date": "2026:10:15 12:34:56",
+    "captured": "2026:10:14 10:20:30",
+    "iso": 400,
+    "exposure": 0.008,
+    "aperture": 2.8,
+    "focalLength": 50.0,
+    "latitude": [
+      52.0,
+      14.0,
+      30.0
+    ],
+    "longitude": [
+      21.0,
+      0.0,
+      45.0
+    ],
+    "altitude": 61.5
+  },
+  "big": {
+    "make": "PictureSharp Synthetic",
+    "model": "Test Camera",
+    "orientation": 6,
+    "dpi": [
+      300.0,
+      240.0
+    ],
+    "date": "2026:10:15 12:34:56",
+    "captured": "2026:10:14 10:20:30",
+    "iso": 400,
+    "exposure": 0.008,
+    "aperture": 2.8,
+    "focalLength": 50.0,
+    "latitude": [
+      52.0,
+      14.0,
+      30.0
+    ],
+    "longitude": [
+      21.0,
+      0.0,
+      45.0
+    ],
+    "altitude": 61.5
+  }
+}

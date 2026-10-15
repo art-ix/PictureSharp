@@ -8,5 +8,6 @@ internal interface ICodecResolver
     IImageFormatDetector? GetDetector(ImageFormat format);
     IImageDecoder? GetDecoder(ImageFormat format);
     IImageEncoder? GetEncoder(ImageFormat format);
+    IImageMetadataCodec? GetMetadataCodec(ImageFormat format);
     IImageDecoder GetDecoderFor(ReadOnlySpan<byte> data);
 }

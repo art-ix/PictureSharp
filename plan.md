@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.6.0. Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG oraz sekwencyjne animacje ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Kolejnym etapem implementacji jest 0.6.1. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja kodu: 0.6.1 (lokalnie; ostatnia opublikowana: 0.6.0). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG oraz sekwencyjne animacje ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** 0.6.1 jest zaimplementowana, zweryfikowana i przygotowana jako wersja lokalna; kolejnym etapem implementacji jest 0.6.2. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
@@ -51,7 +51,7 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.5.6 | API skupione na `Image`, `ImageConfiguration`, wtyczki formatów i procesory ramek | Ukończona — opublikowana |
 | 0.5.7 | Porządki w testach: duplikaty, mniejsze macierze, kategoria `Slow`, migracja na TUnit | Ukończona — wydanie 0.5.7 |
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Ukończona — wydanie 0.6.0 |
-| 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Planowana |
+| 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Ukończona — wersja 0.6.1 lokalnie |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Planowana |
 | 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Planowana |
 | 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Planowana |
@@ -205,6 +205,20 @@ DoD:
 - Testy EXIF little-/big-endian, niepoprawnych offsetów, cyklicznych IFD, brakujących pól i dużych bloków.
 - Dla edycji bez rekompresji identyczne payloady danych skompresowanego obrazu i identyczne piksele/klatki; poprawne metadane potwierdzone niezależnym narzędziem.
 - Usuwanie GPS sprawdzone na syntetycznych fixture'ach; oryginalny plik pozostaje poprawny po anulowaniu lub błędzie zapisu.
+
+Weryfikacja 2026-10-15: `Image.ReadMetadata` / `EditMetadata` (ścieżki, strumienie, pamięć, async I/O),
+`ImageMetadata.ExifProfile`, typowane `ExifTag<T>` i dokładne `ExifRational`. Odczyt/zapis obsługiwanych tagów,
+allowlista i fizyczne usuwanie znanych danych GPS; nieznane dane i offsety EXIF zachowane, nieudane edycje atomowe.
+JPEG (także progressive), PNG/APNG i WebP przepisywane bez dekodowania/rekompresji obrazu; testy porównują
+skompresowane payloady oraz piksele i klatki. JPEG MPF/MPO i extended XMP jawnie nieobsługiwane. Pliki zastępowane
+atomowo po sukcesie, wejścia non-seekable, limity i anulowanie zweryfikowane. Szczegóły API: `docs/metadata.md`.
+
+Build Release bez ostrzeżeń; 4708/4708 pełnych testów (0 pominiętych), w tym 155 Oracle; 113/113 SIMD bez intrinsics.
+Migawka API zawiera wyłącznie dodatki, konsument C# 14, trimming i Native AOT linux-x64 poprawne. Macierz 80 przypadków
+względem 0.6.0: mediana czasu +0,74%, maks. wzrost alokacji +0,66%; pięć podejrzanych wyników potwierdzonych
+naprzemiennie w jednym procesie, żadnej powtarzalnej regresji >5%. Pomiary nowego API i dane surowe w
+`docs/performance.md`. VERSION 0.6.1, notatki `docs/release-0.6.1.md`; przygotowany lokalny commit na polecenie użytkownika, bez pusha i publikacji. ARM64 wymaga osobnego wykonania;
+nie dodano nowych ścieżek SIMD.
 
 ## 0.6.2 — zarządzanie kolorem i światło liniowe
 

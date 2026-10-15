@@ -2,6 +2,9 @@ namespace PictureSharp.Application.Abstractions;
 
 internal interface IImageOutput
 {
+    void WriteAtomicFile(string path, byte[] data, CancellationToken cancellationToken);
+    Task WriteAtomicFileAsync(string path, byte[] data, CancellationToken cancellationToken);
+
     void WriteFile(string path, byte[] data);
     Task WriteFileAsync(string path, byte[] data, CancellationToken cancellationToken);
 

@@ -9,6 +9,9 @@ public sealed class ImageMetadata
     private byte[]? _icc;
     private byte[]? _xmp;
 
+    /// <summary>The live typed EXIF view; an absent block behaves as an empty profile.</summary>
+    public ExifProfile ExifProfile => field ??= new(this);
+
     /// <summary>Horizontal resolution in dots per inch. Default: 96.</summary>
     public float HorizontalResolution
     {

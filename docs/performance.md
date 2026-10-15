@@ -673,3 +673,38 @@ of at least 180 ms after warmup: `photo.png` WebP lossless encoding +1.62%, loss
 regression above 5% was confirmed. These are lightweight regression probes, not a full BenchmarkDotNet study.
 [Raw before/after and confirmation results](sequences-benchmarks.csv). The final forward-reader allocation hardening
 affects only the new sequential path; existing `Image.Load` operations in this matrix use the same measured code.
+
+## Metadata without image recompression (0.6.1 implementation)
+
+The metadata probe uses the committed synthetic `src/photo.png` (256×192), encoded once as JPEG, PNG and lossless
+WebP with a synthetic EXIF profile. `ReadMetadata` inspects the container; `EditMetadata` removes EXIF GPS;
+`DecodeEncode` performs `Load`, the same edit and normal encoding. Measurements use memory input/output, warmed
+buffers, CPUs 0–7 and medians of seven samples of at least 150 ms. Times and allocations exclude file I/O.
+
+| Format | Read metadata µs | Edit metadata µs | Load + edit + encode µs | Edit allocated KiB | Load + edit + encode allocated KiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| JPEG | 6.34 | 22.02 | 939.84 | 43.09 | 303.60 |
+| PNG | 3.07 | 41.26 | 5765.44 | 111.05 | 868.68 |
+| Lossless WebP | 0.18 | 25.70 | 26046.40 | 103.32 | 809.53 |
+
+These are small synthetic inputs, not guarantees for arbitrary images. JPEG inspection scans entropy-coded data
+for marker boundaries; WebP can skip whole image chunks. Metadata-only output uses pooled segments and one final
+owned array. No pixel buffers are allocated. Input files are still read in full and output is staged in memory;
+large encoded inputs and large metadata therefore still need proportional memory. Compressed PNG metadata may be
+inflated and deflated, while image IDAT/fdAT data stays unchanged. Allocations above are cumulative, not peak RSS.
+
+[Raw metadata measurements](metadata-benchmarks.json). Reproduce with:
+
+```bash
+dotnet build -c Release benchmarks/PictureSharp.Benchmarks
+taskset -c 0-7 dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll metadata-probe /tmp/metadata-results.json
+```
+
+The frozen 80-case complete-operation matrix was compared with release 0.6.0 (`78eba60`), one sweep per version,
+seven samples of at least 120 ms, CPUs 0–7. Median time change: +0.74%; largest allocation increase: +0.66%.
+Five cases above +5% were checked in separate AssemblyLoadContexts in one process with alternating order,
+15 samples per version of at least 180 ms. Confirmed changes: JPEG encode +3.41%, GIF encode +1.56%, Lanczos
+resize +0.48%, large WebP lossless decode −0.29%, large PCX decode −0.92%. No repeatable regression above 5%
+was confirmed. The existing codecs and processing algorithms were not changed. This is a lightweight probe,
+not a full BenchmarkDotNet study. [Raw matrix](metadata-regression.csv),
+[alternating confirmations](metadata-regression-confirmation.json).

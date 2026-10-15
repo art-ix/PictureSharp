@@ -15,6 +15,7 @@ PictureSharp reads and writes WebP, PNG, JPEG, BMP, GIF, PCX and ICO and process
 - Raw pixel access and conversion to BGRA/RGB/gray buffers for interop
 - SIMD on x64 (SSE2–AVX2) and ARM64 (AdvSimd/NEON), bit-identical to the scalar code
 - ICC, EXIF and XMP metadata preserved where the output format supports them
+- Typed EXIF and metadata editing without image recompression in source version 0.6.1
 - Limits for untrusted input (encoded size, pixels, frames, metadata) and cancellation of decoding, encoding and processing
 - Extensible: format plugins, per-call or application-wide format configurations, custom frame processors
 
@@ -50,6 +51,12 @@ PictureSharp 0.6.0 adds `Image.OpenFrameReaderAsync` and `Image.CreateFrameWrite
 to process GIF, APNG and WebP one frame at a time. See
 [streaming ownership, output capabilities and examples](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md#sequential-reading-and-writing-060).
 
+Source version **0.6.1** adds `Image.ReadMetadata`, `Image.EditMetadata` and typed `ExifProfile` / `ExifTag<T>`.
+JPEG, PNG/APNG and WebP edits preserve compressed image data byte for byte and replace output files atomically.
+This version is prepared locally; the latest published package remains 0.6.0. See the
+[0.6.1 notes](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.6.1.md) and
+[metadata guide](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md).
+
 ## Documentation
 
 The library is not yet stable: public API may still change between 0.x releases. See also the [architecture](https://github.com/art-ix/PictureSharp/blob/main/docs/architecture.md).
@@ -62,7 +69,7 @@ The library is not yet stable: public API may still change between 0.x releases.
 - [Image processing](https://github.com/art-ix/PictureSharp/blob/main/docs/image-processing.md): resize modes, geometry, color, filters, compositing, custom operations
 - [Pixels and interop](https://github.com/art-ix/PictureSharp/blob/main/docs/pixels-and-interop.md): pixel access, pixel formats, WPF/SkiaSharp/WinForms, frame pixel access and conversion
 - [Animation](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md): frames, durations, animated WebP, APNG and GIF, GIF ↔ WebP conversion
-- [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md): resolution, ICC/EXIF/XMP and orientation
+- [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md): resolution, typed EXIF, ICC/XMP and metadata editing without recompression
 - [Extending PictureSharp](https://github.com/art-ix/PictureSharp/blob/main/docs/extending-picturesharp.md): format plugins, `ImageConfiguration`, custom frame processors and shortcuts
 - [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md): `info`, `convert`, `resize`, `thumbnail`, `decode` and `icon`
 - [Development](https://github.com/art-ix/PictureSharp/blob/main/docs/development.md): building, tests, reference tools and oracles
@@ -75,7 +82,7 @@ dotnet build -c Release
 dotnet test -c Release
 ```
 
-Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (current release **0.6.0**: sequential GIF, APNG and WebP frame readers and writers, bounded animation memory, non-seekable streams, limits and cancellation). See the [0.6.0 release notes](https://github.com/art-ix/PictureSharp/blob/v0.6.0/docs/release-0.6.0.md).
+Reference `src/PictureSharp/PictureSharp.csproj` from your application to use a source checkout. Implementation phases and their completion criteria are in [plan.md](https://github.com/art-ix/PictureSharp/blob/main/plan.md); the library is in development (source version **0.6.1**, latest published release **0.6.0**). See the [0.6.1 notes](https://github.com/art-ix/PictureSharp/blob/main/docs/release-0.6.1.md).
 
 ## License
 

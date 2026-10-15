@@ -90,6 +90,39 @@ public class ConsumerCompilationTests
     }
 
     [Test]
+    public async Task MetadataConsumer_InfersTypedTagsAndSpanOverloads()
+    {
+        const string source = """
+            using System;
+            using PictureSharp;
+            public static class Consumer
+            {
+                public static void Check(byte[] bytes, ReadOnlySpan<byte> span)
+                {
+                    var metadata = Image.ReadMetadata(bytes);
+                    _ = Image.ReadMetadata(span);
+                    if (metadata.ExifProfile.TryGetValue(ExifTag.Model, out var model)) Console.WriteLine(model.Length);
+                    metadata.ExifProfile.SetValue(ExifTag.DateTimeOriginal, new DateTime(2026, 1, 1));
+                    metadata.ExifProfile.SetValue(ExifTag.ExposureTime, new ExifRational(1, 125));
+                    metadata.ExifProfile.SetValue(ExifTag.GPSLatitude, [new(52, 1), new(14, 1), new(0, 1)]);
+                    metadata.ExifProfile.KeepOnly(ExifTag.Model, ExifTag.DateTimeOriginal);
+                    _ = Image.EditMetadata(bytes, m => m.ExifProfile.RemoveGps());
+                    _ = Image.EditMetadata(span, m => m.Clear());
+                }
+            }
+            """;
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
+        CSharpCompilation compilation = CSharpCompilation.Create("MetadataConsumer", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        Diagnostic[] errors = compilation.GetDiagnostics().Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning).ToArray();
+        await Assert.That(errors).IsEmpty().Because(string.Join(Environment.NewLine, errors.Select(e => e.ToString())));
+        SemanticModel model = compilation.GetSemanticModel(tree);
+        await Assert.That(FirstParameter(model, tree, "Image.ReadMetadata(bytes)")).IsEqualTo("System.ReadOnlyMemory<byte>");
+        await Assert.That(FirstParameter(model, tree, "Image.ReadMetadata(span)")).IsEqualTo("System.ReadOnlySpan<byte>");
+        await Assert.That(FirstParameter(model, tree, "Image.EditMetadata(bytes, m => m.ExifProfile.RemoveGps())")).IsEqualTo("System.ReadOnlyMemory<byte>");
+    }
+
+    [Test]
     public async Task ReadmeQuickStart_CompilesWithOnlyThePictureSharpUsing()
     {
         string readme = File.ReadAllText(Path.Combine(Corpus.Assets, "..", "..", "README.md"));

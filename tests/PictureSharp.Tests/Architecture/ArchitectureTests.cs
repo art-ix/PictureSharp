@@ -138,11 +138,37 @@ public class ArchitectureTests
     }
 
     [Test]
+    public async Task MetadataEditing_HasNoPixelDecodeOrEncodeCalls()
+    {
+        Type[] pipeline = Library.GetTypes().Where(t => t.Name.EndsWith("MetadataCodec", StringComparison.Ordinal)
+            || t.FullName == "PictureSharp.Application.Metadata.ImageMetadataService").ToArray();
+        await Assert.That(pipeline.Length >= 4).IsTrue();
+        foreach (Type type in pipeline)
+        foreach (MethodBase method in DeclaredMethods(type))
+        foreach (MemberInfo target in UsedMembers(method))
+        {
+            bool pixelOperation = target is MethodInfo called && called.Name is "Decode" or "Encode" or "Load" or "Save"
+                && called.DeclaringType?.Assembly == Library;
+            await Assert.That(pixelOperation).IsFalse().Because($"{type.Name}.{method.Name} calls {target.DeclaringType?.Name}.{target.Name}");
+        }
+    }
+
+    [Test]
     public async Task SourceClassifier_HandlesRecordsBlockNamespacesAndAttributes()
     {
         var syntax = CSharpSyntaxTree.ParseText("namespace A { [System.Serializable] internal record R<T>(T Value); namespace B { public enum E { A } } }").GetRoot();
         var names = syntax.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(t => t.Identifier.ValueText).ToArray();
         await Assert.That(names).IsEquivalentTo(new[] { "R", "E" }, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task SourceClassifier_HandlesOpenConstructedGenericTypes()
+    {
+        var layers = await SourceLayers();
+        Type parameter = typeof(ExifProfile).GetMethod(nameof(ExifProfile.TryGetValue))!.GetGenericArguments()[0];
+        Type constructed = typeof(ExifTag<>).MakeGenericType(parameter);
+        await Assert.That(constructed.FullName).IsNull();
+        await Assert.That(Layer(constructed, layers)).IsEqualTo("Domain");
     }
 
     [Test]
@@ -294,6 +320,7 @@ public class ArchitectureTests
         while (type.HasElementType) type = type.GetElementType()!;
         if (type.IsGenericParameter) return "Primitives";
         while (type.DeclaringType is { } parent) type = parent;
+        if (type.IsGenericType) type = type.GetGenericTypeDefinition();
         string name = type.FullName!.Split('`')[0];
         // Constant data emitted by the compiler has no source declaration and no outward dependencies.
         if (name == "<PrivateImplementationDetails>" || (type.Namespace is null && name.StartsWith("<>", StringComparison.Ordinal))) return "Primitives";

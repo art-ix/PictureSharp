@@ -16,6 +16,8 @@ internal sealed record FormatRegistration(
     /// <summary>Largest signature a plugin may request; format detection reads this many bytes from files and streams.</summary>
     public const int MaxModuleHeaderSize = 4096;
 
+    public IImageMetadataCodec? MetadataCodec { get; init; }
+
     public ImageFormat Format => Detector.Format;
 
     /// <summary>Validates a plugin and snapshots its members, so later changes to the module object have no effect.</summary>

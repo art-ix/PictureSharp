@@ -41,6 +41,22 @@ public sealed class DocsExamplesTests : IDisposable
     private string P(string name) => Path.Combine(_dir, name);
 
     [Test]
+    public async Task Metadata_TypedTagsAndEditingWithoutRecompression()
+    {
+        ImageMetadata metadata = Image.ReadMetadata(P("photo.jpg"));
+        metadata.ExifProfile.SetValue(ExifTag.Model, "Camera");
+        metadata.ExifProfile.SetValue(ExifTag.ExposureTime, new ExifRational(1, 125));
+        metadata.ExifProfile.SetValue(ExifTag.DateTimeOriginal, new DateTime(2026, 10, 15, 12, 0, 0));
+        Image.EditMetadata(P("photo.jpg"), P("edited.jpg"), m => m.Exif = metadata.Exif);
+        var read = Image.ReadMetadata(P("edited.jpg"));
+        await Assert.That(read.ExifProfile.TryGetValue(ExifTag.Model, out var model)).IsTrue();
+        await Assert.That(model).IsEqualTo("Camera");
+        Image.EditMetadata(P("edited.jpg"), P("share.jpg"), m => m.ExifProfile.RemoveGps());
+        await Image.EditMetadataAsync(P("share.jpg"), P("share.jpg"), m => m.Clear());
+        await Assert.That((await Image.ReadMetadataAsync(P("share.jpg"))).IsEmpty).IsTrue();
+    }
+
+    [Test]
     public async Task Ico_IconsAndVariantOwnership()
     {
         using Image source = Image.Load(P("logo.png"));

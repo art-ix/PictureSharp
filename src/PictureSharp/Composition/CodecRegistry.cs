@@ -15,9 +15,9 @@ internal static class CodecRegistry
     /// <summary>The built-in formats in detection order.</summary>
     public static FormatRegistration[] BuiltIn() =>
     [
-        new(WebPFormatDetector.Instance, static _ => WebPDecoder.Instance, static _ => WebPEncoder.Instance),
-        new(PngFormatDetector.Instance, static _ => PngDecoder.Instance, static _ => PngEncoder.Instance),
-        new(JpegFormatDetector.Instance, static _ => JpegDecoder.Instance, static _ => JpegEncoder.Instance),
+        new(WebPFormatDetector.Instance, static _ => WebPDecoder.Instance, static _ => WebPEncoder.Instance) { MetadataCodec = new WebPMetadataCodec() },
+        new(PngFormatDetector.Instance, static _ => PngDecoder.Instance, static _ => PngEncoder.Instance) { MetadataCodec = new PngMetadataCodec() },
+        new(JpegFormatDetector.Instance, static _ => JpegDecoder.Instance, static _ => JpegEncoder.Instance) { MetadataCodec = new JpegMetadataCodec() },
         new(BmpFormatDetector.Instance, static codecs => new BmpDecoder(codecs), static _ => BmpEncoder.Instance),
         new(GifFormatDetector.Instance, static _ => GifDecoder.Instance, static _ => GifEncoder.Instance),
         new(PcxFormatDetector.Instance, static _ => PcxDecoder.Instance, static _ => PcxEncoder.Instance),

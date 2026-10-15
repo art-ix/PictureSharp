@@ -25,6 +25,29 @@ foreach (ImageFormat format in ImageFormat.All)
     using Image asynchronous = await Image.LoadAsync(stream);
     if (asynchronous.Size != source.Size) throw new InvalidOperationException("Async I/O failed.");
 }
+foreach (ImageFormat format in new[] { ImageFormat.Jpeg, ImageFormat.Png, ImageFormat.WebP })
+{
+    byte[] originalMetadataImage = source.Encode(format);
+    byte[] metadataEdited = Image.EditMetadata(originalMetadataImage, metadata =>
+    {
+        metadata.ExifProfile.SetValue(ExifTag.Model, "AOT camera");
+        metadata.ExifProfile.SetValue(ExifTag.DateTimeOriginal, new DateTime(2026, 10, 15, 12, 0, 0));
+        metadata.ExifProfile.SetValue(ExifTag.ExposureTime, new ExifRational(1, 125));
+        metadata.ExifProfile.SetValue(ExifTag.GPSLatitudeRef, "N");
+        metadata.ExifProfile.SetValue(ExifTag.GPSLatitude, [new(52, 1), new(14, 1), new(0, 1)]);
+        metadata.ExifProfile.RemoveGps();
+    });
+    var metadataRead = Image.ReadMetadata(metadataEdited);
+    if (!metadataRead.ExifProfile.TryGetValue(ExifTag.Model, out var model) || model != "AOT camera"
+        || !metadataRead.ExifProfile.TryGetValue(ExifTag.DateTimeOriginal, out _)
+        || !metadataRead.ExifProfile.TryGetValue(ExifTag.ExposureTime, out _)
+        || metadataRead.ExifProfile.TryGetValue(ExifTag.GPSLatitude, out _)) throw new InvalidOperationException("Metadata editing failed.");
+    using var metadataInput = new MemoryStream(metadataEdited);
+    using var metadataOutput = new MemoryStream();
+    await Image.EditMetadataAsync(metadataInput, metadataOutput, metadata => metadata.ExifProfile.KeepOnly(ExifTag.Model));
+    metadataOutput.Position = 0;
+    if ((await Image.ReadMetadataAsync(metadataOutput)).GetBlockLength(MetadataKinds.Exif) == 0) throw new InvalidOperationException("Async metadata failed.");
+}
 byte[] png = source.ToPng(new PngEncoderOptions());
 using Image copied = Image.Load(png, new DecoderOptions { Png = new() { StrictChecksums = true } });
 if (!copied.GetPixelSpan().SequenceEqual(source.GetPixelSpan())) throw new InvalidOperationException("PNG pixels changed.");
@@ -90,7 +113,7 @@ if (!source.Metadata.TrySetOrientation(ExifOrientation.TopLeft)) throw new Inval
 processed.Frames.AddClone(source.Frames[0]);
 using Image transferred = processed.Frames.ExportFrame(1);
 if (transferred.Size != source.Size) throw new InvalidOperationException("Frame transfer failed.");
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, JPEG thumbnails, configurations, a format plugin and a frame processor.");
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, JPEG thumbnails, configurations, a format plugin and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>

@@ -46,6 +46,8 @@ public class FrameWriterCleanupTests
     private sealed class TrackingOutput : IImageOutput
     {
         public TrackedStream Temporary { get; } = new();
+        public void WriteAtomicFile(string path, byte[] data, CancellationToken token) => throw new NotSupportedException();
+        public Task WriteAtomicFileAsync(string path, byte[] data, CancellationToken token) => throw new NotSupportedException();
         public Stream CreateTemporaryFile() => Temporary;
         public Stream CreateFile(string path) => throw new NotSupportedException();
         public void DeleteFile(string path) => throw new NotSupportedException();

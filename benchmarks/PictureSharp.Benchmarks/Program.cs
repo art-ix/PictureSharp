@@ -14,6 +14,12 @@ if (args is ["matrix-probe", string outputPath])
     return;
 }
 
+if (args is ["metadata-probe", string metadataOutput])
+{
+    MetadataBenchmarks.Probe(metadataOutput);
+    return;
+}
+
 if (args is ["sequence-probe", string format, string count, string mode, string path])
 {
     await SequenceMemoryProbe.RunAsync(format, int.Parse(count, System.Globalization.CultureInfo.InvariantCulture), mode, path);

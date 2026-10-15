@@ -1,0 +1,74 @@
+[
+  {
+    "Format": "jpeg",
+    "Operation": "ReadMetadata",
+    "Nanoseconds": 6344.457133189528,
+    "AllocatedBytes": 9952.054815378759
+  },
+  {
+    "Format": "jpeg",
+    "Operation": "EditMetadata",
+    "Nanoseconds": 22021.785085143863,
+    "AllocatedBytes": 44120.288901937754
+  },
+  {
+    "Format": "jpeg",
+    "Operation": "Decode",
+    "Nanoseconds": 351503.51288056205,
+    "AllocatedBytes": 206766.02955665023
+  },
+  {
+    "Format": "jpeg",
+    "Operation": "DecodeEncode",
+    "Nanoseconds": 939838.75,
+    "AllocatedBytes": 310885.1
+  },
+  {
+    "Format": "png",
+    "Operation": "ReadMetadata",
+    "Nanoseconds": 3074.9718127959654,
+    "AllocatedBytes": 1400.0472315040693
+  },
+  {
+    "Format": "png",
+    "Operation": "EditMetadata",
+    "Nanoseconds": 41255.858085808584,
+    "AllocatedBytes": 113718.04560260587
+  },
+  {
+    "Format": "png",
+    "Operation": "Decode",
+    "Nanoseconds": 881821.6374269006,
+    "AllocatedBytes": 217708.2105263158
+  },
+  {
+    "Format": "png",
+    "Operation": "DecodeEncode",
+    "Nanoseconds": 5765444.444444444,
+    "AllocatedBytes": 889528.8888888889
+  },
+  {
+    "Format": "webp",
+    "Operation": "ReadMetadata",
+    "Nanoseconds": 179.94630402287956,
+    "AllocatedBytes": 1312.004779373835
+  },
+  {
+    "Format": "webp",
+    "Operation": "EditMetadata",
+    "Nanoseconds": 25698.526640397464,
+    "AllocatedBytes": 105795.78508420209
+  },
+  {
+    "Format": "webp",
+    "Operation": "Decode",
+    "Nanoseconds": 728583.9805825243,
+    "AllocatedBytes": 229387.33980582524
+  },
+  {
+    "Format": "webp",
+    "Operation": "DecodeEncode",
+    "Nanoseconds": 26046400,
+    "AllocatedBytes": 828960
+  }
+]

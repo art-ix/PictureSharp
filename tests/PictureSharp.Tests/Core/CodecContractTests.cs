@@ -134,6 +134,7 @@ public class CodecContractTests
         public ImageFormat? Detect(ReadOnlySpan<byte> header) => Format;
         public IImageFormatDetector? GetDetector(ImageFormat format) => null;
         public IImageDecoder? GetDecoder(ImageFormat format) => this;
+        public IImageMetadataCodec? GetMetadataCodec(ImageFormat format) => null;
         public IImageEncoder? GetEncoder(ImageFormat format) => this;
         public IImageDecoder GetDecoderFor(ReadOnlySpan<byte> data) => this;
         public DecodedImage Decode(ReadOnlyMemory<byte> data, DecodeContext context)

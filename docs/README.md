@@ -9,7 +9,7 @@
 | [Image processing](image-processing.md) | Every operation available in `Mutate`/`Clone`: resize, crop, pad, rotate, color, filters, compositing, custom operations |
 | [Pixels and interop](pixels-and-interop.md) | `Rgba32`, pixel spans, `PixelFormat` conversions, WPF/SkiaSharp/WinForms, raw buffer encoding and decoding |
 | [Animation](animation.md) | Frames, durations, loops, animated WebP, APNG and GIF, GIF ↔ WebP conversion |
-| [Metadata](metadata.md) | Resolution, ICC/EXIF/XMP, EXIF orientation |
+| [Metadata](metadata.md) | Resolution, typed EXIF, ICC/XMP and metadata editing without recompression |
 | [Command-line sample](cli.md) | The `samples/PictureSharp.Cli` tool |
 | [Architecture](architecture.md) | Layers, model boundaries, composition and compiled dependency checks |
 | [Domain verification](ddd-verification.md) | Domain hardening, current tests, CI, package consumers and measurements |

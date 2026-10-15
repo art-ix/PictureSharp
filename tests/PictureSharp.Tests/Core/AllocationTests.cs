@@ -31,6 +31,8 @@ public class AllocationTests
     }
 
     [Test]
+    [NotInParallel]
+    [ExecutionPriority(Priority.Low)]
     public async Task AnimatedWebPEncoding_ReusesTheSubframe()
     {
         using Image animation = Pan();

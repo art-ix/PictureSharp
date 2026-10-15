@@ -5,7 +5,7 @@ namespace PictureSharp.Application.Configuration;
 /// <summary>Detects formats and finds codecs among the registrations of one configuration, in registration order.</summary>
 internal sealed class CodecResolver : ICodecResolver
 {
-    private sealed record Codec(IImageFormatDetector Detector, IImageDecoder? Decoder, IImageEncoder? Encoder)
+    private sealed record Codec(IImageFormatDetector Detector, IImageDecoder? Decoder, IImageEncoder? Encoder, IImageMetadataCodec? MetadataCodec)
     {
         public ImageFormat Format => Detector.Format;
     }
@@ -24,7 +24,7 @@ internal sealed class CodecResolver : ICodecResolver
         for (int i = 0; i < _codecs.Length; i++)
         {
             FormatRegistration registration = registrations[i];
-            _codecs[i] = new(registration.Detector, registration.CreateDecoder(this), registration.CreateEncoder(this));
+            _codecs[i] = new(registration.Detector, registration.CreateDecoder(this), registration.CreateEncoder(this), registration.MetadataCodec);
         }
 
         Formats = Array.AsReadOnly(_codecs.Select(static codec => codec.Format).ToArray());
@@ -55,6 +55,8 @@ internal sealed class CodecResolver : ICodecResolver
     public IImageDecoder? GetDecoder(ImageFormat format) => Find(format)?.Decoder;
 
     public IImageEncoder? GetEncoder(ImageFormat format) => Find(format)?.Encoder;
+
+    public IImageMetadataCodec? GetMetadataCodec(ImageFormat format) => Find(format)?.MetadataCodec;
 
     private Codec? Find(ImageFormat format)
     {
