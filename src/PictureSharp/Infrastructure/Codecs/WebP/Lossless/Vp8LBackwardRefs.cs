@@ -65,12 +65,21 @@ internal sealed partial class Vp8LBackwardRefs : IDisposable
         return (2 * highest + ((v >> bits) & 1), bits, v & ((1 << bits) - 1));
     }
 
-    public Vp8LBackwardRefs(uint[] pixels, int width, int height, int quality, bool lowEffort, bool box = false, int maxDegreeOfParallelism = 1)
+    public Vp8LBackwardRefs(uint[] pixels, int width, int height, int quality, bool lowEffort, bool box = false, int maxDegreeOfParallelism = 1,
+        CancellationToken cancellationToken = default)
     {
         _pixels = pixels; _width = width; _count = width * height;
         _matches = ArrayPool<int>.Shared.Rent(_count);
-        Fill(quality, lowEffort, maxDegreeOfParallelism);
-        if (box) FillBox();
+        try
+        {
+            Fill(quality, lowEffort, maxDegreeOfParallelism, cancellationToken);
+            if (box) FillBox();
+        }
+        catch
+        {
+            ArrayPool<int>.Shared.Return(_matches);
+            throw;
+        }
     }
 
     private int Length(int pos) => _matches[pos] & 4095;

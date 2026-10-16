@@ -1,3 +1,5 @@
+using PictureSharp.Primitives.Parallelism;
+
 namespace PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 
 internal static class Vp8Analysis
@@ -20,7 +22,9 @@ internal static class Vp8Analysis
         long alphaSum = 0, uvAlphaSum = 0;
         Lock gate = new();
         int degree = context.Config.Options.MaxDegreeOfParallelism;
-        Parallel.For(0, context.MbHeight, new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = context.CancellationToken },
+        // Below 256 macroblocks (the VP8 decoder's threshold) extra workers cost more iterator setup than they save.
+        if (!Parallelism.IsWorthwhile(degree, (long)context.MbWidth * context.MbHeight, 256)) degree = 1;
+        Parallel.For(0, context.MbHeight, Parallelism.Options(degree, context.CancellationToken),
             () => (Iterator: new Vp8EncoderIterator(context, resetContext: false), Histogram: new int[256], Alpha: 0L, UvAlpha: 0L),
             (y, _, local) =>
             {

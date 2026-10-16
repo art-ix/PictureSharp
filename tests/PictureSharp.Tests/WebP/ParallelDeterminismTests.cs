@@ -121,6 +121,46 @@ public class ParallelDeterminismTests
         }
     }
 
+    [Test]
+    [Arguments(1)]
+    [Arguments(-1)]
+    public async Task HashChain_StopsOnCanceledToken(int threads)
+    {
+        const int Width = 700, Height = 420;
+        uint[] pixels = HashChainPixels(Width, Height);
+        using var canceled = new CancellationTokenSource();
+        await canceled.CancelAsync();
+        Assert.Throws<OperationCanceledException>(() =>
+            new Vp8LBackwardRefs(pixels, Width, Height, 75, false, maxDegreeOfParallelism: threads, cancellationToken: canceled.Token).Dispose());
+    }
+
+    // TargetSize resizes every frame directly (not through Mutate) so that the decoder's thread limit applies.
+    // A nearest 3× upscale keeps the exact GIF palette and puts the Lanczos pass above the parallel threshold;
+    // two frames are enough and keep the test fast.
+    [Test]
+    public async Task TargetSize_AnimatedGif_IsIndependentOfThreadCount_AndEqualsLoadAndResize()
+    {
+        using Image source = Image.Load(Corpus.PathOf("gif/pil_anim_alpha.gif"));
+        while (source.Frames.Count > 2) source.Frames.RemoveAt(2);
+        source.Mutate(x => x.Resize(288, 192, ResamplingFilter.Nearest));
+        using var file = new MemoryStream();
+        source.Save(file, ImageFormat.Gif);
+        using Image expected = source.Clone(x => x.Thumbnail(24, 24, ResamplingFilter.Lanczos3));
+        foreach (int threads in new[] { 1, -1 })
+        {
+            using Image image = Image.Load(file.ToArray(), new DecoderOptions
+            {
+                TargetSize = new(24, 24), TargetResampling = ResamplingFilter.Lanczos3, MaxDegreeOfParallelism = threads,
+            });
+            await Assert.That(image.Frames.Count).IsEqualTo(expected.Frames.Count).Because($"{threads} threads");
+            for (int i = 0; i < image.Frames.Count; i++)
+            {
+                await Assert.That(image.Frames[i].ToPixelData()).IsEquivalentTo(expected.Frames[i].ToPixelData(), CollectionOrdering.Matching)
+                    .Because($"{threads} threads, frame {i}");
+            }
+        }
+    }
+
     // Noise, constant runs, short periodic patterns and long copies, in blocks that straddle segment boundaries.
     private static uint[] HashChainPixels(int width, int height)
     {

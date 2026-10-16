@@ -86,17 +86,20 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
             return;
         }
 
-        if (scale == 1)
+        // Resized directly rather than through Mutate so that DecoderOptions.MaxDegreeOfParallelism also limits this step.
+        var replacements = new FrameReplacement[image.FrameCount];
+        for (int i = 0; i < replacements.Length; i++)
         {
-            var resize = new ResizeOptions { Size = size, Filter = options.TargetResampling };
-            ImageProcessingService.Mutate(image, x => x.Resize(resize), cancellationToken);
-            return;
+            cancellationToken.ThrowIfCancellationRequested();
+            ImageFrame frame = image.Frames[i];
+            // A reduced decode covers the stored size divided by the scale, which may end in a fractional pixel.
+            (float x1, float y1) = scale == 1 ? (frame.Width, frame.Height) : ((float)stored.Width / scale, (float)stored.Height / scale);
+            Rgba32[] pixels = Resizer.Resize(frame.Pixels, frame.Width, frame.Height, size.Width, size.Height, options.TargetResampling,
+                0, 0, x1, y1, cancellationToken, maxDegreeOfParallelism: options.MaxDegreeOfParallelism);
+            replacements[i] = new FrameReplacement(size.Width, size.Height, pixels);
         }
 
-        ImageFrame frame = image.Frames[0];
-        Rgba32[] pixels = Resizer.Resize(frame.Pixels, frame.Width, frame.Height, size.Width, size.Height, options.TargetResampling,
-            0, 0, (float)stored.Width / scale, (float)stored.Height / scale, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        image.CommitFrames([new FrameReplacement(size.Width, size.Height, pixels)]);
+        image.CommitFrames(replacements);
     }
 }

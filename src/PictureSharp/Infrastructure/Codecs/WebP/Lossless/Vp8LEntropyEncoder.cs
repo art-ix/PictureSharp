@@ -15,7 +15,7 @@ internal static class Vp8LEntropyEncoder
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var matches = new Vp8LBackwardRefs(pixels, width, height, quality, lowEffort, maxDegreeOfParallelism: maxDegreeOfParallelism);
+        using var matches = new Vp8LBackwardRefs(pixels, width, height, quality, lowEffort, maxDegreeOfParallelism: maxDegreeOfParallelism, cancellationToken: cancellationToken);
         Vp8LBackwardRefs? box = null;
         // A non-zero value was set by the palette analysis.
         int cacheBitsInit = cacheBits == 0 ? Vp8LEncoder.MaxColorCacheBits : cacheBits;
@@ -25,7 +25,7 @@ internal static class Vp8LEntropyEncoder
             foreach (Vp8LCrunchSubConfig sub in subConfigs)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var refs = GetBackwardReferences(pixels, width, height, quality, lowEffort, sub.Lz77, cacheBitsInit, sub.DoNoCache, matches, ref box, out int cacheBitsBest, maxDegreeOfParallelism);
+                var refs = GetBackwardReferences(pixels, width, height, quality, lowEffort, sub.Lz77, cacheBitsInit, sub.DoNoCache, matches, ref box, out int cacheBitsBest, maxDegreeOfParallelism, cancellationToken);
                 try
                 {
                     for (int iCache = 0; iCache < (sub.DoNoCache ? 2 : 1); iCache++)
@@ -34,7 +34,7 @@ internal static class Vp8LEntropyEncoder
                         // The no-cache case was already studied when the best cache size is 0.
                         if (iCache == 1 && cacheBitsBest == 0) break;
                         cancellationToken.ThrowIfCancellationRequested();
-                        Vp8LBitWriter candidate = StoreImage(refs[iCache]!, width, height, quality, lowEffort, cacheBitsTmp, histoBits, maxDegreeOfParallelism);
+                        Vp8LBitWriter candidate = StoreImage(refs[iCache]!, width, height, quality, lowEffort, cacheBitsTmp, histoBits, maxDegreeOfParallelism, cancellationToken);
                         if (best is null || candidate.ByteCount < best.ByteCount)
                         {
                             best?.Dispose();
@@ -52,10 +52,10 @@ internal static class Vp8LEntropyEncoder
     }
 
     private static Vp8LBitWriter StoreImage(Vp8LRefs refs, int width, int height, int quality, bool lowEffort, int cacheBits, int histoBits,
-        int maxDegreeOfParallelism)
+        int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         var writer = new Vp8LBitWriter();
-        var (set, groups, symbols) = Vp8LHistogramCluster.Build(refs, width, height, histoBits, cacheBits, quality, lowEffort, maxDegreeOfParallelism);
+        var (set, groups, symbols) = Vp8LHistogramCluster.Build(refs, width, height, histoBits, cacheBits, quality, lowEffort, maxDegreeOfParallelism, cancellationToken);
         Vp8LHuffmanEncoder[][] codes;
         using (set) codes = groups.Select(static h => h.Codes()).ToArray();
         if (cacheBits > 0) { writer.Put(1, 1); writer.Put(cacheBits, 4); }
@@ -104,7 +104,8 @@ internal static class Vp8LEntropyEncoder
     // Returns the references with a color cache (index 0) and, when requested, without one (index 1).
     // Their distances are raw; plane codes are applied when the tokens are stored, as BackwardReferences2DLocality does.
     private static Vp8LRefs?[] GetBackwardReferences(uint[] pixels, int width, int height, int quality, bool lowEffort, Vp8LLz77 types,
-        int cacheBitsMax, bool doNoCache, Vp8LBackwardRefs matches, ref Vp8LBackwardRefs? box, out int cacheBitsBest, int maxDegreeOfParallelism)
+        int cacheBitsMax, bool doNoCache, Vp8LBackwardRefs matches, ref Vp8LBackwardRefs? box, out int cacheBitsBest, int maxDegreeOfParallelism,
+        CancellationToken cancellationToken = default)
     {
         var refs = new Vp8LRefs?[2];
         if (lowEffort)
@@ -125,7 +126,7 @@ internal static class Vp8LEntropyEncoder
                 {
                     Vp8LLz77.Rle => matches.Greedy(true),
                     Vp8LLz77.Standard => matches.Greedy(false),
-                    _ => (box ??= new Vp8LBackwardRefs(pixels, width, height, quality, false, box: true, maxDegreeOfParallelism)).Greedy(false),
+                    _ => (box ??= new Vp8LBackwardRefs(pixels, width, height, quality, false, box: true, maxDegreeOfParallelism, cancellationToken)).Greedy(false),
                 };
                 long bitCost = 0;
                 try

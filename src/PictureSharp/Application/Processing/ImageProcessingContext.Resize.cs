@@ -46,6 +46,7 @@ public readonly ref partial struct ImageProcessingContext
     /// Resizes as described by <paramref name="options"/>. Resampling runs on premultiplied alpha and matches Pillow's
     /// <c>Image.resize</c> pixel for pixel, unless <see cref="ResizeOptions.LinearLight"/> is set.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The requested or resulting size exceeds the maximum image size.</exception>
     public ImageProcessingContext Resize(ResizeOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -79,8 +80,6 @@ public readonly ref partial struct ImageProcessingContext
                 break;
             case ResizeMode.Min:
                 (w, h) = Resizer.CoverSize(srcWidth, srcHeight, width, height);
-                // Covering an extreme aspect ratio can exceed the requested canvas (double-to-int saturates).
-                ImageFrame.ValidateSize(w, h);
                 break;
         }
 
@@ -106,6 +105,9 @@ public readonly ref partial struct ImageProcessingContext
         }
 
         (int canvasWidth, int canvasHeight) = options.Mode == ResizeMode.Pad ? (width, height) : (w, h);
+        // Min covering an extreme aspect ratio can exceed the requested canvas (double-to-int saturates).
+        ImageFrame.ValidateSize(canvasWidth, canvasHeight);
+
         bool resample = cropOnly is null && (w != srcWidth || h != srcHeight || x0 != 0 || y0 != 0 || x1 != srcWidth || y1 != srcHeight);
         bool pad = canvasWidth != w || canvasHeight != h;
         if (!resample && cropOnly is null && !pad)

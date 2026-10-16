@@ -14,7 +14,7 @@ internal static partial class Resizer
     /// encoded back with straight alpha.
     /// </summary>
     private static void ResampleLinear(Rgba32[] src, int srcWidth, int srcHeight, Rgba32[] dst, int width, int height,
-        ResamplingFilter filter, float x0, float y0, float x1, float y1, CancellationToken cancellationToken)
+        ResamplingFilter filter, float x0, float y0, float x1, float y1, ParallelOptions parallel)
     {
         bool needHorizontal = width != srcWidth || x0 != 0 || x1 != width;
         bool needVertical = height != srcHeight || y0 != 0 || y1 != height;
@@ -34,7 +34,7 @@ internal static partial class Resizer
         Vector4[]? vertical = needVertical ? ArrayPool<Vector4>.Shared.Rent(height * width) : null;
         try
         {
-            ForRows(rowCount, srcWidth, cancellationToken, y =>
+            ForRows(rowCount, srcWidth, parallel, y =>
                 ToLinearPremultiplied(src.AsSpan((firstRow + y) * srcWidth, srcWidth), linear.AsSpan(y * srcWidth, srcWidth)));
 
             Vector4[] current = linear;
@@ -42,7 +42,7 @@ internal static partial class Resizer
             if (horizontal is not null)
             {
                 float[] k = ToSingle(weightsH);
-                ForRows(rowCount, (long)width * ksizeH, cancellationToken, y =>
+                ForRows(rowCount, (long)width * ksizeH, parallel, y =>
                 {
                     ReadOnlySpan<Vector4> inRow = linear.AsSpan(y * srcWidth, srcWidth);
                     Span<Vector4> outRow = horizontal.AsSpan(y * width, width);
@@ -67,7 +67,7 @@ internal static partial class Resizer
             {
                 float[] k = ToSingle(weightsV);
                 Vector4[] input = current;
-                ForRows(height, (long)width * ksizeV, cancellationToken, yy =>
+                ForRows(height, (long)width * ksizeV, parallel, yy =>
                 {
                     ReadOnlySpan<float> w = k.AsSpan(yy * ksizeV, boundsV[(yy * 2) + 1]);
                     int ymin = boundsV[yy * 2];
@@ -87,7 +87,7 @@ internal static partial class Resizer
             }
 
             Vector4[] result = current;
-            ForRows(height, width, cancellationToken, y =>
+            ForRows(height, width, parallel, y =>
                 FromLinearPremultiplied(result.AsSpan(y * width, width), dst.AsSpan(y * width, width)));
         }
         finally

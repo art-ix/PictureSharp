@@ -156,6 +156,16 @@ public class MutateCloneTests
     }
 
     [Test]
+    [Arguments(1, 60000, 40000, 40000)]
+    [Arguments(60000, 1, 40000, 40000)]
+    public async Task Resize_MinCoveringTooLargeCanvas_WithoutUpscale_LeavesImageUnchanged(int srcWidth, int srcHeight, int w, int h)
+    {
+        using var img = new Image(srcWidth, srcHeight);
+        img.Mutate(x => x.Resize(new ResizeOptions { Size = new(w, h), Mode = ResizeMode.Min, AllowUpscale = false }));
+        await Assert.That(img.Size).IsEqualTo(new Size(srcWidth, srcHeight));
+    }
+
+    [Test]
     public async Task Resize_CropWithoutUpscale_CropsAtAnchor_WithoutResampling()
     {
         using Image img = ImageTests.Pattern(10, 4);

@@ -23,7 +23,11 @@ internal sealed partial class ImageOutput
             token.ThrowIfCancellationRequested();
             File.Move(temporary, destination, overwrite: true);
         }
-        finally { File.Delete(temporary); }
+        catch
+        {
+            DeleteTemporary(temporary);
+            throw;
+        }
     }
 
     public async Task WriteAtomicFileAsync(string path, byte[] data, CancellationToken token)
@@ -43,11 +47,23 @@ internal sealed partial class ImageOutput
                     offset += length;
                 }
                 await stream.FlushAsync(token).ConfigureAwait(false);
+                // fsync has no async API; Task.Run would only block another pool thread.
                 stream.Flush(flushToDisk: true);
             }
             token.ThrowIfCancellationRequested();
             File.Move(temporary, destination, overwrite: true);
         }
-        finally { File.Delete(temporary); }
+        catch
+        {
+            DeleteTemporary(temporary);
+            throw;
+        }
+    }
+
+    // Cleanup must not replace the write's own exception; a leftover temporary file is harmless.
+    private static void DeleteTemporary(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 }

@@ -190,7 +190,8 @@ PNG text. Neither operation promises complete anonymization of arbitrary embedde
 
 Path output is prepared in a separate temporary file in the destination directory. The destination is atomically
 replaced after writing, flushing and a final cancellation check; errors before that point leave it intact. The
-operation does not preserve filesystem attributes of a replaced destination. Streams need not be seekable and
+operation does not preserve filesystem attributes of a replaced destination, and a symbolic link at the destination
+is replaced by a regular file rather than followed. Streams need not be seekable and
 remain open. Separate input/output streams are required; a write error or cancellation while copying the result
 may leave partial output; use the path overloads when atomic replacement matters. Memory input returns a new byte
 array. An edit that changes no block and no resolution leaves an in-place file untouched (no write, same

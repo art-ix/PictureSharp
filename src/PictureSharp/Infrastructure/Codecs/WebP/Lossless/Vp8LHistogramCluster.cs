@@ -9,7 +9,7 @@ internal static class Vp8LHistogramCluster
 
     // The returned groups live in the returned set, which the caller disposes after use.
     public static (Vp8LHistogramSet Set, Vp8LHistogram[] Groups, int[] Symbols) Build(Vp8LRefs refs, int width, int height, int bits, int cacheBits,
-        int quality, bool lowEffort, int maxDegreeOfParallelism = 1)
+        int quality, bool lowEffort, int maxDegreeOfParallelism = 1, CancellationToken cancellationToken = default)
     {
         int tw = Vp8LDecoder.SubSampleSize(width, bits), th = Vp8LDecoder.SubSampleSize(height, bits), count = tw * th;
         var originals = new Vp8LHistogram?[count];
@@ -42,9 +42,13 @@ internal static class Vp8LHistogramCluster
         var map = new int[count];
         foreach (Vp8LHistogram group in groups) _ = group.ClusterCost;
         if (maxDegreeOfParallelism != 1 && count * groups.Count >= 4096)
-            Parallel.For(0, count, new ParallelOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism }, i => Remap(i));
+            Parallel.For(0, count, new ParallelOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism, CancellationToken = cancellationToken }, i => Remap(i));
         else
-            for (int i = 0; i < count; i++) Remap(i);
+            for (int i = 0; i < count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Remap(i);
+            }
         // Empty tiles take the previous symbol.
         for (int i = 0; i < count; i++) if (originals[i] is null) map[i] = i > 0 ? map[i - 1] : 0;
         var rebuiltSet = new Vp8LHistogramSet(groups.Count, cacheBits);

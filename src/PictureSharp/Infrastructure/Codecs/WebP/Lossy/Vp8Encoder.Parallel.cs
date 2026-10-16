@@ -1,11 +1,13 @@
 using System.Runtime.ExceptionServices;
+using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 
 internal static partial class Vp8Encoder
 {
     private static bool UseParallelPass(Vp8EncoderContext context) =>
-        context.Config.Options.MaxDegreeOfParallelism != 1 && Environment.ProcessorCount > 1 && context.MbHeight > 1 && context.MbWidth > 2;
+        // The wavefront needs a second row and room for the top-right dependency.
+        Parallelism.IsWorthwhile(context.Config.Options.MaxDegreeOfParallelism, context.MbHeight, minimumWork: 2) && context.MbWidth > 2;
 
     // Wavefront version of the VP8EncTokenLoop pass, with output identical to the sequential loop.
     // A macroblock depends on its left, top and top-right neighbours (reconstruction, non-zero context, error

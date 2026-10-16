@@ -20,7 +20,7 @@ internal sealed partial class Vp8LBackwardRefs
     // follows the true order from the top: once it reaches a position a segment also searched from, the rest
     // of that segment is identical, so it jumps to the segment's last search. The result equals the
     // sequential one. The segments overwrite links that others still read, so they need a copy of the chain.
-    private void Fill(int quality, bool lowEffort, int maxDegreeOfParallelism)
+    private void Fill(int quality, bool lowEffort, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         _matches.AsSpan(0, _count).Clear();
         if (_count <= 2) return;
@@ -29,7 +29,11 @@ internal sealed partial class Vp8LBackwardRefs
         {
             BuildChain(_matches);
             var sequential = new ChainSearch(this, _matches, quality, lowEffort);
-            for (int start = _count - 2; start > 0;) start = sequential.Step(start, 1);
+            for (int start = _count - 2; start > 0;)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                start = sequential.Step(start, 1);
+            }
             return;
         }
         int[] chain = ArrayPool<int>.Shared.Rent(_count);
@@ -48,7 +52,7 @@ internal sealed partial class Vp8LBackwardRefs
             try
             {
                 searched.AsSpan(0, (_count + 63) >> 6).Clear();
-                Parallel.For(0, segments, new ParallelOptions { MaxDegreeOfParallelism = degree }, segment =>
+                Parallel.For(0, segments, new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = cancellationToken }, segment =>
                 {
                     int low = Math.Max(1, segment * size), start = Math.Min(_count - 2, (segment + 1) * size - 1);
                     while (start >= low)

@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.6.8 fixes animation trimming, repeated frame-writer completion with a canceled token, and histogram region overflow. Improves cancellation in graphics operations and refactors HDR color transforms without public API changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.8/docs/releases/release-0.6.8.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.8 fixes animation trimming, repeated frame-writer completion with a canceled token, histogram region overflow, Resize Min overflow, and the thread limit of TargetSize decoding. Improves cancellation in graphics operations and lossless WebP encoding and refactors HDR color transforms without public API changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.8/docs/releases/release-0.6.8.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>
