@@ -53,8 +53,9 @@ Krótkie zadania, które nie dodają funkcjonalności, ale blokują zamknięcie 
   jego zgody punkt przechodzi do bramki 0.7.0 i pozostaje otwarty.
 - NuGet: obecność 0.6.8 wszystkich czterech paczek w indeksie; Trusted Publishing dla `PictureSharp.Drawing`,
   `PictureSharp.Skia` i `PictureSharp.AspNetCore`.
-- 0.6.6: decyzja użytkownika, czy czekamy na macOS, czy zamykamy etap z adnotacją. Bez porównania z ImageIO/Core Image
-  wariant Apple pozostaje „zgodny z referencjami Linux, niepotwierdzony na Apple” i nie jest oznaczany jako zweryfikowany.
+- 0.6.6: decyzja użytkownika (2026-10-16) — testy na macOS odłożone do dostępności sprzętu; etap pozostaje otwarty.
+  Bez porównania z ImageIO/Core Image wariant Apple pozostaje „zgodny z referencjami Linux, niepotwierdzony na Apple”
+  i nie jest oznaczany jako zweryfikowany.
 
 ## 0.6.6 — weryfikacja HDR na macOS (odłożona)
 
@@ -70,12 +71,27 @@ Cel: JPEG HDR wczytany z `LoadGainMap` po zmianie orientacji, rozmiaru lub przyc
 map, który odczyta PictureSharp, libultrahdr oraz odbiorcy ISO 21496-1 (iOS 18+, Android, przeglądarki). Domyślny
 `Save` pozostaje SDR i bajtowo identyczny z 0.6.8; zapis mapy wymaga jawnej opcji. Wydanie nie tworzy nowych map.
 
-Decyzje do zatwierdzenia przed implementacją (nazwy robocze):
-- Operacje geometryczne zachowują mapę zamiast ją usuwać. To zmiana zachowania `image.Hdr`/`HasHdr` po `Mutate`
-  (wcześniej `null`, `ToHdr` → `InvalidOperationException`); opisać w notatkach. Alternatywa: jawna opcja w `Mutate`.
+Decyzje zatwierdzone (2026-10-16):
+- Wariant A: operacje geometryczne zachowują mapę bez dodatkowej opcji. Zmiana zachowania `image.Hdr`/`HasHdr` po
+  `Mutate` (wcześniej `null`, `ToHdr` → `InvalidOperationException`) opisana w notatkach wydania.
 - `JpegEncoderOptions.GainMap` typu `JpegGainMapMode`: `None` (domyślnie), `Preserve` (zapis mapy, gdy dołączona i
   dekodowalna, inaczej zwykły JPEG) i `Require` (brak mapy lub wariant niezapisywalny → wyjątek). Dodatkowo
-  `GainMapQuality` z domyślną wartością ustaloną według libultrahdr.
+  `GainMapQuality` z domyślną wartością ustaloną według libultrahdr. Nazwy robocze do migawki API.
+
+Konwencje geometrii mapy (ustalone przed implementacją, porównane ze źródłami libultrahdr 2.0.2):
+- Mapa pokrywa całe płótno bazy, piksel mapy (i, j) odpowiada prostokątowi bazy [i·sx, (i+1)·sx) × [j·sy, (j+1)·sy),
+  gdzie sx = W/mw, sy = H/mh (konwencja środków pikseli, jak `box` w Pillow i model Apple).
+- Flip, obrót o 90/180/270° i orientacje EXIF: te same operacje na tablicy mapy (jak `apply_mirror`/`apply_rotate`
+  libultrahdr), bit-exact. Przycięcie wyrównane do sx/sy (całkowite współrzędne mapy): wycinek tablicy, bit-exact.
+- Rozmiar mapy po operacji: mw' = max(1, ⌊(2·W'·mw + W) / (2·W)⌋), analogicznie mh' (zaokrąglenie połówek w górę,
+  arytmetyka całkowita).
+- Resize, Thumbnail, tryby Max/Crop/Min/Stretch i przycięcie niewyrównane: resampling mapy w dziedzinie zakodowanej
+  (kody 8-bit) przez `Resizer` (port Pillow) z prostokątem źródłowym przeliczonym do współrzędnych mapy (ułamkowym).
+  Filtr jak w operacji bazy; `Crop` bez filtra używa `Bilinear`. libultrahdr przycina mapę z obcięciem współrzędnych
+  (`(int)(left / ratio)`) i skaluje ją próbkowaniem co całkowity krok, więc dla operacji niewyrównanych jest tylko
+  punktem odniesienia jakości, nie wyrocznią bajtową.
+- Przekształcona mapa jest próbkowana przy `ToHdr` tak samo jak mapa z pliku (bez śledzenia geometrii źródła), więc
+  `ToHdr` przed zapisem i po ponownym wczytaniu zapisanego pliku różni się tylko kompresją mapy.
 
 Zakres:
 - Model: `GainMapAttachment` w dwóch niezmiennych stanach: skompresowany (jak dziś, bez dekodu przy ładowaniu) i
@@ -98,12 +114,21 @@ Zakres:
   w resamplingu i kodowaniu mapy.
 - CLI: `convert`/`resize` z `-hdr keep` (JPEG→JPEG z mapą); `info` pokazuje mapę po przekształceniu.
 
-Referencje (przed implementacją, rozszerzenie `tests/assets/hdr_reference.py`, `python3 -I`):
-- Model numpy przekształceń mapy: flip/rotate/crop wyrównany do skali mapy bit-exact; resize i crop niewyrównany ≤ 1 na
-  kanał 8-bit względem modelu i efektów libultrahdr.
-- Rekonstrukcja po edycji porównana z `ToHdr` oryginału przekształconym tą samą geometrią w float; tolerancja ustalona i
-  zapisana przed implementacją.
-- libultrahdr `ultrahdr_app` dekoduje nasze pliki: metadane identyczne, rekonstrukcja w budżetach z 0.6.5.
+Referencje (rozszerzenie `tests/assets/hdr_reference.py`, `python3 -I`; model i tolerancje gotowe 2026-10-16):
+- `corpus/hdr_edit/` i `hdr_edit_reference.json`: 228 edycji 21 źródeł (mapy 1/1, 1/2, 1/4, ułamkowe, nieparzyste i
+  zaokrąglone w dół; mono i RGB; ISO, Apple, Apple+ISO; orientacje 1–8 przez `AutoOrient` i przy ładowaniu; flip,
+  obroty, przycięcie wyrównane i niewyrównane, Resize Stretch/Crop z filtrami Nearest/Bilinear/Bicubic/Lanczos3,
+  Thumbnail i łańcuch). Na każdą edycję: oczekiwany rozmiar bazy i mapy oraz kody mapy (`.map`).
+- Mapa: operacje tablicowe i wycinki tolerancja 0, resampling ≤ 1 na kanał (model to Pillow, którego portem jest
+  `Resizer`, więc oczekiwane 0).
+- Rekonstrukcja: `ToHdr` po edycji względem modelu na tej samej bazie i mapie (`.edited.f32`) w tolerancji z 0.6.5.
+- Wierność (`.ideal.f32`): ta sama edytowana baza, wzmocnienie próbkowane z oryginalnej mapy w dokładnej pozycji
+  źródłowej piksela. Budżet na gładkich mapach: max 0,8, mediana 0,10, p99 0,26 (pierwszy pomiar max 0,539,
+  mediana 0,066, p99 0,170, mapa 16 px, plus 50%). Flip/obrót mapy ISO przesuwa wzmocnienie o (1 − 1/skala) piksela
+  mapy, bo libultrahdr próbkuje od rogu; wariant Apple (środki pikseli) pozostaje dokładny (0).
+- libultrahdr: semantyka edycji porównana ze źródłami (`apply_effects` dekodera: flip/obrót tablicowo jak u nas,
+  przycięcie z obcięciem współrzędnych, resize co całkowity krok). Dekodowanie naszych plików przez `ultrahdr_app`
+  sprawdzamy na etapie enkodera.
 
 DoD:
 - Testy każdej operacji × orientacje EXIF 1–8 × proporcje mapy 1/1, 1/2, 1/4 i nieparzyste rozmiary; mapy mono i RGB;
@@ -155,6 +180,7 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | Parsowanie metadanych gain map poza JPEG | `ReadIso`/`ReadApple` związane z `JpegHeader` | `Identify` (`HdrInfo.Headroom`) i dekod | 0.7.0 |
 | Kolor bazy HDR z opisu metadanych | `JpegGainMapReader.ReadBaseColor`, tylko ICC z JPEG | HEIC z ICC lub nclx | 0.7.0 |
 | Metadane bez dekodu | `IImageMetadataCodec` internal; wtyczki → `NotSupportedException` | `ReadMetadata`/`EditMetadata` HEIC | 0.7.0 (odczyt; zapis opcjonalny) |
+| Liczba elementów kontenera w Identify | `ImageInfo` ma tylko `FrameCount`; to liczba klatek, nie elementów HEIF | DoD wtyczki 0.1.0: liczba elementów bez traktowania kafli/alfy/metadanych jako animacji; rozważyć opcjonalne `ContainerItemCount` | 0.7.0; nazwa i semantyka do decyzji |
 | Kontrakt orientacji kontenera | nieopisany | `irot`/`imir` bez podwójnego obrotu z EXIF | 0.7.0 (dokumentacja) |
 | Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
 | Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
@@ -215,88 +241,18 @@ DoD:
 
 ## Wtyczka HEIF — osobne repozytorium
 
-Wtyczka `PictureSharp.Heif` powstaje w osobnym repozytorium git, z własnym `VERSION` i SemVer od 0.1.0. Zależy wyłącznie
-od paczki NuGet `PictureSharp` w minimalnej wersji podanej niżej i korzysta tylko z publicznego API (test architektury,
-CI na paczce z NuGet lub lokalnego feedu). Prace startują od razu, na 0.6.8; luki SPI zamyka rdzeń według tabeli w 0.7.0.
-Zakres poniżej przenosimy do `plan.md` nowego repozytorium przy jego założeniu.
+Wtyczka `PictureSharp.Heif` (HEIC: kontener HEIF, własny port HEVC intra w C#) powstaje w osobnym repozytorium
+`../PictureSharp.Heif`, z własnym `VERSION` i SemVer od 0.1.0. Zakres, DoD, licencje (HM/kvazaar, wyrocznie
+LGPL/GPL bez portowania) i patenty opisuje jej `plan.md`. Wtyczka zależy wyłącznie od paczki NuGet `PictureSharp`
+i korzysta tylko z publicznego API; prace startują na 0.6.8.
+
+Zależności od wydań rdzenia:
 
 | Wersja wtyczki | Zakres | Minimalny PictureSharp |
 | --- | --- | --- |
-| 0.1.0 | Repo, CI, kontener HEIF (ISOBMFF), detekcja, `Identify`, limity, fuzzing parsera | 0.6.8 |
-| 0.2.0 | Dekoder HEVC intra (skalar), siatka, kolor, alfa, `irot`/`imir`/`clap`, ICC/EXIF/XMP | 0.6.8 |
-| 0.3.0 | Enkoder HEVC intra Main 8-bit 4:2:0, alfa, siatka, metadane | 0.6.8 |
-| 0.4.0 | Gain map Apple/ISO → `ToHdr`, `ReadMetadata` bez dekodu | 0.7.0 |
-| 0.5.0 | SIMD i równoległość, pomiary względem libheif, ARM64 | 0.7.0 |
+| 0.1.0–0.3.0 | Kontener i `Identify`, dekoder i enkoder HEVC intra, kolor, alfa, metadane | 0.6.8 |
+| 0.4.0–0.5.0 | Gain map → `ToHdr`, `ReadMetadata` bez dekodu; SIMD i pomiary | 0.7.0 (SPI wtyczek) |
 | dalej | Zapis gain map w HEIC, ewentualnie `thmb` i opcje dekodera | 0.8.0 |
-
-Cel: moduł `IImageFormatModule` (rejestracja przez `ImageConfigurationBuilder.AddFormat`), który odczytuje i zapisuje
-HEIC (HEVC w kontenerze HEIF) bez kodu natywnego. Zdjęcia HEIC zawierają tylko obrazy intra, więc port obejmuje HEVC
-intra, bez kompensacji ruchu.
-
-Zasady:
-- Te same reguły co rdzeń: `net10.0`, C# 14, BCL-only, bez `unsafe`, P/Invoke i `System.IO.Compression`; zależność
-  wyłącznie od `PictureSharp` przez publiczne API (test architektury jak dla adapterów). Wyjątki, limity, anulowanie,
-  pule buforów, `Rgba32` z prostą alfą.
-- Licencje: port tylko z kodu zgodnego z MIT. Dekoder HEVC według ITU-T H.265 (bezpłatna specyfikacja) i
-  oprogramowania referencyjnego HM (BSD-3); enkoder według HM i kvazaar (BSD-3). Kontener według ISO/IEC 23008-12 i
-  ISO/IEC 14496-12. libde265, libheif (LGPL) i x265 (GPL) wyłącznie jako wyrocznie, bez portowania kodu.
-  `THIRD-PARTY-NOTICES.txt` paczki uzupełniony o porty.
-- Patenty HEVC: biblioteka ich nie rozstrzyga. README paczki opisuje sytuację; decyzja o publikacji paczki należy do
-  użytkownika i zapada przed wydaniem.
-- Źródła referencyjne przypięte w `reference/` repozytorium wtyczki (HM, kvazaar, libheif + libde265 do narzędzi), read-only; pobranie
-  wymaga zgody użytkownika. Narzędzia wyroczni (`heif-dec`, `heif-enc`, `heif-info`, dekoder HM) budowane skryptem
-  `scripts/build-heif-reference.sh`, z nadpisaniem katalogu przez `PICTURESHARP_HEIF_TOOLS`.
-- Port funkcja po funkcji z komentarzem źródłowym; najpierw skalar, SIMD dopiero po pomiarach i z testami identyczności.
-
-Zakres dekodowania:
-- Kontener: `ftyp` (`heic`, `heix`, `mif1`), `meta` z `hdlr pict`, `pitm`, `iinf`/`infe`, `iloc` (wersje 0–2, metody
-  0 i 1), `iref` (`dimg`, `auxl`, `thmb`, `cdsc`, `prem`), `iprp`/`ipco`/`ipma` (`hvcC`, `ispe`, `colr` nclx/prof,
-  `pixi`, `irot`, `imir`, `clap`, `auxC`), `idat`. Elementy `grid` (kafle iPhone’a) i `iden`; transformacje w kolejności
-  z `ipma`. Ustalić relację z `ApplyExifOrientation` (HEIF stosuje `irot`/`imir`, EXIF orientation jest informacyjne).
-- HEVC: profile Main, Main Still Picture i Main 10; chroma 4:2:0 i 4:0:0. VPS/SPS/PPS, segmenty slice, CABAC, drzewo
-  kodowania, predykcja intra (35 trybów), transform skip, listy skalowania, transformaty 4–32 i DST 4×4, dekwantyzacja,
-  deblocking, SAO, kafle i WPP, PCM. Slice inter, 4:2:2/4:4:4 (RExt) i SCC → `NotSupportedException`.
-- Kolor: YCbCr → RGB według nclx (macierze BT.601/709/2020, zakres pełny/ograniczony) z dokładnie opisanym
-  zaokrągleniem; ICC do metadanych; 10-bit → 8-bit jak PNG 16-bit. Alfa z obrazu pomocniczego (auxC alpha) jako prosta
-  alfa, z odwróceniem premultiplikacji przy `prem`.
-- Metadane: elementy Exif (z prefiksem offsetu), XMP i ICC w `ImageMetadata`; `Identify` bez dekodowania HEVC; miniatura
-  `thmb` jako możliwa szybka ścieżka `TargetSize` (wymaga SPI z rdzenia 0.8.0).
-- HDR: gain map Apple (`urn:com:apple:photo:2020:aux:hdrgainmap`) i ISO (`tmap`) dołączane przez SPI z rdzenia 0.7.0, więc
-  `ToHdr`/`ToneMap` działają dla HEIC. Mapy głębi i matowe portretów, Live Photos, sekwencje HEIF i AVIF poza zakresem
-  (AVIF może później współdzielić parser kontenera).
-- Limity: `MaxInputBytes`, `MaxPixels` (suma kafli, alfy i mapy), `MaxMetadataBytes`, liczba elementów, głębokość i
-  cykle `iref`, wymiary siatki i kafli, rozmiary NAL. Kafle siatki dekodowane równolegle, wynik niezależny od liczby wątków.
-
-Zakres kodowania:
-- Pojedynczy obraz (polityka dla animacji jak w pozostałych enkoderach jednoobrazowych), HEVC Main 8-bit 4:2:0, alfa
-  jako obraz pomocniczy 4:0:0, siatka kafli dla dużych obrazów, nclx/ICC, Exif i XMP. Domyślne parametry kolorów
-  ustalone według `heif-enc`.
-- Enkoder intra: `Quality` 0–100 → QP, CTU 32/64, wybór trybów przez SATD i uproszczone RDO, CABAC, deblocking i SAO;
-  deterministyczny i niezależny od liczby wątków (kafle równolegle).
-- `HeifEncoderOptions` (robocze): `Quality`, `TileSize`, `Effort`, `MaxDegreeOfParallelism`. Bezstratny tryb, 4:4:4 i
-  10-bit poza pierwszymi wersjami. Zapis gain map w HEIC po SPI z rdzenia 0.8.0 (decyzja po etapie dekodera).
-
-Referencje i tolerancje (ustalone przed implementacją):
-- Dekoder: YCbCr bit-exact (tolerancja 0) z HM i libde265 na strumieniach konformacyjnych intra JCT-VC (pobranie za
-  zgodą) i syntetycznym korpusie z `heif-enc` (x265 i kvazaar) oraz ffmpeg. RGB z `heif-dec` przy tej samej konwersji
-  kolorów: 0, inaczej ustalona tolerancja.
-- Korpus syntetyczny: siatki, alfa, rotacje/lustra/clap, 10-bit, monochrom, nclx/ICC, Exif/XMP, gain map Apple i ISO;
-  uszkodzone, obcięte, cykliczne referencje i fuzzing. Prywatne zdjęcia HEIC z iPhone’a tylko lokalnie (`Category=Local`).
-- Enkoder: pliki odczytywane przez libheif i dekoder HM; nasz dekoder identyczny z HM na naszych plikach. Kryterium
-  jakości/rozmiaru względem x265 i kvazaar przy równym PSNR/SSIM (np. rozmiar ≤ 1,5× x265 `medium`) zapisane przed
-  implementacją enkodera.
-- Zgodność odbiorców: ręcznie Windows (HEIF Image Extensions) i Apple Photos, gdy dostępne; brak nie jest zaliczeniem.
-
-Kolejność według tabeli wersji wtyczki; każdy etap z testami i wpisem w dzienniku postępu repozytorium wtyczki, a
-publikacja każdej wersji wyłącznie na decyzję użytkownika. SIMD i równoległość (IDCT/DST, predykcja intra, deblocking,
-SAO, YCbCr→RGB) dopiero po wersji skalarnej.
-
-DoD:
-- Wyrocznie zielone w ustalonych tolerancjach; skalar i SIMD identyczne na x64 i ARM64; wynik niezależny od liczby wątków.
-- Testy limitów, uszkodzonych danych i anulowania; żadne wejście nie daje niekontrolowanego wyjątku (fuzzing `Category=Slow`).
-- Pomiary dekodowania 12/48 MP i kodowania względem libheif (czas, alokacje, szczytowa pamięć).
-- Paczka `PictureSharp.Heif` z README (w tym nota o patentach), `LICENSE` i notices; test architektury; konsument
-  trim/Native AOT; dokumentacja z przykładami sprawdzanymi testami w repozytorium wtyczki; przykład CLI z rejestracją wtyczki.
 
 ## Poza planem — kandydaci po 0.8.0
 

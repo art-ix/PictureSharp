@@ -15,7 +15,7 @@ internal static class HdrService
         cancellationToken.ThrowIfCancellationRequested();
         GainMapAttachment attachment = image.GainMap
             ?? throw new InvalidOperationException(
-                "The image has no HDR gain map: load it with DecoderOptions.LoadGainMap = true from a file that has one, and do not change it before ToHdr (Mutate and frame changes remove the map).");
+                "The image has no HDR gain map: load it with DecoderOptions.LoadGainMap = true from a file that has one. Resize, Thumbnail, Crop, AutoOrient, quarter-turn rotations and flips keep the map; other Mutate operations and frame changes remove it.");
         if (!attachment.CanDecode)
         {
             string reason = attachment.Info.UnsupportedReason ?? "The HDR gain map cannot be decoded.";
@@ -25,6 +25,25 @@ internal static class HdrService
         }
 
         GainMapParameters parameters = attachment.Parameters!;
+        DecodedGainMap map = attachment.EditedMap ?? DecodeMap(image, attachment, options, cancellationToken);
+        HdrColorSpace outputSpace = options.ColorSpace ?? attachment.BaseSpace;
+        var reconstructor = new GainMapReconstructor(parameters, map, attachment.BaseSpace, attachment.BaseLinearization, outputSpace,
+            options.TargetHeadroom, image.Size, attachment.StoredSize, attachment.AppliedOrientation);
+        Rgba128[] pixels = GC.AllocateUninitializedArray<Rgba128>(checked(image.Width * image.Height));
+        try
+        {
+            reconstructor.Run(image.Frames[0].Pixels, pixels, options.MaxDegreeOfParallelism, cancellationToken);
+        }
+        catch (AggregateException ex) when (CodecErrors.Canceled(ex, cancellationToken))
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+
+        return new HdrImage(image.Width, image.Height, pixels, outputSpace, reconstructor.Headroom, parameters.Kind, image.Metadata.Clone());
+    }
+
+    private static DecodedGainMap DecodeMap(Image image, GainMapAttachment attachment, HdrOptions options, CancellationToken cancellationToken)
+    {
         int scale = GainMapReconstructor.MapScale(attachment.Info.GainMapSize, image.Size, attachment.StoredSize, attachment.AppliedOrientation);
         DecodedGainMap map;
         try
@@ -45,20 +64,7 @@ internal static class HdrService
             throw new ImageFormatException(ImageFormat.Jpeg, "The decoded HDR gain map does not match its header.");
         }
 
-        HdrColorSpace outputSpace = options.ColorSpace ?? attachment.BaseSpace;
-        var reconstructor = new GainMapReconstructor(parameters, map, attachment.BaseSpace, attachment.BaseLinearization, outputSpace,
-            options.TargetHeadroom, image.Size, attachment.StoredSize, attachment.AppliedOrientation);
-        Rgba128[] pixels = GC.AllocateUninitializedArray<Rgba128>(checked(image.Width * image.Height));
-        try
-        {
-            reconstructor.Run(image.Frames[0].Pixels, pixels, options.MaxDegreeOfParallelism, cancellationToken);
-        }
-        catch (AggregateException ex) when (CodecErrors.Canceled(ex, cancellationToken))
-        {
-            throw new OperationCanceledException(cancellationToken);
-        }
-
-        return new HdrImage(image.Width, image.Height, pixels, outputSpace, reconstructor.Headroom, parameters.Kind, image.Metadata.Clone());
+        return map;
     }
 
     public static Image ToneMap(HdrImage hdr, ToneMappingOptions? options, CancellationToken cancellationToken)

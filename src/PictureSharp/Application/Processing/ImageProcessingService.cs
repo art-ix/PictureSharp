@@ -27,7 +27,6 @@ internal static class ImageProcessingService
         ArgumentNullException.ThrowIfNull(image);
         image.ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
-        image.GainMap = null;   // in-place operations change the pixels the gain map describes
         operation(new ImageProcessingContext(new ProcessingState(image, shared: false, cancellationToken)));
     }
 
@@ -57,6 +56,7 @@ internal static class ImageProcessingService
         }
 
         Image clone = image.CopyPropertiesTo(new Image(frames));
+        clone.GainMap = image.GainMap;   // immutable, shared; geometric edits replace it, other operations remove it
         var state = new ProcessingState(clone, shared: true, cancellationToken);
         try
         {

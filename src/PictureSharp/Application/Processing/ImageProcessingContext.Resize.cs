@@ -1,4 +1,5 @@
 using PictureSharp.Domain.Frames;
+using PictureSharp.Application.Hdr;
 using PictureSharp.Application.Processing;
 using System.Drawing;
 using PictureSharp.Algorithms.Processing;
@@ -116,6 +117,10 @@ public readonly ref partial struct ImageProcessingContext
         }
 
         Point offset = Anchor.Place(new(canvasWidth, canvasHeight), new(w, h), options.Position);
+        // The gain map follows resizes and crops; padding adds pixels it does not describe.
+        GainMapEdit? gainMapEdit = pad ? null
+            : cropOnly is { } crop ? GainMapEdit.Crop(crop)
+            : GainMapEdit.Region(x0, y0, x1, y1, w, h, options.Filter);
         _state.ReplaceFrames((cropOnly, resample, srcWidth, srcHeight, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset), static (frame, state, token) =>
         {
             var (cropOnly, resample, srcWidth, srcHeight, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset) = state;
@@ -131,7 +136,7 @@ public readonly ref partial struct ImageProcessingContext
             }
 
             return new FrameReplacement(canvasWidth, canvasHeight, pixels);
-        });
+        }, gainMapEdit);
         if (pad && options.PadColor.A != 255)
         {
             image.HasAlpha = true;

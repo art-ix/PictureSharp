@@ -1,4 +1,6 @@
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Hdr;
+using PictureSharp.Application.Hdr;
 using PictureSharp.Application.Processing;
 using System.Drawing;
 using PictureSharp.Algorithms.Processing;
@@ -13,7 +15,7 @@ public readonly ref partial struct ImageProcessingContext
     {
         Image.CheckRectangle(rectangle, Target.Width, Target.Height, nameof(rectangle));
         _state.ReplaceFrames(rectangle, static (frame, rect, token) =>
-            new FrameReplacement(rect.Width, rect.Height, Geometry.Crop(frame, rect)));
+            new FrameReplacement(rect.Width, rect.Height, Geometry.Crop(frame, rect)), GainMapEdit.Crop(rectangle));
         return this;
     }
 
@@ -103,13 +105,16 @@ public readonly ref partial struct ImageProcessingContext
         if (newBuffers)
         {
             _state.ReplaceFrames((turns, flipX), static (frame, state, token) =>
-                new FrameReplacement(frame.Height, frame.Width, Geometry.RotateQuarterPixels(frame.Pixels, frame.Width, frame.Height, state.turns, state.flipX)));
+                new FrameReplacement(frame.Height, frame.Width, Geometry.RotateQuarterPixels(frame.Pixels, frame.Width, frame.Height, state.turns, state.flipX)),
+                GainMapEdit.RotateFlip(turns, flipX));
             ImageMetadata metadata = Target.Metadata;
             (metadata.HorizontalResolution, metadata.VerticalResolution) = (metadata.VerticalResolution, metadata.HorizontalResolution);
         }
         else
         {
+            GainMapAttachment? gainMap = _state.EditGainMap(GainMapEdit.RotateFlip(turns, flipX));
             foreach (ImageFrame frame in _state.WritableFrames) Geometry.RotateFlip(frame, turns, flipX);
+            Target.GainMap = gainMap;   // set after every frame is flipped; a cancellation in between removes it
         }
 
         return this;

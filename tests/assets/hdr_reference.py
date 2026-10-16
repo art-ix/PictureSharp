@@ -12,6 +12,10 @@ follows the formulas fixed in plan_hdr.md: ISO reconstruction as libultrahdr v2.
 sampling, gamma, log2 gain bounds, offsets, headroom weight), the Apple formula (bilinear sampling at pixel centers,
 Rec. 709 linearization, 1 + (headroom - 1) * gain) and the extended Reinhard tone mapping.
 
+Since 0.6.9 it also writes tests/assets/corpus/hdr_edit/ and hdr_edit_reference.json: the expected gain map after
+geometric edits (flip, 90° rotations, EXIF orientations, crop, resize, thumbnail and chains), under the conventions in
+plan.md, with the reconstruction of each edited image and a fidelity measure against the original map (see edits()).
+
   python3 -I tests/assets/hdr_reference.py
 """
 import io
@@ -21,7 +25,7 @@ import struct
 import sys
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
@@ -183,9 +187,14 @@ def base_image(width, height, seed):
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
 
 
-def map_image(width, height, channels, seed):
+def map_image(width, height, channels, seed, smooth=False):
     rng = np.random.default_rng(seed)
     y, x = np.mgrid[0:height, 0:width]
+    if smooth:  # a low-frequency field like real gain maps (edits measure fidelity on these)
+        v = 128 + 90 * np.sin(2.4 * x / width + 0.5) * np.cos(1.9 * y / height - 0.3)
+        planes = [v + d for d in ((0, -25, 25) if channels == 3 else (0,))]
+        planes = [np.clip(np.round(p_), 0, 255).astype(np.uint8) for p_ in planes]
+        return Image.fromarray(np.stack(planes, axis=-1), "RGB") if channels == 3 else Image.fromarray(planes[0], "L")
     v = 255 * (x + y) / max(width + height - 2, 1)
     v[height // 2:, width // 2:] = 255 - v[height // 2:, width // 2:]            # sharp edge
     v[:2, :2] = 0
@@ -260,13 +269,17 @@ def sample_bilinear(m, x, y):
     return top + (bottom - top) * fy
 
 
-def reconstruct(case, base_rgb, map_px, target_headroom=None, output_space=None):
-    """HDR in the stored geometry, in output_space (default: base space)."""
+def reconstruct(case, base_rgb, map_px, target_headroom=None, output_space=None, coords=None):
+    """HDR in the stored geometry, in output_space (default: base space). coords, when given, holds the positions
+    (x, y) in the stored base image, of size case["size"], at which each base pixel samples the map."""
     h, w, _ = base_rgb.shape
     space = case["base_space"]
     lin = linearize(base_rgb.astype(np.float64), "icc" if case.get("icc") else "srgb")
     mh, mw = map_px.shape[:2]
     y, x = np.mgrid[0:h, 0:w].astype(np.float64)
+    if coords is not None:
+        x, y = coords
+        w, h = case["size"]
     if case["model"] == "iso":
         p = case["iso_q"]
         mult = space if p.get("use_base", True) else case["alt_space"]
@@ -367,7 +380,7 @@ def build(case, iso_version=0, iso_flags=0, mpf=True, primary_iso=True, map_xmp=
     seed = sum(map(ord, case["name"]))
     base = jpeg_bytes(base_image(w, h, seed))
     mw, mh = case["map"]
-    map_jpeg = jpeg_bytes(map_image(mw, mh, case["channels"], seed + 1), quality=90)
+    map_jpeg = jpeg_bytes(map_image(mw, mh, case["channels"], seed + 1, case.get("smooth", False)), quality=90)
     map_segments = []
     if case["model"] == "iso" or case.get("apple_too"):
         if case["model"] == "iso":
@@ -402,6 +415,267 @@ def decode_parts(data):
 
 def write_f32(path, rgb):
     np.ascontiguousarray(rgb, dtype="<f4").tofile(path)
+
+
+# ------------------------------------------------------------------ geometric edits (0.6.9)
+#
+# Conventions fixed in plan.md (0.6.9, "Konwencje geometrii mapy"): the map covers the whole base canvas; map pixel i
+# spans base pixels [i * W / mw, (i + 1) * W / mw). Flips, 90° rotations and EXIF orientations are the same array
+# operations on the map. Every other edit resamples the map's 8-bit codes with Pillow's resampler (PictureSharp's
+# Resizer is its port) from the edit's source box converted to map coordinates; when that box is integral and the
+# output has its size, the result is a plain slice. Map sizes after an edit: max(1, floor((2 W' mw + W) / (2 W))).
+
+EDIT_OUT = os.path.join(HERE, "corpus", "hdr_edit")
+
+FILTERS = {"Nearest": Image.Resampling.NEAREST, "Bilinear": Image.Resampling.BILINEAR,
+           "Bicubic": Image.Resampling.BICUBIC, "Lanczos3": Image.Resampling.LANCZOS}
+
+# Edited map codes against this model: 0 for array operations and slices, at most 1 per channel when resampled.
+# "reconstruction": ToHdr of the edited image against its *.edited.f32 (the model on the same base and map).
+# "fidelity": ToHdr of the edited image against *.ideal.f32, the same edited base with the gain sampled from the
+# original map at each pixel's exact source position (errors as HdrUltraHdrOracleTests: relative =
+# |d| / max(|expected|, 0.01)). It measures only what the map edit loses: array flips of an ISO map shift the gain by
+# (1 - 1/scale) map pixels under libultrahdr's corner-aligned sampling (Apple's centered sampling stays exact), and
+# resampling smooths it. Checked on the smooth_* sources, whose low-frequency maps resemble real ones; the budget is
+# the first measurement (max 0.539, median 0.066, p99 0.170, all on smooth_iso_quarter_rgb: a 16 px wide map) with
+# 50% margin. The synthetic noisy maps are checked by the map and reconstruction tolerances only.
+EDIT_TOLERANCE = {"map_exact": 0, "map_resampled": 1, "reconstruction": TOLERANCE,
+                  "fidelity": {"max_absolute": 0.8, "median_relative": 0.1, "p99_relative": 0.26}}
+
+
+def map_size(new_base, base, size):
+    return max(1, (2 * new_base * size + base) // (2 * base))
+
+
+def resample(a, size, filt, box):
+    """Pillow resize of each channel of an H x W x C array (uint8 or float) from a source box (x0, y0, x1, y1)."""
+    planes = []
+    for c in range(a.shape[2]):
+        mode = "L" if a.dtype == np.uint8 else "F"
+        im = Image.fromarray(np.ascontiguousarray(a[..., c] if mode == "L" else a[..., c].astype(np.float32)), mode)
+        planes.append(np.asarray(im.resize(size, FILTERS[filt], box=tuple(float(v) for v in box))))
+    out = np.stack(planes, axis=-1)
+    return out if a.dtype == np.uint8 else out.astype(np.float64)
+
+
+def map_region(m, base_w, base_h, box, size, filt):
+    """The map of a base region: box in base pixels (float32 values, as Resizer.FillBox returns), size in map pixels."""
+    mh, mw = m.shape[:2]
+    scale = (mw / base_w, mh / base_h)
+    mbox = [float(np.float64(np.float32(v)) * scale[i % 2]) for i, v in enumerate(box)]
+    integral = all(float(v).is_integer() for v in mbox)
+    if integral and size == (int(mbox[2] - mbox[0]), int(mbox[3] - mbox[1])):
+        x0, y0, x1, y1 = (int(v) for v in mbox)
+        return m[y0:y1, x0:x1], True
+    return resample(m, size, filt, mbox), False
+
+
+def fit_box(w, h, width, height):
+    """Resizer.FillBox (Pillow ImageOps.fit, bleed 0, centered) as float32."""
+    live, out = w / h, width / height
+    if live == out:
+        cw, ch = w, h
+    elif live >= out:
+        cw, ch = out * h, h
+    else:
+        cw, ch = w, w / out
+    left, top = (w - cw) * 0.5, (h - ch) * 0.5
+    return tuple(float(np.float32(v)) for v in (left, top, left + cw, top + ch))
+
+
+def affine(m):
+    return np.array([[m[0], m[1], m[2]], [m[3], m[4], m[5]], [0.0, 0.0, 1.0]])
+
+
+def apply_edit(state, op):
+    """One edit on {base, map, to_stored}; to_stored maps a current pixel position (x, y, 1) to its position in the
+    stored base image. Returns whether the map stayed bit-exact (no resampling)."""
+    base, m = state["base"], state["map"]
+    h, w = base.shape[:2]
+    kind = op["op"]
+    if kind == "flip":
+        horizontal = op["mode"] == "Horizontal"
+        f = (lambda a: a[:, ::-1]) if horizontal else (lambda a: a[::-1])
+        step = affine([-1, 0, w - 1, 0, 1, 0] if horizontal else [1, 0, 0, 0, -1, h - 1])
+        state.update(base=f(base), map=f(m), to_stored=state["to_stored"] @ step)
+        return True
+    if kind == "rotate":
+        degrees = op["degrees"]
+        k = {90: -1, 180: 2, 270: 1}[degrees]  # clockwise
+        step = affine({90: [0, 1, 0, -1, 0, h - 1], 180: [-1, 0, w - 1, 0, -1, h - 1],
+                       270: [0, -1, w - 1, 1, 0, 0]}[degrees])
+        state.update(base=np.rot90(base, k), map=np.rot90(m, k), to_stored=state["to_stored"] @ step)
+        return True
+    if kind == "crop":
+        x, y, cw, ch = op["x"], op["y"], op["width"], op["height"]
+        size = (map_size(cw, w, m.shape[1]), map_size(ch, h, m.shape[0]))
+        new_map, exact = map_region(m, w, h, (x, y, x + cw, y + ch), size, "Bilinear")
+        state.update(base=base[y:y + ch, x:x + cw], map=new_map, to_stored=state["to_stored"] @ affine([1, 0, x, 0, 1, y]))
+        return exact
+    if kind in ("resize", "thumbnail"):
+        if kind == "thumbnail":
+            out = ImageOps.contain(Image.new("L", (w, h)), (op["max_width"], op["max_height"])).size
+            box = (0.0, 0.0, float(w), float(h))
+        elif op.get("mode", "Stretch") == "Crop":
+            out = (op["width"], op["height"])
+            box = fit_box(w, h, *out)
+        else:
+            out = (op["width"], op["height"])
+            box = (0.0, 0.0, float(w), float(h))
+        filt = op["filter"]
+        size = (map_size(out[0], w, m.shape[1]), map_size(out[1], h, m.shape[0]))
+        new_map, exact = map_region(m, w, h, box, size, filt)
+        # Pixel centers: x = x0 + (x' + 0.5) * (x1 - x0) / width - 0.5.
+        sx, sy = (box[2] - box[0]) / out[0], (box[3] - box[1]) / out[1]
+        step = affine([sx, 0, box[0] + 0.5 * sx - 0.5, 0, sy, box[1] + 0.5 * sy - 0.5])
+        state.update(base=resample(base, out, filt, box), map=new_map, to_stored=state["to_stored"] @ step)
+        return exact
+    raise ValueError(kind)
+
+
+def stored_positions(state, stored_size):
+    """Positions in the stored base image of every current pixel, clamped to the image."""
+    h, w = state["base"].shape[:2]
+    y, x = np.mgrid[0:h, 0:w].astype(np.float64)
+    t = state["to_stored"]
+    xs = t[0, 0] * x + t[0, 1] * y + t[0, 2]
+    ys = t[1, 0] * x + t[1, 1] * y + t[1, 2]
+    return np.clip(xs, 0, stored_size[0] - 1), np.clip(ys, 0, stored_size[1] - 1)
+
+
+def orientation_affine(orientation, stored_size):
+    """display position -> stored position for an EXIF orientation, fitted from orient() on index planes."""
+    sw, sh = stored_size
+    y, x = np.mgrid[0:sh, 0:sw].astype(np.float64)
+    idx = orient(np.stack([x, y], axis=-1), orientation)
+    o, dx, dy = idx[0, 0], idx[0, 1] - idx[0, 0], idx[1, 0] - idx[0, 0]
+    t = affine([dx[0], dy[0], o[0], dx[1], dy[1], o[1]])
+    yy, xx = np.mgrid[0:idx.shape[0], 0:idx.shape[1]]
+    assert np.array_equal(t[0, 0] * xx + t[0, 1] * yy + t[0, 2], idx[..., 0])
+    assert np.array_equal(t[1, 0] * xx + t[1, 1] * yy + t[1, 2], idx[..., 1])
+    return t
+
+
+def edit_ops(w, h, mw):
+    """Named edit sequences for a base of w x h with a map mw pixels wide."""
+    ops = {
+        "flip_h": [dict(op="flip", mode="Horizontal")],
+        "flip_v": [dict(op="flip", mode="Vertical")],
+        "rotate90": [dict(op="rotate", degrees=90)],
+        "rotate180": [dict(op="rotate", degrees=180)],
+        "rotate270": [dict(op="rotate", degrees=270)],
+        "crop_unaligned": [dict(op="crop", x=w // 7 + 1, y=h // 5 + 1, width=w // 2 + 1, height=h // 2 + 1)],
+        "resize_half_lanczos": [dict(op="resize", width=w // 2, height=h // 2, filter="Lanczos3")],
+        "resize_aspect_bicubic": [dict(op="resize", width=w * 5 // 7, height=h * 2 // 3, filter="Bicubic")],
+        "resize_up_bilinear": [dict(op="resize", width=w * 3 // 2, height=h * 3 // 2, filter="Bilinear")],
+        "resize_third_nearest": [dict(op="resize", width=w // 3, height=h // 3, filter="Nearest")],
+        "resize_crop_mode": [dict(op="resize", width=w // 2, height=w // 2, filter="Lanczos3", mode="Crop")],
+        "thumbnail": [dict(op="thumbnail", max_width=16, max_height=16, filter="Lanczos3")],
+    }
+    # The smallest positive offset on the map grid in both axes, when the scale allows one inside the image.
+    sx = w / mw
+    k = next((k for k in range(1, mw) if (k * w) % mw == 0 and k * w // mw < w // 2), None)
+    if k is not None:
+        step = k * w // mw
+        ops["crop_aligned"] = [dict(op="crop", x=step, y=0, width=w - 2 * step, height=h)] if sx != int(sx) else \
+            [dict(op="crop", x=step, y=int(sx), width=w // 2 // int(sx) * int(sx), height=h - 2 * int(sx))]
+    ops["chain"] = ops["crop_unaligned"] + [dict(op="rotate", degrees=90)] + \
+        [dict(op="resize", width=(h // 2 + 1) * 2 // 3, height=(w // 2 + 1) * 2 // 3, filter="Lanczos3")] + \
+        [dict(op="flip", mode="Horizontal")]
+    return ops
+
+
+ORIENT_OPS = ("none", "flip_h", "rotate90", "crop_unaligned", "resize_half_lanczos", "thumbnail")
+FLOAT_SOURCES = ("smooth_iso_half", "smooth_iso_quarter_rgb", "smooth_apple_half", "iso_rgb_p3", "iso_full_scale")
+
+
+def fidelity(actual, expected):
+    d = np.abs(actual - expected)
+    rel = d / np.maximum(np.abs(expected), 1e-2)
+    return {"max_absolute": float(d.max()), "median_relative": float(np.median(rel)),
+            "p99_relative": float(np.percentile(rel, 99))}
+
+
+def edits():
+    os.makedirs(EDIT_OUT, exist_ok=True)
+    for f in os.listdir(EDIT_OUT):
+        os.remove(os.path.join(EDIT_OUT, f))
+    by_name = {c["name"]: c for c in CASES}
+    sources = {n: (by_name[n], os.path.join(OUT, n + ".jpg"), False) for n in
+               ("iso_mono_srgb", "iso_rgb_p3", "iso_common_denominator", "iso_fractional_scale", "iso_odd_scale",
+                "apple_makernote", "iso_and_apple", "iso_orientation6")}
+    extra = [dict(name="iso_full_scale", size=(32, 24), map=(32, 24), channels=1, model="iso", iso=ISO_MONO),
+             dict(name="iso_floor_quarter", size=(47, 33), map=(11, 8), channels=3, model="iso", iso=ISO_RGB, icc=P3_ICC)]
+    extra += [dict(name="smooth_iso_half", size=(48, 32), map=(24, 16), channels=1, model="iso", iso=ISO_GAMMA,
+                   icc=P3_ICC, smooth=True),
+              dict(name="smooth_iso_quarter_rgb", size=(64, 48), map=(16, 12), channels=3, model="iso", iso=ISO_RGB,
+                   smooth=True),
+              dict(name="smooth_apple_half", size=(48, 32), map=(24, 16), channels=1, model="apple",
+                   maker=(1.01, 1.0547851), icc=P3_ICC, smooth=True)]
+    extra += [dict(name=f"iso_orient{o}", size=(46, 30), map=(23, 15), channels=1, model="iso", iso=ISO_GAMMA,
+                   icc=P3_ICC, orientation=o) for o in range(1, 9)]
+    for case in extra:
+        path = os.path.join(EDIT_OUT, case["name"] + ".jpg")
+        with open(path, "wb") as fh:
+            fh.write(build(case))
+        sources[case["name"]] = (case, path, case["name"].startswith("iso_orient"))
+
+    reference = {"tolerance": EDIT_TOLERANCE, "sources": [], "edits": []}
+    worst = {}
+    total_floats = 0
+    for name, (case, path, orient_matrix) in sources.items():
+        with open(path, "rb") as fh:
+            data = fh.read()
+        case = dict(case)
+        case["base_space"] = "p3" if case.get("icc") is P3_ICC else "srgb"
+        case["icc"] = case.get("icc") is not None
+        if case["model"] == "iso":
+            case["iso_q"] = quantized_iso(case["iso"])
+        stored_base, stored_map = decode_parts(data)
+        orientation = case.get("orientation", 1)
+        _, headroom = reconstruct(case, stored_base, stored_map)
+        stored_size = (stored_base.shape[1], stored_base.shape[0])
+        start = {"base": orient(stored_base, orientation), "map": orient(stored_map, orientation),
+                 "to_stored": orientation_affine(orientation, stored_size)}
+        h, w = start["base"].shape[:2]
+        reference["sources"].append({"name": name, "file": os.path.relpath(path, os.path.join(HERE, "corpus")),
+                                     "orientation": orientation, "width": w, "height": h,
+                                     "map_width": stored_map.shape[1], "map_height": stored_map.shape[0],
+                                     "channels": stored_map.shape[2], "headroom": headroom})
+        ops = edit_ops(w, h, start["map"].shape[1])
+        ops["none"] = []
+        names = ORIENT_OPS if orient_matrix else [k for k in ops if k != "none"]
+        for op_name in names:
+            state = dict(start)
+            exact = all([apply_edit(state, op) for op in ops[op_name]])
+            entry_name = f"{name}.{op_name}"
+            m = np.ascontiguousarray(state["map"])
+            m.tofile(os.path.join(EDIT_OUT, entry_name + ".map"))
+            edited_base = np.ascontiguousarray(state["base"])
+            edited, _ = reconstruct(case, edited_base, m)
+            ideal, _ = reconstruct(case, edited_base, stored_map, coords=stored_positions(state, stored_size))
+            stats = fidelity(edited, ideal)
+            key = ("smooth_" if case.get("smooth") else "synthetic_") + ("exact" if exact else "resampled")
+            worst[key] = {k: max(v, worst.get(key, {}).get(k, 0.0)) for k, v in stats.items()}
+            entry = {"name": entry_name, "source": name, "ops": ops[op_name], "width": state["base"].shape[1],
+                     "height": state["base"].shape[0], "map_width": m.shape[1], "map_height": m.shape[0],
+                     "map_exact": exact, "fidelity": stats}
+            if name in FLOAT_SOURCES:
+                write_f32(os.path.join(EDIT_OUT, entry_name + ".edited.f32"), edited)
+                write_f32(os.path.join(EDIT_OUT, entry_name + ".ideal.f32"), ideal)
+                entry["floats"] = True
+                total_floats += 2 * edited.size * 4
+            reference["edits"].append(entry)
+    reference["measured_fidelity"] = worst
+    budget = EDIT_TOLERANCE["fidelity"]
+    for e in reference["edits"]:
+        if e["source"].startswith("smooth_"):
+            assert all(e["fidelity"][k] <= budget[k] for k in budget), e["name"]
+    with open(os.path.join(HERE, "hdr_edit_reference.json"), "w") as fh:
+        json.dump(reference, fh, indent=1)
+        fh.write("\n")
+    print(f"{len(reference['edits'])} edits of {len(sources)} sources in {EDIT_OUT}; floats {total_floats} bytes")
+    print(json.dumps(worst, indent=1))
 
 
 def main():
@@ -473,6 +747,7 @@ def main():
         json.dump(reference, fh, indent=1)
         fh.write("\n")
     print(f"{len(reference['cases'])} valid, {len(reference['invalid'])} invalid files in {OUT}")
+    edits()
 
 
 if __name__ == "__main__":

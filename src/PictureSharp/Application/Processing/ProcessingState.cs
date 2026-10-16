@@ -1,4 +1,6 @@
+using PictureSharp.Application.Hdr;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Hdr;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Application.Processing;
@@ -20,11 +22,15 @@ internal sealed class ProcessingState(Image image, bool shared, CancellationToke
     /// <summary>Frames for reading; their buffers must not be written. Cancellation is checked before each frame.</summary>
     public FrameSequence Frames => new(Image.Frames, CancellationToken);
 
-    /// <summary>Frames whose buffers may be written in place. Cancellation is checked before each frame.</summary>
+    /// <summary>
+    /// Frames whose buffers may be written in place. Cancellation is checked before each frame. Removes the gain map,
+    /// which describes the pixels before the change.
+    /// </summary>
     public FrameSequence WritableFrames
     {
         get
         {
+            Image.GainMap = null;
             EnsureWritable();
             return new(Image.Frames, CancellationToken);
         }
@@ -48,8 +54,19 @@ internal sealed class ProcessingState(Image image, bool shared, CancellationToke
         _shared = false;
     }
 
-    /// <summary>Commits every output together, preserving canvas invariants on cancellation or failure.</summary>
-    public void ReplaceFrames<TState>(TState state, Func<ImageFrame, TState, CancellationToken, FrameReplacement> transform)
+    /// <summary>
+    /// The attached gain map after <paramref name="edit"/> of the current image, or null when none is attached. Runs
+    /// before the frames change, so a failure or cancellation leaves the image as it was.
+    /// </summary>
+    public GainMapAttachment? EditGainMap(GainMapEdit edit) =>
+        Image.GainMap is { } attachment ? GainMapEditing.Apply(attachment, Image.Size, edit, CancellationToken) : null;
+
+    /// <summary>
+    /// Commits every output together, preserving canvas invariants on cancellation or failure. The gain map follows
+    /// <paramref name="gainMapEdit"/>, or is removed without one.
+    /// </summary>
+    public void ReplaceFrames<TState>(TState state, Func<ImageFrame, TState, CancellationToken, FrameReplacement> transform,
+        GainMapEdit? gainMapEdit = null)
     {
         int count = Image.FrameCount;
         if (count == 1)
@@ -57,8 +74,9 @@ internal sealed class ProcessingState(Image image, bool shared, CancellationToke
             CancellationToken.ThrowIfCancellationRequested();
             ImageFrame frame = Image.Frames[0];
             FrameReplacement result = transform(frame, state, CancellationToken);
+            GainMapAttachment? gainMap = gainMapEdit is { } edit ? EditGainMap(edit) : null;
             CancellationToken.ThrowIfCancellationRequested();
-            Image.CommitFrames(new ReadOnlySpan<FrameReplacement>(in result));
+            Image.CommitFrames(new ReadOnlySpan<FrameReplacement>(in result), gainMap);
         }
         else
         {
@@ -69,10 +87,11 @@ internal sealed class ProcessingState(Image image, bool shared, CancellationToke
                 {
                     CancellationToken.ThrowIfCancellationRequested();
                     results[i] = transform(Image.Frames[i], state, CancellationToken);
-
                 }
+
+                GainMapAttachment? gainMap = gainMapEdit is { } edit ? EditGainMap(edit) : null;
                 CancellationToken.ThrowIfCancellationRequested();
-                Image.CommitFrames(results.AsSpan(0, count));
+                Image.CommitFrames(results.AsSpan(0, count), gainMap);
             }
             finally
             {

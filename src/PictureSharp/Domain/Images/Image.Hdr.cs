@@ -5,8 +5,8 @@ namespace PictureSharp;
 public sealed partial class Image
 {
     /// <summary>
-    /// The gain map attached by a load with <c>DecoderOptions.LoadGainMap</c>. Removed when the pixels or frames change
-    /// (<c>Mutate</c>, frame insertion, removal or reordering), because the map describes the loaded base pixels.
+    /// The gain map attached by a load with <c>DecoderOptions.LoadGainMap</c>. Geometric edits replace it with the map
+    /// carried through the same geometry; other pixel or frame changes remove it, because it describes the base pixels.
     /// </summary>
     internal GainMapAttachment? GainMap
     {
@@ -16,8 +16,10 @@ public sealed partial class Image
 
     /// <summary>
     /// The HDR gain map of the file this image was loaded from, or null when <c>DecoderOptions.LoadGainMap</c> was not
-    /// set, the file declares none, or the image was changed since loading (<c>Mutate</c> or frame changes remove it;
-    /// <see cref="Clone()"/> keeps it). Corrupt or unsupported HDR data does not fail the load; it is reported here.
+    /// set, the file declares none, or the image was changed since loading. <c>Resize</c> (except padding),
+    /// <c>Thumbnail</c>, <c>Crop</c>, <c>AutoOrient</c>, quarter-turn rotations and flips keep the map and edit it with the
+    /// base; other <c>Mutate</c> operations and frame changes remove it; <see cref="Clone()"/> keeps it. Corrupt or
+    /// unsupported HDR data does not fail the load; it is reported here.
     /// </summary>
     public HdrInfo? Hdr => GainMap?.Info;
 

@@ -68,6 +68,13 @@ internal sealed record GainMapAttachment
 
     public IGainMapDecoder? Decoder { get; init; }
 
+    /// <summary>
+    /// The map carried through geometric edits, in the geometry of the current base pixels; null while
+    /// <see cref="MapData"/> still describes them. When set, <see cref="StoredSize"/> is the current base size,
+    /// <see cref="AppliedOrientation"/> is <see cref="ExifOrientation.Unknown"/> and <c>Info.GainMapSize</c> is its size.
+    /// </summary>
+    public DecodedGainMap? EditedMap { get; init; }
+
     /// <summary>The stored size of the base image, before thumbnails and orientation.</summary>
     public Size StoredSize { get; init; }
 

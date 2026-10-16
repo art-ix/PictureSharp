@@ -90,11 +90,26 @@ variants and `ImageFormatException` for damaged maps. `HdrImage` owns its buffer
 
 ### What keeps or removes the map
 
-The map describes the loaded base pixels, so:
+The map describes the base pixels. Geometric operations edit it together with the base (since 0.6.9); everything
+else removes it (`image.Hdr` becomes null):
 
-- every `Mutate`, frame insertion, removal or reordering removes it (`image.Hdr` becomes null), including `AutoOrient`
-  and `Resize`; use `ApplyExifOrientation` and `TargetSize` while loading to get an oriented or smaller HDR image;
-- `Clone()` keeps it, `Clone(operation)` does not;
+| Operation | Gain map |
+| --- | --- |
+| `Resize` (`Stretch`, `Max`, `Min`, `Crop`), `Thumbnail` | kept, resampled with the same filter |
+| `Crop` | kept: sliced when the rectangle lies on the map grid, otherwise resampled bilinearly |
+| `AutoOrient`, `Rotate(RotateMode)`, `Rotate` by multiples of 90°, `Flip`, `RotateFlip` | kept, same array operation |
+| `Resize` with padding (`Pad`), `Pad`, rotation by other angles, color, tone, filters, drawing, masks, `Apply` | removed |
+| Frame insertion, removal or reordering | removed |
+| `Clone()`, `Clone(operation)` | kept, then the rules above apply to the copy |
+
+The edited map keeps the map-to-base ratio (`HdrInfo.GainMapSize` reports its new size). It is decoded at full
+resolution on the first edit and resampled in its 8-bit codes; results
+are deterministic and independent of the thread count. ISO 21496-1 readers such as libultrahdr sample the map from
+pixel corners, so after a flip or rotation their gain is offset by less than one map pixel (Apple's centered sampling
+is unaffected); on real maps the difference is not visible.
+
+- `ApplyExifOrientation` and `TargetSize` while loading remain the cheapest way to an oriented or smaller HDR image:
+  they need no map decode until `ToHdr`;
 - writes through pixel views are not detected: `ToHdr` uses the current pixels;
 - `ColorConversion = ToSrgb` still allows `ToHdr`, but colors outside sRGB were clipped while loading; load with the
   default `ColorConversion.None` to keep the full Display P3 gamut;
@@ -143,5 +158,5 @@ dotnet run -c Release --project samples/PictureSharp.Cli -- convert IMG_8113.jpe
 
 ## Limits of this release
 
-No HDR encoder or gain map generation, no HDR processing in `Mutate`, no HEIC/AVIF. Saving to PNG or WebP produces
+No HDR encoder or gain map generation, no HDR processing in `Mutate` beyond the geometric edits above, no HEIC/AVIF. Saving to PNG or WebP produces
 SDR. Displaying HDR is up to the application, which needs a platform API that accepts linear or PQ/HLG pixels.

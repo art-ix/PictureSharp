@@ -43,12 +43,11 @@ internal static class Geometry
     /// Rotates the frame by <paramref name="rotation"/> quarter turns clockwise, then mirrors it horizontally when
     /// <paramref name="flipX"/> is set. Even turns work in place; odd turns use RotateQuarterPixels instead.
     /// </summary>
-    public static void RotateFlip(ImageFrame frame, int rotation, bool flipX)
-    {
-        int w = frame.Width;
-        int h = frame.Height;
-        Rgba32[] src = frame.Pixels;
+    public static void RotateFlip(ImageFrame frame, int rotation, bool flipX) => RotateFlip(frame.Pixels, frame.Width, frame.Height, rotation, flipX);
 
+    /// <summary>Rotates <paramref name="src"/> in place by an even number of quarter turns, then mirrors it when <paramref name="flipX"/> is set.</summary>
+    public static void RotateFlip(Rgba32[] src, int w, int h, int rotation, bool flipX)
+    {
         if (rotation == 0 && !flipX)
         {
             return;

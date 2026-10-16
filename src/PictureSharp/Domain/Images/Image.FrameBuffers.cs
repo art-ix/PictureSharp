@@ -1,11 +1,15 @@
+using PictureSharp.Domain.Hdr;
 using PictureSharp.Domain.Frames;
 
 namespace PictureSharp;
 
 public sealed partial class Image
 {
-    /// <summary>Validates every output before publishing a common canvas, with no cancellation or callbacks during publication.</summary>
-    internal void CommitFrames(ReadOnlySpan<FrameReplacement> replacements)
+    /// <summary>
+    /// Validates every output before publishing a common canvas, with no cancellation or callbacks during publication.
+    /// <paramref name="gainMap"/> replaces the attached gain map (null removes it: it described the previous pixels).
+    /// </summary>
+    internal void CommitFrames(ReadOnlySpan<FrameReplacement> replacements, GainMapAttachment? gainMap = null)
     {
         ThrowIfDisposed();
         if (replacements.Length != _frames.Count)
@@ -16,7 +20,7 @@ public sealed partial class Image
             if (replacement.Width != replacements[0].Width || replacement.Height != replacements[0].Height)
                 throw new ArgumentException("All frames must share a canvas.", nameof(replacements));
         }
-        GainMap = null;   // the map describes the loaded pixels
+        GainMap = gainMap;
         for (int i = 0; i < replacements.Length; i++) _frames[i].Publish(replacements[i]);
     }
 

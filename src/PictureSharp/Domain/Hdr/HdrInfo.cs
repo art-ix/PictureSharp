@@ -17,7 +17,10 @@ public sealed record HdrInfo
     /// </summary>
     public HdrGainMapKinds Selected { get; init; }
 
-    /// <summary>The stored size of the gain map, or <see cref="Size.Empty"/> when it is unknown.</summary>
+    /// <summary>
+    /// The stored size of the gain map, or <see cref="Size.Empty"/> when it is unknown. After geometric edits that keep
+    /// the map (<c>Resize</c>, <c>Crop</c>, quarter turns, flips) it is the size of the edited map.
+    /// </summary>
     public Size GainMapSize { get; init; }
 
     /// <summary>
