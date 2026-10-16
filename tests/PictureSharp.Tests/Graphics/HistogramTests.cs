@@ -10,6 +10,17 @@ public class HistogramTests
     public static IEnumerable<string> Cases() => GraphicsReference.Names("histogram");
 
     [Test]
+    [Arguments(int.MaxValue, 1)]
+    [Arguments(1, int.MaxValue)]
+    [Arguments(int.MaxValue, int.MaxValue)]
+    public void Histogram_OverflowingRegion_Throws(int width, int height)
+    {
+        using var image = new Image(2, 2);
+        var options = new HistogramOptions { Region = new Rectangle(1, 1, width, height) };
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => image.GetHistogram(options));
+    }
+
+    [Test]
     [MethodDataSource(nameof(Cases))]
     public async Task Histogram_MatchesReference(string name)
     {

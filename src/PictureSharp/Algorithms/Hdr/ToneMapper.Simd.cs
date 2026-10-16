@@ -34,12 +34,9 @@ internal sealed partial class ToneMapper
             Vector128<int> a = Vector128.LoadUnsafe(ref s, (nuint)((i * 4) + 12)).AsInt32();
             Simd.Transpose(ref r, ref g, ref b, ref a);
             (Vector128<float> red, Vector128<float> green, Vector128<float> blue) = (r.AsSingle(), g.AsSingle(), b.AsSingle());
-            if (_toSrgb is { } m)
+            if (_toSrgb is { } matrix)
             {
-                (red, green, blue) = (
-                    (Vector128.Create(m[0]) * red) + (Vector128.Create(m[1]) * green) + (Vector128.Create(m[2]) * blue),
-                    (Vector128.Create(m[3]) * red) + (Vector128.Create(m[4]) * green) + (Vector128.Create(m[5]) * blue),
-                    (Vector128.Create(m[6]) * red) + (Vector128.Create(m[7]) * green) + (Vector128.Create(m[8]) * blue));
+                (red, green, blue) = matrix.Transform(red, green, blue);
             }
 
             red *= exposure;

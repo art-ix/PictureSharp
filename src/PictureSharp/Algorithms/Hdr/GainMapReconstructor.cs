@@ -16,8 +16,8 @@ internal sealed partial class GainMapReconstructor
     private readonly GainMapParameters _p;
     private readonly DecodedGainMap _map;
     private readonly float[] _linear;      // 768 entries: R, G, B codes → linear
-    private readonly float[]? _toMultiply; // 3×3, null for identity
-    private readonly float[]? _toOutput;   // 3×3, null for identity
+    private readonly HdrColorMatrix? _toMultiply; // 3×3, null for identity
+    private readonly HdrColorMatrix? _toOutput;   // 3×3, null for identity
     private readonly float _weight;        // ISO weight of the alternate rendition
     private readonly float _appleFactor;   // Apple: headroom − 1
     private readonly int _width, _height;
@@ -42,8 +42,8 @@ internal sealed partial class GainMapReconstructor
         _map = map;
         _linear = baseLinearization ?? SrgbTables();
         HdrColorSpace multiplySpace = parameters.MultiplicationSpace ?? baseSpace;
-        _toMultiply = Matrix(baseSpace, multiplySpace);
-        _toOutput = Matrix(multiplySpace, outputSpace);
+        _toMultiply = HdrColorMatrix.Between(baseSpace, multiplySpace);
+        _toOutput = HdrColorMatrix.Between(multiplySpace, outputSpace);
         (_width, _height) = (size.Width, size.Height);
         (_storedWidth, _storedHeight) = (storedSize.Width, storedSize.Height);
         _orientation = orientation;
@@ -127,7 +127,7 @@ internal sealed partial class GainMapReconstructor
             float r = linear[p.R], g = linear[256 + p.G], b = linear[512 + p.B];
             if (_toMultiply is { } m)
             {
-                (r, g, b) = Transform(m, r, g, b);
+                (r, g, b) = m.Transform(r, g, b);
             }
 
             (float bx, float by) = BasePosition(x, y);
@@ -160,7 +160,7 @@ internal sealed partial class GainMapReconstructor
 
             if (_toOutput is { } o)
             {
-                (r, g, b) = Transform(o, r, g, b);
+                (r, g, b) = o.Transform(r, g, b);
             }
 
             target[x] = new Rgba128(r, g, b, p.A / 255f);
@@ -198,20 +198,6 @@ internal sealed partial class GainMapReconstructor
             ExifOrientation.LeftBottom => (ow - 1 - y, x),
             _ => (x, y),
         };
-    }
-
-    private static (float, float, float) Transform(float[] m, float r, float g, float b) =>
-        ((m[0] * r) + (m[1] * g) + (m[2] * b), (m[3] * r) + (m[4] * g) + (m[5] * b), (m[6] * r) + (m[7] * g) + (m[8] * b));
-
-    private static float[]? Matrix(HdrColorSpace source, HdrColorSpace target)
-    {
-        if (source == target)
-        {
-            return null;
-        }
-
-        ColorMatrix c = HdrColorSpaces.Conversion(source, target);
-        return [(float)c.M00, (float)c.M01, (float)c.M02, (float)c.M10, (float)c.M11, (float)c.M12, (float)c.M20, (float)c.M21, (float)c.M22];
     }
 
     private static float[] SrgbTables()

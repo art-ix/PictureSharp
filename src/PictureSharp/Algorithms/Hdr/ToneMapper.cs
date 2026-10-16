@@ -8,17 +8,13 @@ namespace PictureSharp.Algorithms.Hdr;
 /// </summary>
 internal sealed partial class ToneMapper
 {
-    private readonly float[]? _toSrgb;
+    private readonly HdrColorMatrix? _toSrgb;
     private readonly float _exposure;
     private readonly float _inverseWhiteSquared;
 
     public ToneMapper(HdrColorSpace source, float exposure, float whitePoint)
     {
-        if (source != HdrColorSpace.LinearSrgb)
-        {
-            ColorMatrix m = HdrColorSpaces.Conversion(source, HdrColorSpace.LinearSrgb);
-            _toSrgb = [(float)m.M00, (float)m.M01, (float)m.M02, (float)m.M10, (float)m.M11, (float)m.M12, (float)m.M20, (float)m.M21, (float)m.M22];
-        }
+        _toSrgb = HdrColorMatrix.Between(source, HdrColorSpace.LinearSrgb);
 
         _exposure = float.Exp2(exposure);
         _inverseWhiteSquared = 1f / (whitePoint * whitePoint);
@@ -39,9 +35,9 @@ internal sealed partial class ToneMapper
         {
             Rgba128 p = source[i];
             float r = p.R, g = p.G, b = p.B;
-            if (_toSrgb is { } m)
+            if (_toSrgb is { } matrix)
             {
-                (r, g, b) = ((m[0] * r) + (m[1] * g) + (m[2] * b), (m[3] * r) + (m[4] * g) + (m[5] * b), (m[6] * r) + (m[7] * g) + (m[8] * b));
+                (r, g, b) = matrix.Transform(r, g, b);
             }
 
             r *= _exposure;

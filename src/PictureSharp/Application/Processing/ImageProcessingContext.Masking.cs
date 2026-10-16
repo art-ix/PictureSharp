@@ -34,7 +34,7 @@ public readonly ref partial struct ImageProcessingContext
         int height = source.Height;
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            AlphaMask.Apply(frame, pixels, width, height, location, options);
+            AlphaMask.Apply(frame, pixels, width, height, location, options, cancellationToken: _state.CancellationToken);
         }
 
         return this;

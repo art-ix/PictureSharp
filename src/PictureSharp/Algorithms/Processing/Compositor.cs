@@ -16,7 +16,7 @@ internal static partial class Compositor
     /// keeps to the scalar code, which the vector code equals bit for bit (tests compare them).
     /// </summary>
     public static void DrawOver(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity,
-        bool vectorize = true)
+        bool vectorize = true, CancellationToken cancellationToken = default)
     {
         int x0 = Math.Max(0, at.X);
         int y0 = Math.Max(0, at.Y);
@@ -32,6 +32,7 @@ internal static partial class Compositor
 
         for (int y = y0; y < y1; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, x1 - x0);
             ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), x1 - x0);
             int done = vectorize ? OverRowSimd(dstRow, srcRow, opacity) : 0;
@@ -48,7 +49,7 @@ internal static partial class Compositor
     /// Like <see cref="DrawOver"/>, but blends linear-light sRGB with premultiplied alpha in float precision:
     /// out = src + dst × (1 − src alpha), with the source alpha scaled by <paramref name="opacity"/> unrounded.
     /// </summary>
-    public static void DrawOverLinear(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity)
+    public static void DrawOverLinear(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity, CancellationToken cancellationToken = default)
     {
         int x0 = Math.Max(0, at.X);
         int y0 = Math.Max(0, at.Y);
@@ -62,6 +63,7 @@ internal static partial class Compositor
         int n = x1 - x0;
         for (int y = y0; y < y1; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, n);
             ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), n);
             for (int x = 0; x < n; x++)

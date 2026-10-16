@@ -65,7 +65,25 @@ internal static class ToneLut
     }
 
     /// <summary>Maps the color channels of <paramref name="pixels"/> through <paramref name="lut"/>.</summary>
-    public static void Apply(Span<Rgba32> pixels, ReadOnlySpan<byte> lut)
+    public static void Apply(Span<Rgba32> pixels, ReadOnlySpan<byte> lut, CancellationToken cancellationToken = default)
+    {
+        if (!cancellationToken.CanBeCanceled)
+        {
+            ApplyBlock(pixels, lut);
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        for (int offset = 0; offset < pixels.Length;)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int length = Math.Min(16384, pixels.Length - offset);
+            ApplyBlock(pixels.Slice(offset, length), lut);
+            offset += length;
+        }
+    }
+
+    private static void ApplyBlock(Span<Rgba32> pixels, ReadOnlySpan<byte> lut)
     {
         ReadOnlySpan<byte> r = lut[..256];
         ReadOnlySpan<byte> g = lut.Slice(256, 256);

@@ -82,7 +82,7 @@ public readonly ref partial struct ImageProcessingContext
         foreach (ImageFrame frame in Target.Frames)
         {
             _state.CancellationToken.ThrowIfCancellationRequested();
-            Histogram.Accumulate(frame.GetPixelSpan(), counts, excludeTransparent: false);
+            Histogram.Accumulate(frame.GetPixelSpan(), counts, excludeTransparent: false, _state.CancellationToken);
         }
 
         return counts;
@@ -97,5 +97,5 @@ public readonly ref partial struct ImageProcessingContext
     }
 
     private ImageProcessingContext ApplyToneLut(byte[] lut) =>
-        ToneLut.IsIdentity(lut) ? this : ForEachPixelSpan(lut, static (pixels, table) => ToneLut.Apply(pixels, table));
+        ToneLut.IsIdentity(lut) ? this : ForEachPixelSpan((Lut: lut, Token: _state.CancellationToken), static (pixels, state) => ToneLut.Apply(pixels, state.Lut, state.Token));
 }

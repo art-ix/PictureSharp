@@ -31,25 +31,26 @@ public readonly ref partial struct ImageProcessingContext
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(options);
         ImageFrame src = source.Frames.RootFrame;
-        Rgba32[] pixels = ReferenceEquals(source, Target) ? (Rgba32[])src.Pixels.Clone() : src.Pixels;
         if (options.Opacity == 0f)
         {
             return this;
         }
 
+        Rgba32[] pixels = ReferenceEquals(source, Target) ? (Rgba32[])src.Pixels.Clone() : src.Pixels;
+
         foreach (ImageFrame frame in _state.WritableFrames)
         {
             if (options.BlendMode != BlendMode.Normal)
             {
-                Compositor.DrawBlended(frame, pixels, src.Width, src.Height, location, options.Opacity, options.BlendMode, options.LinearLight);
+                Compositor.DrawBlended(frame, pixels, src.Width, src.Height, location, options.Opacity, options.BlendMode, options.LinearLight, cancellationToken: _state.CancellationToken);
             }
             else if (options.LinearLight)
             {
-                Compositor.DrawOverLinear(frame, pixels, src.Width, src.Height, location, options.Opacity);
+                Compositor.DrawOverLinear(frame, pixels, src.Width, src.Height, location, options.Opacity, cancellationToken: _state.CancellationToken);
             }
             else
             {
-                Compositor.DrawOver(frame, pixels, src.Width, src.Height, location, options.Opacity);
+                Compositor.DrawOver(frame, pixels, src.Width, src.Height, location, options.Opacity, cancellationToken: _state.CancellationToken);
             }
         }
 

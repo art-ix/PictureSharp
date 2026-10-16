@@ -14,7 +14,7 @@ internal static partial class AlphaMask
     /// <paramref name="vectorize"/> = false keeps to the scalar code, which the vector code equals (tests compare them).
     /// </summary>
     public static void Apply(ImageFrame frame, ReadOnlySpan<Rgba32> mask, int maskWidth, int maskHeight, Point at, MaskOptions options,
-        bool vectorize = true)
+        bool vectorize = true, CancellationToken cancellationToken = default)
     {
         int x0 = Math.Clamp(at.X, 0, frame.Width);
         int y0 = Math.Clamp(at.Y, 0, frame.Height);
@@ -25,6 +25,7 @@ internal static partial class AlphaMask
         int flip = options.Invert ? 255 : 0;
         for (int y = 0; y < frame.Height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Span<Rgba32> row = frame.GetRowSpan(y);
             if (y < y0 || y >= y1 || x0 >= x1)
             {

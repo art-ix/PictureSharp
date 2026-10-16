@@ -251,6 +251,30 @@ public class CancellationInFlightTests
         }, token).Dispose());
     }
 
+    [Test]
+    [Arguments("mask")]
+    [Arguments("normal")]
+    [Arguments("linear")]
+    [Arguments("multiply")]
+    [Arguments("levels")]
+    [Arguments("autocontrast")]
+    [Arguments("equalize")]
+    public async Task Graphics_StopsPromptlyInsideSingleFrame(string operation)
+    {
+        using Image target = Noise(4096, 4096);
+        using Image source = Noise(4096, 4096, seed: 2);
+        await AssertCancelsPromptly(token => target.Mutate(x => _ = operation switch
+        {
+            "mask" => x.ApplyMask(source, new MaskOptions { Channel = MaskChannel.Luminance }),
+            "normal" => x.DrawImage(source, System.Drawing.Point.Empty, 0.5f),
+            "linear" => x.DrawImage(source, System.Drawing.Point.Empty, new DrawImageOptions { LinearLight = true, Opacity = 0.5f }),
+            "multiply" => x.DrawImage(source, System.Drawing.Point.Empty, new DrawImageOptions { BlendMode = BlendMode.Multiply }),
+            "levels" => x.Gamma(1.2f),
+            "autocontrast" => x.AutoContrast(1f),
+            _ => x.Equalize(),
+        }, token));
+    }
+
     /// <summary>
     /// Measures the uncanceled duration, then cancels a second run at a quarter of it: the run must end with
     /// <see cref="OperationCanceledException"/> well before it would have finished.

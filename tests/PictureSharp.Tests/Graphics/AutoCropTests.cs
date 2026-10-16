@@ -28,6 +28,25 @@ public class AutoCropTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task AutoCrop_AnimationBounds_DoNotDependOnFrameOrder(bool reverse)
+    {
+        using var image = new Image(10, 10);
+        ImageFrame second = image.Frames.AddClone(image.Frames.RootFrame);
+        ImageFrame upper = reverse ? second : image.Frames.RootFrame;
+        ImageFrame lower = reverse ? image.Frames.RootFrame : second;
+        upper[2, 2] = new Rgba32(0, 255, 0);
+        lower[6, 7] = new Rgba32(255, 0, 0);
+
+        await Assert.That(image.FindTrimBounds()).IsEqualTo(new Rectangle(2, 2, 5, 6));
+        image.Mutate(x => x.AutoCrop());
+        await Assert.That(image.Size).IsEqualTo(new Size(5, 6));
+        await Assert.That(upper[0, 0]).IsEqualTo(new Rgba32(0, 255, 0));
+        await Assert.That(lower[4, 5]).IsEqualTo(new Rgba32(255, 0, 0));
+    }
+
+    [Test]
     [MethodDataSource(nameof(Cases))]
     public async Task AutoCrop_MatchesReference(string name)
     {

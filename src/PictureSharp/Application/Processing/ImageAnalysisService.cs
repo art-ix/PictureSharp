@@ -7,19 +7,13 @@ namespace PictureSharp.Application.Processing;
 /// <summary>Read-only analyses of an image; they never change pixels.</summary>
 internal static class ImageAnalysisService
 {
-    private const int RowsPerBlock = 64;
-
     public static ImageHistogram GetHistogram(Image image, HistogramOptions? options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(image);
         options ??= HistogramOptions.Default;
         cancellationToken.ThrowIfCancellationRequested();
         Rectangle region = options.Region ?? new Rectangle(Point.Empty, image.Size);
-        if (region.Width <= 0 || region.Height <= 0 || region.X < 0 || region.Y < 0 ||
-            region.Right > image.Width || region.Bottom > image.Height)
-        {
-            throw new ArgumentOutOfRangeException(nameof(options), region, "The histogram region must be non-empty and inside the image.");
-        }
+        Image.CheckRectangle(region, image.Width, image.Height, nameof(options));
 
         long[] counts = new long[Histogram.Length];
         long pixels = 0;
@@ -30,14 +24,8 @@ internal static class ImageAnalysisService
             ImageFrame frame = image.Frames[f];
             if (region.Width == frame.Width)
             {
-                // Full rows are contiguous: count blocks of rows, checking cancellation between them.
-                ReadOnlySpan<Rgba32> all = frame.GetPixelSpan();
-                for (int y = region.Y; y < region.Bottom; y += RowsPerBlock)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    int rows = Math.Min(RowsPerBlock, region.Bottom - y);
-                    pixels += Histogram.Accumulate(all.Slice(y * frame.Width, rows * frame.Width), counts, exclude);
-                }
+                ReadOnlySpan<Rgba32> pixelsInRegion = frame.GetPixelSpan().Slice(region.Y * frame.Width, region.Height * frame.Width);
+                pixels += Histogram.Accumulate(pixelsInRegion, counts, exclude, cancellationToken);
 
                 continue;
             }
@@ -45,7 +33,7 @@ internal static class ImageAnalysisService
             for (int y = region.Y; y < region.Bottom; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                pixels += Histogram.Accumulate(frame.GetRowSpan(y).Slice(region.X, region.Width), counts, exclude);
+                pixels += Histogram.Accumulate(frame.GetRowSpan(y).Slice(region.X, region.Width), counts, exclude, cancellationToken);
             }
         }
 

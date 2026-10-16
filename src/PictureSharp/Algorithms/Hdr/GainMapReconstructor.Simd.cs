@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -43,7 +42,7 @@ internal sealed partial class GainMapReconstructor
             Vector128<float> b = Vector128.Create(linear[512 + p0.B], linear[512 + p1.B], linear[512 + p2.B], linear[512 + p3.B]);
             if (_toMultiply is { } m)
             {
-                (r, g, b) = Transform(m, r, g, b);
+                (r, g, b) = m.Transform(r, g, b);
             }
 
             Vector128<int> xs = Vector128.Create(x) + lane;
@@ -84,7 +83,7 @@ internal sealed partial class GainMapReconstructor
 
             if (_toOutput is { } o)
             {
-                (r, g, b) = Transform(o, r, g, b);
+                (r, g, b) = o.Transform(r, g, b);
             }
 
             Vector128<float> a = Vector128.Create((float)p0.A, p1.A, p2.A, p3.A) / Vector128.Create(255f);
@@ -99,9 +98,4 @@ internal sealed partial class GainMapReconstructor
         return count;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static (Vector128<float>, Vector128<float>, Vector128<float>) Transform(float[] m, Vector128<float> r, Vector128<float> g, Vector128<float> b) =>
-        ((Vector128.Create(m[0]) * r) + (Vector128.Create(m[1]) * g) + (Vector128.Create(m[2]) * b),
-         (Vector128.Create(m[3]) * r) + (Vector128.Create(m[4]) * g) + (Vector128.Create(m[5]) * b),
-         (Vector128.Create(m[6]) * r) + (Vector128.Create(m[7]) * g) + (Vector128.Create(m[8]) * b));
 }

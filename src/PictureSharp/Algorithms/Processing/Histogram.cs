@@ -11,8 +11,9 @@ internal static class Histogram
     public const int Length = 5 * 256;
 
     /// <summary>Adds <paramref name="pixels"/> to <paramref name="counts"/> and returns how many were counted.</summary>
-    public static long Accumulate(ReadOnlySpan<Rgba32> pixels, Span<long> counts, bool excludeTransparent)
+    public static long Accumulate(ReadOnlySpan<Rgba32> pixels, Span<long> counts, bool excludeTransparent, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // Neighbouring pixels often share values; alternating between two sets of 32-bit counters breaks the chain of
         // dependent increments on the same entry. A frame holds fewer than 2^31 pixels, so they cannot overflow.
         int[] rented = ArrayPool<int>.Shared.Rent(2 * Length);
@@ -23,10 +24,15 @@ internal static class Histogram
             even.Clear();
             odd.Clear();
             int i = 0;
-            for (; i + 1 < pixels.Length; i += 2)
+            while (i + 1 < pixels.Length)
             {
-                Count(even, pixels[i], excludeTransparent);
-                Count(odd, pixels[i + 1], excludeTransparent);
+                cancellationToken.ThrowIfCancellationRequested();
+                int end = i + Math.Min(16384, (pixels.Length - i) & ~1);
+                for (; i < end; i += 2)
+                {
+                    Count(even, pixels[i], excludeTransparent);
+                    Count(odd, pixels[i + 1], excludeTransparent);
+                }
             }
 
             if (i < pixels.Length)

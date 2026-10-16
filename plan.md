@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja kodu: 0.6.7 (biblioteka i paczki adapterów; HDR z gain map, SIMD dla HDR i grafiki). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Wydano 0.6.7 (SIMD dla HDR i grafiki); kolejnym etapem jest 0.6.6 (weryfikacja Apple na macOS), wydawane po 0.6.7. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja kodu: 0.6.8 (biblioteka i paczki adapterów; poprawki po review 0.6.7). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Przygotowano lokalnie 0.6.8 (poprawki i refaktoryzacje). Wydano 0.6.7 (SIMD dla HDR i grafiki); 0.6.6 (weryfikacja Apple na macOS) odłożone do czasu dostępności zasobów. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
@@ -56,8 +56,9 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Ukończona — opublikowana |
 | 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Ukończona — wydanie 0.6.4 |
 | 0.6.5 | HDR z JPEG iPhone: gain map Apple i ISO 21496-1, rekonstrukcja HDR i konwersja do SDR | Ukończona — wydanie 0.6.5 (weryfikacja Apple na macOS przeniesiona do 0.6.6) |
-| 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, benchmarki HDR, usuwanie deklaracji Ultra HDR przy zapisie SDR | Planowana |
+| 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, benchmarki HDR, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona — wrócimy, gdy będzie dostępny macOS |
 | 0.6.7 | SIMD dla HDR (rekonstrukcja, tone mapping, deterministyczne Exp2/Log2) i operacji 0.6.3 (mieszanie, AutoCrop, maski, histogram/Levels) | Ukończona — wydanie 0.6.7 |
+| 0.6.8 | Poprawki AutoCrop animacji, zakończenia zapisu i obszaru histogramu; anulowanie grafiki, refaktoryzacje HDR/SIMD | Przygotowana lokalnie — bez publikacji |
 | 0.7.0 | Integracja ICO, sześciu obszarów, adapterów i JPEG HDR, stabilizacja API i wydanie | Planowana |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości. Nazwy nowych opcji i metod poniżej są robocze do czasu zatwierdzenia migawki API.
@@ -473,6 +474,18 @@ DoD:
 - Operacje 0.6.3 bajtowo identyczne z 0.6.6; HDR w budżetach referencji f32 i wyroczni libultrahdr; x64 == ARM64.
 - Pomiary przed/po (x64 i Orange Pi 5) w `docs/measurements/` i `docs/performance.md`; ścieżki bez zysku usunięte;
   brak nowych alokacji; wspólna bramka jakości i konsument trim/Native AOT.
+
+## 0.6.8 — poprawki po review
+
+- AutoCrop/FindTrimBounds zachowuje sumę granic wszystkich klatek niezależnie od ich kolejności.
+- Ponowne CompleteAsync z anulowanym tokenem zachowuje ukończony plik; walidacja obszaru histogramu odrzuca przepełnienia.
+- Anulowanie maskowania i mieszania między wierszami, LUT i histogramu między blokami; wspólne macierze HDR, deklaracje SIMD w plikach partial i brak kopiowania źródła przy opacity = 0.
+- Testy regresji i anulowania. Publiczne API bez zmian.
+
+Weryfikacja lokalna linux-x64: Release 5673/5680 (7 GDI+ pominiętych, 0 błędów), Oracle 176/176,
+SIMD bez AVX2 i bez intrinsics po 128/128, konsument biblioteki i adapterów z pełnym trimmingiem i Native AOT.
+Końcowa wersja zmian nie była testowana na ARM64 zgodnie z poleceniem użytkownika. Przygotowano lokalną wersję 0.6.8;
+publikacja i dalsza weryfikacja wydania wymagają osobnego polecenia.
 
 ## 0.7.0 — integracja i stabilizacja
 

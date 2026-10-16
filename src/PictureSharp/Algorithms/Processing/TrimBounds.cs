@@ -47,7 +47,7 @@ internal static partial class TrimBounds
                 left = Math.Min(left, x0);
                 right = Math.Max(right, Math.Max(x0, x1));
                 top = Math.Min(top, y);
-                bottom = y;
+                bottom = Math.Max(bottom, y);
             }
         }
 

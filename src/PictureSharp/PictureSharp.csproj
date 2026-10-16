@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.6.7 adds SIMD (NEON on ARM64, SSE and AVX2 on x64) to HDR reconstruction and tone mapping and to DrawImage blend modes, ApplyMask and AutoCrop: up to 5x faster on x64. HDR results are now bit-identical on x64 and ARM64 (own deterministic float math; floats differ from 0.6.5 by a few ulp); graphics results are unchanged. No API changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.7/docs/releases/release-0.6.7.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.8 fixes animation trimming, repeated frame-writer completion with a canceled token, and histogram region overflow. Improves cancellation in graphics operations and refactors HDR color transforms without public API changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.8/docs/releases/release-0.6.8.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

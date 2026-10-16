@@ -10,6 +10,30 @@ namespace PictureSharp.Algorithms.Processing;
 // the bytes are identical to the scalar code. Branches of the blend functions become selects of both results.
 internal static partial class Compositor
 {
+    private partial interface IBlendFunction
+    {
+        /// <summary>Lane-wise <see cref="Blend(float, float)"/> with the same operations.</summary>
+        static abstract Vector128<float> Blend(Vector128<float> cb, Vector128<float> cs);
+
+        /// <summary>Lane-wise <see cref="Blend(float, float)"/> with the same operations.</summary>
+        static abstract Vector256<float> Blend(Vector256<float> cb, Vector256<float> cs);
+    }
+
+    private partial interface IChannelTransfer
+    {
+        /// <summary>Lane-wise <see cref="Decode(byte)"/> of values 0–255.</summary>
+        static abstract Vector128<float> Decode(Vector128<int> value);
+
+        /// <summary>Lane-wise <see cref="Encode(float)"/>, as ints 0–255.</summary>
+        static abstract Vector128<int> Encode(Vector128<float> value);
+
+        /// <summary>Lane-wise <see cref="Decode(byte)"/> of values 0–255.</summary>
+        static abstract Vector256<float> Decode(Vector256<int> value);
+
+        /// <summary>Lane-wise <see cref="Encode(float)"/>, as ints 0–255.</summary>
+        static abstract Vector256<int> Encode(Vector256<float> value);
+    }
+
     /// <summary>Blends whole groups of eight (AVX2) and four pixels of a row; returns the pixels processed.</summary>
     private static int BlendRowSimd<TChannels, TMode>(Span<Rgba32> dstRow, ReadOnlySpan<Rgba32> srcRow, float opacity)
         where TChannels : struct, IChannelTransfer

@@ -38,6 +38,32 @@ public class FrameWriterTests
     }
 
     [Test]
+    public async Task CompletedWriter_CanceledCompletion_PreservesFile()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"picturesharp-completed-{Guid.NewGuid():N}.png");
+        try
+        {
+            using Image source = Pattern(1);
+            await using (var writer = Image.CreateFrameWriter(path, source.Size))
+            {
+                await writer.WriteAsync(source.Frames.RootFrame);
+                await writer.CompleteAsync();
+                byte[] completed = File.ReadAllBytes(path);
+                await writer.CompleteAsync(new CancellationToken(canceled: true));
+                await Assert.That(writer.IsComplete).IsTrue();
+                await Assert.That(File.ReadAllBytes(path)).IsEquivalentTo(completed, CollectionOrdering.Matching);
+            }
+
+            using Image decoded = Image.Load(path);
+            await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Test]
     [MethodDataSource(nameof(Formats))]
     public async Task Writer_RoundTripsSeekableAndTemporaryOutputs_AtNonzeroOffset(string format)
     {

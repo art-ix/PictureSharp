@@ -101,8 +101,12 @@ public sealed class ImageFrameWriter : IDisposable, IAsyncDisposable
         Begin();
         try
         {
+            if (IsComplete)
+            {
+                return;
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
-            if (IsComplete) return;
             await _session.CompleteAsync(cancellationToken).ConfigureAwait(false);
             if (_destination is not null)
             {
@@ -116,14 +120,13 @@ public sealed class ImageFrameWriter : IDisposable, IAsyncDisposable
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            IsComplete = true;
             // Close owned files now, so the completed path can be opened before disposing the writer.
             await _session.DisposeAsync().ConfigureAwait(false);
             if (_ownsStream) await _encoded.DisposeAsync().ConfigureAwait(false);
+            IsComplete = true;
         }
         catch
         {
-            IsComplete = false;
             await AbortAsync().ConfigureAwait(false);
             throw;
         }

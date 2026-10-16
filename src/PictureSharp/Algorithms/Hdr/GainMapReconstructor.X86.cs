@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using PictureSharp.Domain.Hdr;
@@ -36,7 +35,7 @@ internal sealed partial class GainMapReconstructor
                 linear[512 + p4.B], linear[512 + p5.B], linear[512 + p6.B], linear[512 + p7.B]);
             if (_toMultiply is { } m)
             {
-                (r, g, b) = Transform(m, r, g, b);
+                (r, g, b) = m.Transform(r, g, b);
             }
 
             Vector256<int> xs = Vector256.Create(x) + lane;
@@ -77,7 +76,7 @@ internal sealed partial class GainMapReconstructor
 
             if (_toOutput is { } o)
             {
-                (r, g, b) = Transform(o, r, g, b);
+                (r, g, b) = o.Transform(r, g, b);
             }
 
             Vector256<float> a = Vector256.Create((float)p0.A, p1.A, p2.A, p3.A, p4.A, p5.A, p6.A, p7.A) / Vector256.Create(255f);
@@ -98,9 +97,4 @@ internal sealed partial class GainMapReconstructor
         return count;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static (Vector256<float>, Vector256<float>, Vector256<float>) Transform(float[] m, Vector256<float> r, Vector256<float> g, Vector256<float> b) =>
-        ((Vector256.Create(m[0]) * r) + (Vector256.Create(m[1]) * g) + (Vector256.Create(m[2]) * b),
-         (Vector256.Create(m[3]) * r) + (Vector256.Create(m[4]) * g) + (Vector256.Create(m[5]) * b),
-         (Vector256.Create(m[6]) * r) + (Vector256.Create(m[7]) * g) + (Vector256.Create(m[8]) * b));
 }
