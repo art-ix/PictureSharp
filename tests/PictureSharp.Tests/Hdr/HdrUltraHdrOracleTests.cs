@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Formats.Jpeg;
+using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
 namespace PictureSharp.Tests.Hdr;
@@ -136,6 +138,58 @@ public class HdrUltraHdrOracleTests
         }
         finally
         {
+            File.Delete(output);
+        }
+    }
+
+    public static IEnumerable<(string Name, string Edit)> WrittenCases() =>
+        IsoCases().SelectMany(n => new[] { (n, "none"), (n, "rotate90_half") });
+
+    /// <summary>
+    /// Files written with JpegGainMapMode.Require, unedited and edited, decode in ultrahdr_app within the full-pipeline
+    /// budget against PictureSharp's ToHdr of the same written file. The base is written 4:4:4 like the corpus: with
+    /// 4:2:0, libultrahdr's chroma upsampling of the noisy synthetic bases alone exceeds the budget.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(WrittenCases))]
+    public async Task WrittenFiles_DecodeInUltraHdrApp(string name, string edit)
+    {
+        Skip.Unless(ReferenceTools.HasUltraHdr, "libultrahdr v2.0.2 tools are not built (scripts/build-ultrahdr-reference.sh).");
+        var options = new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true };
+        using Image image = Image.Load(HdrGainMapTests.File(name + ".jpg"), options);
+        if (edit == "rotate90_half")
+        {
+            image.Mutate(x => x.Rotate(RotateMode.Rotate90).Resize(image.Height / 2, image.Width / 2));
+        }
+
+        byte[] file = image.ToJpeg(new JpegEncoderOptions { GainMap = JpegGainMapMode.Require, Quality = 95, Subsampling = JpegSubsampling.Ratio444 });
+        string path = Path.Combine(Path.GetTempPath(), $"ps-uhdr-{name}-{Guid.NewGuid():N}.jpg"), output = path + ".raw";
+        try
+        {
+            File.WriteAllBytes(path, file);
+            int code = ReferenceTools.Run("ultrahdr_app", $"-m 1 -j \"{path}\" -o 0 -O 4 -z \"{output}\"", out string log);
+            if (code != 0) throw new InvalidOperationException($"ultrahdr_app failed ({code}): {log}");
+            float[] reference = [.. MemoryMarshal.Cast<byte, Half>(File.ReadAllBytes(output)).ToArray().Select(h => (float)h)];
+            using Image written = Image.Load(file, options);
+            using HdrImage hdr = written.ToHdr();
+            await Assert.That(reference.Length).IsEqualTo(hdr.Width * hdr.Height * 4);
+            // As in the 0.6.5 budget, libultrahdr resizes maps whose aspect ratio differs from the base by more than 1%
+            // (rounded map sizes after edits of small images); those only have to decode.
+            System.Drawing.Size map = written.Hdr!.GainMapSize;
+            double baseAspect = (double)written.Width / written.Height, mapAspect = (double)map.Width / map.Height;
+            if (Math.Abs(baseAspect - mapAspect) / baseAspect > 0.01)
+            {
+                return;
+            }
+
+            Stats s = Measure(hdr.GetPixelSpan(), reference, 0, 0, stride: 4, clamp: v => Math.Clamp(v, 0f, 10000f / 203f));
+            await Assert.That(s.MaxAbsolute).IsLessThanOrEqualTo(Budget.GetProperty("pipeline_max_absolute").GetDouble()).Because($"{name}/{edit}: {s}");
+            await Assert.That(s.MedianRelative).IsLessThanOrEqualTo(Budget.GetProperty("pipeline_median_relative").GetDouble()).Because($"{name}/{edit}: {s}");
+            await Assert.That(s.P99Relative).IsLessThanOrEqualTo(Budget.GetProperty("pipeline_p99_relative").GetDouble()).Because($"{name}/{edit}: {s}");
+        }
+        finally
+        {
+            File.Delete(path);
             File.Delete(output);
         }
     }

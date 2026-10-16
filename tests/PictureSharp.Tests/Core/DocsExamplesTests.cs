@@ -71,6 +71,17 @@ public sealed class DocsExamplesTests : IDisposable
     }
 
     [Test]
+    public async Task Hdr_SaveWithTheGainMap()
+    {
+        using Image photo = Image.Load(P("IMG_8113.jpeg"), new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true });
+        photo.Mutate(x => x.Resize(1600, 0));
+        photo.SaveAsJpeg(P("small-hdr.jpeg"), new JpegEncoderOptions { Quality = 90, GainMap = JpegGainMapMode.Preserve });
+        using Image reloaded = Image.Load(P("small-hdr.jpeg"), new DecoderOptions { LoadGainMap = true });
+        await Assert.That(reloaded.Width).IsEqualTo(1600);
+        await Assert.That(reloaded.HasHdr).IsTrue();
+    }
+
+    [Test]
     public async Task Metadata_TypedTagsAndEditingWithoutRecompression()
     {
         ImageMetadata metadata = Image.ReadMetadata(P("photo.jpg"));

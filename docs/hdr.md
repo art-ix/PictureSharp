@@ -113,11 +113,36 @@ is unaffected); on real maps the difference is not visible.
 - writes through pixel views are not detected: `ToHdr` uses the current pixels;
 - `ColorConversion = ToSrgb` still allows `ToHdr`, but colors outside sRGB were clipped while loading; load with the
   default `ColorConversion.None` to keep the full Display P3 gamut;
-- encoders never write the map or HDR declarations: `Save` produces an SDR file.
+- `Save` produces an SDR file unless `JpegEncoderOptions.GainMap` asks for the map (see below).
 
 With `TargetSize`, `ToHdr` reconstructs at the reduced size and decodes the map with a reduced inverse DCT, so no
 full-size buffer is needed for thumbnails. The map's pixels count towards `MaxPixels` when it is attached; a map over
 the limit makes `HasHdr` false instead of failing the load.
+
+## Saving with the gain map
+
+`JpegEncoderOptions.GainMap` writes the attached map after the base image, so an edited photo stays HDR:
+
+```csharp
+using Image photo = Image.Load("IMG_8113.jpeg", new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true });
+photo.Mutate(x => x.Resize(1600, 0));
+photo.SaveAsJpeg("small-hdr.jpeg", new JpegEncoderOptions { Quality = 90, GainMap = JpegGainMapMode.Preserve });
+```
+
+| Mode | Map attached and ISO 21496-1 | No map, Apple-only map or unusable map |
+| --- | --- | --- |
+| `None` (default) | SDR file, byte for byte as without the map | SDR file |
+| `Preserve` | file with the map | SDR file |
+| `Require` | file with the map | `InvalidOperationException` (no map), `NotSupportedException` (Apple-only or unsupported), `ImageFormatException` (damaged) |
+
+The file follows libultrahdr v2.0.2 with its default settings: ISO 21496-1 metadata only (a version block in the base
+image, the full metadata in the map) and an MPF directory before the base image's first scan. No Ultra HDR XMP
+(`hdrgm`) is generated; a user XMP packet that declares a gain map (Ultra HDR XMP or a GContainer directory) is left
+out, because it would describe the source file's items. EXIF and ICC are written as usual. The ISO metadata is copied
+from the source byte for byte, and files with both Apple and ISO metadata are written with ISO only. A map that was
+not edited is copied without re-encoding (also after `TargetSize`); an edited map, or one oriented by
+`ApplyExifOrientation`, is encoded with `GainMapQuality` (default 95, as libultrahdr), gray maps as grayscale JPEG and
+RGB maps without chroma subsampling. Converting Apple-only maps to ISO 21496-1 is not supported.
 
 ## Tone mapping
 
@@ -158,5 +183,5 @@ dotnet run -c Release --project samples/PictureSharp.Cli -- convert IMG_8113.jpe
 
 ## Limits of this release
 
-No HDR encoder or gain map generation, no HDR processing in `Mutate` beyond the geometric edits above, no HEIC/AVIF. Saving to PNG or WebP produces
+No gain map generation from HDR pixels (`HdrImage` cannot be saved), no HDR processing in `Mutate` beyond the geometric edits above, no HEIC/AVIF. Saving to PNG or WebP produces
 SDR. Displaying HDR is up to the application, which needs a platform API that accepts linear or PQ/HLG pixels.

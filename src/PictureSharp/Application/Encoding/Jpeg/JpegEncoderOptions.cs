@@ -31,6 +31,17 @@ public sealed record JpegEncoderOptions : EncoderOptions
         init => field = value.A == 255 ? value : throw new ArgumentOutOfRangeException(nameof(BackgroundColor), value, "Expected an opaque background.");
     } = Rgba32.White;
 
+    /// <summary>
+    /// Whether the HDR gain map attached by <c>DecoderOptions.LoadGainMap</c> (and kept through geometric edits) is
+    /// written after the base image. Default: <see cref="JpegGainMapMode.None"/>, an SDR file. Only ISO 21496-1 maps are
+    /// written; an Apple-only map is skipped by <see cref="JpegGainMapMode.Preserve"/> and rejected by
+    /// <see cref="JpegGainMapMode.Require"/> with <see cref="NotSupportedException"/>.
+    /// </summary>
+    public JpegGainMapMode GainMap { get; init => field = Check.Defined(value); }
+
+    /// <summary>Quality from 1 to 100 of a gain map that has to be re-encoded (after edits). Default: 95, as libultrahdr.</summary>
+    public int GainMapQuality { get; init => field = Check.Range(value, 1, 100); } = 95;
+
     /// <summary>Maximum number of threads to use (1 = single-threaded, -1 = automatic). Output does not depend on it.</summary>
     public int MaxDegreeOfParallelism { get; init => field = Check.Parallelism(value); } = -1;
 }

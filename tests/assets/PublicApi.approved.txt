@@ -192,13 +192,19 @@ sealed class PictureSharp.Formats.ImageDecodeContext
 sealed record PictureSharp.Formats.Jpeg.JpegEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PictureSharp.Formats.Jpeg.JpegEncoderOptions>
     ctor()
     property ImageFormat Format { get; }
+    property PictureSharp.Formats.Jpeg.JpegGainMapMode GainMap { get; init; }
     property PictureSharp.Formats.Jpeg.JpegSubsampling Subsampling { get; init; }
     property Rgba32 BackgroundColor { get; init; }
     property System.Boolean OptimizeCoding { get; init; }
     property System.Boolean Progressive { get; init; }
+    property System.Int32 GainMapQuality { get; init; }
     property System.Int32 MaxDegreeOfParallelism { get; init; }
     property System.Int32 Quality { get; init; }
     property System.Int32 RestartInterval { get; init; }
+enum PictureSharp.Formats.Jpeg.JpegGainMapMode
+    None = 0
+    Preserve = 1
+    Require = 2
 static class PictureSharp.Formats.Jpeg.JpegImageExtensions
     method [Extension] static System.Byte[] ToJpeg(Image image, PictureSharp.Formats.Jpeg.JpegEncoderOptions? options = null)
     method [Extension] static System.Threading.Tasks.Task SaveAsJpegAsync(Image image, System.IO.Stream stream, PictureSharp.Formats.Jpeg.JpegEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)

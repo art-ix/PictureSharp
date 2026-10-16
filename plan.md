@@ -76,7 +76,7 @@ Decyzje zatwierdzone (2026-10-16):
   `Mutate` (wcześniej `null`, `ToHdr` → `InvalidOperationException`) opisana w notatkach wydania.
 - `JpegEncoderOptions.GainMap` typu `JpegGainMapMode`: `None` (domyślnie), `Preserve` (zapis mapy, gdy dołączona i
   dekodowalna, inaczej zwykły JPEG) i `Require` (brak mapy lub wariant niezapisywalny → wyjątek). Dodatkowo
-  `GainMapQuality` z domyślną wartością ustaloną według libultrahdr. Nazwy robocze do migawki API.
+  `GainMapQuality` (1–100, domyślnie 95 jak `kMapCompressQualityDefault` libultrahdr). Nazwy robocze do migawki API.
 
 Konwencje geometrii mapy (ustalone przed implementacją, porównane ze źródłami libultrahdr 2.0.2):
 - Mapa pokrywa całe płótno bazy, piksel mapy (i, j) odpowiada prostokątowi bazy [i·sx, (i+1)·sx) × [j·sy, (j+1)·sy),
@@ -104,10 +104,14 @@ Zakres:
   libultrahdr 2.0.2 (`uhdr_add_effect_crop/resize/rotate/mirror`).
 - Pozostałe operacje (kolor, ton, filtry, mieszanie, maski, `Pad`/`Canvas`, obrót o dowolny kąt, zmiany ramek) nadal
   usuwają mapę. Polityka opisana w `docs/hdr.md` w jednej tabeli.
-- Enkoder JPEG z mapą (Ultra HDR 1.1 / ISO 21496-1, jak libultrahdr): baza z ICC, EXIF i XMP; APP2 MPF z dwoma
-  obrazami i poprawnymi offsetami (wspólny kod z `JpegMpf` i `EditMetadata`); w bazie XMP `hdrgm`/GContainer i APP2
-  z wersją ISO; w mapie APP2 z metadanymi ISO i XMP `hdrgm`. Mapa nieprzekształcona jest kopiowana bez rekompresji;
-  przekształcona kodowana jako JPEG mono lub RGB jak źródło.
+- Enkoder JPEG z mapą (ISO 21496-1 jak domyślny build libultrahdr 2.0.2 `appendGainMap`, `UHDR_WRITE_ISO=ON`,
+  `UHDR_WRITE_XMP=OFF`; decyzja użytkownika 2026-10-16): baza SOI, APP0 JFIF, EXIF, XMP użytkownika, ICC, APP2 ISO
+  (wersje 0/0), DQT/SOF/DHT, APP2 MPF (big-endian, dwa wpisy) tuż przed pierwszym SOS, skan…EOI; mapa SOI, APP2 ISO,
+  ICC mapy ze źródła, segmenty mapy bez APPn. Bez generowanego XMP `hdrgm`/GContainer; XMP użytkownika, które deklaruje
+  gain map (przestrzenie `hdr-gain-map` lub GContainer), jest pomijane przy zapisie z mapą (opisywałoby nieaktualne
+  elementy). Payload ISO kopiowany bajtowo ze źródła (parametry się nie zmieniają). Mapa nieprzekształcona (także po
+  `TargetSize`) kopiowana bez rekompresji; przekształcona lub zorientowana przy ładowaniu kodowana z
+  `GainMapQuality` (domyślnie 95, `kMapCompressQualityDefault`), mono jako JPEG w skali szarości, RGB jako 4:4:4.
 - Warianty: źródło ISO oraz Apple+ISO zapisywane jako ISO (bez Apple MakerNote w nowej deklaracji); samo Apple
   (iOS 14–17) → `Require` daje `NotSupportedException`, `Preserve` zapisuje SDR. Konwersja Apple→ISO poza zakresem.
 - SPI dla wtyczki HEIF (decyzja użytkownika 2026-10-16): `ImageInfo.ContainerItemCount` (`int?`, ≥ 0) — liczba
