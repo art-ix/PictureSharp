@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.6.8 (opublikowana).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.6.8 (opublikowana); 0.6.9 gotowa do wydania (VERSION 0.6.9, nieopublikowana).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -37,7 +37,7 @@ pracy: `progres.md` (bez commitowania).
 | Wersja | Zakres | Status |
 | --- | --- | --- |
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
-| 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Planowana |
+| 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Gotowa do wydania (DoD i bramka linux-x64; bez ARM64) |
 | 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
@@ -151,6 +151,13 @@ DoD:
   innych formatach.
 
 Kolejność: decyzje API → referencje → model mapy → operacje geometryczne → enkoder → CLI i dokumentacja → pomiary i bramka.
+
+Stan (2026-10-16): wszystkie kroki wykonane. DoD: 228 edycji (operacje × orientacje 1–8 × mapy 1/1, 1/2, 1/4,
+ułamkowe i nieparzyste; mono/RGB; ISO, Apple, Apple+ISO) bajtowo zgodne z modelem; round-trip i kopia mapy bez
+rekompresji; domyślny zapis bez zmian; limity, uszkodzone mapy, anulowanie i alokacje; `ultrahdr_app` dekoduje nasze
+pliki w budżecie 0.6.5 (baza 4:4:4); pomiary 12/48 MP w `docs/performance.md`; migawka API, `docs/hdr.md`,
+`docs/cli.md`, `DocsExamplesTests`. Bramka linux-x64: 7168 testów, fallbacki SIMD, konsument trim/Native AOT.
+Otwarte poza DoD 0.6.9: ARM64 (do bramki 0.7.0), weryfikacja na Apple (0.6.6).
 
 ## 0.7.0 — integracja i stabilizacja
 
@@ -301,3 +308,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.6.5** — HDR z JPEG z gain map (Apple, ISO 21496-1): `ToHdr`, `ToneMap`, edycja metadanych z zachowaniem mapy.
 - **0.6.7** — SIMD dla HDR (deterministyczne Exp2/Log2) i operacji graficznych.
 - **0.6.8** — poprawki po review: AutoCrop animacji, Resize Min, TargetSize z limitem wątków, anulowanie VP8L.
+- **0.6.9** — gain map zachowana przy operacjach geometrycznych, zapis JPEG z mapą ISO 21496-1 (`JpegEncoderOptions.GainMap`), `ImageInfo.ContainerItemCount`, CLI `-hdr keep` (gotowe, nieopublikowane).

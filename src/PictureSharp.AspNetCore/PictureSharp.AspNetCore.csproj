@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.AspNetCore</RootNamespace>
     <PackageId>PictureSharp.AspNetCore</PackageId>
     <Description>Returns PictureSharp images from ASP.NET Core endpoints with Accept-based WebP/PNG/JPEG negotiation, and reads uploaded images with size limits and request cancellation.</Description>
-    <PackageReleaseNotes>0.6.8: unchanged adapter, released with PictureSharp 0.6.8 (correctness and graphics cancellation fixes). Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.8/docs/releases/release-0.6.8.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.9: unchanged adapter, released with PictureSharp 0.6.9 (HDR gain maps kept through geometric edits and written to JPEG). Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.9/docs/releases/release-0.6.9.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;aspnetcore;minimal-api;iresult;webp;content-negotiation</PackageTags>
   </PropertyGroup>
 

@@ -1,0 +1,30 @@
+[
+  {
+    "Size": "12mp",
+    "KeepGainMap": false,
+    "Nanoseconds": 54448300,
+    "AllocatedBytes": 60528960,
+    "OutputBytes": 190130
+  },
+  {
+    "Size": "12mp",
+    "KeepGainMap": true,
+    "Nanoseconds": 63051100,
+    "AllocatedBytes": 66257784,
+    "OutputBytes": 246216
+  },
+  {
+    "Size": "48mp",
+    "KeepGainMap": false,
+    "Nanoseconds": 183372400,
+    "AllocatedBytes": 241184672,
+    "OutputBytes": 625741
+  },
+  {
+    "Size": "48mp",
+    "KeepGainMap": true,
+    "Nanoseconds": 197431800,
+    "AllocatedBytes": 263273664,
+    "OutputBytes": 808877
+  }
+]

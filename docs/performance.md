@@ -870,3 +870,23 @@ The 80-case complete-operation matrix (`matrix-probe`) against release 0.6.5 in 
 change +0.24%, largest allocation increase +0.29%. Three cases were above +5%: WebP lossy encode (+26%, one of the
 two current samples), JPEG encode (+7.7%, one sample) and GIF encode (+10.8%, both samples). No codec changed in
 0.6.7, and these were not rechecked in alternating runs. [Raw matrix](measurements/simd-regression.csv).
+
+## Editing and saving HDR photos (0.6.9)
+
+`Load` → `Resize` to half → `Save` (JPEG quality 90) of a synthetic JPEG with an ISO 21496-1 RGB gain map at a quarter
+of the base resolution (`HdrEditBenchmarks`, `hdr-edit-probe`: median of nine runs after three warmups). "SDR" loads
+without `LoadGainMap` and saves the base only; "gain map" loads the map, resizes it with the base (decoded on the first
+edit) and writes it with `JpegGainMapMode.Require`. x64: Intel Core i5-12500H (16 threads), .NET 10, Linux.
+
+| Image | SDR | With gain map | Allocated (SDR / gain map) | Output |
+| --- | --- | --- | --- | --- |
+| 12 MP (4000×3000, map 1000×750) | 54–56 ms | 59–63 ms | 57.7 / 63.2 MiB | 190 / 246 KB |
+| 48 MP (8000×6000, map 2000×1500) | 181–183 ms | 197–198 ms | 230.0 / 251.1 MiB | 626 / 809 KB |
+
+Keeping the map adds 6–16% time and the map's own buffers (its decoded pixels, the resized map and its JPEG);
+no full-size float buffer is allocated. Ranges are two runs of the probe. Raw data:
+[hdr-edit-0.6.9-x64.json](measurements/hdr-edit-0.6.9-x64.json). Not measured on ARM64.
+
+```bash
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- hdr-edit-probe docs/measurements/hdr-edit-0.6.9-x64.json
+```
