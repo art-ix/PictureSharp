@@ -33,7 +33,8 @@ internal sealed partial class ImageOutput
         try
         {
             token.ThrowIfCancellationRequested();
-            await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
+            var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous);
+            await using (stream.ConfigureAwait(false))
             {
                 for (int offset = 0; offset < data.Length;)
                 {

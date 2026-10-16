@@ -67,7 +67,7 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
             throw new NotSupportedException("JPEG stores colors only as an ICC profile; gamma, chromaticities and sRGB intent are PNG chunks.");
         bool resolution = metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution;
         using var output = new PooledBufferStream();
-        output.Write(new byte[] { 0xff, 0xd8 });
+        output.Write([0xff, 0xd8]);
         if (resolution)
         {
             if (metadata.HorizontalResolution > 65535 || metadata.VerticalResolution > 65535) throw new ArgumentOutOfRangeException(nameof(metadata), "JPEG JFIF resolution must fit in 16 bits.");

@@ -21,8 +21,11 @@ internal static class StreamBuffer
     public static async Task<byte[]> ReadFileAsync(string path, long maxBytes, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(path);
-        await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 0, FileOptions.Asynchronous);
-        return await ReadAllAsync(file, maxBytes, cancellationToken).ConfigureAwait(false);
+        var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 0, FileOptions.Asynchronous);
+        await using (file.ConfigureAwait(false))
+        {
+            return await ReadAllAsync(file, maxBytes, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public static byte[] ReadAll(Stream stream, long maxBytes, CancellationToken cancellationToken = default)

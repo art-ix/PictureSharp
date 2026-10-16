@@ -79,6 +79,8 @@ public readonly ref partial struct ImageProcessingContext
                 break;
             case ResizeMode.Min:
                 (w, h) = Resizer.CoverSize(srcWidth, srcHeight, width, height);
+                // Covering an extreme aspect ratio can exceed the requested canvas (double-to-int saturates).
+                ImageFrame.ValidateSize(w, h);
                 break;
         }
 
