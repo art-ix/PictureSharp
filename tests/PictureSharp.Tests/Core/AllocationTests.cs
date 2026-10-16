@@ -20,7 +20,10 @@ namespace PictureSharp.Tests.Core;
 [ExecutionPriority(Priority.High)]
 public class AllocationTests
 {
+    // Alone: other tests renting large buffers from the shared ArrayPool at the same time made the encoder allocate
+    // its histograms again on a 4-core CI runner (4.8 MB).
     [Test]
+    [NotInParallel]
     public async Task LosslessWebPEncoding_PoolsHistograms()
     {
         using Image image = Image.Load(Corpus.PathOf("src/photo.png"));
