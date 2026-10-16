@@ -44,7 +44,7 @@ cat > "$smoke_root/consumer/NuGet.Config" <<EOF
     <add key="nuget" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
-    <packageSource key="local"><package pattern="PictureSharp" /></packageSource>
+    <packageSource key="local"><package pattern="PictureSharp" /><package pattern="PictureSharp.*" /></packageSource>
     <packageSource key="nuget"><package pattern="*" /></packageSource>
   </packageSourceMapping>
 </configuration>
@@ -78,3 +78,60 @@ for framework in UseWindowsForms UseWPF UseMaui; do
     fi
 done
 echo "Global usings checked: added with ImplicitUsings, removed by opt-out and for Windows Forms, WPF and MAUI"
+
+# Adapter packages: separate packages that depend only on PictureSharp and their target API.
+for adapter in Drawing Skia AspNetCore; do
+    dotnet pack "$project_root/src/PictureSharp.$adapter/PictureSharp.$adapter.csproj" -c Release -o "$smoke_root/feed"
+done
+python3 -I - "$smoke_root/feed" "$version" <<'PYADAPTERS'
+import sys, zipfile, xml.etree.ElementTree as ET
+feed, version = sys.argv[1], sys.argv[2]
+expected = {"Drawing": {"System.Drawing.Common"}, "Skia": {"SkiaSharp"}, "AspNetCore": set()}
+for adapter, targets in expected.items():
+    package_id = f"PictureSharp.{adapter}"
+    with zipfile.ZipFile(f"{feed}/{package_id}.{version}.nupkg") as package:
+        names = package.namelist()
+        required = {"LICENSE", "THIRD-PARTY-NOTICES.txt", "README.md", f"lib/net10.0/{package_id}.dll", f"lib/net10.0/{package_id}.xml"}
+        assert required.issubset(names), f"{package_id} is missing required files"
+        assert [name for name in names if name.endswith(".dll")] == [f"lib/net10.0/{package_id}.dll"], f"{package_id} has extra assemblies"
+        assert not any(name.startswith("runtimes/") for name in names), f"{package_id} has native assets"
+        spec = ET.fromstring(package.read(f"{package_id}.nuspec"))
+        deps = {node.get("id"): node.get("version") for node in spec.iter() if node.tag.rsplit("}", 1)[-1] == "dependency"}
+        assert deps.get("PictureSharp") == version, f"{package_id} must depend on PictureSharp {version}: {deps}"
+        assert set(deps) - {"PictureSharp"} == targets, f"{package_id} has unexpected dependencies: {deps}"
+        frameworks = {node.get("name") for node in spec.iter() if node.tag.rsplit("}", 1)[-1] == "frameworkReference"}
+        assert frameworks == ({"Microsoft.AspNetCore.App"} if adapter == "AspNetCore" else set()), f"{package_id}: {frameworks}"
+print("Adapter packages checked: one assembly each, XML docs, README, licenses, dependencies on PictureSharp and the target API only")
+PYADAPTERS
+
+# The consumer runs the adapter smoke program from the local packages; System.Drawing is compiled and trimmed, and
+# runs only on Windows.
+mkdir -p "$smoke_root/adapters"
+cp "$project_root/samples/PictureSharp.AdaptersSmoke/Program.cs" "$smoke_root/consumer/NuGet.Config" "$smoke_root/adapters/"
+skia_native="$(sed -n 's/.*"SkiaSharp.NativeAssets.Linux" Version="\([^"]*\)".*/\1/p' "$project_root/samples/PictureSharp.AdaptersSmoke/PictureSharp.AdaptersSmoke.csproj")"
+cat > "$smoke_root/adapters/Adapters.csproj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesPath>$smoke_root/cache</RestorePackagesPath>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="PictureSharp.Drawing" Version="$version" />
+    <PackageReference Include="PictureSharp.Skia" Version="$version" />
+    <PackageReference Include="PictureSharp.AspNetCore" Version="$version" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="$skia_native" />
+  </ItemGroup>
+</Project>
+EOF
+dotnet publish "$smoke_root/adapters/Adapters.csproj" -c Release -r linux-x64 --self-contained true -o "$smoke_root/adapters-trimmed"
+"$smoke_root/adapters-trimmed/Adapters"
+dotnet publish "$smoke_root/adapters/Adapters.csproj" -c Release -r linux-x64 --self-contained true -p:PublishAot=true -o "$smoke_root/adapters-aot"
+"$smoke_root/adapters-aot/Adapters"
+echo "Adapter consumer checked: local packages, full trimming and Native AOT linux-x64"

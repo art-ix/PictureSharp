@@ -50,6 +50,16 @@ public class ArchitectureTests
     }
 
     [Test]
+    public async Task Library_ReferencesOnlyTheSharedRuntime()
+    {
+        // BCL-only: no package, adapter (PictureSharp.Drawing/Skia/AspNetCore) or native-wrapper assembly.
+        string runtime = System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory();
+        var foreign = Library.GetReferencedAssemblies().Select(a => a.Name!)
+            .Where(name => !File.Exists(Path.Combine(runtime, name + ".dll")) || name.StartsWith("PictureSharp", StringComparison.Ordinal));
+        await Assert.That(foreign).IsEmpty();
+    }
+
+    [Test]
     public async Task OnlyInfrastructure_PerformsFilesystemIO()
     {
         Dictionary<string, string> layers = await SourceLayers();

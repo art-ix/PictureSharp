@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CA1707;TUnit0046</NoWarn>
+    <!-- Filters for core-only categories (Oracle, SimdTests) select no adapter tests; that is not a failure. -->
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --ignore-exit-code 8</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TUnit" Version="1.72.16" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.6" />
+    <!-- Native Skia for the Linux test run; the PictureSharp.Skia package leaves the choice of native assets to the app. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="TUnit.Assertions.Enums" />
+    <Using Include="PictureSharp" />
+    <ProjectReference Include="..\..\src\PictureSharp.Drawing\PictureSharp.Drawing.csproj" />
+    <ProjectReference Include="..\..\src\PictureSharp.Skia\PictureSharp.Skia.csproj" />
+    <ProjectReference Include="..\..\src\PictureSharp.AspNetCore\PictureSharp.AspNetCore.csproj" />
+  </ItemGroup>
+
+</Project>

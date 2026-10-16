@@ -1,6 +1,6 @@
-# Publishing a GitHub Release builds, tests and packs the library, pushes the
-# package to nuget.org (Trusted Publishing, no stored API key) and attaches it
-# to the release.
+# Publishing a GitHub Release builds, tests and packs the library and its adapter
+# packages, pushes them to nuget.org (Trusted Publishing, no stored API key) and attaches
+# them to the release.
 name: Release
 
 on:
@@ -41,7 +41,11 @@ jobs:
       # Oracle tests skip without the reference tools; Local and External need private or downloaded files.
       - run: dotnet test -c Release --no-build --treenode-filter "/*/*/*/*[(Category!=Local)&(Category!=External)]"
 
-      - run: dotnet pack src/PictureSharp/PictureSharp.csproj -c Release --no-build -o artifacts
+      - name: Pack the library and the adapters
+        run: |
+          for project in PictureSharp PictureSharp.Drawing PictureSharp.Skia PictureSharp.AspNetCore; do
+            dotnet pack "src/$project/$project.csproj" -c Release --no-build -o artifacts
+          done
 
       - name: NuGet login
         id: login

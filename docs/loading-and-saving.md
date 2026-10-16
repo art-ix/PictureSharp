@@ -221,6 +221,8 @@ app.MapGet("/thumb/{name}", async (string name, int? w, CancellationToken ct) =>
 });
 ```
 
+The `PictureSharp.AspNetCore` package returns `Results.Extensions.Image(image)` instead: it negotiates WebP, PNG or JPEG from the `Accept` header, writes `Content-Length`, `Vary` and `Cache-Control`, stops on `RequestAborted` and reads uploads with `request.ReadImageAsync(options)`; see [Adapters](adapters.md#aspnet-core).
+
 ### Memory in a server
 
 A decoded image holds 4 bytes per pixel and frame: a 12-megapixel photo takes 48 MB, and an animation takes that much for every frame. Decoders and encoders rent their temporary buffers (rows, planes, histograms, compressed data) from `ArrayPool<T>.Shared`, so in a steady state a request allocates about the decoded pixels plus the encoded output. The pool keeps a few buffers for reuse and releases them under memory pressure.

@@ -17,7 +17,9 @@ The library version comes from the [VERSION](../VERSION) file, read by `Director
 | Path | Contents |
 | --- | --- |
 | `src/PictureSharp/` | Layered library: `Domain/`, `Application/`, `Infrastructure/`, `Algorithms/`, `Primitives/`, `PublicApi/`, `Composition/`; see [architecture](architecture.md) |
+| `src/PictureSharp.Drawing/`, `src/PictureSharp.Skia/`, `src/PictureSharp.AspNetCore/` | [Adapter packages](adapters.md) with their own dependencies, outside the library |
 | `tests/PictureSharp.Tests/` | TUnit tests on Microsoft.Testing.Platform |
+| `tests/PictureSharp.Adapters.Tests/` | Adapter tests: pixel round trips, a `TestServer` integration and dependency checks; GDI+ tests run on Windows only |
 | `tests/assets/` | Corpus, reference hashes, oracle scripts, public API snapshot |
 | `benchmarks/` | BenchmarkDotNet |
 | `samples/PictureSharp.Cli/` | [Command-line sample](cli.md) |
@@ -99,4 +101,4 @@ dotnet publish samples/PictureSharp.AotSmoke -c Release -r linux-x64 --self-cont
 
 Native AOT requires the platform linker/toolchain. Repeat the full tests and smoke consumer on ARM64 hardware before claiming ARM64 runtime verification.
 
-See [Extending PictureSharp](extending-picturesharp.md) for model invariants, codec contracts, processing and C# 14 consumer checks. Push/PR and release use the same validation workflow; `bash scripts/verify-package-consumer.sh` verifies the local package with full trimming and Native AOT on linux-x64, including a format plugin, a frame processor and the package's `global using PictureSharp;` (added under `ImplicitUsings`, removed by `PictureSharpImplicitUsings=false` and for Windows Forms, WPF and MAUI).
+See [Extending PictureSharp](extending-picturesharp.md) for model invariants, codec contracts, processing and C# 14 consumer checks. Push/PR and release use the same validation workflow; `bash scripts/verify-package-consumer.sh` verifies the local package with full trimming and Native AOT on linux-x64, including a format plugin, a frame processor and the package's `global using PictureSharp;` (added under `ImplicitUsings`, removed by `PictureSharpImplicitUsings=false` and for Windows Forms, WPF and MAUI). It then packs the adapters, checks that each package has one assembly and depends only on PictureSharp and its target API, and runs `samples/PictureSharp.AdaptersSmoke` from the local packages with full trimming and Native AOT.

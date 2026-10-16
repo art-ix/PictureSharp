@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="../PictureSharp.Adapters.props" />
+
+  <PropertyGroup>
+    <RootNamespace>PictureSharp.Skia</RootNamespace>
+    <PackageId>PictureSharp.Skia</PackageId>
+    <Description>Copies PictureSharp images to and from SkiaSharp SKBitmap, SKImage and SKPixmap with an explicit alpha policy.</Description>
+    <PackageTags>picturesharp;image;skiasharp;skia;skbitmap;interop</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+
+</Project>

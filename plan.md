@@ -2,11 +2,11 @@
 
 ## Stan i cel
 
-**Bieżąca wersja kodu: 0.6.3 (przygotowana do publikacji; ostatnia opublikowana: 0.6.2). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Kolejnym etapem implementacji jest 0.6.4. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja kodu: 0.6.3 (opublikowana). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Etap 0.6.4 (adaptery) jest zaimplementowany lokalnie; testy GDI+ czekają na Windows (CI). Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
-Do 0.7.0 dodajemy odczyt i zapis ICO oraz rozwijamy sześć obszarów: miniatury przy dekodowaniu, kontrolę zasobów, sekwencyjne animacje, zarządzanie kolorem, metadane i operacje graficzne. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL) pozostają poza tym planem.
+Do 0.7.0 dodajemy odczyt i zapis ICO oraz rozwijamy sześć obszarów: miniatury przy dekodowaniu, kontrolę zasobów, sekwencyjne animacje, zarządzanie kolorem, metadane i operacje graficzne. W 0.6.5 dodajemy odczyt HDR z JPEG pochodzących z iPhone’a (obraz bazowy i mapa wzmocnienia, gain map). Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, HEIF/HEIC, AVIF, JPEG XL) pozostają poza tym planem.
 
 Szczegóły istniejącego API i ograniczeń: `README.md`, `docs/`, XML docs oraz `tests/assets/PublicApi.approved.txt`. Wyniki pomiarów: `docs/performance.md`. Lokalna historia pracy: `progres.md` (bez commitowania). Historyczne szczegóły implementacji pozostają w historii Git.
 
@@ -53,9 +53,10 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Ukończona — wydanie 0.6.0 |
 | 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Ukończona — wydanie 0.6.1 |
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Ukończona — opublikowana |
-| 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Ukończona — wersja 0.6.3 przygotowana do publikacji |
-| 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Planowana |
-| 0.7.0 | Integracja ICO i sześciu obszarów, stabilizacja API i wydanie | Planowana |
+| 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Ukończona — opublikowana |
+| 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Zaimplementowana lokalnie — GDI+ do sprawdzenia na Windows |
+| 0.6.5 | HDR z JPEG iPhone: gain map Apple i ISO 21496-1, rekonstrukcja HDR i konwersja do SDR | Planowana |
+| 0.7.0 | Integracja ICO, sześciu obszarów, adapterów i JPEG HDR, stabilizacja API i wydanie | Planowana |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości. Nazwy nowych opcji i metod poniżej są robocze do czasu zatwierdzenia migawki API.
 
@@ -357,11 +358,100 @@ DoD:
 - Paczki z `LICENSE` i notices; `PictureSharp` nadal bez `PackageReference`; architektura nie zależy od adapterów (test architektury).
 - Konsument z lokalnego feedu buduje się; trimming/AOT sprawdzone tam, gdzie zależność to obsługuje.
 
+Weryfikacja 2026-10-16 (linux-x64): `src/PictureSharp.Drawing` (System.Drawing.Common 10.0.0; `ToBitmap` w
+32bppArgb/PArgb/24bppRgb/32bppRgb, `Image.FromBitmap`, rozdzielczość, ujemny stride), `src/PictureSharp.Skia`
+(SkiaSharp 3.119.4; `ToSKBitmap`/`ToSKImage` Rgba8888/Bgra8888 × Unpremul/Premul, `FromSKBitmap/FromSKPixmap/FromSKImage`
+dla dowolnego typu koloru, źródło Opaque → alfa 255), `src/PictureSharp.AspNetCore` (`ImageResult`,
+`Results.Extensions.Image`, `ImageResultOptions`: negocjacja `Accept` z q i wildcardami, `Content-Length`, `Vary`,
+`Cache-Control`, HEAD, opcjonalne 406, bufor przed zapisem, `RequestAborted`; `request.ReadImageAsync` → 413 przy
+`MaxInputBytes`). Wszystkie konwersje kopiują. API rdzenia bez zmian (migawka niezmieniona). Build 0 ostrzeżeń;
+5313/5313 testów, 7 pominiętych (GDI+ tylko na Windows; logika wierszy/stride testowana na pamięci natywnej);
+`TestServer`: format, nagłówki, anulowanie w trakcie kodowania, limity. Oracle 155/155. Testy architektury: rdzeń tylko runtime,
+adaptery tylko PictureSharp + docelowe API. `verify-package-consumer.sh`: paczki z `LICENSE`/notices/README, jeden
+assembly, zależności; konsument z lokalnego feedu (trim + Native AOT linux-x64). CI: job `adapters-windows`; Release
+pakuje cztery paczki. Nieuruchomione: testy GDI+ na Windows, ARM64, Trusted Publishing dla nowych identyfikatorów NuGet.
+
+## 0.6.5 — HDR ze zdjęć iPhone: JPEG z gain map
+
+Cel: odczytać rzeczywistą informację HDR z JPEG zawierającego obraz bazowy SDR i mapę wzmocnienia,
+udostępnić liniowe piksele HDR oraz umożliwić świadomą konwersję do zwykłego obrazu SDR. Sam odczyt bazowego
+JPEG lub podbicie jasności nie oznacza obsługi HDR. Pierwszy etap obejmuje zdjęcia statyczne i eksporty JPEG
+z ekosystemu iPhone; HEIF/HEIC, ProRAW/DNG i wideo pozostają poza zakresem.
+
+Formaty i źródła:
+- Rozróżnić starszy Apple HDR Gain Map oraz Adaptive HDR oparty na ISO 21496-1; to osobne warianty metadanych
+  i rekonstrukcji. Apple opisuje oba podejścia w [WWDC24: Use HDR for dynamic image experiences](https://developer.apple.com/videos/play/wwdc2024/10177/).
+- Starszy wariant: mapa luminancji, jej krzywa transferu, `HDRGainMapVersion` i parametry headroom z Apple
+  MakerNote według [Applying Apple HDR effect to your photos](https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos).
+  Nie traktować wzoru Apple jako implementacji ISO 21496-1.
+- Dla ISO zweryfikować specyfikację oraz strukturę JPEG/MPF i metadanych na podstawie przypiętej wersji
+  [libultrahdr](https://github.com/google/libultrahdr). Narzędzie służy jako zewnętrzna wyrocznia dla wspólnego
+  podzbioru ISO; biblioteka PictureSharp pozostaje BCL-only. Zgodność z samym XMP Adobe/Ultra HDR nie jest
+  automatycznie zgodnością z Apple. Przed portowaniem sprawdzić licencję i uzupełnić notices.
+
+Zakres:
+- Najpierw macierz rzeczywistych wariantów: model iPhone’a, wersja systemu, sposób eksportu, typ gain map,
+  przestrzeń barwna, orientacja i rozdzielczości obu obrazów. Nie każdy JPEG z iPhone’a zawiera HDR; zwykły
+  eksport SDR musi zostać poprawnie rozpoznany. Prywatne zdjęcia wyłącznie lokalnie; do repo syntetyczne
+  odpowiedniki i próbki z prawem redystrybucji, bez GPS. Pobieranie zewnętrznych korpusów wymaga zgody.
+- Parser kontenera JPEG: MPF/APP2, odpowiednie APP1/XMP i Apple MakerNote, identyfikacja oraz bezpieczne
+  wydzielenie pomocniczego JPEG. Użyć istniejącego dekodera do bazy i mapy; nie zakładać stałego rozmiaru
+  mapy ani że każdy dodatkowy obraz jest gain map. Mapa nie jest klatką animacji w `Image.Frames`.
+- `Image.Identify` ma opisywać obecność, wariant i deklarowane parametry HDR bez pełnego dekodowania pikseli;
+  odróżnić wykrycie deklaracji od potwierdzenia możliwości rekonstrukcji. Zwykłe `Image.Load` nadal zwraca
+  bazę SDR z dotychczasowymi pikselami. Odczyt HDR jest jawny, z przeciążeniami strumień/plik i async oraz
+  wspólnymi `DecoderOptions` i anulowaniem.
+- API pozostaje skupione na `Image`: roboczo rozszerzenie `Image.LoadHdr(...)` zwracające osobny wynik z
+  liniowymi kanałami float i opisem przestrzeni barwnej/headroom. `Image`/`ImageFrame` nadal przechowują
+  `Rgba32` z prostą alfą; wartości HDR powyżej 1 nie mogą być tam obcinane. Przed implementacją zatwierdzić
+  nazwy, własność i zwalnianie buforów, dostęp do wierszy oraz kontrakt braku HDR (jawny błąd lub jawnie
+  wybrany fallback SDR). Bez statycznej fasady kodeka i bez ogólnej przebudowy modelu na `Image<TPixel>`.
+- Rekonstrukcja najpierw skalarna: osobne modele Apple/ISO, dekodowanie transferu, interpolacja mapy,
+  parametry headroom i docelowego zakresu, jednoznaczna jednostka bieli SDR = 1. Obsłużyć sRGB oraz Display P3
+  z obsługiwanym ICC; mnożenie w prawidłowej przestrzeni liniowej, bez przedwczesnego clippingu do sRGB.
+  Zdefiniować kolejność orientacji, skalowania mapy i konwersji barw, także dla zmniejszonego dekodu JPEG.
+- Jawna konwersja wyniku HDR do `Image` SDR: udokumentowany, deterministyczny operator tone mapping i
+  polityka gamut mapping, parametry ekspozycji/bieli, końcowe kodowanie sRGB. To osobny wybór względem
+  pobrania oryginalnej bazy SDR; wygląd aplikacji Photos nie stanowi numerycznej specyfikacji operatora.
+- Zdefiniować współdziałanie z `IgnoreMetadata`, `ColorConversion`, orientacją i miniaturami. Metadane
+  niezbędne do rekonstrukcji są danymi dekodera; ignorowanie metadanych użytkowych nie może ich przypadkiem
+  usunąć. Nieobsługiwany wariant/profil przy żądaniu HDR → `NotSupportedException`, uszkodzone struktury →
+  `ImageFormatException`; brak niejawnego sukcesu z SDR po nieudanej rekonstrukcji HDR.
+- Wspólne limity dla bazy i mapy: `MaxInputBytes` na cały kontener, `MaxPixels` na sumę dekodowanych pikseli,
+  `MaxMetadataBytes` także na pomocnicze metadane; sprawdzanie rozmiaru bufora float i wszystkich offsetów
+  przed alokacją. Mapa nie zwiększa `MaxFrames`. Anulowanie w ograniczonych porcjach dekodu i rekonstrukcji.
+- `EditMetadata` bez rekompresji ma zachowywać oba strumienie JPEG oraz poprawiać offsety MPF po zmianie
+  długości metadanych. Edycja/usunięcie informacji niezbędnych dla HDR musi mieć jawną politykę i nie może
+  pozostawić pozornie poprawnego HDR. Zwykły zapis obrazu SDR nie może kopiować nieaktualnych deklaracji HDR.
+- CLI `info`: wariant HDR i parametry; `convert`: jawny wybór bazowego SDR albo tone mapping HDR→SDR.
+  Dokumentacja z przykładem dostępu do liniowych pikseli HDR i ograniczeniami odbiorcy/wyświetlacza.
+- Poza 0.6.5: tworzenie nowych gain map, enkoder JPEG HDR, pełne przetwarzanie HDR przez istniejące `Mutate`,
+  automatyczne utrzymywanie gain map po resize/crop/korekcji, wyświetlanie HDR i integracja GPU. Konwersja
+  do PNG/WebP w obecnym modelu daje SDR; zachowanie HDR przy takim zapisie wymaga osobnego przyszłego etapu.
+
+DoD:
+- Korpus obu wariantów (Apple i ISO): różne rozmiary map, sRGB/Display P3, orientacje, brak mapy, nieznana
+  wersja, brakujące/sprzeczne metadane, obcięcia, błędne offsety MPF, przepełnienia i przekroczenia limitów.
+- Przed implementacją zapisać referencje float i ustalić tolerancje osobno dla dekodu JPEG, interpolacji,
+  rekonstrukcji oraz tone mapping. Wektory analityczne i niezależny model double; ISO porównane z przypiętym
+  libultrahdr, Apple z wynikami ImageIO/Core Image na macOS/iOS, z zapisanymi opcjami i wersją systemu.
+  Brak środowiska Apple nie jest zaliczeniem zgodności; zachować reprodukowalne referencje do CI na Linux.
+- Testy potwierdzają wartości HDR > 1, tożsamość przy neutralnej mapie/headroom = 1 w odpowiednim modelu,
+  poprawną orientację i kolory, deterministyczność, limity i anulowanie. Zwykły JPEG i domyślny odczyt SDR
+  zachowują dotychczasowe referencje; API float nie obcina świateł.
+- Edycja metadanych zachowuje bajty obu skompresowanych obrazów i odczytywalność HDR przez wyrocznię;
+  ścieżka SDR usuwa niespójne deklaracje. Testy własności buforów, Dispose i kompilacji konsumenta.
+- Benchmarki małych zdjęć i 12/48 MP: czas, alokacje, szczytowa pamięć i reakcja na anulowanie; regresja
+  zwykłego JPEG. Migawka API, XML docs, przykłady, CLI, wspólna bramka jakości i konsument trim/Native AOT.
+
+Kolejność: próbki i kontrakt API → referencje → parser/Identify → Apple → ISO → wynik float i tone mapping →
+metadane/CLI/dokumentacja → pomiary i bramka. Etapu nie zamyka samo wykrywanie mapy ani odczyt bazy SDR.
+
 ## 0.7.0 — integracja i stabilizacja
 
 Zakres:
-- Ukończyć DoD obsługi ICO, wszystkich sześciu obszarów i adapterów z 0.6.4. Ujednolicić opcje, nazwy, własność buforów, limity, anulowanie i polityki metadanych/koloru.
-- Testy end-to-end: tworzenie i odczyt wielowariantowego ICO; miniatura JPEG z orientacją i konwersją ICC; sekwencyjna konwersja animacji z maską i resize; edycja metadanych bez rekompresji; przetwarzanie przy ograniczonych zasobach.
+- Ukończyć DoD obsługi ICO, wszystkich sześciu obszarów, adapterów z 0.6.4 i JPEG HDR z 0.6.5. Ujednolicić opcje, nazwy, własność buforów, limity, anulowanie i polityki metadanych/koloru.
+- Testy end-to-end: tworzenie i odczyt wielowariantowego ICO; miniatura JPEG z orientacją i konwersją ICC; sekwencyjna konwersja animacji z maską i resize; edycja metadanych bez rekompresji; przetwarzanie przy ograniczonych zasobach; odczyt JPEG HDR i jawna konwersja do SDR.
 - Uzupełnić CLI i przewodniki o ICO, miniatury, limity, sekwencyjne animacje, kolor, metadane i nowe operacje. Przykłady sprawdzane przez `DocsExamplesTests`.
 - Rozszerzyć istniejącą macierz wydajności o nowe ścieżki, czas anulowania, szczytową pamięć i długie animacje; opisać kompromisy jakości i ograniczenia.
 - Sprawdzić pakiet NuGet, trimming/NativeAOT w obsługiwanym zakresie i użycie z lokalnego feedu na x64/ARM64. Przygotować notatki migracyjne z 0.5.0, w tym zmianę nazwy pakietu i przestrzeni nazw z RasterSharp na PictureSharp.

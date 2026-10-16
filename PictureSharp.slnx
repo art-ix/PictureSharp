@@ -3,13 +3,18 @@
     <Project Path="benchmarks/PictureSharp.Benchmarks/PictureSharp.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/PictureSharp.AdaptersSmoke/PictureSharp.AdaptersSmoke.csproj" />
     <Project Path="samples/PictureSharp.AotSmoke/PictureSharp.AotSmoke.csproj" />
     <Project Path="samples/PictureSharp.Cli/PictureSharp.Cli.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/PictureSharp/PictureSharp.csproj" />
+    <Project Path="src/PictureSharp.AspNetCore/PictureSharp.AspNetCore.csproj" />
+    <Project Path="src/PictureSharp.Drawing/PictureSharp.Drawing.csproj" />
+    <Project Path="src/PictureSharp.Skia/PictureSharp.Skia.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PictureSharp.Adapters.Tests/PictureSharp.Adapters.Tests.csproj" />
     <Project Path="tests/PictureSharp.Tests/PictureSharp.Tests.csproj" />
   </Folder>
 </Solution>

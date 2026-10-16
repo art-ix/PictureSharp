@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Exercised from the local packages by scripts/verify-package-consumer.sh (full trimming and Native AOT). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/PictureSharp.AspNetCore/PictureSharp.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/PictureSharp.Drawing/PictureSharp.Drawing.csproj" />
+    <ProjectReference Include="../../src/PictureSharp.Skia/PictureSharp.Skia.csproj" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
+  </ItemGroup>
+</Project>

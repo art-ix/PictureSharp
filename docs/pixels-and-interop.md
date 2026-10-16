@@ -84,7 +84,7 @@ using Image fromStructs = Image.LoadPixelData(rgbaPixels, width, height);   // R
 
 ## Interop recipes
 
-These snippets need the other library's package; PictureSharp itself stays dependency-free.
+These snippets need the other library's package; PictureSharp itself stays dependency-free. For SkiaSharp and System.Drawing, the `PictureSharp.Skia` and `PictureSharp.Drawing` packages wrap the same copies (`image.ToSKBitmap()`, `Image.FromBitmap(bitmap)` and more); see [Adapters](adapters.md).
 
 ### WPF
 

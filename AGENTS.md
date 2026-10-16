@@ -29,13 +29,16 @@ Follow `.editorconfig`. Enable nullable annotations, `TreatWarningsAsErrors` and
 | Path | Purpose |
 | --- | --- |
 | `src/PictureSharp/` | Library: `Image`, codecs, compression, processing and internal helpers |
+| `src/PictureSharp.Drawing/`, `src/PictureSharp.Skia/`, `src/PictureSharp.AspNetCore/` | Adapter packages; each depends only on PictureSharp and its target API, through the public API |
 | `tests/PictureSharp.Tests/` | TUnit tests |
+| `tests/PictureSharp.Adapters.Tests/` | Adapter tests; GDI+ tests run on Windows only |
 | `tests/assets/` | Corpus, reference data and generation scripts |
 | `benchmarks/` | BenchmarkDotNet |
 | `docs/` | User guides; examples checked by `DocsExamplesTests` |
 | `docs/releases/` | Release notes (`release-x.y.z.md`) |
 | `docs/measurements/` | Raw benchmark and verification data (`.csv`, `.tsv`, `.json`) |
 | `samples/PictureSharp.Cli/` | CLI: `convert`, `info`, `resize` |
+| `samples/PictureSharp.AdaptersSmoke/` | Adapter package consumer, trimmed and Native AOT by `verify-package-consumer.sh` |
 | `reference/` | Uncommitted reference sources and tools, outside the build |
 
 Register each built-in format in `Composition/CodecRegistry.cs` as a `FormatRegistration`; `ImageConfiguration` builds resolvers and services from registrations, and `Composition/LibraryServices.cs` composes the default configuration and supplies concrete adapters. Public plugins go through `IImageFormatModule` and the adapters in `Application/Extensibility`; keep built-in codecs on the internal contracts. Decode, identify and encode services invoke codecs; shared errors and thumbnail policies do not depend on orchestration. Keep algorithm ports unchanged during structural refactoring. Split large codecs into partial files, for example `PngDecoder.Chunks.cs`.

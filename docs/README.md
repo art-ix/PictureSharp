@@ -8,6 +8,7 @@
 | [Encoder options](encoder-options.md) | `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions`, `BmpEncoderOptions`, `GifEncoderOptions`, `PcxEncoderOptions` and common recipes |
 | [Image processing](image-processing.md) | Every operation available in `Mutate`/`Clone`: resize, crop, trim, pad, rotate, color, levels, histograms, filters, compositing with blend modes, alpha masks, custom operations |
 | [Pixels and interop](pixels-and-interop.md) | `Rgba32`, pixel spans, `PixelFormat` conversions, WPF/SkiaSharp/WinForms, raw buffer encoding and decoding |
+| [Adapters](adapters.md) | The `PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` packages: `Bitmap`/`SKBitmap` conversions, `ImageResult` with `Accept` negotiation, uploads with limits |
 | [Animation](animation.md) | Frames, durations, loops, animated WebP, APNG and GIF, GIF ↔ WebP conversion |
 | [Metadata](metadata.md) | Resolution, typed EXIF, ICC/XMP and metadata editing without recompression |
 | [Color management](color-management.md) | ICC/PNG color descriptions, conversion to sRGB, linear-light resize and compositing |

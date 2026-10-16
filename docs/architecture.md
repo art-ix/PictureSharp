@@ -42,6 +42,15 @@ Format plugins implement the public `IImageFormatModule`, `IImageFormatDecoder` 
 
 `IFrameProcessor` operations run through `ProcessingState.ReplaceFrames`, like built-in geometry: every frame is prepared, then the aggregate commits the batch. Destination buffers are zeroed because third-party code writes them.
 
+## Adapter packages
+
+`PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` are separate assemblies and packages
+outside the layer graph. They use only the public API (`CopyPixelDataTo/From` with `PixelFormat` and stride,
+`GetPixelMemory`, `SaveAsync`, `LoadAsync` and `DecoderOptions`) and need no internal access or library changes. Each
+depends on `PictureSharp` and its target API only; their public types live in the namespace named after the
+package. Tests check both directions on compiled references: the library references only the shared runtime, and
+each adapter only PictureSharp, its target and the runtime. See [Adapters](adapters.md).
+
 ## Enforcement and development
 
 Architecture tests map compiled types to source-layer folders, then inspect type signatures, generic arguments, fields, interfaces, method IL, local variables and catch clauses. They reject forbidden directions, layer cycles, filesystem access outside infrastructure and references to codec registration outside composition. An inspector fixture verifies that method calls, fields, generic arguments and exception handlers are observed.

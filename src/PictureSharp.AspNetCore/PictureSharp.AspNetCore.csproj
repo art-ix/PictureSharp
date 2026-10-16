@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="../PictureSharp.Adapters.props" />
+
+  <PropertyGroup>
+    <RootNamespace>PictureSharp.AspNetCore</RootNamespace>
+    <PackageId>PictureSharp.AspNetCore</PackageId>
+    <Description>Returns PictureSharp images from ASP.NET Core endpoints with Accept-based WebP/PNG/JPEG negotiation, and reads uploaded images with size limits and request cancellation.</Description>
+    <PackageTags>picturesharp;image;aspnetcore;minimal-api;iresult;webp;content-negotiation</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

@@ -24,6 +24,16 @@ jobs:
         env:
           DOTNET_EnableHWIntrinsic: 0
 
+  adapters-windows:
+    # System.Drawing (GDI+) round trips run on Windows only; elsewhere they report as skipped.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/PictureSharp.Adapters.Tests/PictureSharp.Adapters.Tests.csproj -c Release
+
   oracle:
     runs-on: ubuntu-latest
     steps:

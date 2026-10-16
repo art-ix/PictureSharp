@@ -23,6 +23,7 @@ PictureSharp reads, writes and processes WebP, PNG, JPEG, BMP, GIF, PCX and ICO 
 - Limits for untrusted input and cancellation of all long-running work
 - SIMD on x64 and ARM64, bit-identical to the scalar code
 - Extensible with format plugins and custom processors
+- Optional adapter packages for System.Drawing, SkiaSharp and ASP.NET Core
 
 ## Quick start
 
@@ -50,6 +51,7 @@ The public API may still change between 0.x releases.
 - [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md) · [Limits and cancellation](https://github.com/art-ix/PictureSharp/blob/main/docs/limits-and-cancellation.md)
 - [Image processing](https://github.com/art-ix/PictureSharp/blob/main/docs/image-processing.md) · [Encoder options](https://github.com/art-ix/PictureSharp/blob/main/docs/encoder-options.md) · [Pixels and interop](https://github.com/art-ix/PictureSharp/blob/main/docs/pixels-and-interop.md)
 - [Animation](https://github.com/art-ix/PictureSharp/blob/main/docs/animation.md) · [Metadata](https://github.com/art-ix/PictureSharp/blob/main/docs/metadata.md) · [Color management](https://github.com/art-ix/PictureSharp/blob/main/docs/color-management.md) · [ICO icons](https://github.com/art-ix/PictureSharp/blob/main/docs/ico.md)
+- [Adapters: System.Drawing, SkiaSharp, ASP.NET Core](https://github.com/art-ix/PictureSharp/blob/main/docs/adapters.md)
 - [Extending PictureSharp](https://github.com/art-ix/PictureSharp/blob/main/docs/extending-picturesharp.md) · [Architecture](https://github.com/art-ix/PictureSharp/blob/main/docs/architecture.md) · [Performance](https://github.com/art-ix/PictureSharp/blob/main/docs/performance.md)
 - [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md) · [Development](https://github.com/art-ix/PictureSharp/blob/main/docs/development.md) · [Release notes](https://github.com/art-ix/PictureSharp/tree/main/docs/releases)
 
