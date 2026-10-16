@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.6.3 adds graphics operations: levels and gamma, Pillow-exact AutoContrast and Equalize, read-only histograms (GetHistogram), trimming of transparent or background-colored margins (AutoCrop, FindTrimBounds), alpha masks (ApplyMask) and the twelve W3C separable blend modes in DrawImageOptions.BlendMode. Default results are unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.3/docs/releases/release-0.6.3.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.4 leaves the library unchanged (same API and results as 0.6.3) and adds the separate adapter packages PictureSharp.Drawing (System.Drawing.Bitmap), PictureSharp.Skia (SKBitmap/SKImage/SKPixmap) and PictureSharp.AspNetCore (ImageResult with Accept negotiation, uploads with size limits). Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.4/docs/releases/release-0.6.4.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

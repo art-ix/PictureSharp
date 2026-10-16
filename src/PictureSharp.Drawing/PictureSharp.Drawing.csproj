@@ -6,6 +6,7 @@
     <RootNamespace>PictureSharp.Drawing</RootNamespace>
     <PackageId>PictureSharp.Drawing</PackageId>
     <Description>Copies PictureSharp images to and from System.Drawing.Bitmap (Windows).</Description>
+    <PackageReleaseNotes>First release: copies Image and ImageFrame to and from System.Drawing.Bitmap (32bppArgb, 32bppPArgb, 24/32bppRgb; other formats through GDI+), with row padding, bottom-up strides and resolution. Windows only. Notes: https://github.com/art-ix/PictureSharp/blob/v0.6.4/docs/releases/release-0.6.4.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;system.drawing;bitmap;gdi+;interop</PackageTags>
   </PropertyGroup>
 
