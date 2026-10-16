@@ -176,3 +176,7 @@ Otwarte przed zamknięciem DoD:
 - Manifest techniczny próbek (inspektor bez GPS).
 - Usuwanie deklaracji Ultra HDR (`hdrgm`/`GContainer`) z XMP bazy przy zapisie SDR.
 - Benchmarki BenchmarkDotNet (3/12/24/48 MP, alokacje, szczytowa pamięć) i przebieg ARM64; tone mapping jest jednowątkowy.
+
+## 7. Decyzja o wydaniu (2026-10-16)
+
+Na decyzję użytkownika 0.6.5 zostaje wydane bez weryfikacji Apple na macOS (brak Maca do wynajęcia). Weryfikacja z sekcji 4, benchmarki BenchmarkDotNet i usuwanie deklaracji Ultra HDR przy zapisie SDR przechodzą do 0.6.6. ARM64 (Orange Pi 5) zweryfikowane: pełne testy, Slow, Local, Oracle bez libultrahdr, adaptery, konsument trim/AOT, identyczne wyniki tone mappingu x64/ARM64.
