@@ -1,14 +1,24 @@
-# PictureSharp: plan rozwoju do 0.7.0
+# PictureSharp: plan rozwoju do 0.8.0
 
 ## Stan i cel
 
-**Bieżąca wersja kodu: 0.6.8 (biblioteka i paczki adapterów; poprawki po review 0.6.7). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Wydano 0.6.8 (poprawki i refaktoryzacje) oraz 0.6.7 (SIMD dla HDR i grafiki); 0.6.6 (weryfikacja Apple na macOS) odłożone do czasu dostępności zasobów. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja: 0.6.8 (opublikowana).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
+kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
-PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
+Dalej: zachowanie HDR przy edycji i zapis JPEG z gain map (0.6.9), stabilizacja API i SPI wtyczek dla HDR i metadanych
+(0.7.0), poprawki SPI zgłoszone przez wtyczkę HEIF i generowanie gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
+(własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
+Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
+są poza planem.
 
-Do 0.7.0 dodajemy odczyt i zapis ICO oraz rozwijamy sześć obszarów: miniatury przy dekodowaniu, kontrolę zasobów, sekwencyjne animacje, zarządzanie kolorem, metadane i operacje graficzne. W 0.6.5 dodajemy odczyt HDR z JPEG pochodzących z iPhone’a (obraz bazowy i mapa wzmocnienia, gain map). Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, HEIF/HEIC, AVIF, JPEG XL) pozostają poza tym planem.
+Decyzje użytkownika (2026-10-16): kolejność rdzenia 0.6.9 → 0.7.0 → 0.8.0; HEIF jako wtyczka z portem dekodera i
+enkodera HEVC intra w C#, nie jako wrapper natywnego libheif; wtyczka w osobnym repozytorium z własnym SemVer; rdzeń
+0.8.0 = poprawki SPI zgłoszone przez wtyczkę + dalszy HDR.
 
-Szczegóły istniejącego API i ograniczeń: `README.md`, `docs/`, XML docs oraz `tests/assets/PublicApi.approved.txt`. Wyniki pomiarów: `docs/performance.md`. Lokalna historia pracy: `progres.md` (bez commitowania). Historyczne szczegóły implementacji pozostają w historii Git.
+Istniejące API i ograniczenia: `README.md`, `docs/`, XML docs, `tests/assets/PublicApi.approved.txt`. Pomiary:
+`docs/performance.md`. Ukończone wydania: [changelog](#changelog), `docs/releases/` i historia Git. Lokalna historia
+pracy: `progres.md` (bez commitowania).
 
 ## Zasady obowiązujące we wszystkich wydaniach
 
@@ -22,481 +32,276 @@ Szczegóły istniejącego API i ograniczeń: `README.md`, `docs/`, XML docs oraz
 - Testy, benchmarki i wyrocznie mogą używać zewnętrznych pakietów. Pobieranie zewnętrznych korpusów wymaga zgody użytkownika. Prywatne zdjęcia pozostają lokalne.
 - Commit, push i publikacja wyłącznie na polecenie użytkownika. `VERSION` zmieniamy przy przygotowaniu wydania, nie przy rozpoczęciu etapu.
 
-## Przebudowa architektury — wydanie 0.5.5
-
-Zatwierdzony zakres: jeden projekt i pakiet, czysty model obrazu, wydzielone operacje I/O i przetwarzania, funkcjonalne namespace, migracja API bez fasady zgodności. Szczegóły: [architektura](docs/architecture.md) i [migracja](docs/migration-layered-api.md).
-
-DoD: build Release bez ostrzeżeń; testy regresji i dostępne Oracle; testy zależności IL i braku cykli warstw; nowa migawka API; pomiary istniejącej macierzy przed/po; pakiet NuGet i konsument trimming/Native AOT. Zmiana nie dodaje funkcjonalności kolejnych wydań. Wydanie 0.5.5 obejmuje te zmiany i celowo łamie zgodność API z 0.5.4; migracja jest opisana w przewodniku.
-
-Weryfikacja linux-x64: build bez ostrzeżeń, 5081/5081 Release, 150/150 Oracle, 113/113 testów SIMD bez intrinsics, poprawne pakowanie oraz konsumenci trimming/Native AOT (także z lokalnej paczki). Macierz 80 przypadków: brak potwierdzonej powtarzalnej regresji >5%. ARM64 wymaga osobnego wykonania. [Pełne wyniki](docs/refactoring-verification.md).
-
-## Ukończona baza: 0.5.0
-
-- Kodeki sześciu formatów, animacje WebP/APNG/GIF, własny deflate/inflate, przetwarzanie i CLI.
-- Zgodność z korpusem i wyroczniami; WebP dąży do identycznych bajtów z `cwebp` 1.6.0, dekod do identycznych pikseli z `dwebp`. Bezstratne formaty zachowują piksele w obsługiwanym modelu kolorów.
-- SIMD x64 i ARM64, pomiary pełnych operacji, redukcja alokacji. Bramka WebP ≤3× natywnego C została spełniona na ustalonej macierzy.
-- Testy Release, Oracle, odporność, pakiet NuGet i dokumentacja zweryfikowane. Szczegóły i ograniczenia pomiarów w `docs/performance.md`.
-
-Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całości; wszystkie klatki animacji są przechowywane jako pełne płótna; ICC jest przenoszony bez stosowania; CMYK→RGB jest uproszczone; PNG 16-bit jest redukowane do 8 bitów. `MaxPixels` obejmuje sumę pikseli dekodowanych klatek, a `FirstFrameOnly` liczy jedną.
-
 ## Kolejność wydań
 
 | Wersja | Zakres | Status |
 | --- | --- | --- |
-| 0.5.1 | Odczyt i zapis ICO (jako RasterSharp) | Ukończona — opublikowana |
-| 0.5.2 | Zmiana nazwy RasterSharp → PictureSharp | Ukończona — opublikowana |
-| 0.5.3 | Kontrola zasobów i anulowanie pracy CPU (funkcjonalność 2) | Ukończona — opublikowana |
-| 0.5.4 | Miniatury podczas dekodowania JPEG (1) | Ukończona — opublikowana |
-| 0.5.5 | Warstwy, model domenowy, własność buforów i API C# 14 | Ukończona — wydanie 0.5.5 |
-| 0.5.6 | API skupione na `Image`, `ImageConfiguration`, wtyczki formatów i procesory ramek | Ukończona — opublikowana |
-| 0.5.7 | Porządki w testach: duplikaty, mniejsze macierze, kategoria `Slow`, migracja na TUnit | Ukończona — wydanie 0.5.7 |
-| 0.6.0 | Sekwencyjny odczyt i zapis animacji (3) | Ukończona — wydanie 0.6.0 |
-| 0.6.1 | Typowane metadane i edycja bez rekompresji (5) | Ukończona — wydanie 0.6.1 |
-| 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Ukończona — opublikowana |
-| 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Ukończona — opublikowana |
-| 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Ukończona — wydanie 0.6.4 |
-| 0.6.5 | HDR z JPEG iPhone: gain map Apple i ISO 21496-1, rekonstrukcja HDR i konwersja do SDR | Ukończona — wydanie 0.6.5 (weryfikacja Apple na macOS przeniesiona do 0.6.6) |
-| 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, benchmarki HDR, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona — wrócimy, gdy będzie dostępny macOS |
-| 0.6.7 | SIMD dla HDR (rekonstrukcja, tone mapping, deterministyczne Exp2/Log2) i operacji 0.6.3 (mieszanie, AutoCrop, maski, histogram/Levels) | Ukończona — wydanie 0.6.7 |
-| 0.6.8 | Poprawki AutoCrop animacji, zakończenia zapisu i obszaru histogramu; anulowanie grafiki, refaktoryzacje HDR/SIMD | Wydana |
-| 0.7.0 | Integracja ICO, sześciu obszarów, adapterów i JPEG HDR, stabilizacja API i wydanie | Planowana |
+| 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
+| 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Planowana |
+| 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Planowana |
+| 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
+
+Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
+opisuje sekcja [Wtyczka HEIF](#wtyczka-heif--osobne-repozytorium).
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości. Nazwy nowych opcji i metod poniżej są robocze do czasu zatwierdzenia migawki API.
 
-## 0.5.1 — odczyt i zapis ICO
+## Zaległe weryfikacje — przed 0.6.9
+
+Krótkie zadania, które nie dodają funkcjonalności, ale blokują zamknięcie bramki 0.7.0:
+- ARM64 końcowej wersji 0.6.8 (testy, `*SimdTests`, fallbacki). Orange Pi jest wyłączony poleceniem użytkownika; bez
+  jego zgody punkt przechodzi do bramki 0.7.0 i pozostaje otwarty.
+- NuGet: obecność 0.6.8 wszystkich czterech paczek w indeksie; Trusted Publishing dla `PictureSharp.Drawing`,
+  `PictureSharp.Skia` i `PictureSharp.AspNetCore`.
+- 0.6.6: decyzja użytkownika, czy czekamy na macOS, czy zamykamy etap z adnotacją. Bez porównania z ImageIO/Core Image
+  wariant Apple pozostaje „zgodny z referencjami Linux, niepotwierdzony na Apple” i nie jest oznaczany jako zweryfikowany.
+
+## 0.6.6 — weryfikacja HDR na macOS (odłożona)
+
+- Porównać rekonstrukcję wariantu Apple (i ISO) z ImageIO/Core Image na macOS/iOS; zapisać opcje, wersję systemu i
+  tolerancje. Brak środowiska Apple nie jest zaliczeniem; referencje dla CI na Linux pozostają reprodukowalne.
+- Benchmarki HDR względem ImageIO na tym samym sprzęcie.
+- Zapis SDR nie może przenosić nieaktualnych deklaracji HDR (np. XMP `hdrgm` w bazie); przed pracą sprawdzić, co już
+  zapewnia obecny enkoder.
+
+## 0.6.9 — HDR przy edycji i zapis JPEG z gain map
+
+Cel: JPEG HDR wczytany z `LoadGainMap` po zmianie orientacji, rozmiaru lub przycięciu można zapisać jako JPEG z gain
+map, który odczyta PictureSharp, libultrahdr oraz odbiorcy ISO 21496-1 (iOS 18+, Android, przeglądarki). Domyślny
+`Save` pozostaje SDR i bajtowo identyczny z 0.6.8; zapis mapy wymaga jawnej opcji. Wydanie nie tworzy nowych map.
+
+Decyzje do zatwierdzenia przed implementacją (nazwy robocze):
+- Operacje geometryczne zachowują mapę zamiast ją usuwać. To zmiana zachowania `image.Hdr`/`HasHdr` po `Mutate`
+  (wcześniej `null`, `ToHdr` → `InvalidOperationException`); opisać w notatkach. Alternatywa: jawna opcja w `Mutate`.
+- `JpegEncoderOptions.GainMap` typu `JpegGainMapMode`: `None` (domyślnie), `Preserve` (zapis mapy, gdy dołączona i
+  dekodowalna, inaczej zwykły JPEG) i `Require` (brak mapy lub wariant niezapisywalny → wyjątek). Dodatkowo
+  `GainMapQuality` z domyślną wartością ustaloną według libultrahdr.
 
 Zakres:
-- Zarejestrować ICO w `CodecRegistry`: detektor, dekoder, enkoder, `ImageFormat.Ico`, opcje w `Formats/Ico/` i rozszerzenia `SaveAsIco` / `ToIco`, także zapis async. Obsługa w `Identify`, CLI i dokumentacji.
-- Odczytywać kontener z pojedynczymi lub wieloma wariantami: osadzony PNG oraz nieskompresowany DIB z paletą 1/4/8-bit i truecolor 24/32-bit. Wykorzystać istniejące kodeki i wspólne helpery, uwzględniając specyfikę DIB w ICO.
-- Poprawnie interpretować maskę AND, kanał alfa 32-bit, padding wierszy i orientację rastera. Jawnie ustalić regułę dla starszych ikon z zerowym kanałem alfa oraz sprzeczności maski i alfy.
-- `Image.Load` zwraca jeden wybrany wariant, domyślnie największy obsługiwany, z deterministycznym rozstrzyganiem remisów; umożliwić wybór indeksu lub preferowanego rozmiaru. `Identify` opisuje ten sam wybór. Ikona nie jest animacją.
-- Osobne API do listowania wariantów (rozmiar, głębia, sposób kodowania), odczytu wybranego wariantu i zapisu kolekcji obrazów o różnych rozmiarach. Nie wykorzystywać `Image.Frames` jako kolekcji wariantów ICO; przed implementacją ustalić własność i zwalnianie obrazów.
-- Zapis pojedynczego obrazu i zestawu wariantów 1–256 px w każdej osi; tryb PNG oraz DIB 32-bit z maską AND. Generowanie typowych rozmiarów ikon przez jawnie wybrany resize. Nie kwantyzować kolorów bez żądania użytkownika.
-- Sprawdzać katalog, offsety, długości, wymiary i rozmiary alokacji przed dekodem, także wewnątrz osadzonego PNG/DIB. `MaxPixels` obejmuje wybrany obraz, a przy ładowaniu kolekcji sumę ładowanych wariantów. Uszkodzone dane nie mogą być po cichu pomijane jako nieobsługiwane.
-- CUR, animowane kursory ANI, zasoby ikon w PE oraz pozostałe warianty DIB poza zakresem tego wydania; poprawne nieobsługiwane warianty zgłaszać zgodnie z zasadami biblioteki.
+- Model: `GainMapAttachment` w dwóch niezmiennych stanach: skompresowany (jak dziś, bez dekodu przy ładowaniu) i
+  przekształcony (piksele mapy `Rgba32` w jej rozdzielczości + niezmienione parametry). Mapa dekodowana leniwie przy
+  pierwszej operacji geometrycznej; `Clone()` współdzieli stan; `MaxPixels` obejmuje mapę jak w 0.6.5.
+- Operacje zachowujące mapę: `Resize` (tryby bez dodawania tła), `Thumbnail`, `Crop`, `AutoOrient`, `Rotate` o
+  90/180/270°, `Flip`; `TargetSize` i `ApplyExifOrientation` jak dziś. Mapa przechodzi tę samą geometrię przeliczoną do
+  swojej rozdzielczości: zachowany stosunek mapa/baza (zaokrąglenie, min. 1 px), przycięcie prostokątem w ułamkowych
+  współrzędnych mapy z resamplingiem w dziedzinie zakodowanej mapy. Semantykę zaokrągleń porównać z efektami edycji
+  libultrahdr 2.0.2 (`uhdr_add_effect_crop/resize/rotate/mirror`).
+- Pozostałe operacje (kolor, ton, filtry, mieszanie, maski, `Pad`/`Canvas`, obrót o dowolny kąt, zmiany ramek) nadal
+  usuwają mapę. Polityka opisana w `docs/hdr.md` w jednej tabeli.
+- Enkoder JPEG z mapą (Ultra HDR 1.1 / ISO 21496-1, jak libultrahdr): baza z ICC, EXIF i XMP; APP2 MPF z dwoma
+  obrazami i poprawnymi offsetami (wspólny kod z `JpegMpf` i `EditMetadata`); w bazie XMP `hdrgm`/GContainer i APP2
+  z wersją ISO; w mapie APP2 z metadanymi ISO i XMP `hdrgm`. Mapa nieprzekształcona jest kopiowana bez rekompresji;
+  przekształcona kodowana jako JPEG mono lub RGB jak źródło.
+- Warianty: źródło ISO oraz Apple+ISO zapisywane jako ISO (bez Apple MakerNote w nowej deklaracji); samo Apple
+  (iOS 14–17) → `Require` daje `NotSupportedException`, `Preserve` zapisuje SDR. Konwersja Apple→ISO poza zakresem.
+- Zapis PNG/WebP/innych formatów pozostaje SDR; `EditMetadata` bez zmian. Limity rozmiaru kodowanej mapy i anulowanie
+  w resamplingu i kodowaniu mapy.
+- CLI: `convert`/`resize` z `-hdr keep` (JPEG→JPEG z mapą); `info` pokazuje mapę po przekształceniu.
+
+Referencje (przed implementacją, rozszerzenie `tests/assets/hdr_reference.py`, `python3 -I`):
+- Model numpy przekształceń mapy: flip/rotate/crop wyrównany do skali mapy bit-exact; resize i crop niewyrównany ≤ 1 na
+  kanał 8-bit względem modelu i efektów libultrahdr.
+- Rekonstrukcja po edycji porównana z `ToHdr` oryginału przekształconym tą samą geometrią w float; tolerancja ustalona i
+  zapisana przed implementacją.
+- libultrahdr `ultrahdr_app` dekoduje nasze pliki: metadane identyczne, rekonstrukcja w budżetach z 0.6.5.
 
 DoD:
-- Syntetyczny korpus: PNG/DIB, wszystkie obsługiwane głębie, maski i alfa, nieparzyste szerokości, pojedyncze i mieszane warianty, rozmiar 256 px. Referencje RGBA porównane z niezależnym narzędziem, np. Pillow/ImageMagick.
-- Round-trip PNG i DIB 32-bit zachowuje piksele w udokumentowanej semantyce przezroczystości; zapisane pliki i wszystkie warianty poprawnie odczytywane przez wyrocznię.
-- Testy wyboru wariantu, identyfikacji, kolekcji różnych rozmiarów, limitów, obcięć, błędnych offsetów i rozbieżności między katalogiem a osadzonym obrazem.
-- Migawka API, przykłady tworzenia favicony/wielowariantowej ikony i konwersji ICO w CLI; wspólna bramka jakości zaliczona.
+- Testy każdej operacji × orientacje EXIF 1–8 × proporcje mapy 1/1, 1/2, 1/4 i nieparzyste rozmiary; mapy mono i RGB;
+  źródła ISO, Apple+ISO i samo Apple.
+- Round-trip `Load` → `Mutate` → `Save(Preserve)` → `Load`: `HasHdr`, identyczne parametry, piksele HDR w tolerancji;
+  bez `Mutate` mapa bajtowo identyczna ze źródłem.
+- Domyślny `Save` bajtowo jak 0.6.8; operacje niegeometryczne usuwają mapę; zwykłe JPEG i dotychczasowe referencje bez
+  zmian.
+- Testy limitów, uszkodzonych map przy zapisie, anulowania i alokacji (resize bez pełnowymiarowych buforów float).
+- Pomiary `Load` → `Resize` → `Save` 12/48 MP z mapą i bez; migawka API z samymi dodatkami, `docs/hdr.md`,
+  `docs/cli.md`, przykłady w `DocsExamplesTests`, wspólna bramka jakości i konsument trim/Native AOT.
+- Poza 0.6.9: generowanie map z `HdrImage`, zapis `HdrImage`, przetwarzanie HDR w float, konwersja Apple→ISO, HDR w
+  innych formatach.
 
-Weryfikacja 2026-10-15: build Release bez ostrzeżeń; 4136/4136 testów Release,
-150/150 Oracle, 19/19 testów ICO i jego przykładów bez intrinsics. Korpus ma
-14 plików ICO, referencje każdego wariantu z Pillow (dla paletowego PNG z tRNS
-bezpośrednio z osadzonego PNG, dodatkowo wyrocznia ImageMagick). CLI i pakiet
-z lokalnego feedu sprawdzone; pomiary w `docs/performance.md`. Nie dodano nowych
-ścieżek SIMD. API i ograniczenia: `docs/ico.md`. VERSION 0.5.1; README i plan zaktualizowane do wydania. Opublikowane
-jako RasterSharp 0.5.1 (tag v0.5.1, GitHub Release z paczką).
-
-## 0.5.2 — zmiana nazwy na PictureSharp
-
-Nazwa RasterSharp jest zajęta. Wydanie zmienia wyłącznie nazwę: pakiet NuGet, assembly, przestrzeń nazw `PictureSharp`, projekty, CLI `picturesharp-cli`, zmienne środowiskowe `PICTURESHARP_*`, dokumentację i repozytorium `art-ix/PictureSharp`. Kod, formaty i wyniki bez zmian względem 0.5.1.
-
-DoD: brak pozostałości starej nazwy w śledzonych plikach poza historią; build Release bez ostrzeżeń, pełne testy Release i Oracle, paczka `PictureSharp.0.5.2.nupkg` z `LICENSE` i notices, tag v0.5.2 i GitHub Release.
-
-## 0.5.3 — kontrola zasobów i anulowanie
-
-Zakres:
-- Dodać limity `MaxInputBytes`, `MaxMetadataBytes` (łączny rozmiar obsługiwanych metadanych, także po dekompresji) i `MaxFrames`; zachować dotychczasową semantykę `MaxPixels`.
-- Sprawdzać limity przed alokacją lub powiększeniem bufora. Dla strumieni bez `Seek` egzekwować limit w trakcie odczytu; nie polegać wyłącznie na deklarowanej długości.
-- Limity stosować konsekwentnie w `Load`, wariantach async i odpowiednich ścieżkach `Identify`; `IgnoreMetadata` nie może pozwalać na nieograniczoną dekompresję ignorowanych danych.
-- Przekazywać `CancellationToken` do pracy CPU kodeków i przetwarzania, także do operacji synchronicznych przez spójne przeciążenia. Kontrole w ograniczonych porcjach pracy, bez kosztu sprawdzania każdego piksela.
-- Ustalić i opisać wartości domyślne, zakres limitów oraz zachowanie po błędzie. Nie obiecywać twardego limitu całej pamięci procesu na podstawie samego `MaxPixels`.
-
-DoD:
-- Testy granic każdego limitu, strumieni seekable/non-seekable, zaniżonych deklaracji długości, dużych metadanych i animacji dla wszystkich właściwych formatów.
-- Anulowanie przed startem i w trakcie odczytu, dekodu, kodowania oraz przetwarzania kończy operację i zwraca bufory. Udokumentowane zachowanie częściowego wyniku zapisu i obrazu po przerwanym `Mutate`.
-- Pomiary narzutu kontroli i szczytowej pamięci; brak nieograniczonego buforowania wejścia ponad ustawiony limit.
-
-Weryfikacja 2026-10-15: `MaxInputBytes` (domyślnie `Array.MaxLength`), `MaxMetadataBytes` (64 MiB łącznie, po
-dekompresji) i `MaxFrames` (65536) w `Load`/`LoadAsync`/`Identify`/`IcoFile`; token w pracy CPU wszystkich kodeków i
-przetwarzania, przeciążenia synchroniczne z tokenem. Zmiany zachowania (limit metadanych i klatek, pierwszy `iCCP`/`eXIf`
-w PNG) opisane w `docs/limits-and-cancellation.md`. Build Release bez ostrzeżeń, 4823/4823 testów Release (dwa
-przebiegi), 150/150 Oracle; migawka API (wyłącznie dodane elementy) zatwierdzona. Narzut kontroli w granicach szumu,
-alokacje bez zmian, odczyt strumienia alokuje 1× wejście (wcześniej 2–3,2×); szczegóły w `docs/performance.md`. Nowych
-ścieżek SIMD brak. VERSION 0.5.3; README zaktualizowane do wydania.
-
-## 0.5.4 — miniatury bez pełnego dekodowania JPEG
-
-Zakres:
-- Opcja docelowego rozmiaru przy ładowaniu: zachowanie proporcji, bez powiększania domyślnie, jednoznaczna kolejność względem EXIF orientation.
-- Pomniejszone IDCT JPEG (1/2, 1/4, 1/8) z doborem skali zapewniającej wystarczający raster do końcowego resize; obsługa baseline i progressive.
-- Nie tworzyć pełnowymiarowego bufora RGBA dla miniatury. Osobno mierzyć pamięć współczynników potrzebną JPEG progressive.
-- Dla pozostałych formatów jawnie udokumentowany pełny dekod + resize; nie deklarować tam oszczędności dekodera.
-- Limity nadal sprawdzają źródłowe wymiary i wymagane bufory; mały rozmiar docelowy nie omija ochrony przed złośliwym wejściem.
-
-DoD:
-- Porównanie pomniejszonego dekodu z libjpeg-turbo przy zgodnych ustawieniach; ustalona i zapisana tolerancja pikseli. Nie wymagać identyczności z pełnym dekodem + resize, bo to inny algorytm.
-- Testy nieparzystych rozmiarów, skali, subsamplingu, szarości, CMYK, progressive i orientacji EXIF 1–8.
-- Benchmarki zdjęć 12 MP i większych do miniatur 256/512/1920 px: czas, alokacje i szczytowa pamięć wobec `Load` + `Thumbnail`. Wykazana redukcja pamięci baseline; ograniczenia progressive opisane.
-
-Weryfikacja 2026-10-15: `DecoderOptions.TargetSize`/`TargetResampling`/`TargetReducingGap` (domyślnie 2, jak Pillow
-`thumbnail` i libvips); resize przed orientacją, ramka liczona dla zwracanej orientacji, rozmiar zawsze jak `Thumbnail`.
-Pomniejszone IDCT 4×4/2×2/1×1 z `jidctred.c`, skalowanie chromy w IDCT i wybór upsamplingu jak libjpeg-turbo
-(`jdmaster.c`, `jdsample.c`). Tolerancja 0: bit-exact z libjpeg-turbo 2.1.5 (Pillow 10.2.0 `draft`) dla 46 plików
-korpusu × 1/2, 1/4, 1/8 (`jpeg_scaled_reference.json`), uszkodzonych strumieni i lokalnych zdjęć 12/27 MP, baseline
-i progressive. Testy EXIF 1–8, subsamplingu, szarości, CMYK/YCCK, nieparzystych rozmiarów, limitów i alokacji. Pozostałe
-formaty: pełny dekod + `Thumbnail`, identycznie z ręcznym wywołaniem. Pomiary w `docs/performance.md`: szczyt pamięci
-baseline 12 MP→256 px 68→7 MiB, 27 MP 149→4 MiB; progressive ograniczony przez współczynniki (2 B/próbkę). Build Release
-bez ostrzeżeń, 5076/5076 testów, 150/150 Oracle; migawka API (3 dodane właściwości). Bez nowych ścieżek SIMD.
-VERSION 0.5.4; paczka z symbolami `.snupkg` i Source Link. README zaktualizowane do wydania.
-
-## 0.5.6 — API skupione na `Image` i rozszerzalność
-
-Biblioteka nie ma jeszcze zewnętrznych użytkowników, więc zmiana łamie API 0.5.5 bez przewodnika migracji. Model DDD pozostaje bez zmian.
-
-- `Image` jako jedyne wejście (styl ImageSharp): `Image.Load/LoadAsync/Identify/IdentifyAsync/DetectFormat`, `image.Save/SaveAsync/Encode/Mutate/Clone`, `ImageFormat.All/FromExtension/FromMimeType`, `format.CanDecode/CanEncode` jako extension blocks C# 14 w `PublicApi`, namespace `PictureSharp`. Usunięte `ImageReader`, `ImageWriter`, `ImageFormats` i namespace `PictureSharp.IO`.
-- Niezmienna `ImageConfiguration` z builderem (`KeepOnly`, `RemoveFormat`, `AddFormat`, `ReplaceFormat`), podmienialne `ImageConfiguration.Default` i `DecoderOptions.Configuration`.
-- Publiczne SPI wtyczek (`IImageFormatModule`, `IImageFormatDecoder`, `IImageFormatEncoder<TOptions>`, `ImageDecodeContext`), `ImageFormat.Create`, otwarty konstruktor `EncoderOptions`; adaptery egzekwują limity i bezpieczną detekcję.
-- `IFrameProcessor` i `ApplyProcessor<T>` z atomową podmianą ramek.
-- Paczka dodaje `global using PictureSharp;` przy `ImplicitUsings` (opt-out `PictureSharpImplicitUsings=false`, wyłączone dla Windows Forms, WPF i MAUI).
-
-DoD: Release bez ostrzeżeń; pełne testy, Oracle i testy architektury; testy wtyczek, konfiguracji i procesorów; migawka API przejrzana; konsument C# 14 z jednym `using`; `verify-package-consumer.sh` z trimmingiem, Native AOT, wtyczką, procesorem i global usings; dokumentacja z `Image.*` jako formą domyślną.
-
-## 0.5.7 — porządki w testach
-
-Biblioteka bez zmian; zmienia się tylko projekt testów. Usunięte testy pokryte przez inne (losowa korupcja per kodek, geometria, formaty pikseli, część testów klonowania i resize), macierze niezależne od formatu (anulowanie, `MaxInputBytes`, kwantyzacja przez enkoder GIF) zawężone do reprezentatywnych przypadków, powiązane testy połączone, a fuzzing i testy wielowątkowe oznaczone `Category=Slow` (CI uruchamia je dalej). Testy przeniesione z xUnit na TUnit (Microsoft.Testing.Platform, `--treenode-filter`) z zachowaniem semantyki asercji xUnit; testy Oracle bez narzędzi są raportowane jako pominięte.
-
-DoD: Release bez ostrzeżeń; 3854/3854 testów (wcześniej 4610), 149/149 Oracle, 113/113 bez intrinsics; każdy usunięty przypadek ma wskazane pokrycie; po migracji identyczna liczba przypadków każdej metody.
-
-## 0.6.0 — sekwencyjne animacje
-
-Zakres:
-- Osobny czytnik i zapis klatek WebP/APNG/GIF, bez zmiany znaczenia istniejącego `Image.Frames`.
-- Odczyt kolejnych skomponowanych klatek z czasem, pętlą i tłem. Jawna własność bufora: kiedy jest ważny, kiedy trzeba go skopiować i kto go zwalnia.
-- Kodowanie z sekwencji klatek przy ograniczonym buforze bieżących/poprzednich płócien. Zachować blend/dispose, przezroczystość i czasy.
-- Wspierać wejścia i wyjścia bez `Seek`. Dla nagłówków wymagających długości lub liczby klatek zastosować jawny kontrakt (np. znana liczba klatek, seek albo kontrolowany plik tymczasowy), bez ukrytego buforowania całej animacji w RAM.
-- Udokumentować różnice optymalizacji względem enkodera mającego wszystkie klatki, np. paletę GIF i wybór klatek kluczowych WebP.
-- Obsłużyć anulowanie, przedwczesne zakończenie enumeracji, błędy I/O i sprzątanie zasobów. Egzekwować limity wejścia i łączne limity klatek/pikseli również przy odczycie sekwencyjnym.
-
-DoD:
-- Wynik czytnika piksel w piksel oraz czasy/pętla zgodne z istniejącym dekoderem; nowe pliki sprawdzone zewnętrznymi wyroczniami.
-- Konwersje GIF↔WebP↔APNG bez przechowywania całej animacji w pamięci.
-- Pomiary dla 10/100/1000 klatek o stałym płótnie pokazują brak wzrostu pamięci proporcjonalnego do liczby pełnych klatek; niewielkie indeksy i koszty formatu raportowane osobno.
-- Testy blend/dispose, częściowych prostokątów, pustej/obciętej sekwencji, niedotrzymanej deklaracji liczby klatek, non-seekable i anulowania.
-
-Weryfikacja 2026-10-15: `Image.OpenFrameReaderAsync` i `Image.CreateFrameWriter`, publiczne reader/writer/options,
-GIF/APNG/WebP z wejścia non-seekable, zapis forward-only GIF i APNG ze znaną liczbą klatek; pozostałe wyjścia przez
-jawny `UseTemporaryFile`. `FrameCount=1` używa zwykłego enkodera. Własność borrowed buffers, metadane/pętla znane
-po końcu, limity, anulowanie, cleanup i różnice optymalizacji opisane w `docs/animation.md`.
-
-Czytniki zgodne piksel w piksel, czasy/pętla/tło/metadane/DPI dla 206 plików korpusu (plik i non-seekable).
-Nowe pliki zweryfikowane przez Pillow i libwebp; 9 par konwersji, blend/dispose i częściowe prostokąty z korpusu,
-puste/obcięte sekwencje, count mismatch, błędy I/O i anulowanie (także kopiowania temp). APNG: fallback statyczny tylko
-przed pierwszą zwróconą klatką, różna liczba klatek od acTL odrzucana. GIF ma paletę i kwantyzację per klatka oraz pełne
-prostokąty; APNG Auto=RGBA, bez indexed; WebP współdzieli okno klatek kluczowych z zapisem wsadowym.
-
-Build Release 0 ostrzeżeń/błędów; **4651/4651 pełnych testów**, **152/152 Oracle** bez pominięć, **113/113 fallback SIMD**;
-paczka z notices/LICENSE, konsument z trimmingiem i Native AOT linux-x64 oraz przykładami sekwencji poprawny. API snapshot
-przejrzany; README quick start kompiluje się z jednym using. Pomiary 10/100/1000 klatek i raport ograniczonej pamięci:
-`docs/performance.md`, `docs/measurements/sequence-memory.tsv`. Macierz 80 przypadków przed/po (2 przebiegi na wersję, ABBA): mediana
-+0,09%, alokacje maks. +0,49%; 2 podejrzane przypadki sprawdzone naprzemiennie (+1,62% / −0,91%), brak potwierdzonej
-regresji >5%; `docs/measurements/sequences-benchmarks.csv`. Nowych SIMD nie dodano. Rzeczywisty ARM64 i zdalny CI nieuruchamiane.
-VERSION 0.6.0; README, instrukcja instalacji i PackageReleaseNotes zaktualizowane. Notatki: `docs/releases/release-0.6.0.md`.
-Publikacja przez workflow Release, po bramce Validate (managed, Oracle i package-consumer).
-
-## 0.6.1 — metadane
-
-Zakres:
-- Typowany odczyt EXIF: orientacja, DPI, daty, producent/model aparatu, ekspozycja, przysłona, ISO, ogniskowa i GPS. Zachować dostęp do surowych bloków ICC/EXIF/XMP.
-- Polityka zachowania wybranych pól oraz usuwanie GPS. Rozróżnić usunięcie znanych tagów GPS od pełnego usunięcia metadanych; nie obiecywać anonimizacji nieznanych MakerNotes/XMP.
-- Edycja EXIF/XMP/ICC w JPEG, PNG/APNG i WebP bez dekodowania/rekompresji pikseli; zakres tagów zapisywalnych określony jawnie.
-- Poprawne długości, offsety, CRC i nagłówki kontenerów; pozostawienie nienaruszonych danych obrazu, animacji i bezpiecznych nieznanych segmentów/chunków.
-- Zapis do osobnego wyniku; atomowe zastąpienie pliku dopiero po poprawnym zakończeniu. Limity i anulowanie z 0.5.3.
-
-DoD:
-- Testy EXIF little-/big-endian, niepoprawnych offsetów, cyklicznych IFD, brakujących pól i dużych bloków.
-- Dla edycji bez rekompresji identyczne payloady danych skompresowanego obrazu i identyczne piksele/klatki; poprawne metadane potwierdzone niezależnym narzędziem.
-- Usuwanie GPS sprawdzone na syntetycznych fixture'ach; oryginalny plik pozostaje poprawny po anulowaniu lub błędzie zapisu.
-
-Weryfikacja 2026-10-15: `Image.ReadMetadata` / `EditMetadata` (ścieżki, strumienie, pamięć, async I/O),
-`ImageMetadata.ExifProfile`, typowane `ExifTag<T>` i dokładne `ExifRational`. Odczyt/zapis obsługiwanych tagów,
-allowlista i fizyczne usuwanie znanych danych GPS; nieznane dane i offsety EXIF zachowane, nieudane edycje atomowe.
-JPEG (także progressive), PNG/APNG i WebP przepisywane bez dekodowania/rekompresji obrazu; testy porównują
-skompresowane payloady oraz piksele i klatki. JPEG MPF/MPO i extended XMP jawnie nieobsługiwane. Pliki zastępowane
-atomowo po sukcesie, wejścia non-seekable, limity i anulowanie zweryfikowane. Szczegóły API: `docs/metadata.md`.
-
-Build Release bez ostrzeżeń; 4708/4708 pełnych testów (0 pominiętych), w tym 155 Oracle; 113/113 SIMD bez intrinsics.
-Migawka API zawiera wyłącznie dodatki, konsument C# 14, trimming i Native AOT linux-x64 poprawne. Macierz 80 przypadków
-względem 0.6.0: mediana czasu +0,74%, maks. wzrost alokacji +0,66%; pięć podejrzanych wyników potwierdzonych
-naprzemiennie w jednym procesie, żadnej powtarzalnej regresji >5%. Pomiary nowego API i dane surowe w
-`docs/performance.md`. VERSION 0.6.1, notatki `docs/releases/release-0.6.1.md`; przygotowany lokalny commit na polecenie użytkownika, bez pusha i publikacji. ARM64 wymaga osobnego wykonania;
-nie dodano nowych ścieżek SIMD.
-
-Poprawki API sekwencyjnego z 0.6.0 (addytywne, w 0.6.1): `CreateFrameWriter(path, size[, options])` z formatem
-z rozszerzenia, `ImageFrameWriter.Width/Height`, `WriteAsync(frame, duration)` i `WriteAsync(image, duration)`,
-`ImageFrameReader.CloneCurrent()` (strumieniowe przetwarzanie klatek przez `Mutate`) oraz
-`ImageFrameWriterOptions.From(reader)`. Bajty wyjścia kodeków bez zmian. Weryfikacja 2026-10-15: build Release bez
-ostrzeżeń, 4736/4736 testów, 155/155 Oracle, package consumer (trim + Native AOT linux-x64) OK.
-
-## 0.6.2 — zarządzanie kolorem i światło liniowe
-
-Zakres:
-- Jawna konwersja do sRGB dla ograniczonego podzbioru profili ICC v2/v4: RGB matrix/TRC oraz Gray/TRC. Obsłużyć wymagane krzywe, macierze i adaptację punktu bieli; opisać obsługiwany rendering intent.
-- Profile LUT, pełne CMYK ICC i pozostałe warianty poza zakresem 0.7.0. Przy żądaniu konwersji nieobsługiwany profil daje `NotSupportedException`, uszkodzony `ImageFormatException`; domyślne przenoszenie profilu pozostaje możliwe.
-- Jednoznaczna polityka dla braku profilu i konfliktów informacji o kolorze (ICC, sRGB, gAMA/cHRM PNG); brak cichej podwójnej konwersji.
-- Po konwersji aktualizować oznaczenie przestrzeni i metadane, aby wynik nie zachował błędnego profilu źródłowego.
-- Opcjonalny resize i kompozycja w świetle liniowym sRGB, z poprawną premultiplikacją alfy w buforach roboczych i prostą alfą w `Rgba32`.
-- Domyślny resize/kompozycja zachowują obecne wyniki. Nie rozszerzamy magazynu pikseli do HDR/16-bit; bufory obliczeniowe mogą mieć większą precyzję.
-
-DoD:
-- Wektory i obrazy kontrolne porównane z niezależnym silnikiem kolorów (np. LittleCMS tylko jako wyrocznia); przed implementacją zapisana tolerancja błędu i konfiguracja referencji.
-- Testy sRGB, profili szerokogamutowych matrix/TRC, szarości, błędnych/nieobsługiwanych profili, krzywych i punktu bieli.
-- Testy krawędzi z alfą, gradientów i mieszania potwierdzają obliczenia liniowe; tryb domyślny nadal zgodny z dotychczasowymi referencjami.
-
-Referencja i tolerancja (ustalone 2026-10-15 przed implementacją; `tests/assets/color_reference.py`,
-`tests/assets/corpus/color/color_reference.json`):
-- Wyrocznia: LittleCMS 2.14 przez Pillow 10.2.0 `ImageCms`, intent relative colorimetric, bez BPC, flagi 0, cel
-  wbudowany sRGB LittleCMS (D65 → D50 Bradford), tryby 8-bit RGB→RGB i L→RGB. Profile testowe są syntetyczne
-  (v2/v4, `curv` gamma/tabela/tożsamość, `para` typy 0–4, P3, Adobe RGB, ProPhoto, Rec.2020, sRGB, Gray).
-- Tolerancja: RGB matrix/TRC |różnica| ≤ 1 na kanał 8-bit, Gray/TRC ≤ 2, odsetek różniących się kanałów ≤ 7%.
-  Kalibracja LittleCMS względem dokładnego modelu double: RGB maks. 1 (≤ 2,2% kanałów), Gray maks. 2 przy czerni
-  (16-bitowa ścieżka z odwróconą krzywą sRGB).
-- Polityka PNG: iCCP > sRGB > cHRM/gAMA (jak libpng i przeglądarki); same gAMA = prymarne sRGB z krzywą potęgową,
-  same cHRM = krzywa sRGB. Chunki koloru po pierwszym IDAT i gAMA = 0 są ignorowane. Brak opisu koloru = sRGB.
-  Po konwersji profil i opis koloru są usuwane (sRGB domyślne), więc nie ma podwójnej konwersji.
-- Światło liniowe: referencja to Pillow `F` (resampling 32bpc) na liniowych, premultiplikowanych kanałach oraz
-  model source-over w double; tolerancja ≤ 1 na kanał.
-
-Weryfikacja 2026-10-15: `ConvertToSrgb()`, `DecoderOptions.ColorConversion = ToSrgb` (z `IgnoreMetadata` →
-`ArgumentException`, frame readers → `NotSupportedException`), parser ICC v2/v4 matrix/TRC (RGB, Gray; `curv`,
-`para` 0–4), nieobsługiwane → `NotSupportedException`, uszkodzone → `ImageFormatException` (fuzzing 2000 przypadków).
-`ImageMetadata.Gamma/Chromaticities/SrgbRenderingIntent` z PNG gAMA/cHRM/sRGB (oba dekodery, enkoder, EditMetadata;
-JPEG/WebP odrzucają zmianę). `ResizeOptions.LinearLight`, `DrawImageOptions { Opacity, LinearLight }`; tryb
-domyślny bez zmian (referencje Pillow zielone). Wszystkie 13 profili w tolerancji względem LittleCMS, 7 przypadków
-PNG, 9 przypadków światła liniowego ≤ 1. Build Release bez ostrzeżeń, 4970/4970 testów, 155/155 Oracle, 113/113
-scalar, 56/56 testów koloru bez intrinsics, package consumer (trim + AOT) OK. Pomiar lokalny: resize liniowy ≈ 1,5×
-czasu domyślnego, `ConvertToSrgb` 3000×2250 ≈ 38 ms. Bez nowych ścieżek SIMD; macierz regresji wydajności i ARM64
-nie były uruchamiane.
-
-Przygotowanie wydania (2026-10-15): review kodu (10 ustaleń, wszystkie poprawione): IgnoreMetadata pomija też
-gAMA/cHRM/sRGB, `ConvertToSrgb` atomowe (ReplaceFrames), `IcoFile.LoadAll` obsługuje `ColorConversion`, rozmiar
-profilu większy od danych przycinany jak w LittleCMS, zakres `Gamma` jak gAMA, zdegenerowane `CieChromaticities`
-odrzucane w konstruktorze, wspólny `PngColorDescription`, wagi resamplingu bez dodatkowych alokacji, `DrawImage`
-liniowe bez zbędnych konwersji. VERSION 0.6.2, `docs/releases/release-0.6.2.md`, PackageReleaseNotes. Build Release
-bez ostrzeżeń, 4974/4974, Oracle 155/155, scalar 113/113, kolor bez intrinsics 60/60, package consumer 0.6.2 (trim +
-AOT, AotSmoke z nowym API). Macierz 80 przypadków względem v0.6.1: mediana +0,28%, alokacje maks. +0,27%; dziewięć
-przypadków >5% potwierdzonych naprzemiennie w osobnych ALC: od −1,79% do +2,28%, bez regresji >5%. ARM64 osobno.
-
-## 0.6.3 — operacje graficzne
-
-Zakres porównany z libvips (`find_trim`), Pillow (`getbbox`, `ImageChops`, `ImageOps`), ImageMagick (`-trim -fuzz`,
-`-level`, `-compose`), ImageSharp (tryby mieszania, `HistogramEqualization`) i W3C Compositing and Blending Level 1.
-Rozszerzenia zatwierdzone 2026-10-15: dodatkowe tryby W3C, AutoCrop po kolorze tła, `FindTrimBounds`, `AutoContrast`,
-`Equalize` i komenda CLI `trim`. Nazwy API są robocze do czasu zatwierdzenia migawki.
-
-Zakres:
-- `AutoCrop(AutoCropOptions)`: tryb `Alpha` (próg alfy) albo `Background` (kolor tła, domyślnie piksel narożny, z
-  tolerancją jak `-trim -fuzz`, ale jako największa różnica kanału RGBA; piksele z alfą 0 pasują do przezroczystego
-  tła niezależnie od koloru), opcjonalny padding ograniczony do płótna. Obraz bez treści pozostaje bez zmian (bez
-  obrazu 0×0). Animacje: suma obwiedni wszystkich klatek i jedno przycięcie wspólnego płótna; czasy i metadane bez zmian.
-  `Image.FindTrimBounds(options) → Rectangle?` zwraca obwiednię bez modyfikacji obrazu.
-- Maski `ApplyMask(Image mask, MaskOptions)`: kanał `Alpha` albo `Luminance` (BT.601, jak `Grayscale`), pozycja lub
-  kotwica, `Invert`, obszar poza maską `Keep` albo `Transparent`; `A' = A·m/255` z zaokrągleniem, RGB bez zmian. Maska
-  może być obrazem docelowym.
-- `BlendMode` w `DrawImageOptions`: `Normal`, `Multiply`, `Screen`, `Overlay`, `Darken`, `Lighten`, `Difference` oraz
-  `HardLight`, `SoftLight`, `ColorDodge`, `ColorBurn`, `Exclusion`. Wzory B(Cb, Cs) i wariant z alfą według W3C
-  (`Cs' = (1−αb)·Cs + αb·B(Cb, Cs)`, potem source-over) z opacity; z `LinearLight` w liniowym sRGB. `Normal` używa
-  dotychczasowej ścieżki, więc wynik jest bajtowo identyczny z 0.6.2.
-- Histogram `Image.GetHistogram(HistogramOptions) → ImageHistogram`: R, G, B, A i luminancja po 256 koszyków, liczba
-  pikseli, średnia i percentyl (nearest rank). Przezroczystość: `Include` (domyślnie, jak Pillow `histogram()`) albo
-  `Exclude` dla A = 0; opcjonalny region i wybór klatki (pierwsza lub wszystkie). Analiza nie modyfikuje obrazu.
-  `WeightByAlpha` usunięte z zakresu (2026-10-15): wymagałoby ułamkowych liczników zamiast całkowitych.
-  `AutoContrast`/`Equalize` liczą histogram z wszystkich pikseli i klatek; animacja dostaje jedno wspólne mapowanie.
-- `Gamma` i `Levels(LevelsOptions)` dla RGB albo pojedynczego kanału:
-  `out = ob + (ow−ob)·clamp((x−ib)/(iw−ib), 0, 1)^(1/γ)` w zakodowanym sRGB. LUT jest liczony w double i zaokrąglany
-  połówkowo w górę. Kolejność: poziomy wejściowe, gamma, poziomy wyjściowe. Walidacja `ib < iw`, skończonego γ > 0 i
-  zakresu 0–255; alfa bez zmian.
-- `AutoContrast(cutoffLow, cutoffHigh, preserveTone)` i `Equalize()` jako port Pillow 10.2.0 `ImageOps`; wspólny
-  wewnętrzny LUT dla operacji tonalnych.
-- CLI: komenda `trim` (tryb alfa/tło, tolerancja, padding).
-- Operacje dostępne przez `Mutate`/`Clone`, analiza jako API odczytowe. Poza zakresem: tryby nierozdzielne
-  (Hue/Saturation/Color/Luminosity), pełne operatory Porter-Duff, krzywe ze splajnami, `EntropyCrop`, tekst i grafika wektorowa.
-
-Referencje (przed implementacją, `tests/assets/graphics_reference.py`, `python3 -I`):
-- Model double (numpy) dla mieszania, masek i poziomów z alfą. Pillow 10.2.0 `ImageChops` dla nieprzezroczystych
-  trybów, `ImageOps.autocontrast/equalize` i `getbbox`. ImageMagick 6 `-trim -fuzz` i `-level` jako dodatkowa wyrocznia.
-- Tolerancja: LUT, maski i AutoCrop 0; tryby mieszania ≤ 1 na kanał 8-bit względem modelu double; autocontrast i
-  equalize bit-exact z Pillow.
-
-Kolejność prac: referencje → LUT, Gamma i Levels → histogram, AutoContrast i Equalize → AutoCrop i FindTrimBounds →
-maski → tryby mieszania (`Compositor.Blend.cs`) → CLI, dokumentacja, migawka API i pomiary.
-
-DoD:
-- Małe ręcznie policzone wektory dla każdego trybu, masek, histogramu, gammy i poziomów; testy alfy 0/255 i pośredniej, przycinania oraz granic parametrów.
-- Testy animacji, `Clone`/`Mutate`, źródła będącego celem i braku niezamierzonych zmian RGB pod alfą.
-- Wyrocznie zielone w ustalonej tolerancji; `DrawImage` z `Normal` bajtowo identyczne z 0.6.2.
-- Pomiary pełnych operacji na małych grafikach i 12 MP, macierz regresji względem v0.6.2; SIMD dopiero przy wykazanej korzyści i identyczności ze skalarem.
-- Dokumentacja (`docs/image-processing.md`, `docs/cli.md`) z przykładami w `DocsExamplesTests`, migawka API z samymi dodatkami, konsument trim/AOT.
-
-Weryfikacja 2026-10-15: `Levels`/`Gamma`, `AutoContrast`/`Equalize` (bit-exact z Pillow 10.2.0 `ImageOps`),
-`GetHistogram`, `AutoCrop`/`FindTrimBounds`, `ApplyMask` i 12 trybów `BlendMode` w `DrawImageOptions`; komenda CLI
-`trim`. 59 plików referencji w `tests/assets/corpus/graphics/` z `graphics_reference.py`. Kalibracja: model mieszania
-a Pillow `ImageChops` maks. 1, trim a `getbbox` identyczne, poziomy a ImageMagick 6 maks. 1. Tolerancje dotrzymane:
-LUT, maski i trim 0, mieszanie ≤ 1, `Normal` bajtowo jak 0.6.2. `WeightByAlpha` usunięte z zakresu.
-Build Release bez ostrzeżeń, 5261/5261 testów (110 grafiki), Oracle 155/155, scalar 113/113, grafika bez intrinsics
-110/110, package consumer z AotSmoke nowych operacji (trim + Native AOT linux-x64). Pomiary (`docs/performance.md`):
-12 MP Levels 10,5 ms, histogram 26 ms (po przeplecionych licznikach, wcześniej 56 ms), mieszanie Multiply 75 ms (po
-specjalizacji trybów, wcześniej 117 ms). Macierz 80 przypadków ABBA względem v0.6.2: mediana −0,52%, alokacje maks.
-+0,13%; przypadki >5% sprawdzone naprzemiennie w osobnych ALC, bez potwierdzonej regresji (PCX decode dwumodalny,
-kodek niezmieniony). Bez nowych ścieżek SIMD; ARM64 nieuruchamiany.
-
-Przygotowanie wydania (2026-10-15): VERSION 0.6.3, `docs/releases/release-0.6.3.md`, PackageReleaseNotes,
-README, `docs/README.md` i getting-started. Build Release bez ostrzeżeń, 5261/5261, package consumer 0.6.3 (trim +
-AOT, AotSmoke z nowymi operacjami). Bez commita, tagu i publikacji.
-
-## 0.6.4 — adaptery do ekosystemu .NET
-
-Zakres:
-- Osobne paczki NuGet obok `PictureSharp`; sama biblioteka zostaje bez zależności i bez zmian w API poza ewentualnymi punktami rozszerzeń potrzebnymi adapterom.
-- `PictureSharp.Drawing`: konwersje `Image` ↔ `System.Drawing.Bitmap` (Windows) z poprawnym mapowaniem alfa/stride i jawnym kopiowaniem lub własnością bufora.
-- `PictureSharp.Skia`: konwersje `Image` ↔ `SKBitmap`/`SKImage`; przezroczystość prosta (nieprzemnożona), jawna polityka alfa.
-- `PictureSharp.AspNetCore`: zwracanie obrazu jako `IResult` (kodowanie do strumienia odpowiedzi, negocjacja formatu WebP/PNG/JPEG według `Accept`, nagłówki `Content-Type`/cache), z limitami i anulowaniem przez `RequestAborted`.
-- Każdy adapter w osobnym projekcie z własnym README, wersjonowaniem zgodnym z `VERSION` i zależnością tylko od `PictureSharp` oraz docelowego API.
-
-DoD:
-- Testy round-trip pikseli dla każdego adaptera (alfa 0/255 i pośrednia, nieparzyste szerokości, stride) oraz testy zwalniania zasobów.
-- Test integracyjny ASP.NET Core na `TestServer`: format, nagłówki, anulowanie, przekroczenie limitu.
-- Paczki z `LICENSE` i notices; `PictureSharp` nadal bez `PackageReference`; architektura nie zależy od adapterów (test architektury).
-- Konsument z lokalnego feedu buduje się; trimming/AOT sprawdzone tam, gdzie zależność to obsługuje.
-
-Weryfikacja 2026-10-16 (linux-x64): `src/PictureSharp.Drawing` (System.Drawing.Common 10.0.0; `ToBitmap` w
-32bppArgb/PArgb/24bppRgb/32bppRgb, `Image.FromBitmap`, rozdzielczość, ujemny stride), `src/PictureSharp.Skia`
-(SkiaSharp 3.119.4; `ToSKBitmap`/`ToSKImage` Rgba8888/Bgra8888 × Unpremul/Premul, `FromSKBitmap/FromSKPixmap/FromSKImage`
-dla dowolnego typu koloru, źródło Opaque → alfa 255), `src/PictureSharp.AspNetCore` (`ImageResult`,
-`Results.Extensions.Image`, `ImageResultOptions`: negocjacja `Accept` z q i wildcardami, `Content-Length`, `Vary`,
-`Cache-Control`, HEAD, opcjonalne 406, bufor przed zapisem, `RequestAborted`; `request.ReadImageAsync` → 413 przy
-`MaxInputBytes`). Wszystkie konwersje kopiują. API rdzenia bez zmian (migawka niezmieniona). Build 0 ostrzeżeń;
-5313/5313 testów, 7 pominiętych (GDI+ tylko na Windows; logika wierszy/stride testowana na pamięci natywnej);
-`TestServer`: format, nagłówki, anulowanie w trakcie kodowania, limity. Oracle 155/155. Testy architektury: rdzeń tylko runtime,
-adaptery tylko PictureSharp + docelowe API. `verify-package-consumer.sh`: paczki z `LICENSE`/notices/README, jeden
-assembly, zależności; konsument z lokalnego feedu (trim + Native AOT linux-x64). CI: job `adapters-windows`; Release
-pakuje cztery paczki. CI Validate 38858805444: managed, oracle, package-consumer i adapters-windows (58/58, 0 pominiętych) zielone. Nieuruchomione: ARM64, Trusted Publishing dla nowych identyfikatorów NuGet.
-
-## 0.6.5 — HDR ze zdjęć iPhone: JPEG z gain map
-
-Cel: odczytać rzeczywistą informację HDR z JPEG zawierającego obraz bazowy SDR i mapę wzmocnienia,
-udostępnić liniowe piksele HDR oraz umożliwić świadomą konwersję do zwykłego obrazu SDR. Sam odczyt bazowego
-JPEG lub podbicie jasności nie oznacza obsługi HDR. Pierwszy etap obejmuje zdjęcia statyczne i eksporty JPEG
-z ekosystemu iPhone; HEIF/HEIC, ProRAW/DNG i wideo pozostają poza zakresem.
-
-Formaty i źródła:
-- Rozróżnić starszy Apple HDR Gain Map oraz Adaptive HDR oparty na ISO 21496-1; to osobne warianty metadanych
-  i rekonstrukcji. Apple opisuje oba podejścia w [WWDC24: Use HDR for dynamic image experiences](https://developer.apple.com/videos/play/wwdc2024/10177/).
-- Starszy wariant: mapa luminancji, jej krzywa transferu, `HDRGainMapVersion` i parametry headroom z Apple
-  MakerNote według [Applying Apple HDR effect to your photos](https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos).
-  Nie traktować wzoru Apple jako implementacji ISO 21496-1.
-- Dla ISO zweryfikować specyfikację oraz strukturę JPEG/MPF i metadanych na podstawie przypiętej wersji
-  [libultrahdr](https://github.com/google/libultrahdr). Narzędzie służy jako zewnętrzna wyrocznia dla wspólnego
-  podzbioru ISO; biblioteka PictureSharp pozostaje BCL-only. Zgodność z samym XMP Adobe/Ultra HDR nie jest
-  automatycznie zgodnością z Apple. Przed portowaniem sprawdzić licencję i uzupełnić notices.
-
-Zakres:
-- Najpierw macierz rzeczywistych wariantów: model iPhone’a, wersja systemu, sposób eksportu, typ gain map,
-  przestrzeń barwna, orientacja i rozdzielczości obu obrazów. Nie każdy JPEG z iPhone’a zawiera HDR; zwykły
-  eksport SDR musi zostać poprawnie rozpoznany. Prywatne zdjęcia wyłącznie lokalnie; do repo syntetyczne
-  odpowiedniki i próbki z prawem redystrybucji, bez GPS. Pobieranie zewnętrznych korpusów wymaga zgody.
-- Parser kontenera JPEG: MPF/APP2, odpowiednie APP1/XMP i Apple MakerNote, identyfikacja oraz bezpieczne
-  wydzielenie pomocniczego JPEG. Użyć istniejącego dekodera do bazy i mapy; nie zakładać stałego rozmiaru
-  mapy ani że każdy dodatkowy obraz jest gain map. Mapa nie jest klatką animacji w `Image.Frames`.
-- `Image.Identify` ma opisywać obecność, wariant i deklarowane parametry HDR bez pełnego dekodowania pikseli;
-  odróżnić wykrycie deklaracji od potwierdzenia możliwości rekonstrukcji. Zwykłe `Image.Load` nadal zwraca
-  bazę SDR z dotychczasowymi pikselami. Odczyt HDR jest jawny, z przeciążeniami strumień/plik i async oraz
-  wspólnymi `DecoderOptions` i anulowaniem.
-- API pozostaje skupione na `Image`: roboczo rozszerzenie `Image.LoadHdr(...)` zwracające osobny wynik z
-  liniowymi kanałami float i opisem przestrzeni barwnej/headroom. `Image`/`ImageFrame` nadal przechowują
-  `Rgba32` z prostą alfą; wartości HDR powyżej 1 nie mogą być tam obcinane. Przed implementacją zatwierdzić
-  nazwy, własność i zwalnianie buforów, dostęp do wierszy oraz kontrakt braku HDR (jawny błąd lub jawnie
-  wybrany fallback SDR). Bez statycznej fasady kodeka i bez ogólnej przebudowy modelu na `Image<TPixel>`.
-- Rekonstrukcja najpierw skalarna: osobne modele Apple/ISO, dekodowanie transferu, interpolacja mapy,
-  parametry headroom i docelowego zakresu, jednoznaczna jednostka bieli SDR = 1. Obsłużyć sRGB oraz Display P3
-  z obsługiwanym ICC; mnożenie w prawidłowej przestrzeni liniowej, bez przedwczesnego clippingu do sRGB.
-  Zdefiniować kolejność orientacji, skalowania mapy i konwersji barw, także dla zmniejszonego dekodu JPEG.
-- Jawna konwersja wyniku HDR do `Image` SDR: udokumentowany, deterministyczny operator tone mapping i
-  polityka gamut mapping, parametry ekspozycji/bieli, końcowe kodowanie sRGB. To osobny wybór względem
-  pobrania oryginalnej bazy SDR; wygląd aplikacji Photos nie stanowi numerycznej specyfikacji operatora.
-- Zdefiniować współdziałanie z `IgnoreMetadata`, `ColorConversion`, orientacją i miniaturami. Metadane
-  niezbędne do rekonstrukcji są danymi dekodera; ignorowanie metadanych użytkowych nie może ich przypadkiem
-  usunąć. Nieobsługiwany wariant/profil przy żądaniu HDR → `NotSupportedException`, uszkodzone struktury →
-  `ImageFormatException`; brak niejawnego sukcesu z SDR po nieudanej rekonstrukcji HDR.
-- Wspólne limity dla bazy i mapy: `MaxInputBytes` na cały kontener, `MaxPixels` na sumę dekodowanych pikseli,
-  `MaxMetadataBytes` także na pomocnicze metadane; sprawdzanie rozmiaru bufora float i wszystkich offsetów
-  przed alokacją. Mapa nie zwiększa `MaxFrames`. Anulowanie w ograniczonych porcjach dekodu i rekonstrukcji.
-- `EditMetadata` bez rekompresji ma zachowywać oba strumienie JPEG oraz poprawiać offsety MPF po zmianie
-  długości metadanych. Edycja/usunięcie informacji niezbędnych dla HDR musi mieć jawną politykę i nie może
-  pozostawić pozornie poprawnego HDR. Zwykły zapis obrazu SDR nie może kopiować nieaktualnych deklaracji HDR.
-- CLI `info`: wariant HDR i parametry; `convert`: jawny wybór bazowego SDR albo tone mapping HDR→SDR.
-  Dokumentacja z przykładem dostępu do liniowych pikseli HDR i ograniczeniami odbiorcy/wyświetlacza.
-- Poza 0.6.5: tworzenie nowych gain map, enkoder JPEG HDR, pełne przetwarzanie HDR przez istniejące `Mutate`,
-  automatyczne utrzymywanie gain map po resize/crop/korekcji, wyświetlanie HDR i integracja GPU. Konwersja
-  do PNG/WebP w obecnym modelu daje SDR; zachowanie HDR przy takim zapisie wymaga osobnego przyszłego etapu.
-
-DoD:
-- Korpus obu wariantów (Apple i ISO): różne rozmiary map, sRGB/Display P3, orientacje, brak mapy, nieznana
-  wersja, brakujące/sprzeczne metadane, obcięcia, błędne offsety MPF, przepełnienia i przekroczenia limitów.
-- Przed implementacją zapisać referencje float i ustalić tolerancje osobno dla dekodu JPEG, interpolacji,
-  rekonstrukcji oraz tone mapping. Wektory analityczne i niezależny model double; ISO porównane z przypiętym
-  libultrahdr, Apple z wynikami ImageIO/Core Image na macOS/iOS, z zapisanymi opcjami i wersją systemu.
-  Brak środowiska Apple nie jest zaliczeniem zgodności; zachować reprodukowalne referencje do CI na Linux.
-- Testy potwierdzają wartości HDR > 1, tożsamość przy neutralnej mapie/headroom = 1 w odpowiednim modelu,
-  poprawną orientację i kolory, deterministyczność, limity i anulowanie. Zwykły JPEG i domyślny odczyt SDR
-  zachowują dotychczasowe referencje; API float nie obcina świateł.
-- Edycja metadanych zachowuje bajty obu skompresowanych obrazów i odczytywalność HDR przez wyrocznię;
-  ścieżka SDR usuwa niespójne deklaracje. Testy własności buforów, Dispose i kompilacji konsumenta.
-- Benchmarki małych zdjęć i 12/48 MP: czas, alokacje, szczytowa pamięć i reakcja na anulowanie; regresja
-  zwykłego JPEG. Migawka API, XML docs, przykłady, CLI, wspólna bramka jakości i konsument trim/Native AOT.
-
-Kolejność: próbki i kontrakt API → referencje → parser/Identify → Apple → ISO → wynik float i tone mapping →
-metadane/CLI/dokumentacja → pomiary i bramka. Etapu nie zamyka samo wykrywanie mapy ani odczyt bazy SDR.
-
-## 0.6.7 — SIMD dla HDR i operacji graficznych
-
-Decyzje użytkownika (2026-10-16): osobne wydanie po 0.6.6; HDR na własnych deterministycznych `Exp2`/`Log2`/`Pow`
-wspólnych dla skalara i SIMD (wyniki `ToHdr` zmieniają się względem 0.6.5 o kilka ulp, x64 == ARM64 z konstrukcji);
-z 0.6.3 mieszanie, AutoCrop, maski oraz histogram/Levels (eksperyment); najpierw Vector128 (x64 i NEON), Vector256
-tylko przy zmierzonym dodatkowym zysku.
-
-Zakres:
-- Benchmarki odniesienia: `HdrBenchmarks` (Load z mapą, `ToHdr`, `ToneMap`; ISO mono/RGB, gamma 1/≠1, Apple; 3 i
-  12 MP, syntetyczne w pamięci) i rozszerzone `GraphicsBenchmarks` (11 trybów mieszania, AutoCrop, maski,
-  histogram, Levels), x64 i ARM64.
-- `Primitives/Numerics/DeterministicMath` (wielomiany tylko z add/mul/div IEEE, bez FMA) dla `IsoGainFactor` i
-  `Rec709ToLinear`; błąd ≤ 2 ulp względem double.
-- `ToneMapper.Simd.cs`, `GainMapReconstructor.Simd.cs`/`GainMapMath.Simd.cs`, `SrgbTransfer.Simd.cs`;
-  `Compositor.Blend.Simd.cs`, `TrimBounds.Simd.cs`, `AlphaMask.Simd.cs`; histogram i `ToneLut.Apply` tylko przy
-  zysku ≥ 5%. Lookupy tablicowe pozostają skalarne, gałęzie przez `ConditionalSelect`.
-- Opcjonalnie (decyzja użytkownika po pomiarze): równoległy `ToneMap` z `ToneMappingOptions.MaxDegreeOfParallelism`.
-
-DoD:
-- Każda ścieżka SIMD bitowo identyczna ze skalarem (`*SimdTests`, także z `DOTNET_EnableHWIntrinsic=0` i
-  `DOTNET_EnableAVX2=0`), ogony, wszystkie orientacje/tryby, NaN/∞ w tone mappingu.
-- Operacje 0.6.3 bajtowo identyczne z 0.6.6; HDR w budżetach referencji f32 i wyroczni libultrahdr; x64 == ARM64.
-- Pomiary przed/po (x64 i Orange Pi 5) w `docs/measurements/` i `docs/performance.md`; ścieżki bez zysku usunięte;
-  brak nowych alokacji; wspólna bramka jakości i konsument trim/Native AOT.
-
-## 0.6.8 — poprawki po review
-
-- AutoCrop/FindTrimBounds zachowuje sumę granic wszystkich klatek niezależnie od ich kolejności.
-- Ponowne CompleteAsync z anulowanym tokenem zachowuje ukończony plik; walidacja obszaru histogramu odrzuca przepełnienia.
-- Anulowanie maskowania i mieszania między wierszami, LUT i histogramu między blokami; wspólne macierze HDR, deklaracje SIMD w plikach partial i brak kopiowania źródła przy opacity = 0.
-- Resize Min ze skrajnymi proporcjami rzuca ArgumentOutOfRangeException (bez upscalingu obraz bez zmian); TargetSize skaluje wszystkie klatki z limitem wątków dekodera; anulowanie w bezstratnym koderze WebP; sprzątanie pliku tymczasowego nie przykrywa błędu zapisu.
-- Testy regresji i anulowania. Publiczne API bez zmian.
-
-Weryfikacja lokalna linux-x64: Release 5681/5688 (7 GDI+ pominiętych, 0 błędów), Oracle 176/176,
-SIMD bez AVX2 i bez intrinsics po 128/128, konsument biblioteki i adapterów z pełnym trimmingiem i Native AOT.
-Końcowa wersja zmian nie była testowana na ARM64 zgodnie z poleceniem użytkownika. Wydano 0.6.8 (tag v0.6.8, GitHub Release, NuGet).
+Kolejność: decyzje API → referencje → model mapy → operacje geometryczne → enkoder → CLI i dokumentacja → pomiary i bramka.
 
 ## 0.7.0 — integracja i stabilizacja
 
 Zakres:
-- Ukończyć DoD obsługi ICO, wszystkich sześciu obszarów, adapterów z 0.6.4 i JPEG HDR z 0.6.5. Ujednolicić opcje, nazwy, własność buforów, limity, anulowanie i polityki metadanych/koloru.
-- Testy end-to-end: tworzenie i odczyt wielowariantowego ICO; miniatura JPEG z orientacją i konwersją ICC; sekwencyjna konwersja animacji z maską i resize; edycja metadanych bez rekompresji; przetwarzanie przy ograniczonych zasobach; odczyt JPEG HDR i jawna konwersja do SDR.
-- Uzupełnić CLI i przewodniki o ICO, miniatury, limity, sekwencyjne animacje, kolor, metadane i nowe operacje. Przykłady sprawdzane przez `DocsExamplesTests`.
+- Ukończyć DoD obsługi ICO, wszystkich sześciu obszarów, adapterów z 0.6.4, JPEG HDR z 0.6.5 i 0.6.9. Ujednolicić opcje, nazwy, własność buforów, limity, anulowanie i polityki metadanych/koloru.
+- SPI wtyczek dla gain map i metadanych (szczegóły w podsekcji poniżej); wbudowane kodeki pozostają na kontraktach
+  wewnętrznych.
+- Testy end-to-end: tworzenie i odczyt wielowariantowego ICO; miniatura JPEG z orientacją i konwersją ICC; sekwencyjna konwersja animacji z maską i resize; edycja metadanych bez rekompresji; przetwarzanie przy ograniczonych zasobach; odczyt JPEG HDR i jawna konwersja do SDR; JPEG HDR → resize → zapis z mapą → odczyt przez libultrahdr; wtyczka testowa korzystająca z nowego SPI HDR.
+- Uzupełnić CLI i przewodniki o ICO, miniatury, limity, sekwencyjne animacje, kolor, metadane, HDR i nowe operacje. Przykłady sprawdzane przez `DocsExamplesTests`.
 - Rozszerzyć istniejącą macierz wydajności o nowe ścieżki, czas anulowania, szczytową pamięć i długie animacje; opisać kompromisy jakości i ograniczenia.
 - Sprawdzić pakiet NuGet, trimming/NativeAOT w obsługiwanym zakresie i użycie z lokalnego feedu na x64/ARM64. Przygotować notatki migracyjne z 0.5.0, w tym zmianę nazwy pakietu i przestrzeni nazw z RasterSharp na PictureSharp.
+- Rozstrzygnąć zaległe weryfikacje: ARM64 (wymaga zgody użytkownika na Orange Pi) i status 0.6.6.
+
+### SPI wtyczek w 0.7.0
+
+Audyt SPI (2026-10-16, stan 0.6.8): dekodowanie i kodowanie HEIC SDR jest możliwe na obecnym publicznym API.
+- `IImageFormatModule`: detekcja `ftyp` mieści się w `HeaderSize` ≤ 4096. Dostępne są `ImageFormat.Create`, rejestracja
+  przez `ImageConfigurationBuilder.AddFormat` oraz `SaveAsHeic`/`ToHeic` jako extension blocks w paczce wtyczki.
+- `Identify` zwraca publiczny `ImageInfo` (wymiary, alfa, głębia, orientacja, `Hdr` z `init`). `Decode` zwraca
+  `Image` z publicznymi pikselami i `ImageMetadata` (`IccProfile`, `Exif`, `Xmp`, `SetBlock`; EXIF parsowany przez rdzeń).
+- `ImageDecodeContext` daje `ReservePixels`, `ReserveMetadata`, token, `Options` i `DecodeEmbedded`. Rdzeń sam stosuje
+  `TargetSize`, `ApplyExifOrientation`, `ColorConversion` i limity klatek/pikseli oraz normalizuje wyjątki wtyczki
+  (`ModuleAdapters.cs`, `ImageDecodeService.cs`).
+- Kolor nclx bez ICC wyrażają `Chromaticities` (+ `Gamma` dla krzywych potęgowych); same `Chromaticities` oznaczają
+  krzywą sRGB (`ColorDescriptionResolver`). Nie obejmuje to PQ/HLG.
+- Enkoder: `IImageFormatEncoder<TOptions>` z rekordem pochodnym od `EncoderOptions`. ASP.NET Core
+  `ImageResultOptions.Formats` przyjmuje każdy kodowalny format. Brak refleksji, więc trim/AOT bez przeszkód.
+
+Luki, których wtyczka nie obejdzie (typy są `internal`):
+
+| Luka | Stan w 0.6.8 | Potrzebne wtyczce do | Wydanie |
+| --- | --- | --- | --- |
+| Dołączanie gain map przez wtyczkę | `GainMapAttachment`, `IGainMapDecoder`, `DecodedImage.GainMap` internal | `ToHdr`/`ToneMap` dla HEIC (Apple `hdrgainmap`, ISO `tmap`) | 0.7.0 |
+| Parsowanie metadanych gain map poza JPEG | `ReadIso`/`ReadApple` związane z `JpegHeader` | `Identify` (`HdrInfo.Headroom`) i dekod | 0.7.0 |
+| Kolor bazy HDR z opisu metadanych | `JpegGainMapReader.ReadBaseColor`, tylko ICC z JPEG | HEIC z ICC lub nclx | 0.7.0 |
+| Metadane bez dekodu | `IImageMetadataCodec` internal; wtyczki → `NotSupportedException` | `ReadMetadata`/`EditMetadata` HEIC | 0.7.0 (odczyt; zapis opcjonalny) |
+| Kontrakt orientacji kontenera | nieopisany | `irot`/`imir` bez podwójnego obrotu z EXIF | 0.7.0 (dokumentacja) |
+| Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
+| Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
+| Opcje dekodera per wtyczka | `DecoderOptions.Ico/Png/WebP` zamknięte | np. wybór elementu | 0.8.0, jeśli potrzebne |
+| CICP PQ/HLG | brak | HDR10 HEIC z Androida | poza 0.8.0 |
+
+Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
+1. Format-neutralny model gain map: publiczne `PictureSharp.Formats.GainMapMetadata` z
+   `ParseIso(payload, mapChannels, alternateIcc)`, `ParseApple(exif, mapXmp)`, `Kind`, `Headroom` i
+   `ToHdrInfo(mapSize)`. Opakowuje `GainMapParameters`. Parsery `ReadIso`/`ReadIsoVersion`/`ReadApple`/`AppleHeadroom`
+   przeniesione z `JpegGainMapReader.Metadata.cs` do wspólnego miejsca (np. `Infrastructure/Codecs/GainMaps/`); JPEG
+   korzysta z nich dalej bez zmiany wyników.
+2. Źródło mapy wtyczki: publiczne `GainMapImage { Size; Image Decode(maxDegreeOfParallelism, cancellationToken) }`
+   (pełny rozmiar, mono lub RGB) z adapterem do `IGainMapDecoder`. `HdrService` dla map wtyczek używa skali 1 i zgłasza
+   błędy z `SourceFormat` zamiast stałego `ImageFormat.Jpeg`.
+3. `ImageDecodeContext.AttachGainMap(GainMapMetadata, GainMapImage)` i
+   `ImageDecodeContext.DeclareGainMap(detected, corrupt, reason)`. Kontekst zbiera załącznik, a `ModuleDecoder` zwraca go
+   w `DecodedImage.GainMap`, więc `TargetSize`, orientacja i `ColorConversion` działają jak dla JPEG. Mapa liczy się do
+   `MaxPixels` i jest pomijana bez `LoadGainMap`.
+4. Kolor bazy: `BaseSpace`/`BaseLinearization` liczone z rozwiązanego opisu koloru obrazu (ICC albo
+   `Chromaticities`/`Gamma`), wspólnie dla JPEG i wtyczek.
+5. Metadane bez dekodu: opcjonalny `IImageFormatModule.MetadataCodec => null` z publicznym
+   `IImageFormatMetadataCodec { Read(data, context); Rewrite(...) }`; `Rewrite` domyślnie rzuca `NotSupportedException`.
+   `CodecResolver.GetMetadataCodec` używa adaptera; atomowy zapis, limity i anulowanie z `ImageMetadataService`.
+6. Dokumentacja kontraktu w `docs/extending-picturesharp.md`:
+   - orientacja: wtyczka stosuje transformacje kontenera i ustawia `Metadata.Orientation` tak, by `ApplyExifOrientation`
+     nie obracał drugi raz;
+   - mapowanie nclx, gain map, metadane i wątki;
+   - polityka zgodności SPI: zmiany łamiące tylko w wersji minor, z notatką migracyjną i migawką API.
+
+DoD SPI:
+- Wtyczka testowa w `tests/PictureSharp.Tests` (kontener z bazą JPEG/PNG, mapą JPEG i payloadem ISO) daje `ToHdr`
+  bitowo równe ścieżce JPEG dla tych samych danych.
+- Testy `TargetSize`, orientacji, `ColorConversion`, limitów, uszkodzonych deklaracji oraz `ReadMetadata`/`EditMetadata`
+  przez wtyczkę.
+- Zwykły JPEG HDR bez zmian bajtów i pikseli (`hdr_reference`, wyrocznia libultrahdr).
+- Testy architektury, `ConsumerCompilationTests`, migawka API z samymi dodatkami, `verify-package-consumer.sh` z
+  wtyczką używającą nowego SPI.
 
 DoD: wszystkie wcześniejsze kryteria zamknięte, pełna wspólna bramka jakości zaliczona, dokumentacja i paczka gotowe. Niezrealizowanych punktów nie oznaczamy jako ukończone; zmiana zakresu wymaga jawnej decyzji i aktualizacji planu.
+
+## 0.8.0 — poprawki SPI i dalszy HDR
+
+Zakres:
+- Poprawki SPI zgłoszone przez wtyczkę HEIF. Kandydaci z tabeli luk to `ReportStoredSize` dla miniatur `thmb` i opcje
+  dekodera per wtyczka. Każda zmiana jest addytywna i potwierdzona potrzebą wtyczki.
+- Gain map w enkoderach wtyczek: publiczny odczyt załącznika obrazu (`GainMapMetadata` + `GainMapImage`) i
+  `GainMapMetadata.ToIso()`, z tą samą serializacją co zapis JPEG z 0.6.9.
+- Generowanie gain map ISO z `HdrImage` i bazy SDR: port `generateGainMap` z libultrahdr 2.0.2 (Apache-2.0, notices).
+- Zapis HDR do JPEG z mapą (baza z `ToneMap` albo podana).
+- Konwersja Apple→ISO przy `Preserve`.
+- Poza 0.8.0: przetwarzanie HDR w float, CICP PQ/HLG, AVIF.
+
+DoD:
+- Wyrocznia libultrahdr dla wygenerowanych map i plików.
+- Budżet błędu round-trip `HdrImage` → JPEG → `ToHdr` ustalony przed implementacją.
+- Wspólna bramka jakości.
+
+## Wtyczka HEIF — osobne repozytorium
+
+Wtyczka `PictureSharp.Heif` powstaje w osobnym repozytorium git, z własnym `VERSION` i SemVer od 0.1.0. Zależy wyłącznie
+od paczki NuGet `PictureSharp` w minimalnej wersji podanej niżej i korzysta tylko z publicznego API (test architektury,
+CI na paczce z NuGet lub lokalnego feedu). Prace startują od razu, na 0.6.8; luki SPI zamyka rdzeń według tabeli w 0.7.0.
+Zakres poniżej przenosimy do `plan.md` nowego repozytorium przy jego założeniu.
+
+| Wersja wtyczki | Zakres | Minimalny PictureSharp |
+| --- | --- | --- |
+| 0.1.0 | Repo, CI, kontener HEIF (ISOBMFF), detekcja, `Identify`, limity, fuzzing parsera | 0.6.8 |
+| 0.2.0 | Dekoder HEVC intra (skalar), siatka, kolor, alfa, `irot`/`imir`/`clap`, ICC/EXIF/XMP | 0.6.8 |
+| 0.3.0 | Enkoder HEVC intra Main 8-bit 4:2:0, alfa, siatka, metadane | 0.6.8 |
+| 0.4.0 | Gain map Apple/ISO → `ToHdr`, `ReadMetadata` bez dekodu | 0.7.0 |
+| 0.5.0 | SIMD i równoległość, pomiary względem libheif, ARM64 | 0.7.0 |
+| dalej | Zapis gain map w HEIC, ewentualnie `thmb` i opcje dekodera | 0.8.0 |
+
+Cel: moduł `IImageFormatModule` (rejestracja przez `ImageConfigurationBuilder.AddFormat`), który odczytuje i zapisuje
+HEIC (HEVC w kontenerze HEIF) bez kodu natywnego. Zdjęcia HEIC zawierają tylko obrazy intra, więc port obejmuje HEVC
+intra, bez kompensacji ruchu.
+
+Zasady:
+- Te same reguły co rdzeń: `net10.0`, C# 14, BCL-only, bez `unsafe`, P/Invoke i `System.IO.Compression`; zależność
+  wyłącznie od `PictureSharp` przez publiczne API (test architektury jak dla adapterów). Wyjątki, limity, anulowanie,
+  pule buforów, `Rgba32` z prostą alfą.
+- Licencje: port tylko z kodu zgodnego z MIT. Dekoder HEVC według ITU-T H.265 (bezpłatna specyfikacja) i
+  oprogramowania referencyjnego HM (BSD-3); enkoder według HM i kvazaar (BSD-3). Kontener według ISO/IEC 23008-12 i
+  ISO/IEC 14496-12. libde265, libheif (LGPL) i x265 (GPL) wyłącznie jako wyrocznie, bez portowania kodu.
+  `THIRD-PARTY-NOTICES.txt` paczki uzupełniony o porty.
+- Patenty HEVC: biblioteka ich nie rozstrzyga. README paczki opisuje sytuację; decyzja o publikacji paczki należy do
+  użytkownika i zapada przed wydaniem.
+- Źródła referencyjne przypięte w `reference/` repozytorium wtyczki (HM, kvazaar, libheif + libde265 do narzędzi), read-only; pobranie
+  wymaga zgody użytkownika. Narzędzia wyroczni (`heif-dec`, `heif-enc`, `heif-info`, dekoder HM) budowane skryptem
+  `scripts/build-heif-reference.sh`, z nadpisaniem katalogu przez `PICTURESHARP_HEIF_TOOLS`.
+- Port funkcja po funkcji z komentarzem źródłowym; najpierw skalar, SIMD dopiero po pomiarach i z testami identyczności.
+
+Zakres dekodowania:
+- Kontener: `ftyp` (`heic`, `heix`, `mif1`), `meta` z `hdlr pict`, `pitm`, `iinf`/`infe`, `iloc` (wersje 0–2, metody
+  0 i 1), `iref` (`dimg`, `auxl`, `thmb`, `cdsc`, `prem`), `iprp`/`ipco`/`ipma` (`hvcC`, `ispe`, `colr` nclx/prof,
+  `pixi`, `irot`, `imir`, `clap`, `auxC`), `idat`. Elementy `grid` (kafle iPhone’a) i `iden`; transformacje w kolejności
+  z `ipma`. Ustalić relację z `ApplyExifOrientation` (HEIF stosuje `irot`/`imir`, EXIF orientation jest informacyjne).
+- HEVC: profile Main, Main Still Picture i Main 10; chroma 4:2:0 i 4:0:0. VPS/SPS/PPS, segmenty slice, CABAC, drzewo
+  kodowania, predykcja intra (35 trybów), transform skip, listy skalowania, transformaty 4–32 i DST 4×4, dekwantyzacja,
+  deblocking, SAO, kafle i WPP, PCM. Slice inter, 4:2:2/4:4:4 (RExt) i SCC → `NotSupportedException`.
+- Kolor: YCbCr → RGB według nclx (macierze BT.601/709/2020, zakres pełny/ograniczony) z dokładnie opisanym
+  zaokrągleniem; ICC do metadanych; 10-bit → 8-bit jak PNG 16-bit. Alfa z obrazu pomocniczego (auxC alpha) jako prosta
+  alfa, z odwróceniem premultiplikacji przy `prem`.
+- Metadane: elementy Exif (z prefiksem offsetu), XMP i ICC w `ImageMetadata`; `Identify` bez dekodowania HEVC; miniatura
+  `thmb` jako możliwa szybka ścieżka `TargetSize` (wymaga SPI z rdzenia 0.8.0).
+- HDR: gain map Apple (`urn:com:apple:photo:2020:aux:hdrgainmap`) i ISO (`tmap`) dołączane przez SPI z rdzenia 0.7.0, więc
+  `ToHdr`/`ToneMap` działają dla HEIC. Mapy głębi i matowe portretów, Live Photos, sekwencje HEIF i AVIF poza zakresem
+  (AVIF może później współdzielić parser kontenera).
+- Limity: `MaxInputBytes`, `MaxPixels` (suma kafli, alfy i mapy), `MaxMetadataBytes`, liczba elementów, głębokość i
+  cykle `iref`, wymiary siatki i kafli, rozmiary NAL. Kafle siatki dekodowane równolegle, wynik niezależny od liczby wątków.
+
+Zakres kodowania:
+- Pojedynczy obraz (polityka dla animacji jak w pozostałych enkoderach jednoobrazowych), HEVC Main 8-bit 4:2:0, alfa
+  jako obraz pomocniczy 4:0:0, siatka kafli dla dużych obrazów, nclx/ICC, Exif i XMP. Domyślne parametry kolorów
+  ustalone według `heif-enc`.
+- Enkoder intra: `Quality` 0–100 → QP, CTU 32/64, wybór trybów przez SATD i uproszczone RDO, CABAC, deblocking i SAO;
+  deterministyczny i niezależny od liczby wątków (kafle równolegle).
+- `HeifEncoderOptions` (robocze): `Quality`, `TileSize`, `Effort`, `MaxDegreeOfParallelism`. Bezstratny tryb, 4:4:4 i
+  10-bit poza pierwszymi wersjami. Zapis gain map w HEIC po SPI z rdzenia 0.8.0 (decyzja po etapie dekodera).
+
+Referencje i tolerancje (ustalone przed implementacją):
+- Dekoder: YCbCr bit-exact (tolerancja 0) z HM i libde265 na strumieniach konformacyjnych intra JCT-VC (pobranie za
+  zgodą) i syntetycznym korpusie z `heif-enc` (x265 i kvazaar) oraz ffmpeg. RGB z `heif-dec` przy tej samej konwersji
+  kolorów: 0, inaczej ustalona tolerancja.
+- Korpus syntetyczny: siatki, alfa, rotacje/lustra/clap, 10-bit, monochrom, nclx/ICC, Exif/XMP, gain map Apple i ISO;
+  uszkodzone, obcięte, cykliczne referencje i fuzzing. Prywatne zdjęcia HEIC z iPhone’a tylko lokalnie (`Category=Local`).
+- Enkoder: pliki odczytywane przez libheif i dekoder HM; nasz dekoder identyczny z HM na naszych plikach. Kryterium
+  jakości/rozmiaru względem x265 i kvazaar przy równym PSNR/SSIM (np. rozmiar ≤ 1,5× x265 `medium`) zapisane przed
+  implementacją enkodera.
+- Zgodność odbiorców: ręcznie Windows (HEIF Image Extensions) i Apple Photos, gdy dostępne; brak nie jest zaliczeniem.
+
+Kolejność według tabeli wersji wtyczki; każdy etap z testami i wpisem w dzienniku postępu repozytorium wtyczki, a
+publikacja każdej wersji wyłącznie na decyzję użytkownika. SIMD i równoległość (IDCT/DST, predykcja intra, deblocking,
+SAO, YCbCr→RGB) dopiero po wersji skalarnej.
+
+DoD:
+- Wyrocznie zielone w ustalonych tolerancjach; skalar i SIMD identyczne na x64 i ARM64; wynik niezależny od liczby wątków.
+- Testy limitów, uszkodzonych danych i anulowania; żadne wejście nie daje niekontrolowanego wyjątku (fuzzing `Category=Slow`).
+- Pomiary dekodowania 12/48 MP i kodowania względem libheif (czas, alokacje, szczytowa pamięć).
+- Paczka `PictureSharp.Heif` z README (w tym nota o patentach), `LICENSE` i notices; test architektury; konsument
+  trim/Native AOT; dokumentacja z przykładami sprawdzanymi testami w repozytorium wtyczki; przykład CLI z rejestracją wtyczki.
+
+## Poza planem — kandydaci po 0.8.0
+
+Do decyzji użytkownika, bez zobowiązań: przetwarzanie HDR w float, CICP PQ/HLG, AVIF (kontener wspólny z wtyczką
+HEIF), proste formaty QOI, TGA i PNM.
 
 ## Wspólna bramka jakości każdego wydania
 
@@ -513,9 +318,23 @@ dotnet test -c Release
 dotnet test -c Release --treenode-filter "/*/*/*/*[Category=Oracle]"
 ```
 
-## Wzmocnienie domeny i C# 14 — zakończone lokalnie (2026-10-15)
+## Changelog
 
-- ImageDimensions, atomowe zatwierdzanie wspólnego płótna przez Image, kontrolowana własność, nieujemne czasy klatek i spójne Dispose.
-- Migawki metadanych i jawna edycja orientacji; grupy opcji i wspólne budżety zagnieżdżonych dekoderów; wewnętrzne kontrakty sesji bez implementacji kodeków sekwencyjnych.
-- Testy reguł domeny, kontraktów kodeków i sesji, wywołań IL oraz kompilacji konsumenta C# 14. CI push/PR i bramka przed publikacją z wyroczniami i konsumentem pakietu trim/AOT.
-- DoD lokalne: Release 0 ostrzeżeń/błędów, 5134/5134, Oracle 150/150, scalar 113/113; paczka i isolated-cache konsument z pełnym trimmingiem oraz Native AOT linux-x64. Macierz 80 przypadków ABBA i 10 naprzemiennych kontroli nie potwierdziła regresji >5%; dokumentacja w docs/ddd-verification.md. ARM64 i zdalny GitHub CI niesprawdzone. Wydanie 0.5.5 przygotowane na polecenie użytkownika. Kodeki sekwencyjne pozostają częścią 0.6.0.
+Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
+
+- **0.5.0** — kodeki WebP, PNG/APNG, JPEG, GIF, BMP, PCX; animacje, własny deflate/inflate, SIMD x64/ARM64, CLI.
+- **0.5.1** — odczyt i zapis ICO (jako RasterSharp).
+- **0.5.2** — zmiana nazwy RasterSharp → PictureSharp.
+- **0.5.3** — limity `MaxInputBytes`/`MaxMetadataBytes`/`MaxFrames`, anulowanie pracy CPU.
+- **0.5.4** — miniatury JPEG przez pomniejszone IDCT (`TargetSize`), bit-exact z libjpeg-turbo.
+- **0.5.5** — warstwy, model domenowy, własność buforów, API C# 14 (łamie zgodność z 0.5.4).
+- **0.5.6** — API skupione na `Image`, `ImageConfiguration`, publiczne SPI wtyczek, procesory ramek.
+- **0.5.7** — porządki w testach, migracja na TUnit.
+- **0.6.0** — sekwencyjny odczyt i zapis animacji GIF/APNG/WebP.
+- **0.6.1** — typowany EXIF, usuwanie GPS, edycja metadanych bez rekompresji.
+- **0.6.2** — konwersja ICC do sRGB (matrix/TRC), resize i kompozycja w świetle liniowym.
+- **0.6.3** — AutoCrop, maski, 12 trybów mieszania, histogram, Levels/Gamma, AutoContrast/Equalize, CLI `trim`.
+- **0.6.4** — paczki adapterów `PictureSharp.Drawing`, `PictureSharp.Skia`, `PictureSharp.AspNetCore`.
+- **0.6.5** — HDR z JPEG z gain map (Apple, ISO 21496-1): `ToHdr`, `ToneMap`, edycja metadanych z zachowaniem mapy.
+- **0.6.7** — SIMD dla HDR (deterministyczne Exp2/Log2) i operacji graficznych.
+- **0.6.8** — poprawki po review: AutoCrop animacji, Resize Min, TargetSize z limitem wątków, anulowanie VP8L.
