@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja kodu: 0.6.5 (biblioteka i paczki adapterów; HDR z gain map). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Wydano 0.6.5 (HDR z JPEG iPhone); kolejnym etapem jest 0.6.6 (weryfikacja Apple na macOS). Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
+**Bieżąca wersja kodu: 0.6.7 (biblioteka i paczki adapterów; HDR z gain map, SIMD dla HDR i grafiki). Fazy 0–10, ICO, kontrola zasobów, miniatury JPEG, sekwencyjne animacje, metadane, zarządzanie kolorem oraz operacje graficzne ukończone; 0.5.2 zmieniło nazwę biblioteki z RasterSharp na PictureSharp.** Wydano 0.6.7 (SIMD dla HDR i grafiki); kolejnym etapem jest 0.6.6 (weryfikacja Apple na macOS), wydawane po 0.6.7. Zakres dalszych planowanych wydań nie oznacza istniejącej funkcjonalności.
 
 PictureSharp to biblioteka obrazów dla .NET 10+, napisana w C# 14, bez zależności biblioteki i kodu natywnego. Odczytuje i zapisuje WebP, PNG/APNG, JPEG, GIF, BMP i PCX; wydanie 0.5.1 dodało ICO. Udostępnia animacje, metadane, operacje na pikselach, skalowanie, geometrię, korekcję kolorów i filtry przez `Image.Load` / `Mutate` / `Clone` / `Save` / `SaveAs*`; formaty można rozszerzać wtyczkami.
 
@@ -57,6 +57,7 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Ukończona — wydanie 0.6.4 |
 | 0.6.5 | HDR z JPEG iPhone: gain map Apple i ISO 21496-1, rekonstrukcja HDR i konwersja do SDR | Ukończona — wydanie 0.6.5 (weryfikacja Apple na macOS przeniesiona do 0.6.6) |
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, benchmarki HDR, usuwanie deklaracji Ultra HDR przy zapisie SDR | Planowana |
+| 0.6.7 | SIMD dla HDR (rekonstrukcja, tone mapping, deterministyczne Exp2/Log2) i operacji 0.6.3 (mieszanie, AutoCrop, maski, histogram/Levels) | Ukończona — wydanie 0.6.7 |
 | 0.7.0 | Integracja ICO, sześciu obszarów, adapterów i JPEG HDR, stabilizacja API i wydanie | Planowana |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości. Nazwy nowych opcji i metod poniżej są robocze do czasu zatwierdzenia migawki API.
@@ -447,6 +448,31 @@ DoD:
 
 Kolejność: próbki i kontrakt API → referencje → parser/Identify → Apple → ISO → wynik float i tone mapping →
 metadane/CLI/dokumentacja → pomiary i bramka. Etapu nie zamyka samo wykrywanie mapy ani odczyt bazy SDR.
+
+## 0.6.7 — SIMD dla HDR i operacji graficznych
+
+Decyzje użytkownika (2026-10-16): osobne wydanie po 0.6.6; HDR na własnych deterministycznych `Exp2`/`Log2`/`Pow`
+wspólnych dla skalara i SIMD (wyniki `ToHdr` zmieniają się względem 0.6.5 o kilka ulp, x64 == ARM64 z konstrukcji);
+z 0.6.3 mieszanie, AutoCrop, maski oraz histogram/Levels (eksperyment); najpierw Vector128 (x64 i NEON), Vector256
+tylko przy zmierzonym dodatkowym zysku.
+
+Zakres:
+- Benchmarki odniesienia: `HdrBenchmarks` (Load z mapą, `ToHdr`, `ToneMap`; ISO mono/RGB, gamma 1/≠1, Apple; 3 i
+  12 MP, syntetyczne w pamięci) i rozszerzone `GraphicsBenchmarks` (11 trybów mieszania, AutoCrop, maski,
+  histogram, Levels), x64 i ARM64.
+- `Primitives/Numerics/DeterministicMath` (wielomiany tylko z add/mul/div IEEE, bez FMA) dla `IsoGainFactor` i
+  `Rec709ToLinear`; błąd ≤ 2 ulp względem double.
+- `ToneMapper.Simd.cs`, `GainMapReconstructor.Simd.cs`/`GainMapMath.Simd.cs`, `SrgbTransfer.Simd.cs`;
+  `Compositor.Blend.Simd.cs`, `TrimBounds.Simd.cs`, `AlphaMask.Simd.cs`; histogram i `ToneLut.Apply` tylko przy
+  zysku ≥ 5%. Lookupy tablicowe pozostają skalarne, gałęzie przez `ConditionalSelect`.
+- Opcjonalnie (decyzja użytkownika po pomiarze): równoległy `ToneMap` z `ToneMappingOptions.MaxDegreeOfParallelism`.
+
+DoD:
+- Każda ścieżka SIMD bitowo identyczna ze skalarem (`*SimdTests`, także z `DOTNET_EnableHWIntrinsic=0` i
+  `DOTNET_EnableAVX2=0`), ogony, wszystkie orientacje/tryby, NaN/∞ w tone mappingu.
+- Operacje 0.6.3 bajtowo identyczne z 0.6.6; HDR w budżetach referencji f32 i wyroczni libultrahdr; x64 == ARM64.
+- Pomiary przed/po (x64 i Orange Pi 5) w `docs/measurements/` i `docs/performance.md`; ścieżki bez zysku usunięte;
+  brak nowych alokacji; wspólna bramka jakości i konsument trim/Native AOT.
 
 ## 0.7.0 — integracja i stabilizacja
 

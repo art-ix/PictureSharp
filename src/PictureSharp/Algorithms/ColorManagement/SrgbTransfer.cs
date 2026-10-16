@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 namespace PictureSharp.Algorithms.ColorManagement;
 
 /// <summary>The sRGB transfer function (IEC 61966-2-1) between 8-bit encoded values and linear light.</summary>
-internal static class SrgbTransfer
+internal static partial class SrgbTransfer
 {
     // Linear light is quantized to 16 bits before encoding; one step changes the 8-bit result by at most 0.05.
     private const int EncodeSteps = 65535;
@@ -11,18 +11,21 @@ internal static class SrgbTransfer
     /// <summary>Linear light of each 8-bit sRGB value.</summary>
     public static ReadOnlySpan<float> DecodeTable => Tables.Decode;
 
+    /// <summary>The 8-bit sRGB values of the 65536 linear steps that <see cref="EncodeIndex(float)"/> selects.</summary>
+    public static ReadOnlySpan<byte> EncodeTable => Tables.Encode;
+
     /// <summary>Linear light of an 8-bit sRGB value.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Decode(byte value) => Tables.Decode[value];
 
     /// <summary>The nearest 8-bit sRGB value of linear light <paramref name="linear"/>, clamped to [0, 1].</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static byte Encode(float linear)
-    {
-        // NaN compares false and maps to 0.
-        int index = linear > 0f ? (linear < 1f ? (int)((linear * EncodeSteps) + 0.5f) : EncodeSteps) : 0;
-        return Tables.Encode[index];
-    }
+    public static byte Encode(float linear) => Tables.Encode[EncodeIndex(linear)];
+
+    /// <summary>The index in <see cref="EncodeTable"/> of linear light <paramref name="linear"/>.</summary>
+    // NaN compares false and maps to 0.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int EncodeIndex(float linear) => linear > 0f ? (linear < 1f ? (int)((linear * EncodeSteps) + 0.5f) : EncodeSteps) : 0;
 
     /// <summary>The exact encoded value of linear light in [0, 1].</summary>
     public static double EncodeExact(double linear)

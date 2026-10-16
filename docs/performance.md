@@ -776,3 +776,97 @@ per run) and moved between −9.1% and +8.2% across seven alternating runs. That
 `PictureSharp.dll` differed under the same benchmark assembly. The PCX decoder and every codec are unchanged in 0.6.3,
 so this is measurement noise, not a regression. No repeatable regression above 5% was confirmed.
 [Raw matrix](measurements/graphics-regression.csv), [alternating confirmations](measurements/graphics-regression-confirmation.json).
+
+## SIMD for HDR and graphics (0.6.7)
+
+0.6.7 adds vector paths to the HDR gain map reconstruction (`ToHdr`), tone mapping (`ToneMap`) and the 0.6.3
+graphics operations: all twelve `DrawImage` blend modes including `Normal`, `AutoCrop`/`FindTrimBounds` and
+`ApplyMask`. Each path has a `Vector128` form (SSE on x64, NEON on ARM64) and, where it measured faster, an AVX2
+`Vector256` form (`*.X86.cs`). Every vector path performs the scalar code's operations in the same order and is
+tested to give identical bits (`*SimdTests`, also with `DOTNET_EnableHWIntrinsic=0` and `DOTNET_EnableAVX2=0`).
+The graphics results are byte-identical to 0.6.5; `ToHdr` changed slightly because its powers and exponentials now
+use PictureSharp's own deterministic `float` functions instead of the C runtime (see [HDR photos](hdr.md)), which
+also makes x64 and ARM64 results identical.
+
+Table lookups (sRGB decoding and encoding, base linearization, map samples) stay scalar per lane: SSE, AVX2 and NEON
+have no efficient byte gather, and AVX2's float gather needs pointers, which the library does not use. This limits
+the linear-light blend modes. A vector luma for `GetHistogram` gained 3.5% (below the 5% threshold) and was
+dropped; `Levels`/`Gamma` are pure byte lookups and were left scalar.
+
+BenchmarkDotNet 0.15.2 (`HdrBenchmarks`, `GraphicsBenchmarks`), one launch, 3 warmups, 9 iterations, mean. x64:
+Intel i5-12500H, CPUs 0–7 (`taskset`), .NET 10. The baseline is release 0.6.5 extracted with `git archive` and the
+same benchmark sources. HDR inputs are synthetic JPEGs with an ISO 21496-1 gain map at a quarter of the base
+resolution (mono map with gamma 1, or RGB map with gamma 0.85–0.87 and a negative minimum, as iPhone maps), built in
+memory. Graphics inputs are those of the 0.6.3 section. Allocations are unchanged in every case.
+
+### x64, 12 MP
+
+| Operation | 0.6.5 | 0.6.7 Vector128 | 0.6.7 AVX2 | Speed-up |
+| --- | ---: | ---: | ---: | ---: |
+| `ToHdr`, mono map | 99.5 ms | 39.6 ms | 34.3 ms | 2.9× |
+| `ToHdr`, mono map, one thread | 663.3 ms | 169.7 ms | 136.8 ms | 4.8× |
+| `ToHdr`, RGB map with gamma | 249.2 ms | 78.4 ms | 54.0 ms | 4.6× |
+| `ToHdr`, RGB map with gamma, one thread | 1346.6 ms | 372.4 ms | 258.2 ms | 5.2× |
+| `ToneMap` (Vector128 only) | 86.8 ms | 50.9 ms | 49.9 ms | 1.7× |
+| `FindTrimBounds` | 2.27 ms | 1.26 ms | 1.27 ms | 1.8× |
+| `AutoCrop` (includes the crop copy) | 5.97 ms | 4.88 ms | 4.98 ms | 1.2× |
+| `ApplyMask` (alpha) | 23.1 ms | 8.2 ms | 8.0 ms | 2.9× |
+| `ApplyMask` (luminance) | 30.2 ms | 10.5 ms | 10.7 ms | 2.8× |
+| `DrawImage` `Normal`, opacity 0.8 | 49.8 ms | 29.3 ms | 17.1 ms | 2.9× |
+| `DrawImage` `Multiply` | 76.3 ms | 35.9 ms | 23.2 ms | 3.3× |
+| `DrawImage` `Screen` | 80.9 ms | 37.3 ms | 23.9 ms | 3.4× |
+| `DrawImage` `SoftLight` | 99.5 ms | 58.2 ms | 33.2 ms | 3.0× |
+| `DrawImage` `ColorBurn` | 98.6 ms | 50.3 ms | 31.0 ms | 3.2× |
+| `DrawImage` `Multiply`, linear light | 84.8 ms | 67.6 ms | 63.4 ms | 1.3× |
+| `Levels` (unchanged control) | 11.3 ms | 11.4 ms | 11.3 ms | — |
+| `GetHistogram` (unchanged control) | 25.9 ms | 26.7 ms | 26.2 ms | — |
+
+`ToneMap` and the mask and trim scans have no AVX2 form: their AVX2 column runs the Vector128 code. At 3 MP,
+`ToHdr` went from 25.9 to 9.1 ms (mono) and 63.7 to 14.9 ms (RGB with gamma), `ToneMap` from 21.9 to 13.1 ms. The
+graphics speed-ups on the small 200×160 image are similar (for example `Multiply` 204 → 65 µs).
+
+### ARM64, 12 MP
+
+Orange Pi 5 (RK3588, 8 cores), .NET 10.0.112, same settings; the vector code is the Vector128 (NEON) path.
+
+| Operation | 0.6.5 | 0.6.7 | Speed-up |
+| --- | ---: | ---: | ---: |
+| `ToHdr`, mono map | 155.9 ms | 100.2 ms | 1.6× |
+| `ToHdr`, mono map, one thread | 724.7 ms | 473.8 ms | 1.5× |
+| `ToHdr`, RGB map with gamma | 533.6 ms | 195.2 ms | 2.7× |
+| `ToHdr`, RGB map with gamma, one thread | 2560.7 ms | 987.1 ms | 2.6× |
+| `ToneMap` | 204.3 ms | 137.9 ms | 1.5× |
+| `FindTrimBounds` | 6.38 ms | 3.52 ms | 1.8× |
+| `AutoCrop` | 10.94 ms | 8.48 ms | 1.3× |
+| `ApplyMask` (alpha) | 94.1 ms | 18.6 ms | 5.1× |
+| `ApplyMask` (luminance) | 127.5 ms | 31.7 ms | 4.0× |
+| `DrawImage` `Normal` (`graphics-probe`) | 129.5 ms | 100.4 ms | 1.3× |
+| `DrawImage` `Multiply` | 207.3 ms | 104.1 ms | 2.0× |
+| `DrawImage` `Screen` | 222.8 ms | 109.8 ms | 2.0× |
+| `DrawImage` `SoftLight` | 292.8 ms | 155.1 ms | 1.9× |
+| `DrawImage` `ColorBurn` | 292.0 ms | 133.5 ms | 2.2× |
+| `DrawImage` `Multiply`, linear light | 252.3 ms | 182.0 ms | 1.4× |
+| `Levels` / `GetHistogram` (controls) | 33.0 / 90.1 ms | 33.1 / 90.5 ms | — |
+
+The `Normal` row comes from `graphics-probe` (median of seven samples) because its vector path was added after the
+ARM64 BenchmarkDotNet run. A first ARM64 run showed `ToneMap` slower than 0.6.5 (204 → 314 ms): reading vector
+lanes with a loop index made the JIT spill the vectors. Constant lane indices fixed it on both architectures.
+
+```bash
+taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
+  --filter '*HdrBenchmarks*' '*GraphicsBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 9
+DOTNET_EnableAVX2=0 taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
+  --filter '*HdrBenchmarks*' '*GraphicsBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 9
+```
+
+BenchmarkDotNet requires a unique benchmark project below the working directory; run it from a checkout without
+nested worktrees (`.claude/worktrees`). Quick medians without BenchmarkDotNet: `hdr-probe` and `graphics-probe`.
+Raw reports: x64 [HDR](measurements/simd-0.6.7-bdn-x64-hdr-avx2.csv) and
+[graphics](measurements/simd-0.6.7-bdn-x64-graphics-avx2.csv) (with `-base` and `-vector128` variants), ARM64
+[HDR](measurements/simd-0.6.7-bdn-arm64-hdr-new.csv) and [graphics](measurements/simd-0.6.7-bdn-arm64-graphics-new.csv)
+(with `-base`), and the probe files `simd-0.6.7-*.json`.
+
+The 80-case complete-operation matrix (`matrix-probe`) against release 0.6.5 in ABBA order, CPUs 0–7: median time
+change +0.24%, largest allocation increase +0.29%. Three cases were above +5%: WebP lossy encode (+26%, one of the
+two current samples), JPEG encode (+7.7%, one sample) and GIF encode (+10.8%, both samples). No codec changed in
+0.6.7, and these were not rechecked in alternating runs. [Raw matrix](measurements/simd-regression.csv).

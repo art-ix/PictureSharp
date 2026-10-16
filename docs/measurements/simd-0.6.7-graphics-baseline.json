@@ -1,0 +1,242 @@
+[
+  {
+    "Size": "small",
+    "Operation": "CopyOnly",
+    "Nanoseconds": 6859.097352416663,
+    "AllocatedBytes": 128907.29082331456
+  },
+  {
+    "Size": "small",
+    "Operation": "Levels",
+    "Nanoseconds": 39156.66927695119,
+    "AllocatedBytes": 129529.80631688854
+  },
+  {
+    "Size": "small",
+    "Operation": "Gamma",
+    "Nanoseconds": 35411.75637393768,
+    "AllocatedBytes": 129500.18042888834
+  },
+  {
+    "Size": "small",
+    "Operation": "AutoContrast",
+    "Nanoseconds": 110719.29307805597,
+    "AllocatedBytes": 139810.13008130083
+  },
+  {
+    "Size": "small",
+    "Operation": "Equalize",
+    "Nanoseconds": 105661.26760563381,
+    "AllocatedBytes": 139827.71967654987
+  },
+  {
+    "Size": "small",
+    "Operation": "Histogram",
+    "Nanoseconds": 65276.718885987815,
+    "AllocatedBytes": 10296.8772845953
+  },
+  {
+    "Size": "small",
+    "Operation": "FindTrimBounds",
+    "Nanoseconds": 5749.371406669222,
+    "AllocatedBytes": 72.07727098505174
+  },
+  {
+    "Size": "small",
+    "Operation": "AutoCrop",
+    "Nanoseconds": 13925.10211659859,
+    "AllocatedBytes": 100526.60088441863
+  },
+  {
+    "Size": "small",
+    "Operation": "ApplyMaskAlpha",
+    "Nanoseconds": 67211.01163831692,
+    "AllocatedBytes": 128706.30830039526
+  },
+  {
+    "Size": "small",
+    "Operation": "ApplyMaskLuminance",
+    "Nanoseconds": 111995.22388059701,
+    "AllocatedBytes": 128702.0589569161
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawNormal",
+    "Nanoseconds": 143234.4465648855,
+    "AllocatedBytes": 128693.73168411037
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawMultiply",
+    "Nanoseconds": 212497.73371104815,
+    "AllocatedBytes": 128703.30066225166
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawSoftLight",
+    "Nanoseconds": 273350.54545454547,
+    "AllocatedBytes": 128705.94244604316
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawMultiplyLinear",
+    "Nanoseconds": 235258.934169279,
+    "AllocatedBytes": 128704.61016949153
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawScreen",
+    "Nanoseconds": 234885.28951486698,
+    "AllocatedBytes": 128673.91139240506
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawOverlay",
+    "Nanoseconds": 252730.42016806724,
+    "AllocatedBytes": 128673.06303236798
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawDifference",
+    "Nanoseconds": 211341.12676056338,
+    "AllocatedBytes": 128672.99184339315
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawColorDodge",
+    "Nanoseconds": 256219.795221843,
+    "AllocatedBytes": 128673.21501706485
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawColorBurn",
+    "Nanoseconds": 265187.80918727914,
+    "AllocatedBytes": 128672.35335689045
+  },
+  {
+    "Size": "small",
+    "Operation": "DrawSoftLightLinear",
+    "Nanoseconds": 296482.0158102767,
+    "AllocatedBytes": 128672.97064579256
+  },
+  {
+    "Size": "12mp",
+    "Operation": "CopyOnly",
+    "Nanoseconds": 3010416,
+    "AllocatedBytes": 48000812.48
+  },
+  {
+    "Size": "12mp",
+    "Operation": "Levels",
+    "Nanoseconds": 10421993.333333334,
+    "AllocatedBytes": 48001561.6
+  },
+  {
+    "Size": "12mp",
+    "Operation": "Gamma",
+    "Nanoseconds": 10602633.333333334,
+    "AllocatedBytes": 48001561.6
+  },
+  {
+    "Size": "12mp",
+    "Operation": "AutoContrast",
+    "Nanoseconds": 35217760,
+    "AllocatedBytes": 48012100.8
+  },
+  {
+    "Size": "12mp",
+    "Operation": "Equalize",
+    "Nanoseconds": 34771200,
+    "AllocatedBytes": 48012140.8
+  },
+  {
+    "Size": "12mp",
+    "Operation": "Histogram",
+    "Nanoseconds": 26525616.666666668,
+    "AllocatedBytes": 10680
+  },
+  {
+    "Size": "12mp",
+    "Operation": "FindTrimBounds",
+    "Nanoseconds": 2229032.3529411764,
+    "AllocatedBytes": 105.88235294117646
+  },
+  {
+    "Size": "12mp",
+    "Operation": "AutoCrop",
+    "Nanoseconds": 6259942.307692308,
+    "AllocatedBytes": 37239112.615384616
+  },
+  {
+    "Size": "12mp",
+    "Operation": "ApplyMaskAlpha",
+    "Nanoseconds": 22424371.42857143,
+    "AllocatedBytes": 48000913.14285714
+  },
+  {
+    "Size": "12mp",
+    "Operation": "ApplyMaskLuminance",
+    "Nanoseconds": 38825350,
+    "AllocatedBytes": 48001252
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawNormal",
+    "Nanoseconds": 50255400,
+    "AllocatedBytes": 48001384
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawMultiply",
+    "Nanoseconds": 77134000,
+    "AllocatedBytes": 48001908
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawSoftLight",
+    "Nanoseconds": 100042750,
+    "AllocatedBytes": 48001908
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawMultiplyLinear",
+    "Nanoseconds": 82779750,
+    "AllocatedBytes": 48001908
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawScreen",
+    "Nanoseconds": 80051500,
+    "AllocatedBytes": 48001876
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawOverlay",
+    "Nanoseconds": 86616200,
+    "AllocatedBytes": 48001876
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawDifference",
+    "Nanoseconds": 76810250,
+    "AllocatedBytes": 48001876
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawColorDodge",
+    "Nanoseconds": 94805100,
+    "AllocatedBytes": 48001876
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawColorBurn",
+    "Nanoseconds": 97958750,
+    "AllocatedBytes": 48001876
+  },
+  {
+    "Size": "12mp",
+    "Operation": "DrawSoftLightLinear",
+    "Nanoseconds": 106758800,
+    "AllocatedBytes": 48001876
+  }
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "Size": "3mp",
+    "Map": "IsoMono",
+    "Operation": "Load",
+    "Nanoseconds": 7631780,
+    "AllocatedBytes": 12025603.487179488
+  },
+  {
+    "Size": "3mp",
+    "Map": "IsoMono",
+    "Operation": "ToHdr",
+    "Nanoseconds": 6456776.595744681,
+    "AllocatedBytes": 48773280.17021277
+  },
+  {
+    "Size": "3mp",
+    "Map": "IsoMono",
+    "Operation": "ToHdrSingleThread",
+    "Nanoseconds": 36118411.11111111,
+    "AllocatedBytes": 48761804.44444445
+  },
+  {
+    "Size": "3mp",
+    "Map": "IsoMono",
+    "Operation": "ToneMap",
+    "Nanoseconds": 15239035,
+    "AllocatedBytes": 12000627.2
+  },
+  {
+    "Size": "3mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "Load",
+    "Nanoseconds": 7505122.5,
+    "AllocatedBytes": 12029084.68292683
+  },
+  {
+    "Size": "3mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "ToHdr",
+    "Nanoseconds": 10164853.333333334,
+    "AllocatedBytes": 48779278.18181818
+  },
+  {
+    "Size": "3mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "ToHdrSingleThread",
+    "Nanoseconds": 61219333.333333336,
+    "AllocatedBytes": 48764084.8
+  },
+  {
+    "Size": "3mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "ToneMap",
+    "Nanoseconds": 13022275,
+    "AllocatedBytes": 12000608
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoMono",
+    "Operation": "Load",
+    "Nanoseconds": 25741141.666666668,
+    "AllocatedBytes": 48041405.333333336
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoMono",
+    "Operation": "ToHdr",
+    "Nanoseconds": 23625446.153846152,
+    "AllocatedBytes": 195026477.53846154
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoMono",
+    "Operation": "ToHdrSingleThread",
+    "Nanoseconds": 137962200,
+    "AllocatedBytes": 195010880
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoMono",
+    "Operation": "ToneMap",
+    "Nanoseconds": 50459116.666666664,
+    "AllocatedBytes": 48000896
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "Load",
+    "Nanoseconds": 26159883.333333332,
+    "AllocatedBytes": 48053401.45454545
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "ToHdr",
+    "Nanoseconds": 37831650,
+    "AllocatedBytes": 195028060
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "ToHdrSingleThread",
+    "Nanoseconds": 240308950,
+    "AllocatedBytes": 195015696
+  },
+  {
+    "Size": "12mp",
+    "Map": "IsoRgbGamma",
+    "Operation": "ToneMap",
+    "Nanoseconds": 50183200,
+    "AllocatedBytes": 48000896
+  }
+]

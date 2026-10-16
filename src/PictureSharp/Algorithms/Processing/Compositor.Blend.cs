@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Processing;
 
@@ -12,44 +13,46 @@ internal static partial class Compositor
     /// Blending Level 1: Cs' = (1 − αb) · Cs + αb · B(Cb, Cs), then source-over with the source alpha scaled by
     /// <paramref name="opacity"/>, on straight alpha in float precision (tests/assets/graphics_reference.py blend).
     /// With <paramref name="linearLight"/> the colors are decoded from sRGB before blending and encoded afterwards.
-    /// A transparent source pixel leaves the destination untouched.
+    /// A transparent source pixel leaves the destination untouched. <paramref name="vectorize"/> = false keeps to the
+    /// scalar code, which the vector code equals bit for bit (tests compare them).
     /// </summary>
     public static void DrawBlended(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity,
-        BlendMode mode, bool linearLight)
+        BlendMode mode, bool linearLight, bool vectorize = true)
     {
         if (linearLight)
         {
-            DrawBlended<LinearChannels>(dst, src, srcWidth, srcHeight, at, opacity, mode);
+            DrawBlended<LinearChannels>(dst, src, srcWidth, srcHeight, at, opacity, mode, vectorize);
         }
         else
         {
-            DrawBlended<EncodedChannels>(dst, src, srcWidth, srcHeight, at, opacity, mode);
+            DrawBlended<EncodedChannels>(dst, src, srcWidth, srcHeight, at, opacity, mode, vectorize);
         }
     }
 
     // One specialization per mode keeps the mode switch out of the pixel loop.
     private static void DrawBlended<TChannels>(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity,
-        BlendMode mode)
+        BlendMode mode, bool vectorize)
         where TChannels : struct, IChannelTransfer
     {
         switch (mode)
         {
-            case BlendMode.Multiply: DrawBlended<TChannels, MultiplyMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.Screen: DrawBlended<TChannels, ScreenMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.Overlay: DrawBlended<TChannels, OverlayMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.Darken: DrawBlended<TChannels, DarkenMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.Lighten: DrawBlended<TChannels, LightenMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.Difference: DrawBlended<TChannels, DifferenceMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.HardLight: DrawBlended<TChannels, HardLightMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.SoftLight: DrawBlended<TChannels, SoftLightMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.ColorDodge: DrawBlended<TChannels, ColorDodgeMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.ColorBurn: DrawBlended<TChannels, ColorBurnMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            case BlendMode.Exclusion: DrawBlended<TChannels, ExclusionMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
-            default: DrawBlended<TChannels, NormalMode>(dst, src, srcWidth, srcHeight, at, opacity); break;
+            case BlendMode.Multiply: DrawBlended<TChannels, MultiplyMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.Screen: DrawBlended<TChannels, ScreenMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.Overlay: DrawBlended<TChannels, OverlayMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.Darken: DrawBlended<TChannels, DarkenMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.Lighten: DrawBlended<TChannels, LightenMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.Difference: DrawBlended<TChannels, DifferenceMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.HardLight: DrawBlended<TChannels, HardLightMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.SoftLight: DrawBlended<TChannels, SoftLightMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.ColorDodge: DrawBlended<TChannels, ColorDodgeMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.ColorBurn: DrawBlended<TChannels, ColorBurnMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            case BlendMode.Exclusion: DrawBlended<TChannels, ExclusionMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
+            default: DrawBlended<TChannels, NormalMode>(dst, src, srcWidth, srcHeight, at, opacity, vectorize); break;
         }
     }
 
-    private static void DrawBlended<TChannels, TMode>(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity)
+    private static void DrawBlended<TChannels, TMode>(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity,
+        bool vectorize)
         where TChannels : struct, IChannelTransfer
         where TMode : struct, IBlendFunction
     {
@@ -67,7 +70,8 @@ internal static partial class Compositor
         {
             Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, n);
             ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), n);
-            for (int x = 0; x < n; x++)
+            int done = vectorize ? BlendRowSimd<TChannels, TMode>(dstRow, srcRow, opacity) : 0;
+            for (int x = done; x < n; x++)
             {
                 Rgba32 s = srcRow[x];
                 if (s.A != 0)
@@ -116,50 +120,56 @@ internal static partial class Compositor
     private interface IBlendFunction
     {
         static abstract float Blend(float cb, float cs);
+
+        /// <summary>Lane-wise <see cref="Blend(float, float)"/> with the same operations.</summary>
+        static abstract Vector128<float> Blend(Vector128<float> cb, Vector128<float> cs);
+
+        /// <summary>Lane-wise <see cref="Blend(float, float)"/> with the same operations.</summary>
+        static abstract Vector256<float> Blend(Vector256<float> cb, Vector256<float> cs);
     }
 
     // port: W3C Compositing and Blending Level 1, 10.1 separable blend modes
-    private readonly struct NormalMode : IBlendFunction
+    private readonly partial struct NormalMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => cs;
     }
 
-    private readonly struct MultiplyMode : IBlendFunction
+    private readonly partial struct MultiplyMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => cb * cs;
     }
 
-    private readonly struct ScreenMode : IBlendFunction
+    private readonly partial struct ScreenMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => Screen(cb, cs);
     }
 
-    private readonly struct OverlayMode : IBlendFunction
+    private readonly partial struct OverlayMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => HardLight(cs, cb);
     }
 
-    private readonly struct DarkenMode : IBlendFunction
+    private readonly partial struct DarkenMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => MathF.Min(cb, cs);
     }
 
-    private readonly struct LightenMode : IBlendFunction
+    private readonly partial struct LightenMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => MathF.Max(cb, cs);
     }
 
-    private readonly struct DifferenceMode : IBlendFunction
+    private readonly partial struct DifferenceMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => MathF.Abs(cb - cs);
     }
 
-    private readonly struct HardLightMode : IBlendFunction
+    private readonly partial struct HardLightMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => HardLight(cb, cs);
     }
 
-    private readonly struct SoftLightMode : IBlendFunction
+    private readonly partial struct SoftLightMode : IBlendFunction
     {
         public static float Blend(float cb, float cs)
         {
@@ -173,17 +183,17 @@ internal static partial class Compositor
         }
     }
 
-    private readonly struct ColorDodgeMode : IBlendFunction
+    private readonly partial struct ColorDodgeMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => cb == 0f ? 0f : cs >= 1f ? 1f : MathF.Min(1f, cb / (1f - cs));
     }
 
-    private readonly struct ColorBurnMode : IBlendFunction
+    private readonly partial struct ColorBurnMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => cb >= 1f ? 1f : cs <= 0f ? 0f : 1f - MathF.Min(1f, (1f - cb) / cs);
     }
 
-    private readonly struct ExclusionMode : IBlendFunction
+    private readonly partial struct ExclusionMode : IBlendFunction
     {
         public static float Blend(float cb, float cs) => cb + cs - (2f * cb * cs);
     }
@@ -194,9 +204,21 @@ internal static partial class Compositor
         static abstract float Decode(byte value);
 
         static abstract byte Encode(float value);
+
+        /// <summary>Lane-wise <see cref="Decode(byte)"/> of values 0–255.</summary>
+        static abstract Vector128<float> Decode(Vector128<int> value);
+
+        /// <summary>Lane-wise <see cref="Encode(float)"/>, as ints 0–255.</summary>
+        static abstract Vector128<int> Encode(Vector128<float> value);
+
+        /// <summary>Lane-wise <see cref="Decode(byte)"/> of values 0–255.</summary>
+        static abstract Vector256<float> Decode(Vector256<int> value);
+
+        /// <summary>Lane-wise <see cref="Encode(float)"/>, as ints 0–255.</summary>
+        static abstract Vector256<int> Encode(Vector256<float> value);
     }
 
-    private readonly struct EncodedChannels : IChannelTransfer
+    private readonly partial struct EncodedChannels : IChannelTransfer
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float Decode(byte value) => UnitTable.Values[value];
@@ -205,7 +227,7 @@ internal static partial class Compositor
         public static byte Encode(float value) => (byte)Math.Clamp((int)((value * 255f) + 0.5f), 0, 255);
     }
 
-    private readonly struct LinearChannels : IChannelTransfer
+    private readonly partial struct LinearChannels : IChannelTransfer
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float Decode(byte value) => SrgbTransfer.Decode(value);

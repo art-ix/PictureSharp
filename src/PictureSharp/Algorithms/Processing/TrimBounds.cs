@@ -8,13 +8,15 @@ namespace PictureSharp.Algorithms.Processing;
 /// The bounding box of the content of frames: pixels that are not margin under <see cref="AutoCropOptions"/>
 /// (tests/assets/graphics_reference.py trim_bounds).
 /// </summary>
-internal static class TrimBounds
+internal static partial class TrimBounds
 {
     /// <summary>
     /// The union of the content boxes of <paramref name="frames"/>, expanded by the padding and clipped to the canvas,
-    /// or <see langword="null"/> when no frame has content.
+    /// or <see langword="null"/> when no frame has content. <paramref name="vectorize"/> = false keeps to the scalar
+    /// scan, which the vector scan equals (tests compare them).
     /// </summary>
-    public static Rectangle? Find(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options, CancellationToken cancellationToken)
+    public static Rectangle? Find(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options, CancellationToken cancellationToken,
+        bool vectorize = true)
     {
         int left = width;
         int top = height;
@@ -34,14 +36,14 @@ internal static class TrimBounds
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 ReadOnlySpan<Rgba32> row = frame.GetRowSpan(y);
-                int x0 = FirstContent(row, options, background);
+                int x0 = FirstContent(row, options, background, vectorize);
                 if (x0 < 0)
                 {
                     continue;
                 }
 
                 // Only the part outside the current box can widen it.
-                int x1 = LastContent(row, Math.Max(x0, right + 1), options, background);
+                int x1 = LastContent(row, Math.Max(x0, right + 1), options, background, vectorize);
                 left = Math.Min(left, x0);
                 right = Math.Max(right, Math.Max(x0, x1));
                 top = Math.Min(top, y);
@@ -62,9 +64,19 @@ internal static class TrimBounds
         return new Rectangle(x, yTop, xEnd - x, yEnd - yTop);
     }
 
-    private static int FirstContent(ReadOnlySpan<Rgba32> row, AutoCropOptions options, Rgba32 background)
+    private static int FirstContent(ReadOnlySpan<Rgba32> row, AutoCropOptions options, Rgba32 background, bool vectorize)
     {
-        for (int x = 0; x < row.Length; x++)
+        int start = 0;
+        if (vectorize)
+        {
+            int found = FirstContentSimd(row, options, background, out start);
+            if (found >= 0)
+            {
+                return found;
+            }
+        }
+
+        for (int x = start; x < row.Length; x++)
         {
             if (IsContent(row[x], options, background))
             {
@@ -76,9 +88,19 @@ internal static class TrimBounds
     }
 
     /// <summary>The last content pixel at or after <paramref name="from"/>, or -1.</summary>
-    private static int LastContent(ReadOnlySpan<Rgba32> row, int from, AutoCropOptions options, Rgba32 background)
+    private static int LastContent(ReadOnlySpan<Rgba32> row, int from, AutoCropOptions options, Rgba32 background, bool vectorize)
     {
-        for (int x = row.Length - 1; x >= from; x--)
+        int end = row.Length;
+        if (vectorize)
+        {
+            int found = LastContentSimd(row, from, options, background, out end);
+            if (found >= 0)
+            {
+                return found;
+            }
+        }
+
+        for (int x = end - 1; x >= from; x--)
         {
             if (IsContent(row[x], options, background))
             {

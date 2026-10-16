@@ -33,12 +33,21 @@ public class GraphicsBenchmarks
         DrawMultiply,
         DrawSoftLight,
         DrawMultiplyLinear,
+        DrawScreen,
+        DrawOverlay,
+        DrawDifference,
+        DrawColorDodge,
+        DrawColorBurn,
+        DrawSoftLightLinear,
     }
 
     [Params("small", "12mp")]
     public string Size { get; set; } = "small";
 
-    [Params(Operation.Levels)]
+    // The 0.6.7 SIMD operations; Levels, Histogram and DrawNormal are unchanged controls.
+    [Params(Operation.Levels, Operation.Histogram, Operation.FindTrimBounds, Operation.AutoCrop, Operation.ApplyMaskAlpha,
+        Operation.ApplyMaskLuminance, Operation.DrawNormal, Operation.DrawMultiply, Operation.DrawScreen, Operation.DrawSoftLight,
+        Operation.DrawColorBurn, Operation.DrawMultiplyLinear)]
     public Operation Op { get; set; }
 
     [GlobalSetup]
@@ -94,9 +103,18 @@ public class GraphicsBenchmarks
             Operation.DrawSoftLight => x.DrawImage(_overlay, Point.Empty, new DrawImageOptions { Opacity = 0.8f, BlendMode = BlendMode.SoftLight }),
             Operation.DrawMultiplyLinear => x.DrawImage(_overlay, Point.Empty,
                 new DrawImageOptions { Opacity = 0.8f, BlendMode = BlendMode.Multiply, LinearLight = true }),
+            Operation.DrawScreen => Draw(x, BlendMode.Screen),
+            Operation.DrawOverlay => Draw(x, BlendMode.Overlay),
+            Operation.DrawDifference => Draw(x, BlendMode.Difference),
+            Operation.DrawColorDodge => Draw(x, BlendMode.ColorDodge),
+            Operation.DrawColorBurn => Draw(x, BlendMode.ColorBurn),
+            Operation.DrawSoftLightLinear => Draw(x, BlendMode.SoftLight, linearLight: true),
             _ => throw new InvalidOperationException(),
         };
     }
+
+    private ImageProcessingContext Draw(ImageProcessingContext x, BlendMode mode, bool linearLight = false) =>
+        x.DrawImage(_overlay, Point.Empty, new DrawImageOptions { Opacity = 0.8f, BlendMode = mode, LinearLight = linearLight });
 
     internal static void Probe(string outputPath)
     {

@@ -74,6 +74,16 @@ clipped. `HdrImage` exposes `Width`, `Height`, `ColorSpace` (`LinearDisplayP3` f
 | `ColorSpace` | null | Output primaries; null keeps the base image's (Display P3 or sRGB). |
 | `MaxDegreeOfParallelism` | -1 | Threads; the result does not depend on it. |
 
+Results are reproducible: since 0.6.7 the powers and exponentials of the gain map formulas use PictureSharp's own
+`float` functions (polynomials built from additions, multiplications and divisions in a fixed order, within 2 ulp),
+not the platform's C runtime. The pixels of `ToHdr` and the bytes of `ToneMap` are therefore identical on x64 and
+ARM64, with or without SIMD (Vector128, AVX2) and for any `MaxDegreeOfParallelism`. Compared with 0.6.5 the floats
+differ by a few ulp (within 2·10⁻⁶ relative), so tone-mapped images may differ by one level in rare pixels.
+
+Reconstruction and tone mapping use SIMD (NEON on ARM64, SSE and AVX2 on x64). For a 12 MP photo with a
+quarter-resolution map on an Intel i5-12500H, `ToHdr` takes about 35–55 ms and `ToneMap` about 50 ms (0.6.5: 100–250
+and 87 ms); see [Performance](performance.md#simd-for-hdr-and-graphics-067).
+
 `ToHdr` throws `InvalidOperationException` when no map is attached, `NotSupportedException` for valid but unsupported
 variants and `ImageFormatException` for damaged maps. `HdrImage` owns its buffer (16 bytes per pixel, four times an
 `Image`) and stays valid after the source image is disposed.

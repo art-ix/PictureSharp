@@ -11,7 +11,7 @@ namespace PictureSharp.Algorithms.Hdr;
 /// source pixel in the stored base image, through the applied orientation and thumbnail scale, so no enlarged map is
 /// allocated.
 /// </summary>
-internal sealed class GainMapReconstructor
+internal sealed partial class GainMapReconstructor
 {
     private readonly GainMapParameters _p;
     private readonly DecodedGainMap _map;
@@ -108,13 +108,20 @@ internal sealed class GainMapReconstructor
 
     private void Row(Rgba32[] basePixels, Rgba128[] output, int y)
     {
+        int done = RowSimd(basePixels, output, y);
+        RowScalar(basePixels, output, y, done);
+    }
+
+    /// <summary>Reconstructs row <paramref name="y"/> from pixel <paramref name="start"/> on.</summary>
+    internal void RowScalar(Rgba32[] basePixels, Rgba128[] output, int y, int start)
+    {
         ReadOnlySpan<Rgba32> source = basePixels.AsSpan(y * _width, _width);
         Span<Rgba128> target = output.AsSpan(y * _width, _width);
         ReadOnlySpan<float> linear = _linear;
         ReadOnlySpan<Rgba32> map = _map.Pixels;
         bool iso = _p.Kind == HdrGainMapKinds.Iso21496;
         bool mono = _p.ChannelCount == 1;
-        for (int x = 0; x < source.Length; x++)
+        for (int x = start; x < source.Length; x++)
         {
             Rgba32 p = source[x];
             float r = linear[p.R], g = linear[256 + p.G], b = linear[512 + p.B];
@@ -164,7 +171,23 @@ internal sealed class GainMapReconstructor
     private (float X, float Y) BasePosition(int x, int y)
     {
         int ow = _orientedWidth, oh = _orientedHeight;
-        (int sx, int sy) = _orientation switch
+        (int sx, int sy) = OrientedSource(x, y);
+        if (!IsScaled)
+        {
+            return (sx, sy);
+        }
+
+        return (((sx + 0.5f) * _storedWidth / ow) - 0.5f, ((sy + 0.5f) * _storedHeight / oh) - 0.5f);
+    }
+
+    /// <summary>Whether the base pixels are a thumbnail of the stored image.</summary>
+    private bool IsScaled => _orientedWidth != _storedWidth || _orientedHeight != _storedHeight;
+
+    /// <summary>The pixel of the image before orientation that output pixel (x, y) shows; affine in x for a fixed y.</summary>
+    private (int X, int Y) OrientedSource(int x, int y)
+    {
+        int ow = _orientedWidth, oh = _orientedHeight;
+        return _orientation switch
         {
             ExifOrientation.TopRight => (ow - 1 - x, y),
             ExifOrientation.BottomRight => (ow - 1 - x, oh - 1 - y),
@@ -175,13 +198,6 @@ internal sealed class GainMapReconstructor
             ExifOrientation.LeftBottom => (ow - 1 - y, x),
             _ => (x, y),
         };
-
-        if (ow == _storedWidth && oh == _storedHeight)
-        {
-            return (sx, sy);
-        }
-
-        return (((sx + 0.5f) * _storedWidth / ow) - 0.5f, ((sy + 0.5f) * _storedHeight / oh) - 0.5f);
     }
 
     private static (float, float, float) Transform(float[] m, float r, float g, float b) =>

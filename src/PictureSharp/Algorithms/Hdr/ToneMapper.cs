@@ -6,7 +6,7 @@ namespace PictureSharp.Algorithms.Hdr;
 /// The deterministic HDR→SDR operator of <c>ToneMap</c>: conversion to linear sRGB, exposure, extended Reinhard on
 /// Rec. 709 luminance with one scale for R, G and B, clipping to [0, 1], the sRGB transfer function and rounding.
 /// </summary>
-internal sealed class ToneMapper
+internal sealed partial class ToneMapper
 {
     private readonly float[]? _toSrgb;
     private readonly float _exposure;
@@ -27,8 +27,15 @@ internal sealed class ToneMapper
     /// <summary>Maps one row; returns whether any output pixel is not opaque.</summary>
     public bool Map(ReadOnlySpan<Rgba128> source, Span<Rgba32> target)
     {
+        int done = MapSimd(source, target, out bool alpha);
+        return MapScalar(source, target, done) | alpha;
+    }
+
+    /// <summary>Maps pixels from <paramref name="start"/> on; returns whether any of them is not opaque.</summary>
+    internal bool MapScalar(ReadOnlySpan<Rgba128> source, Span<Rgba32> target, int start)
+    {
         bool alpha = false;
-        for (int i = 0; i < source.Length; i++)
+        for (int i = start; i < source.Length; i++)
         {
             Rgba128 p = source[i];
             float r = p.R, g = p.G, b = p.B;

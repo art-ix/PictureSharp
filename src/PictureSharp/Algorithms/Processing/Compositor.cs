@@ -12,9 +12,11 @@ internal static partial class Compositor
 
     /// <summary>
     /// Draws <paramref name="src"/> over <paramref name="dst"/> with its top-left corner at <paramref name="at"/>,
-    /// clipped to the destination. <paramref name="opacity"/> scales the source alpha.
+    /// clipped to the destination. <paramref name="opacity"/> scales the source alpha. <paramref name="vectorize"/> = false
+    /// keeps to the scalar code, which the vector code equals bit for bit (tests compare them).
     /// </summary>
-    public static void DrawOver(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity)
+    public static void DrawOver(ImageFrame dst, ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Point at, float opacity,
+        bool vectorize = true)
     {
         int x0 = Math.Max(0, at.X);
         int y0 = Math.Max(0, at.Y);
@@ -32,7 +34,8 @@ internal static partial class Compositor
         {
             Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, x1 - x0);
             ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), x1 - x0);
-            for (int x = 0; x < dstRow.Length; x++)
+            int done = vectorize ? OverRowSimd(dstRow, srcRow, opacity) : 0;
+            for (int x = done; x < dstRow.Length; x++)
             {
                 Rgba32 s = srcRow[x];
                 s.A = alphaMap[s.A];

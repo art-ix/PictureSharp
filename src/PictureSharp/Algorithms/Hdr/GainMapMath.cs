@@ -1,9 +1,10 @@
 using System.Runtime.CompilerServices;
+using PictureSharp.Primitives.Numerics;
 
 namespace PictureSharp.Algorithms.Hdr;
 
 /// <summary>Scalar gain map formulas of the ISO 21496-1 and Apple models.</summary>
-internal static class GainMapMath
+internal static partial class GainMapMath
 {
     /// <summary>
     /// Shepard's inverse-distance weighting of the four map samples around (<paramref name="xMap"/>,
@@ -67,7 +68,8 @@ internal static class GainMapMath
 
     /// <summary>
     /// The ISO 21496-1 gain factor of map value <paramref name="gain"/> (0..1): gamma, interpolation between the log2
-    /// gain bounds and the headroom weight.
+    /// gain bounds and the headroom weight. Powers use <see cref="DeterministicMath"/>, so results do not depend on the
+    /// platform's C runtime and equal the vector path.
     /// </summary>
     // port: libultrahdr v2.0.2 lib/src/gainmapmath.cpp applyGain
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -75,11 +77,11 @@ internal static class GainMapMath
     {
         if (gamma != 1f)
         {
-            gain = MathF.Pow(gain, 1f / gamma);
+            gain = DeterministicMath.Pow(gain, 1f / gamma);
         }
 
         float logBoost = (gainMapMin * (1f - gain)) + (gainMapMax * gain);
-        return float.Exp2(logBoost * weight);
+        return DeterministicMath.Exp2(logBoost * weight);
     }
 
     /// <summary>
@@ -92,7 +94,7 @@ internal static class GainMapMath
 
     /// <summary>The inverse of the Rec. 709 OETF, which linearizes Apple gain map values.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static float Rec709ToLinear(float v) => v < 0.081f ? v / 4.5f : MathF.Pow((v + 0.099f) / 1.099f, 1f / 0.45f);
+    public static float Rec709ToLinear(float v) => v < 0.081f ? v / 4.5f : DeterministicMath.Pow((v + 0.099f) / 1.099f, 1f / 0.45f);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static float Sample(ReadOnlySpan<Rgba32> map, int index, int channel)
