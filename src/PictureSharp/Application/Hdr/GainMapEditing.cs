@@ -22,19 +22,33 @@ internal static class GainMapEditing
             return attachment;
         }
 
-        if (attachment.EditedMap is not { } map)
+        if (edit.IsRegion)
+        {
+            Size map = attachment.EditedMap is { } current ? new(current.Width, current.Height)
+                : (Geometry.FromExifOrientation(attachment.AppliedOrientation).QuarterTurns & 1) != 0
+                    ? new(attachment.Info.GainMapSize.Height, attachment.Info.GainMapSize.Width)
+                    : attachment.Info.GainMapSize;
+            long mapPixels = (long)GainMapGeometry.MapSize(edit.Width, baseSize.Width, map.Width) * GainMapGeometry.MapSize(edit.Height, baseSize.Height, map.Height);
+            if (mapPixels > Array.MaxLength)
+            {
+                // Only after enlarging a thumbnail whose map is larger than the base: the edit succeeds without the map.
+                return GainMapAttachment.Failed(attachment.Info, GainMapFailure.Unsupported, "The edited HDR gain map would exceed the maximum image size.");
+            }
+        }
+
+        if (attachment.EditedMap is not { } decodedMap)
         {
             if (Materialize(attachment, cancellationToken) is not { } decoded)
             {
                 return GainMapAttachment.Failed(attachment.Info, GainMapFailure.Corrupt, "The HDR gain map image is corrupt.");
             }
 
-            map = decoded;
+            decodedMap = decoded;
         }
 
         DecodedGainMap edited = edit.IsRegion
-            ? GainMapGeometry.Region(map, baseSize.Width, baseSize.Height, edit.X0, edit.Y0, edit.X1, edit.Y1, edit.Width, edit.Height, edit.Filter, cancellationToken)
-            : GainMapGeometry.RotateFlip(map, edit.QuarterTurns, edit.FlipX);
+            ? GainMapGeometry.Region(decodedMap, baseSize.Width, baseSize.Height, edit.X0, edit.Y0, edit.X1, edit.Y1, edit.Width, edit.Height, edit.Filter, cancellationToken)
+            : GainMapGeometry.RotateFlip(decodedMap, edit.QuarterTurns, edit.FlipX);
         Size newBase = edit.IsRegion ? new(edit.Width, edit.Height)
             : (edit.QuarterTurns & 1) != 0 ? new(baseSize.Height, baseSize.Width) : baseSize;
         return attachment with

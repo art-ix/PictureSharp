@@ -48,6 +48,21 @@ public class AllocationTests
     }
 
     [Test]
+    public async Task HdrResize_AllocatesTheMapNotFullSizeFloatBuffers()
+    {
+        using Image source = Image.Load(Corpus.PathOf("hdr/iso_mono_srgb.jpg"), new DecoderOptions { LoadGainMap = true });
+        using Image hdr = source.Clone(x => x.Resize(1536, 1024));   // base 1536×1024, map 768×512 (edited)
+        using Image sdr = hdr.Clone();
+        sdr.GainMap = null;
+        long withMap = Measure(() => { Image r = hdr.Clone(x => x.Resize(768, 512, ResamplingFilter.Lanczos3)); r.Dispose(); return r; });
+        long withoutMap = Measure(() => { Image r = sdr.Clone(x => x.Resize(768, 512, ResamplingFilter.Lanczos3)); r.Dispose(); return r; });
+
+        // The map resize costs about its own result (384×256, 0.39 MB) and coefficients: 0.44 MB measured on this
+        // thread. One float buffer of the base would be 25 MB.
+        await Assert.That(withMap - withoutMap).IsBetween(0L, 2L << 20);
+    }
+
+    [Test]
     [Arguments("bmp")]
     [Arguments("pcx")]
     [Arguments("png")]

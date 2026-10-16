@@ -176,10 +176,13 @@ Image.EditMetadata("IMG_8113.jpeg", "share.jpeg", m => m.RemoveBlocks(MetadataKi
 ```bash
 dotnet run -c Release --project samples/PictureSharp.Cli -- info IMG_8113.jpeg
 dotnet run -c Release --project samples/PictureSharp.Cli -- convert IMG_8113.jpeg tone-mapped.webp -hdr tone-map -exposure -0.3
+dotnet run -c Release --project samples/PictureSharp.Cli -- resize IMG_8113.jpeg small-hdr.jpg 1600 0 -hdr keep
 ```
 
 `info` prints the gain map model, size and headroom. `convert` keeps the SDR base image by default (`-hdr base`);
-`-hdr tone-map` renders the HDR reconstruction with `-exposure` and `-white`.
+`-hdr tone-map` renders the HDR reconstruction with `-exposure` and `-white`. `-hdr keep` (`convert`, `resize`, `thumbnail`)
+writes a JPEG with the ISO 21496-1 gain map and fails for Apple-only maps, padding and non-JPEG output; `info` on the
+result shows the edited map size.
 
 ## Limits of this release
 

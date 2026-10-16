@@ -174,4 +174,39 @@ public class HdrGainMapEncoderTests
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => _ = new JpegEncoderOptions { GainMapQuality = 0 });
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => _ = new JpegEncoderOptions { GainMap = (JpegGainMapMode)7 });
     }
+
+    private static byte[] WithBrokenMapHuffmanTable(string name)
+    {
+        byte[] data = System.IO.File.ReadAllBytes(File(name));
+        int map = data.AsSpan().LastIndexOf([(byte)0xFF, (byte)0xD8, (byte)0xFF]);
+        int dht = data.AsSpan(map).IndexOf([(byte)0xFF, (byte)0xC4]) + map;
+        data.AsSpan(dht + 5, 16).Fill(0xFF);
+        return data;
+    }
+
+    [Test]
+    public async Task DamagedMap_UneditedIsCopied_OrientedFailsAsCorrupt()
+    {
+        // Unedited maps are copied without decoding: the damage travels with the file and ToHdr reports it.
+        using Image copied = Image.Load(WithBrokenMapHuffmanTable("iso_mono_srgb.jpg"), Hdr);
+        using Image reloaded = Image.Load(copied.ToJpeg(Require), Hdr);
+        await Assert.That(reloaded.HasHdr).IsTrue();
+        Assert.ThrowsExactly<ImageFormatException>(() => reloaded.ToHdr());
+
+        // A map that has to be oriented is decoded first.
+        using Image oriented = Image.Load(WithBrokenMapHuffmanTable("iso_orientation6.jpg"), Hdr);
+        Assert.ThrowsExactly<ImageFormatException>(() => oriented.ToJpeg(Require));
+        await Assert.That(oriented.ToJpeg(Preserve)).IsEquivalentTo(oriented.ToJpeg(), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task CanceledSave_WritesNothing()
+    {
+        using Image image = Image.Load(File("iso_orientation6.jpg"), Hdr);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var stream = new MemoryStream();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => image.SaveAsJpegAsync(stream, Require, cts.Token));
+        await Assert.That(stream.Length).IsEqualTo(0);
+    }
 }

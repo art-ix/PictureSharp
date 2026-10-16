@@ -272,4 +272,26 @@ public class HdrGainMapEditTests
         await Assert.That(image.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(15, 10));
         await Assert.That(ReferenceEquals(image.GainMap, before)).IsFalse();
     }
+
+    [Test]
+    public async Task OversizedEditedMap_IsDroppedWithoutAllocating()
+    {
+        using Image image = Image.Load(Hdr("iso_mono_srgb.jpg"), Applied);
+        GainMapAttachment edited = PictureSharp.Application.Hdr.GainMapEditing.Apply(image.GainMap!, image.Size,
+            PictureSharp.Application.Hdr.GainMapEdit.Region(0, 0, image.Width, image.Height, 200_000, 200_000, ResamplingFilter.Lanczos3), CancellationToken.None);
+        await Assert.That(edited.CanDecode).IsFalse();
+        await Assert.That(edited.Failure).IsEqualTo(GainMapFailure.Unsupported);
+        await Assert.That(edited.Info.UnsupportedReason).Contains("maximum image size");
+    }
+
+    [Test]
+    public async Task CanceledMapEdit_Throws()
+    {
+        using Image image = Image.Load(Hdr("iso_rgb_p3.jpg"), Applied);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        Assert.Throws<OperationCanceledException>(() => PictureSharp.Application.Hdr.GainMapEditing.Apply(image.GainMap!, image.Size,
+            PictureSharp.Application.Hdr.GainMapEdit.Region(0, 0, 20, 15, 10, 8, ResamplingFilter.Lanczos3), cts.Token));
+        await Assert.That(image.GainMap!.EditedMap).IsNull();
+    }
 }
