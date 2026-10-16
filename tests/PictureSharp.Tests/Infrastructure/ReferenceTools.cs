@@ -14,6 +14,14 @@ public static class ReferenceTools
     // An explicit directory wins; a local reference build takes precedence over system tools.
     private static string Resolve(string tool)
     {
+        if (tool is "ultrahdr_app" or "ultrahdr_oracle")
+        {
+            string? uhdr = Environment.GetEnvironmentVariable("PICTURESHARP_ULTRAHDR_TOOLS");
+            string uhdrDir = !string.IsNullOrWhiteSpace(uhdr) ? uhdr
+                : Path.Combine(Path.GetFullPath(Path.Combine(Corpus.Assets, "..", "..")), "reference", "libultrahdr-2.0.2-build");
+            return Path.Combine(uhdrDir, tool + (OperatingSystem.IsWindows() ? ".exe" : ""));
+        }
+
         if (tool is not ("cwebp" or "dwebp" or "webpmux" or "img2webp" or "webpinfo" or "gif2webp" or "anim_dump" or "anim_diff")) return tool;
         string? configured = Environment.GetEnvironmentVariable("PICTURESHARP_WEBP_TOOLS");
         if (!string.IsNullOrWhiteSpace(configured)) return Path.Combine(configured, tool + (OperatingSystem.IsWindows() ? ".exe" : ""));
@@ -23,6 +31,12 @@ public static class ReferenceTools
     }
 
     public static bool HasDwebp => DwebpAvailable.Value;
+
+    private static readonly Lazy<bool> UltraHdrAvailable = new(() =>
+        File.Exists(Resolve("ultrahdr_oracle")) && Run("ultrahdr_app", "-h x", out string output) >= 0 && output.Contains("lib version: v2.0.2", StringComparison.Ordinal));
+
+    /// <summary>Whether libultrahdr v2.0.2's ultrahdr_app and the ultrahdr_oracle harness (scripts/build-ultrahdr-reference.sh) are available.</summary>
+    public static bool HasUltraHdr => UltraHdrAvailable.Value;
 
     private static readonly Lazy<bool> GifToolsAvailable = new(() =>
         Run("gif2webp", "-version", out string output) == 0 && output.Split('\n')[0].Trim().EndsWith(WebPVersion, StringComparison.Ordinal) && Run("anim_dump", "-version", out _) == 0);

@@ -38,6 +38,17 @@ dotnet test -c Release --treenode-filter "/*/*/*/*[Category=Oracle]"
 
 Tests and corpus scripts automatically use `reference/libwebp-1.6.0-build/`. Set `PICTURESHARP_WEBP_TOOLS` to select another directory containing the 1.6.0 tools. Native sources and binaries stay in the Git-ignored `reference/` directory and are used only for verification.
 
+HDR gain map reconstruction (ISO 21496-1) is compared with **libultrahdr v2.0.2** (commit
+`e5f5a022fe96fc4dc2ee35c19f733a50df807abe`). The script builds `ultrahdr_app` without optional HEIF/AVIF codecs and
+`ultrahdr_oracle` (`tests/assets/ultrahdr_oracle.cpp`), a harness that runs libultrahdr's gain map functions on
+PictureSharp's decoded pixels, so the math is checked separately from libultrahdr's own JPEG and YUV decoding. It needs
+CMake, Ninja, a C++17 compiler and libjpeg headers; `PICTURESHARP_ULTRAHDR_TOOLS` selects another directory. The HDR
+corpus and its double-precision model are regenerated with `python3 -I tests/assets/hdr_reference.py`.
+
+```bash
+./scripts/build-ultrahdr-reference.sh
+```
+
 Corpus regeneration requires libwebp 1.6.0 tools, ImageMagick, Python, NumPy and Pillow:
 
 ```bash

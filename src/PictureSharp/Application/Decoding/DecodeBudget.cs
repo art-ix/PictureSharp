@@ -35,6 +35,15 @@ internal sealed class DecodeBudget(DecoderOptions limits)
         _frames += frames;
     }
 
+    /// <summary>Reserves pixels that are not a frame (a gain map); false when they would exceed the limit.</summary>
+    public bool TryReservePixels(long width, long height)
+    {
+        if (width <= 0 || height <= 0 || width > (limits.MaxPixels - _pixels) / height)
+            return false;
+        _pixels += width * height;
+        return true;
+    }
+
     public void ReserveMetadata(ImageFormat format, long bytes)
     {
         if (bytes < 0 || bytes > RemainingMetadata)

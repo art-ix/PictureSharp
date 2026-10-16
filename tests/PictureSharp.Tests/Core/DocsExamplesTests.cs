@@ -36,11 +36,39 @@ public sealed class DocsExamplesTests : IDisposable
         File.Copy(P("input.png"), P("unknown.bin"));
         File.Copy(Corpus.PathOf("color/png_gama_chrm.png"), P("wide-gamut.png"));
         File.Copy(Corpus.PathOf("src/photo.png"), P("photo.png"));
+        File.Copy(Corpus.PathOf("hdr/iso_orientation6.jpg"), P("IMG_8113.jpeg"));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private string P(string name) => Path.Combine(_dir, name);
+
+    [Test]
+    public async Task Hdr_LoadReconstructToneMapAndEdit()
+    {
+        var options = new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true };
+        using Image image = Image.Load(P("IMG_8113.jpeg"), options);
+        await Assert.That(image.HasHdr).IsTrue();
+        if (image.HasHdr)
+        {
+            using HdrImage hdr = image.ToHdr();
+            ReadOnlySpan<Rgba128> row = hdr.GetRowSpan(0);
+            await Assert.That(row.Length).IsEqualTo(hdr.Width);
+            await Assert.That(hdr.ColorSpace).IsEqualTo(HdrColorSpace.LinearDisplayP3);
+            using Image sdr = hdr.ToneMap(new ToneMappingOptions { Exposure = -0.5f });
+            sdr.Save(P("tone-mapped.jpg"));
+        }
+
+        image.Save(P("base.jpg"));
+        await Assert.That(Image.Load(P("base.jpg"), options).Hdr).IsNull();
+
+        HdrInfo? info = Image.Identify(P("IMG_8113.jpeg"), new DecoderOptions { LoadGainMap = true }).Hdr;
+        await Assert.That(info is { CanDecode: true }).IsTrue();
+        await Assert.That(info!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+
+        Image.EditMetadata(P("IMG_8113.jpeg"), P("share.jpeg"), m => m.RemoveBlocks(MetadataKinds.Exif | MetadataKinds.Xmp));
+        await Assert.That(Image.Identify(P("share.jpeg"), new DecoderOptions { LoadGainMap = true }).Hdr).IsEqualTo(info);
+    }
 
     [Test]
     public async Task Metadata_TypedTagsAndEditingWithoutRecompression()

@@ -26,13 +26,20 @@ internal sealed class JpegDecoder : IImageDecoder
             Orientation = file.Exif is null ? ExifOrientation.Unknown : ExifReader.GetOrientation(file.Exif),
             HorizontalResolution = dpiX,
             VerticalResolution = dpiY,
+            Hdr = options.LoadGainMap ? JpegGainMapReader.Read(data.Span, options, budget: null, copyMap: false)?.Info : null,
         };
     }
 
     public DecodedImage Decode(ReadOnlyMemory<byte> data, DecodeContext context)
     {
         context.CheckInput(data.Length);
-        return DecodeCore(data, context.Options, 0, context.CancellationToken, context);
+        DecodedImage result = DecodeCore(data, context.Options, 0, context.CancellationToken, context);
+        if (context.Options.LoadGainMap)
+        {
+            result = result with { GainMap = JpegGainMapReader.Read(data.Span, context.Options, context.Budget, copyMap: true) };
+        }
+
+        return result;
     }
 
     /// <summary>Test/reference entrypoint forcing an IDCT scale.</summary>

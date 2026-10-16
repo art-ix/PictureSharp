@@ -27,6 +27,7 @@ internal static class ImageProcessingService
         ArgumentNullException.ThrowIfNull(image);
         image.ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
+        image.GainMap = null;   // in-place operations change the pixels the gain map describes
         operation(new ImageProcessingContext(new ProcessingState(image, shared: false, cancellationToken)));
     }
 

@@ -1,0 +1,394 @@
+{
+ "tolerance": {
+  "absolute": 1e-05,
+  "relative": 1e-05,
+  "tone_map_levels": 1
+ },
+ "oracle": {
+  "pipeline_max_absolute": 0.025,
+  "pipeline_median_relative": 0.006,
+  "pipeline_p99_relative": 0.04,
+  "lut_max_absolute": 0.006,
+  "excluded": [
+   "iso_odd_scale",
+   "iso_alt_space"
+  ]
+ },
+ "cases": [
+  {
+   "name": "iso_mono_srgb",
+   "model": "iso",
+   "width": 48,
+   "height": 32,
+   "orientation": 1,
+   "map_width": 24,
+   "map_height": 16,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 4.0,
+     "space": "srgb",
+     "max": 2.723547953969911,
+     "min": -0.004501119809679309
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.6522996180135632,
+     "min": -0.002441274123990563
+    }
+   }
+  },
+  {
+   "name": "iso_gamma_p3",
+   "model": "iso",
+   "width": 48,
+   "height": 32,
+   "orientation": 1,
+   "map_width": 24,
+   "map_height": 16,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 3.363585661014858,
+     "space": "p3",
+     "max": 2.3173462886557497,
+     "min": -1.0745302852702341e-06
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.9342671693387374,
+     "min": -0.2194761120524268
+    }
+   }
+  },
+  {
+   "name": "iso_rgb_p3",
+   "model": "iso",
+   "width": 40,
+   "height": 30,
+   "orientation": 1,
+   "map_width": 20,
+   "map_height": 15,
+   "channels": 3,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 5.656854249492381,
+     "space": "p3",
+     "max": 3.4198218028583733,
+     "min": -0.006527942337609156
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.9692459895776375,
+     "min": -0.2130124054667548
+    }
+   }
+  },
+  {
+   "name": "iso_alt_space",
+   "model": "iso",
+   "width": 48,
+   "height": 32,
+   "orientation": 1,
+   "map_width": 24,
+   "map_height": 16,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 4.0,
+     "space": "p3",
+     "max": 2.770481035357173,
+     "min": -0.0043663177584602406
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.9757339305329624,
+     "min": -0.20945717547572162
+    }
+   }
+  },
+  {
+   "name": "iso_common_denominator",
+   "model": "iso",
+   "width": 48,
+   "height": 32,
+   "orientation": 1,
+   "map_width": 12,
+   "map_height": 8,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 3.363585661014858,
+     "space": "srgb",
+     "max": 2.2339900107558814,
+     "min": -1.0745302852702341e-06
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.5829792255516972,
+     "min": -6.289298490750956e-07
+    }
+   }
+  },
+  {
+   "name": "iso_odd_scale",
+   "model": "iso",
+   "width": 45,
+   "height": 31,
+   "orientation": 1,
+   "map_width": 17,
+   "map_height": 13,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 4.0,
+     "space": "p3",
+     "max": 2.5642970453791563,
+     "min": -0.004507968597573688
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.8910592090130973,
+     "min": -0.20525054154872865
+    }
+   }
+  },
+  {
+   "name": "iso_fractional_scale",
+   "model": "iso",
+   "width": 100,
+   "height": 67,
+   "orientation": 1,
+   "map_width": 40,
+   "map_height": 27,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 3.363585661014858,
+     "space": "p3",
+     "max": 2.373830167766735,
+     "min": -1.0745302852702341e-06
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.9431245888659503,
+     "min": -0.26083931995744564
+    }
+   }
+  },
+  {
+   "name": "iso_orientation6",
+   "model": "iso",
+   "width": 32,
+   "height": 48,
+   "orientation": 6,
+   "map_width": 24,
+   "map_height": 16,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 3.363585661014858,
+     "space": "p3",
+     "max": 2.3942879568119353,
+     "min": -1.0745302852702341e-06
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.9619853020348819,
+     "min": -0.2153672847991887
+    }
+   }
+  },
+  {
+   "name": "iso_orientation7",
+   "model": "iso",
+   "width": 30,
+   "height": 46,
+   "orientation": 7,
+   "map_width": 23,
+   "map_height": 15,
+   "channels": 1,
+   "detected": [
+    "Iso21496"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 4.0,
+     "space": "srgb",
+     "max": 2.8182182697371525,
+     "min": -0.004576456543960194
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.6808778944351366,
+     "min": -0.002485993511660711
+    }
+   }
+  },
+  {
+   "name": "apple_makernote",
+   "model": "apple",
+   "width": 48,
+   "height": 32,
+   "orientation": 1,
+   "map_width": 24,
+   "map_height": 16,
+   "channels": 1,
+   "detected": [
+    "Apple"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 3.9542391992476906,
+     "space": "p3",
+     "max": 2.733905299359679,
+     "min": 0.0
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.8924336536017776,
+     "min": -0.23426002887599823
+    }
+   }
+  },
+  {
+   "name": "apple_xmp_headroom",
+   "model": "apple",
+   "width": 40,
+   "height": 24,
+   "orientation": 1,
+   "map_width": 20,
+   "map_height": 12,
+   "channels": 1,
+   "detected": [
+    "Apple"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 3.5,
+     "space": "srgb",
+     "max": 2.588236536977836,
+     "min": 0.0
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.6352946147911345,
+     "min": 0.0
+    }
+   }
+  },
+  {
+   "name": "iso_and_apple",
+   "model": "iso",
+   "width": 48,
+   "height": 32,
+   "orientation": 1,
+   "map_width": 24,
+   "map_height": 16,
+   "channels": 1,
+   "detected": [
+    "Iso21496",
+    "Apple"
+   ],
+   "variants": {
+    "full": {
+     "headroom": 3.363585661014858,
+     "space": "p3",
+     "max": 2.3092058159533337,
+     "min": -1.0607604683178578e-06
+    },
+    "srgb_t2": {
+     "headroom": 2.0,
+     "space": "srgb",
+     "max": 1.9234298951297086,
+     "min": -0.2384859248063781
+    }
+   }
+  }
+ ],
+ "invalid": [
+  {
+   "name": "iso_min_version1",
+   "failure": "unsupported"
+  },
+  {
+   "name": "iso_backward",
+   "failure": "unsupported"
+  },
+  {
+   "name": "iso_zero_denominator",
+   "failure": "corrupt"
+  },
+  {
+   "name": "iso_truncated",
+   "failure": "corrupt"
+  },
+  {
+   "name": "iso_negative_offset",
+   "failure": "corrupt"
+  },
+  {
+   "name": "iso_version_only",
+   "failure": "corrupt"
+  },
+  {
+   "name": "ultrahdr_xmp_only",
+   "failure": "unsupported"
+  },
+  {
+   "name": "apple_unknown_version",
+   "failure": "unsupported"
+  },
+  {
+   "name": "apple_no_headroom",
+   "failure": "corrupt"
+  },
+  {
+   "name": "base_adobe_rgb",
+   "failure": "unsupported"
+  },
+  {
+   "name": "iso_no_mpf",
+   "failure": "corrupt"
+  },
+  {
+   "name": "mpf_offset_outside",
+   "failure": "corrupt"
+  }
+ ]
+}

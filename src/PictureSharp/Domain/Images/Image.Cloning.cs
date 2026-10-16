@@ -11,6 +11,8 @@ public sealed partial class Image
             frames.Add(frame.Clone());
         }
 
-        return CopyPropertiesTo(new Image(frames));
+        Image clone = CopyPropertiesTo(new Image(frames));
+        clone.GainMap = GainMap;   // immutable, shared
+        return clone;
     }
 }

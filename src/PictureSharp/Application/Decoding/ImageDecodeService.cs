@@ -34,15 +34,31 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
         Image image = result.Image;
         try
         {
+            bool converted = false;
             if (options.ColorConversion == ColorConversionMode.ToSrgb)
             {
+                converted = image.Metadata.IccData is not null || image.Metadata.HasColorDescription;
                 ImageProcessingService.Mutate(image, static x => x.ConvertToSrgb(), cancellationToken);
             }
 
             ApplyTargetSize(result, options, cancellationToken);
+            ExifOrientation orientation = options.ApplyExifOrientation ? image.Metadata.Orientation : ExifOrientation.Unknown;
             if (options.ApplyExifOrientation)
             {
                 ImageProcessingService.Mutate(image, static x => x.AutoOrient(), cancellationToken);
+            }
+
+            if (result.GainMap is { } gainMap)
+            {
+                image.GainMap = gainMap.CanDecode
+                    ? gainMap with
+                    {
+                        StoredSize = result.StoredSize,
+                        AppliedOrientation = orientation,
+                        BaseSpace = converted ? HdrColorSpace.LinearSrgb : gainMap.BaseSpace,
+                        BaseLinearization = converted ? null : gainMap.BaseLinearization,
+                    }
+                    : gainMap;
             }
         }
         catch

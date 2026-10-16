@@ -23,6 +23,7 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     property System.Boolean ApplyExifOrientation { get; init; }
     property System.Boolean FirstFrameOnly { get; init; }
     property System.Boolean IgnoreMetadata { get; init; }
+    property System.Boolean LoadGainMap { get; init; }
     property System.Double TargetReducingGap { get; init; }
     property System.Drawing.Size? TargetSize { get; init; }
     property System.Int32 MaxDegreeOfParallelism { get; init; }
@@ -311,6 +312,47 @@ readonly struct GpsLocation : System.IEquatable<GpsLocation>
     property System.Double Latitude { get; }
     property System.Double Longitude { get; }
     property System.Double? Altitude { get; }
+enum HdrColorSpace
+    LinearSrgb = 0
+    LinearDisplayP3 = 1
+static class HdrExtensions
+    method [Extension] static HdrImage ToHdr(Image image, HdrOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static Image ToneMap(HdrImage hdr, PictureSharp.Processing.ToneMappingOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+[Flags] enum HdrGainMapKinds
+    None = 0
+    Iso21496 = 1
+    Apple = 2
+    UltraHdrXmp = 4
+sealed class HdrImage : System.IDisposable
+    method System.ReadOnlyMemory<Rgba128> GetPixelMemory()
+    method System.ReadOnlySpan<Rgba128> GetPixelSpan()
+    method System.ReadOnlySpan<Rgba128> GetRowSpan(System.Int32 y)
+    method System.String ToString()
+    method System.Void CopyPixelDataTo(System.Span<Rgba128> destination)
+    method System.Void Dispose()
+    property HdrColorSpace ColorSpace { get; }
+    property HdrGainMapKinds GainMapKind { get; }
+    property ImageMetadata Metadata { get; }
+    property Rgba128 this[System.Int32 x, System.Int32 y] { get; }
+    property System.Drawing.Rectangle Bounds { get; }
+    property System.Drawing.Size Size { get; }
+    property System.Int32 Height { get; }
+    property System.Int32 Width { get; }
+    property System.Single Headroom { get; }
+sealed record HdrInfo : System.IEquatable<HdrInfo>
+    ctor()
+    property HdrGainMapKinds Detected { get; init; }
+    property HdrGainMapKinds Selected { get; init; }
+    property System.Boolean CanDecode { get; init; }
+    property System.Drawing.Size GainMapSize { get; init; }
+    property System.Single? Headroom { get; init; }
+    property System.String? UnsupportedReason { get; init; }
+sealed record HdrOptions : System.IEquatable<HdrOptions>
+    ctor()
+    property HdrColorSpace? ColorSpace { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
+    property System.Single? TargetHeadroom { get; init; }
+    property static HdrOptions Default { get; }
 sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height)
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
@@ -331,12 +373,14 @@ sealed class Image : System.IDisposable
     method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
     method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
     method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
+    property HdrInfo? Hdr { get; }
     property ImageFormat? SourceFormat { get; }
     property ImageFrameCollection Frames { get; }
     property ImageMetadata Metadata { get; }
     property Rgba32 AnimationBackgroundColor { get; set; }
     property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
     property System.Boolean HasAlpha { get; }
+    property System.Boolean HasHdr { get; }
     property System.Boolean IsAnimated { get; }
     property System.Drawing.Rectangle Bounds { get; }
     property System.Drawing.Size Size { get; }
@@ -543,6 +587,7 @@ static class ImageIOExtensions
 sealed record ImageInfo : System.IEquatable<ImageInfo>
     ctor()
     property ExifOrientation Orientation { get; init; }
+    property HdrInfo? Hdr { get; init; }
     property PictureSharp.Formats.WebP.WebPCompression WebPCompression { get; init; }
     property System.Boolean HasAlpha { get; init; }
     property System.Boolean IsAnimated { get; init; }
@@ -773,11 +818,30 @@ enum PictureSharp.Processing.RotateMode
     Rotate90 = 90
     Rotate180 = 180
     Rotate270 = 270
+sealed record PictureSharp.Processing.ToneMappingOptions : System.IEquatable<PictureSharp.Processing.ToneMappingOptions>
+    ctor()
+    property System.Single Exposure { get; init; }
+    property System.Single? WhitePoint { get; init; }
+    property static PictureSharp.Processing.ToneMappingOptions Default { get; }
 enum RenderingIntent
     Perceptual = 0
     RelativeColorimetric = 1
     Saturation = 2
     AbsoluteColorimetric = 3
+struct Rgba128 : System.IEquatable<Rgba128>
+    ctor(System.Single r, System.Single g, System.Single b, System.Single a = 1)
+    field System.Single A
+    field System.Single B
+    field System.Single G
+    field System.Single R
+    method System.Boolean Equals(Rgba128 other)
+    method System.Boolean Equals(System.Object? obj)
+    method System.Int32 GetHashCode()
+    method System.String ToString()
+    method static Rgba128 op_Implicit(System.Numerics.Vector4 vector)
+    method static System.Boolean op_Equality(Rgba128 left, Rgba128 right)
+    method static System.Boolean op_Inequality(Rgba128 left, Rgba128 right)
+    method static System.Numerics.Vector4 op_Implicit(Rgba128 pixel)
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32>
     ctor(System.Byte r, System.Byte g, System.Byte b, System.Byte a = 255)
     field System.Byte A

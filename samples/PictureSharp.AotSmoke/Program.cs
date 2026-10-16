@@ -161,7 +161,32 @@ if (!source.Metadata.TrySetOrientation(ExifOrientation.TopLeft)) throw new Inval
 processed.Frames.AddClone(source.Frames[0]);
 using Image transferred = processed.Frames.ExportFrame(1);
 if (transferred.Size != source.Size) throw new InvalidOperationException("Frame transfer failed.");
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, configurations, a format plugin and a frame processor.");
+// HDR: a JPEG with an ISO 21496-1 gain map (two stops of headroom) assembled in memory.
+{
+    static byte[] Segment(byte marker, ReadOnlySpan<byte> body) => [0xFF, marker, (byte)((body.Length + 2) >> 8), (byte)(body.Length + 2), .. body];
+    static byte[] U32(uint v) => [(byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v];
+    byte[] urn = [.. "urn:iso:std:iso:ts:21496:-1"u8, 0];
+    byte[] iso = [.. urn, 0, 0, 0, 0, 0x40, .. U32(0), .. U32(1), .. U32(2), .. U32(1), .. U32(0), .. U32(1), .. U32(2), .. U32(1),
+        .. U32(1), .. U32(1), .. U32(0), .. U32(1), .. U32(0), .. U32(1)];
+    byte[] baseJpeg = source.Encode(ImageFormat.Jpeg);
+    using var mapImage = new Image(8, 6, new Rgba32(255, 255, 255, 255));
+    byte[] mapJpeg = mapImage.Encode(ImageFormat.Jpeg);
+    byte[] map = [.. mapJpeg.AsSpan(0, 2), .. Segment(0xE2, iso), .. mapJpeg.AsSpan(2)];
+    byte[] Mpf(uint primarySize, uint mapOffset) => Segment(0xE2, [.. "MPF\0MM\0*"u8, .. U32(8), 0, 1, 0xB0, 0x02, 0, 7, .. U32(32), .. U32(26), .. U32(0),
+        .. U32(0x030000), .. U32(primarySize), .. U32(0), 0, 0, 0, 0, .. U32(0), .. U32((uint)map.Length), .. U32(mapOffset), 0, 0, 0, 0]);
+    int primaryLength = baseJpeg.Length + Mpf(0, 0).Length;
+    byte[] file = [.. baseJpeg.AsSpan(0, 2), .. Mpf((uint)primaryLength, (uint)(primaryLength - 10)), .. baseJpeg.AsSpan(2), .. map];
+    using Image hdrSource = Image.Load(file, new DecoderOptions { LoadGainMap = true });
+    if (!hdrSource.HasHdr || Image.Identify(file, new DecoderOptions { LoadGainMap = true }).Hdr?.Selected != HdrGainMapKinds.Iso21496)
+        throw new InvalidOperationException($"HDR detection failed: {hdrSource.Hdr?.UnsupportedReason}");
+    using HdrImage hdr = hdrSource.ToHdr();
+    using HdrImage sdrLinear = hdrSource.ToHdr(new HdrOptions { TargetHeadroom = 1 });
+    using Image toneMapped = hdr.ToneMap(new ToneMappingOptions { Exposure = -1 });
+    if (hdr.Headroom != 4f || MathF.Abs((hdr[0, 0].G / sdrLinear[0, 0].G) - 4f) > 1e-3f || toneMapped.Size != hdrSource.Size)
+        throw new InvalidOperationException("HDR reconstruction failed.");
+}
+
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, a format plugin and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>

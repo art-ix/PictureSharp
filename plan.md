@@ -55,7 +55,7 @@ Punkty wyjścia dla nowych prac: wejściowe strumienie są buforowane w całośc
 | 0.6.2 | Zarządzanie kolorem i światło liniowe (4) | Ukończona — opublikowana |
 | 0.6.3 | AutoCrop, maski, mieszanie i korekcja tonalna (6) | Ukończona — opublikowana |
 | 0.6.4 | Adaptery jako osobne paczki: System.Drawing, SkiaSharp, ASP.NET Core | Ukończona — wydanie 0.6.4 |
-| 0.6.5 | HDR z JPEG iPhone: gain map Apple i ISO 21496-1, rekonstrukcja HDR i konwersja do SDR | Planowana |
+| 0.6.5 | HDR z JPEG iPhone: gain map Apple i ISO 21496-1, rekonstrukcja HDR i konwersja do SDR | W trakcie — implementacja i testy na Linuxie; brak wyroczni libultrahdr i weryfikacji Apple |
 | 0.7.0 | Integracja ICO, sześciu obszarów, adapterów i JPEG HDR, stabilizacja API i wydanie | Planowana |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości. Nazwy nowych opcji i metod poniżej są robocze do czasu zatwierdzenia migawki API.

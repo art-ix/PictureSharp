@@ -37,4 +37,7 @@ public sealed record ImageInfo
 
     /// <summary>Vertical resolution in dots per inch (96 when unspecified).</summary>
     public float VerticalResolution { get; init; } = 96f;
+
+    /// <summary>The HDR gain map declared by the file, when <see cref="DecoderOptions.LoadGainMap"/> is set; otherwise null.</summary>
+    public HdrInfo? Hdr { get; init; }
 }

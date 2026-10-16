@@ -12,10 +12,12 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
     private static ReadOnlySpan<byte> ExifPrefix => "Exif\0\0"u8;
     private static ReadOnlySpan<byte> XmpPrefix => "http://ns.adobe.com/xap/1.0/\0"u8;
     private static ReadOnlySpan<byte> IccPrefix => "ICC_PROFILE\0"u8;
+    private static ReadOnlySpan<byte> MpfPrefix => "MPF\0"u8;
 
     public ImageMetadata Read(ReadOnlyMemory<byte> data, DecodeContext context)
     {
         List<Segment> segments = Parse(data.Span, context.CancellationToken);
+        GainMapContainer(data.Span, segments, context);
         var metadata = new ImageMetadata();
         var icc = new SortedDictionary<int, byte[]>();
         int iccCount = 0;
@@ -52,6 +54,15 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
     public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, DecodeContext context)
     {
         var segments = Parse(data.Span, context.CancellationToken);
+        int mpfIndex = MpfIndex(data.Span, segments);
+        HdrInfo? hdr = GainMapContainer(data.Span, segments, context);
+        if (hdr is not null)
+        {
+            if (!(metadata.IccData ?? []).AsSpan().SequenceEqual(original.IccData ?? []))
+                throw new InvalidOperationException("The ICC profile defines the colors of the HDR gain map's base image and cannot be changed or removed; "
+                    + "load the image and save it (base SDR) or use ToHdr and ToneMap to get an SDR copy without HDR.");
+        }
+
         if (!metadata.SameColorDescription(original))
             throw new NotSupportedException("JPEG stores colors only as an ICC profile; gamma, chromaticities and sRGB intent are PNG chunks.");
         bool resolution = metadata.HorizontalResolution != original.HorizontalResolution || metadata.VerticalResolution != original.VerticalResolution;
@@ -75,6 +86,7 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
         }
         // JFIF/Adobe headers precede the replacement profiles, preserving their conventional ordering.
         bool written = false;
+        long newMpf = -1, newPrimaryEnd = -1, oldPrimaryEnd = -1;
         foreach (Segment segment in segments)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -86,9 +98,39 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
                 WriteProfiles(output, metadata, context.CancellationToken);
                 written = true;
             }
+            if (segment.Marker == 0xe2 && segment.Start == (mpfIndex >= 0 ? segments[mpfIndex].Start : -1)) newMpf = output.Position;
+            if (segment.Marker == 0xd9) (newPrimaryEnd, oldPrimaryEnd) = (output.Position + 2, segment.Start + 2);
             MetadataContainer.Write(output, data.Span.Slice(segment.Start, segment.Length), context.CancellationToken);
         }
-        return MetadataContainer.ToArray(output);
+        byte[] result = MetadataContainer.ToArray(output);
+        if (mpfIndex >= 0)
+        {
+            int oldTiff = segments[mpfIndex].Body + MpfPrefix.Length;
+            JpegMpf.Relocate(result, (int)newMpf + 4 + MpfPrefix.Length, oldTiff, (int)oldPrimaryEnd, (int)newPrimaryEnd);
+            HdrInfo? rewritten = JpegGainMapReader.Read(result, context.Options, budget: null, copyMap: false)?.Info;
+            if (rewritten != hdr)
+                throw new InvalidOperationException("The edit would remove or change metadata the HDR gain map needs (such as the Apple MakerNote headroom).");
+        }
+        return result;
+    }
+
+    private static int MpfIndex(ReadOnlySpan<byte> data, List<Segment> segments)
+    {
+        for (int i = 0; i < segments.Count; i++)
+            if (segments[i].Marker == 0xe2 && data.Slice(segments[i].Body, segments[i].BodyLength).StartsWith(MpfPrefix)) return i;
+        return -1;
+    }
+
+    /// <summary>
+    /// The gain map of a file with an MPF directory, or null without MPF. Only HDR gain map containers are supported:
+    /// their secondary image is the map, whose MPF offset a rewrite can fix; other MPO files are rejected.
+    /// </summary>
+    private static HdrInfo? GainMapContainer(ReadOnlySpan<byte> data, List<Segment> segments, DecodeContext context)
+    {
+        if (MpfIndex(data, segments) < 0) return null;
+        HdrInfo? hdr = JpegGainMapReader.Read(data, context.Options, budget: null, copyMap: false)?.Info;
+        return hdr is { CanDecode: true } ? hdr
+            : throw new NotSupportedException("JPEG MPF/MPO offsets can be preserved only for files with a valid HDR gain map.");
     }
 
     private static void WriteProfiles(Stream output, ImageMetadata metadata, CancellationToken token)
@@ -165,8 +207,6 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
             MetadataKinds kind = marker == 0xe1 && body.StartsWith(ExifPrefix) ? MetadataKinds.Exif
                 : marker == 0xe1 && body.StartsWith(XmpPrefix) ? MetadataKinds.Xmp
                 : marker == 0xe2 && body.StartsWith(IccPrefix) ? MetadataKinds.Icc : MetadataKinds.None;
-            if (marker == 0xe2 && body.StartsWith("MPF\0"u8))
-                throw new NotSupportedException("JPEG MPF/MPO offsets cannot be preserved by this metadata editor.");
             if (marker == 0xe1 && body.StartsWith("http://ns.adobe.com/xmp/extension/\0"u8))
                 throw new NotSupportedException("Extended JPEG XMP is not supported for metadata editing.");
             position += length;

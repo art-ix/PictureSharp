@@ -10,6 +10,7 @@ using PictureSharp.Processing;
 // picturesharp-cli: small front-end for the PictureSharp library.
 //   info <file>...
 //   convert <input> <output> [-q quality] [-m method] [-lossless] [-colors n] [-octree] [-dither]
+//           [-hdr base|tone-map] [-exposure ev] [-white w]
 //   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
 //   thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality]
 //   trim <input> <output> [-mode alpha|background] [-color RRGGBB[AA]] [-threshold n] [-tolerance n] [-padding n] [-q quality]
@@ -27,10 +28,16 @@ try
         case "info":
             foreach (string file in args.Skip(1))
             {
-                ImageInfo info = Image.Identify(file);
+                ImageInfo info = Image.Identify(file, new DecoderOptions { LoadGainMap = true });
                 Console.WriteLine($"{file}: {info.Format.Name} {info.Width}x{info.Height}, alpha: {info.HasAlpha}, " +
                                   $"frames: {info.FrameCount}{(info.WebPCompression != WebPCompression.None ? ", " + info.WebPCompression : "")}, " +
                                   $"orientation: {info.Orientation}");
+                if (info.Hdr is { } hdr)
+                {
+                    Console.WriteLine(hdr.CanDecode
+                        ? string.Create(CultureInfo.InvariantCulture, $"  HDR gain map: {hdr.Selected} (detected: {hdr.Detected}), map {hdr.GainMapSize.Width}x{hdr.GainMapSize.Height}, headroom {hdr.Headroom:0.###} ({Math.Log2(hdr.Headroom ?? 1):0.##} EV)")
+                        : $"  HDR gain map: {hdr.Detected}, not decodable: {hdr.UnsupportedReason}");
+                }
                 if (info.Format == ImageFormat.Ico)
                 {
                     foreach (IcoEntryInfo entry in IcoFile.Identify(file))
@@ -113,6 +120,8 @@ try
                 float? quality = null;
                 int? method = null;
                 bool lossless = false;
+                bool toneMap = false;
+                var toneMapping = new ToneMappingOptions();
                 var gif = new GifEncoderOptions();
                 for (int i = 3; i < args.Length; i++)
                 {
@@ -124,12 +133,39 @@ try
                         case "-colors": gif = gif with { ColorCount = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                         case "-octree": gif = gif with { Quantizer = GifQuantizer.Octree }; break;
                         case "-dither": gif = gif with { Dither = GifDither.FloydSteinberg }; break;
+                        case "-hdr":
+                            toneMap = args[++i] switch
+                            {
+                                "base" => false,
+                                "tone-map" => true,
+                                _ => throw new ArgumentException("-hdr expects base or tone-map."),
+                            };
+                            break;
+                        case "-exposure": toneMapping = toneMapping with { Exposure = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-white": toneMapping = toneMapping with { WhitePoint = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                         default: throw new ArgumentException($"Unknown option {args[i]}");
                     }
                 }
 
                 var sw = Stopwatch.StartNew();
-                using Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true });
+                // The default keeps the SDR base image and skips HDR parsing; -hdr tone-map renders the HDR reconstruction.
+                Image image = Image.Load(args[1], new DecoderOptions { ApplyExifOrientation = true, LoadGainMap = toneMap });
+                if (toneMap)
+                {
+                    if (!image.HasHdr)
+                    {
+                        string reason = image.Hdr?.UnsupportedReason ?? "the file has no HDR gain map";
+                        image.Dispose();
+                        throw new NotSupportedException($"Cannot tone-map {args[1]}: {reason.TrimEnd('.')}.");
+                    }
+
+                    using HdrImage hdr = image.ToHdr();
+                    Image sdr = hdr.ToneMap(toneMapping);
+                    image.Dispose();
+                    image = sdr;
+                }
+
+                using Image disposable = image;
                 long decodeMs = sw.ElapsedMilliseconds;
                 sw.Restart();
                 ImageFormat target = ImageFormat.FromExtension(args[2]) ?? throw new ArgumentException("Unknown output extension.");
@@ -302,6 +338,7 @@ static void PrintUsage() => Console.Error.WriteLine(
       picturesharp-cli icon <input> <output.ico> <sizes: 16,32,48,256> [-dib]
       picturesharp-cli convert <input> <output> [-q quality] [-m method] [-lossless]
                               [-colors n] [-octree] [-dither]          (GIF output)
+                              [-hdr base|tone-map] [-exposure ev] [-white w]  (JPEG with HDR gain map)
       picturesharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]
                              [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality]
       picturesharp-cli thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality]

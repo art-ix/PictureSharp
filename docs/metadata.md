@@ -206,7 +206,9 @@ Cancellation covers I/O and bounded CPU work outside the user callback; callback
 Container validation does not validate the compressed image bitstream by decoding it. Metadata-only PNG operations
 always validate chunk CRCs. JPEG EXIF and standard XMP each need to fit in one APP1 segment and ICC in 255 APP2
 segments; larger replacements throw `ArgumentException`, as in `Save`. Extended JPEG XMP in the input is
-unsupported. JPEG MPF/MPO is rejected because its file offsets would need a separate rewrite. Other formats and format plugins without
+unsupported. JPEG files with a valid HDR gain map keep both compressed images and get updated MPF offsets; edits that
+would change the ICC profile or remove data the gain map needs throw `InvalidOperationException` (see
+[HDR photos](hdr.md)). Other JPEG MPF/MPO files are rejected. Other formats and format plugins without
 an internal metadata adapter throw `NotSupportedException`.
 
 Changing `HorizontalResolution`/`VerticalResolution` through the edit callback updates JPEG JFIF or PNG pHYs.
