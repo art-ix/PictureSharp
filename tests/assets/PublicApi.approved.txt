@@ -593,6 +593,7 @@ sealed record ImageInfo : System.IEquatable<ImageInfo>
     property System.Boolean IsAnimated { get; init; }
     property System.Int32 BitsPerChannel { get; init; }
     property System.Int32 FrameCount { get; init; }
+    property System.Int32? ContainerItemCount { get; init; }
     property System.Single HorizontalResolution { get; init; }
     property System.Single VerticalResolution { get; init; }
     property required ImageFormat Format { get; init; }

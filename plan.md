@@ -110,6 +110,9 @@ Zakres:
   przekształcona kodowana jako JPEG mono lub RGB jak źródło.
 - Warianty: źródło ISO oraz Apple+ISO zapisywane jako ISO (bez Apple MakerNote w nowej deklaracji); samo Apple
   (iOS 14–17) → `Require` daje `NotSupportedException`, `Preserve` zapisuje SDR. Konwersja Apple→ISO poza zakresem.
+- SPI dla wtyczki HEIF (decyzja użytkownika 2026-10-16): `ImageInfo.ContainerItemCount` (`int?`, ≥ 0) — liczba
+  elementów kontenera zgłaszana przez wtyczki; formaty wbudowane zostawiają null, niezależne od `FrameCount`. Gotowe:
+  właściwość, migawka API, test przepływu przez wtyczkę testową. Wtyczka 0.1.0 wymaga PictureSharp 0.6.9.
 - Zapis PNG/WebP/innych formatów pozostaje SDR; `EditMetadata` bez zmian. Limity rozmiaru kodowanej mapy i anulowanie
   w resamplingu i kodowaniu mapy.
 - CLI: `convert`/`resize` z `-hdr keep` (JPEG→JPEG z mapą); `info` pokazuje mapę po przekształceniu.
@@ -180,7 +183,7 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | Parsowanie metadanych gain map poza JPEG | `ReadIso`/`ReadApple` związane z `JpegHeader` | `Identify` (`HdrInfo.Headroom`) i dekod | 0.7.0 |
 | Kolor bazy HDR z opisu metadanych | `JpegGainMapReader.ReadBaseColor`, tylko ICC z JPEG | HEIC z ICC lub nclx | 0.7.0 |
 | Metadane bez dekodu | `IImageMetadataCodec` internal; wtyczki → `NotSupportedException` | `ReadMetadata`/`EditMetadata` HEIC | 0.7.0 (odczyt; zapis opcjonalny) |
-| Liczba elementów kontenera w Identify | `ImageInfo` ma tylko `FrameCount`; to liczba klatek, nie elementów HEIF | DoD wtyczki 0.1.0: liczba elementów bez traktowania kafli/alfy/metadanych jako animacji; rozważyć opcjonalne `ContainerItemCount` | 0.7.0; nazwa i semantyka do decyzji |
+| Liczba elementów kontenera w Identify | `ImageInfo` miało tylko `FrameCount`; to liczba klatek, nie elementów HEIF | DoD wtyczki 0.1.0: liczba elementów bez traktowania kafli/alfy/metadanych jako animacji | Zamknięte w 0.6.9: `ImageInfo.ContainerItemCount` (`int?`, null dla formatów wbudowanych) |
 | Kontrakt orientacji kontenera | nieopisany | `irot`/`imir` bez podwójnego obrotu z EXIF | 0.7.0 (dokumentacja) |
 | Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
 | Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
@@ -250,7 +253,7 @@ Zależności od wydań rdzenia:
 
 | Wersja wtyczki | Zakres | Minimalny PictureSharp |
 | --- | --- | --- |
-| 0.1.0–0.3.0 | Kontener i `Identify`, dekoder i enkoder HEVC intra, kolor, alfa, metadane | 0.6.8 |
+| 0.1.0–0.3.0 | Kontener i `Identify` (z `ContainerItemCount`), dekoder i enkoder HEVC intra, kolor, alfa, metadane | 0.6.9 |
 | 0.4.0–0.5.0 | Gain map → `ToHdr`, `ReadMetadata` bez dekodu; SIMD i pomiary | 0.7.0 (SPI wtyczek) |
 | dalej | Zapis gain map w HEIC, ewentualnie `thmb` i opcje dekodera | 0.8.0 |
 

@@ -35,7 +35,7 @@ public sealed class PpmFormat(bool reservePixels = true) : IImageFormatModule
         public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
         {
             (int width, int height, _) = ReadHeader(data.Span);
-            return new ImageInfo { Format = Format, Width = width, Height = height };
+            return new ImageInfo { Format = Format, Width = width, Height = height, ContainerItemCount = 1 };
         }
 
         public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)

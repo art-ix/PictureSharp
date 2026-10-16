@@ -1,4 +1,5 @@
 using PictureSharp.Formats.WebP;
+using PictureSharp.Primitives.Numerics;
 
 namespace PictureSharp;
 
@@ -19,6 +20,13 @@ public sealed record ImageInfo
 
     /// <summary>Number of frames (1 for still images). May be 0 when the count is unknown without decoding.</summary>
     public int FrameCount { get; init; } = 1;
+
+    /// <summary>
+    /// The number of items in the file's container (for example HEIF items: images, grid tiles, auxiliary images and
+    /// metadata), reported by container format plugins; null for formats without one, including every built-in format.
+    /// Independent of <see cref="FrameCount"/>: tiles, alpha and metadata items are not frames.
+    /// </summary>
+    public int? ContainerItemCount { get; init => field = Check.Range(value, 0, int.MaxValue); }
 
     /// <summary>Whether the image is an animation.</summary>
     public bool IsAnimated { get; init; }

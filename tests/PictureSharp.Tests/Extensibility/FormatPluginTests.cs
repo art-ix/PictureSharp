@@ -45,6 +45,9 @@ public class FormatPluginTests
         await Assert.That(fromStream.Size).IsEqualTo(source.Size);
         ImageInfo info = Image.Identify(ppm, options);
         await Assert.That((info.Format, info.Width, info.Height)).IsEqualTo((PpmFormat.Format, 5, 3));
+        await Assert.That(info.ContainerItemCount).IsEqualTo(1);   // passed through unchanged
+        await Assert.That(Image.Identify(source.ToPng()).ContainerItemCount).IsNull();
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => _ = info with { ContainerItemCount = -1 });
 
         // Not part of the default configuration.
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(ppm));
