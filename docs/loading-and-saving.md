@@ -26,6 +26,21 @@ using var fromAsync = await Image.LoadAsync("input.png", cancellationToken);
 The format is detected from the content, so a PNG named `photo.jpg` loads fine. `image.SourceFormat` tells which format
 was decoded (`null` for images created in memory).
 
+### Supported formats
+
+| Format | Read | Write |
+| --- | --- | --- |
+| JPEG | baseline, progressive, CMYK/YCCK, HDR gain maps (ISO 21496-1, Apple) | baseline, progressive, 4:4:4–4:2:0, ISO 21496-1 gain maps |
+| PNG | all color types and bit depths, APNG | gray, RGB(A), palette, Adam7, APNG |
+| WebP | lossy, lossless, alpha, animation | lossy, lossless, near-lossless, alpha, animation |
+| GIF | GIF87a/89a, interlace, transparency, animation | exact or quantized palettes, dithering, animation |
+| BMP | palette, RLE, bit fields, alpha, embedded PNG/JPEG | 1/4/8/24/32-bit |
+| ICO | PNG and DIB 1/4/8/24/32-bit icons, multiple sizes | PNG or 32-bit DIB icons, multiple sizes |
+| PCX | 1–8-bit, 24-bit RGB, 32-bit RGBA | 1/4/8/24/32-bit, RLE |
+
+HEIC/HEIF (HEVC 8/10-bit, tile grids, alpha, HDR gain maps; writing 8-bit 4:2:0) comes from the
+[PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif) plugin. Encoder settings: [Encoder options](encoder-options.md).
+
 ### PCX support
 
 PCX supports monochrome, packed and planar palette images, grayscale, RGB and RGBA. DCX and legacy color images below 8

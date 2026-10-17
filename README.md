@@ -6,21 +6,22 @@ PictureSharp reads, writes and processes JPEG, PNG, WebP, GIF, BMP, ICO and PCX 
 with no NuGet dependencies, native libraries or P/Invoke. Output is verified pixel for pixel against libwebp,
 libjpeg-turbo and Pillow.
 
-| Format | Read | Write |
-| --- | --- | --- |
-| **Photos and the web** | | |
-| JPEG | baseline, progressive, CMYK/YCCK, HDR gain maps | baseline, progressive, 4:4:4–4:2:0, HDR gain maps |
-| PNG, APNG | all color types and bit depths, animation | gray, RGB(A), palette, Adam7, animation |
-| WebP | lossy, lossless, alpha, animation | lossy, lossless, near-lossless, alpha, animation |
-| GIF | GIF87a/89a, interlace, transparency, animation | exact or quantized palettes, dithering, animation |
-| **Windows and legacy** | | |
-| BMP | palette, RLE, bit fields, alpha, embedded PNG/JPEG | 1/4/8/24/32-bit |
-| ICO | PNG and DIB 1/4/8/24/32-bit icons, multiple sizes | PNG or 32-bit DIB icons, multiple sizes |
-| PCX | 1–8-bit, 24-bit RGB, 32-bit RGBA | 1/4/8/24/32-bit, RLE |
-| **Plugin package** ¹ | | |
-| HEIC/HEIF | HEVC 8/10-bit, tile grids, alpha, HDR gain maps | HEVC 8-bit 4:2:0, tile grids, alpha |
+| Format | Best for | Transparency | Animation | HDR gain maps |
+| --- | --- | :---: | :---: | :---: |
+| JPEG | photos | | | read, write |
+| PNG | graphics, screenshots | ✔ | ✔ APNG | |
+| WebP | the web, lossy or lossless | ✔ | ✔ | |
+| GIF | simple animations | ✔ | ✔ | |
+| BMP | Windows bitmaps | ✔ | | |
+| ICO | favicons, app icons | ✔ | | |
+| PCX | legacy files | ✔ | | |
+| HEIC ¹ | iPhone photos | ✔ | | read |
 
-¹ [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif), also 100% C#: `dotnet add package PictureSharp.Heif`.
+Every format is both read and written. Variants and options for each one are listed in
+[Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md#supported-formats).
+
+¹ With the [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif) plugin package, also 100% C#:
+`dotnet add package PictureSharp.Heif`.
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
