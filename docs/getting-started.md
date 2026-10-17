@@ -50,6 +50,8 @@ image.Save("photo-small.webp");                 // the extension selects WebP wi
 
 ## `Mutate` or `Clone`
 
+`Mutate` changes the image's own pixels; `Clone` works on a copy and leaves the source unchanged.
+
 ```csharp
 using PictureSharp;
 using PictureSharp.Processing;
