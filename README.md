@@ -15,6 +15,10 @@ libjpeg-turbo and Pillow.
 | GIF | ✔ GIF87a/89a, interlace, transparency, animation | ✔ exact or quantized palettes, dithering, animation |
 | ICO | ✔ PNG, DIB 1/4/8/24/32-bit | ✔ PNG or 32-bit DIB, multiple sizes |
 | PCX | ✔ 1–8 bit, 24-bit RGB, 32-bit RGBA | ✔ 1/4/8/24/32-bit, RLE |
+| HEIC/HEIF ¹ | ✔ HEVC 8/10-bit, tile grids, alpha, HDR gain maps | ✔ HEVC 8-bit 4:2:0, tile grids, alpha |
+
+¹ Through the [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif) plugin package, also 100% C#
+(`dotnet add package PictureSharp.Heif`).
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
