@@ -2,23 +2,25 @@
 
 **A pure managed image processing library for .NET. No native dependencies.**
 
-PictureSharp reads, writes and processes WebP, PNG, JPEG, BMP, GIF, PCX and ICO in 100% C# for **.NET 10 and later**,
+PictureSharp reads, writes and processes JPEG, PNG, WebP, GIF, BMP, ICO and PCX in 100% C# for **.NET 10 and later**,
 with no NuGet dependencies, native libraries or P/Invoke. Output is verified pixel for pixel against libwebp,
 libjpeg-turbo and Pillow.
 
 | Format | Read | Write |
 | --- | --- | --- |
-| WebP | ✔ lossy, lossless, alpha, animation | ✔ lossy, lossless, near-lossless, alpha, animation |
-| PNG | ✔ all color types and bit depths, APNG | ✔ gray, RGB(A), palette, Adam7, APNG |
-| JPEG | ✔ baseline, progressive, CMYK/YCCK | ✔ baseline, progressive, 4:4:4–4:2:0 |
-| BMP | ✔ palette, RLE, bit fields, alpha, embedded PNG/JPEG | ✔ 1/4/8/24/32-bit |
-| GIF | ✔ GIF87a/89a, interlace, transparency, animation | ✔ exact or quantized palettes, dithering, animation |
-| ICO | ✔ PNG, DIB 1/4/8/24/32-bit | ✔ PNG or 32-bit DIB, multiple sizes |
-| PCX | ✔ 1–8 bit, 24-bit RGB, 32-bit RGBA | ✔ 1/4/8/24/32-bit, RLE |
-| HEIC/HEIF ¹ | ✔ HEVC 8/10-bit, tile grids, alpha, HDR gain maps | ✔ HEVC 8-bit 4:2:0, tile grids, alpha |
+| **Photos and the web** | | |
+| JPEG | baseline, progressive, CMYK/YCCK, HDR gain maps | baseline, progressive, 4:4:4–4:2:0, HDR gain maps |
+| PNG, APNG | all color types and bit depths, animation | gray, RGB(A), palette, Adam7, animation |
+| WebP | lossy, lossless, alpha, animation | lossy, lossless, near-lossless, alpha, animation |
+| GIF | GIF87a/89a, interlace, transparency, animation | exact or quantized palettes, dithering, animation |
+| **Windows and legacy** | | |
+| BMP | palette, RLE, bit fields, alpha, embedded PNG/JPEG | 1/4/8/24/32-bit |
+| ICO | PNG and DIB 1/4/8/24/32-bit icons, multiple sizes | PNG or 32-bit DIB icons, multiple sizes |
+| PCX | 1–8-bit, 24-bit RGB, 32-bit RGBA | 1/4/8/24/32-bit, RLE |
+| **Plugin package** ¹ | | |
+| HEIC/HEIF | HEVC 8/10-bit, tile grids, alpha, HDR gain maps | HEVC 8-bit 4:2:0, tile grids, alpha |
 
-¹ Through the [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif) plugin package, also 100% C#
-(`dotnet add package PictureSharp.Heif`).
+¹ [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif), also 100% C#: `dotnet add package PictureSharp.Heif`.
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes

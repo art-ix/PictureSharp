@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.1 (opublikowana 2026-10-17).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.2 (opublikowana 2026-10-17).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -40,7 +40,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Wydana (2026-10-16; bez ARM64) |
 | 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Wydana (2026-10-17; ARM64 zweryfikowane, bez macOS) |
 | 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Wydana (2026-10-17; bez ARM64) |
-| 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Przygotowana (bramka zaliczona; push i publikacja na decyzję użytkownika) |
+| 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Wydana (2026-10-17; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -315,7 +315,7 @@ kompilują się z rdzeniem i adapterami (pominięty tylko WPF; fragmenty `Pictur
 zepsutych linków i kotwic w 37 plikach, wiersz HEIC/HEIF w README zgodny z `PictureSharp.Heif` 0.5.0 na NuGet.
 Notatki `docs/releases/release-0.7.2.md`, `VERSION` 0.7.2, `PackageReleaseNotes`, getting-started. Bramka linux-x64:
 build bez ostrzeżeń, pełny zestaw z Oracle 7210/7217 (7 GDI+), `verify-package-consumer.sh` exit 0 bez ostrzeżeń
-(nupkg 0.7.2). Pozostało: push, tag `v0.7.2`, GitHub Release i potwierdzenie testu alokacji w CI.
+(nupkg 0.7.2). Wydana 2026-10-17 (tag `v0.7.2`, GitHub Release, NuGet); Validate w CI zielone z nowym testem.
 
 DoD:
 - Wszystkie fragmenty C# z `docs/` i README kompilują się z rdzeniem i adapterami (skrypt ekstrakcji jak przy przeglądzie
