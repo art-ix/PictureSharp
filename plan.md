@@ -39,6 +39,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
 | 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Wydana (2026-10-16; bez ARM64) |
 | 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Wydana (2026-10-17; ARM64 zweryfikowane, bez macOS) |
+| 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -212,6 +213,7 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | Liczba elementów kontenera w Identify | `ImageInfo` miało tylko `FrameCount`; to liczba klatek, nie elementów HEIF | DoD wtyczki 0.1.0: liczba elementów bez traktowania kafli/alfy/metadanych jako animacji | Zamknięte w 0.6.9: `ImageInfo.ContainerItemCount` (`int?`, null dla formatów wbudowanych) |
 | Konfiguracja przy zapisie | `Save`/`Encode`/`CreateWriter` szukają enkodera tylko w `ImageConfiguration.Default`; odczyt ma `DecoderOptions.Configuration` | `SaveAsHeic`/`ToHeic` i `Save(..., HeifEncoderOptions)` bez podmiany globalnej konfiguracji (testy wtyczki wołają enkoder bezpośrednio) | 0.7.0 (zgłoszone przez wtyczkę 2026-10-16) |
 | Kontrakt orientacji kontenera | nieopisany | `irot`/`imir` bez podwójnego obrotu z EXIF | 0.7.0 (dokumentacja) |
+| Wszystkie wykryte modele gain map | `AttachGainMap` ustawia `HdrInfo.Detected` tylko na `metadata.Kind` | HEIC z iOS 18 (ISO `tmap` i Apple `hdrgainmap` przy jednej mapie) zgłasza `Detected = Iso21496`, a JPEG z tego samego zdjęcia `Iso21496, Apple` | 0.7.1 (zgłoszone przez wtyczkę 2026-10-17) |
 | Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
 | Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
 | Opcje dekodera per wtyczka | `DecoderOptions.Ico/Png/WebP` zamknięte | np. wybór elementu | 0.8.0, jeśli potrzebne |
@@ -263,6 +265,21 @@ DoD SPI:
 
 DoD: wszystkie wcześniejsze kryteria zamknięte, pełna wspólna bramka jakości zaliczona, dokumentacja i paczka gotowe. Niezrealizowanych punktów nie oznaczamy jako ukończone; zmiana zakresu wymaga jawnej decyzji i aktualizacji planu.
 
+## 0.7.1 — poprawka SPI gain map (zgłoszona przez wtyczkę HEIF)
+
+Zgłoszenie (2026-10-17, wtyczka 0.4.0): plik HEIC z iOS 18 ma przy jednej mapie metadane ISO 21496-1 (`tmap`) i Apple
+(`hdrgainmap` z XMP), a `ImageDecodeContext.AttachGainMap` zapisuje w `HdrInfo.Detected` tylko wybrany model. `Image.Hdr`
+dla HEIC różni się więc od JPEG z tego samego zdjęcia (`Iso21496, Apple`). `Identify` może już zgłosić oba modele
+(`ToHdrInfo(size) with { Detected = … }`), ale wtyczka tego nie robi, by `Identify` i `Load` były spójne.
+
+Zakres (nazwa robocza): przeciążenie `AttachGainMap(GainMapMetadata metadata, GainMapImage map, HdrGainMapKinds detected)`;
+`detected` musi zawierać `metadata.Kind` (inaczej `ArgumentException`), `Selected` pozostaje `metadata.Kind`. Istniejąca
+sygnatura bez zmian (zgodność binarna), migawka API z samym dodatkiem.
+
+DoD: testy `PluginSpiTests` dla obu modeli (`Detected` jak w JPEG, `Selected` i wynik `ToHdr` bez zmian), walidacja
+argumentu, dokumentacja w `docs/extending-picturesharp.md`, wspólna bramka jakości. Wtyczka HEIF przechodzi na
+przeciążenie w kolejnej wersji wymagającej 0.7.1.
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -292,7 +309,7 @@ Zależności od wydań rdzenia:
 | Wersja wtyczki | Zakres | Minimalny PictureSharp |
 | --- | --- | --- |
 | 0.1.0–0.3.0 | Kontener i `Identify` (z `ContainerItemCount`), dekoder i enkoder HEVC intra, kolor, alfa, metadane | 0.6.9 |
-| 0.4.0–0.5.0 | Gain map → `ToHdr`, `ReadMetadata` bez dekodu; SIMD i pomiary | 0.7.0 (SPI wtyczek) |
+| 0.4.0–0.5.0 | Gain map → `ToHdr`, `ReadMetadata` bez dekodu; SIMD i pomiary | 0.7.0 (SPI wtyczek); pełne `HdrInfo.Detected` od 0.7.1 |
 | dalej | Zapis gain map w HEIC, ewentualnie `thmb` i opcje dekodera | 0.8.0 |
 
 ## Poza planem — kandydaci po 0.8.0
