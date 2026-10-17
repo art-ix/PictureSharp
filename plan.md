@@ -2,12 +2,12 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.6.9 (opublikowana 2026-10-16).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.1 (opublikowana 2026-10-17).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
-Dalej: zachowanie HDR przy edycji i zapis JPEG z gain map (0.6.9), stabilizacja API i SPI wtyczek dla HDR i metadanych
-(0.7.0), poprawki SPI zgłoszone przez wtyczkę HEIF i generowanie gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
+Dalej: skrócona dokumentacja i stabilizacja testów (0.7.2), poprawki SPI zgłoszone przez wtyczkę HEIF i generowanie
+gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
 (własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
 Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
 są poza planem.
@@ -39,7 +39,8 @@ pracy: `progres.md` (bez commitowania).
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
 | 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Wydana (2026-10-16; bez ARM64) |
 | 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Wydana (2026-10-17; ARM64 zweryfikowane, bez macOS) |
-| 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Przygotowana (bramka zaliczona; push i publikacja na decyzję użytkownika) |
+| 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Wydana (2026-10-17; bez ARM64) |
+| 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Przygotowana (bramka zaliczona; push i publikacja na decyzję użytkownika) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -283,17 +284,52 @@ Stan (2026-10-17): przeciążenie `AttachGainMap(metadata, map, detected)` zaimp
 notatki `docs/releases/release-0.7.1.md`, `VERSION` 0.7.1, `PackageReleaseNotes` (adaptery bez zmian). Bramka
 linux-x64: pełny zestaw 7210/7217 (7 GDI+), Oracle 192/192, bez AVX2 i bez intrinsics 6967/6967,
 `verify-package-consumer.sh` exit 0 bez ostrzeżeń (nupkg 0.7.1). ARM64 nieuruchamiane (zmiana bez kodu zależnego od
-platformy). Pozostało: push, tag `v0.7.1` i GitHub Release na decyzję użytkownika.
+platformy). Wydana 2026-10-17 (tag `v0.7.1`, GitHub Release, NuGet).
 
 DoD: testy `PluginSpiTests` dla obu modeli (`Detected` jak w JPEG, `Selected` i wynik `ToHdr` bez zmian), walidacja
 argumentu, dokumentacja w `docs/extending-picturesharp.md`, wspólna bramka jakości. Wtyczka HEIF przechodzi na
 przeciążenie w kolejnej wersji wymagającej 0.7.1.
 
+## 0.7.2 — dokumentacja i stabilizacja testów
+
+Wydanie serwisowe bez zmian publicznego API i bez zmian w kodzie biblioteki (migawka API identyczna z 0.7.1). Paczki
+wychodzą ponownie ze względu na dokumentację (README paczek, opisy, notatki wydania).
+
+Zakres:
+- Dokumentacja (już na `main` po `v0.7.1`): przewodniki w `docs/` skrócone o ~30% słów (`057b816`), różnica `Mutate`
+  i `Clone` w getting-started (`cf6e138`), wzmianka o HEIC/HEIF przez wtyczkę `PictureSharp.Heif` (`b9a2c5f`).
+  Przed wydaniem jeszcze jeden przegląd: spójność po cięciach (README repozytorium, `src/*/README.md` paczek, linki z
+  notatek wydań do nagłówków), brak treści o funkcjach, których nie ma.
+- Niestabilny test `AllocationTests.LosslessWebPEncoding_PoolsHistograms`: w CI (Validate 39021033764) 4 783 968 B
+  przy limicie 3 MiB mimo `[NotInParallel]`. Prawdopodobna przyczyna: `ArrayPool.Shared` oddaje tablice przy GC gen2,
+  więc drugi przebieg alokuje histogramy od nowa. Poprawka tylko w teście: `Measure` jako minimum z kilku przebiegów
+  (to samo dla pozostałych budżetów w klasie), limity bez zmian; potwierdzić kilkoma przebiegami pełnego zestawu.
+- Porządki w `plan.md`: bieżąca wersja, statusy 0.7.x, changelog 0.7.0–0.7.2; punkt SPI w 0.8.0 (`ReportStoredSize`,
+  opcje dekodera per wtyczka) oznaczony jako oczekujący na zgłoszenie z wtyczki, a nie zobowiązanie wydania.
+- Przygotowanie wydania: `docs/releases/release-0.7.2.md` (krótkie: Docs, Tests), `VERSION` 0.7.2,
+  `PackageReleaseNotes` biblioteki i adapterów, numer wersji w getting-started.
+
+Stan (2026-10-17): `AllocationTests.Measure` zwraca minimum z trzech przebiegów po rozgrzewce (limity bez zmian);
+10 kolejnych przebiegów `AllocationTests` 16/16. Przegląd docs: 84 fragmenty C# z `docs/`, README i `src/*/README.md`
+kompilują się z rdzeniem i adapterami (pominięty tylko WPF; fragmenty `PictureSharp.Drawing` w osobnym projekcie), 0
+zepsutych linków i kotwic w 37 plikach, wiersz HEIC/HEIF w README zgodny z `PictureSharp.Heif` 0.5.0 na NuGet.
+Notatki `docs/releases/release-0.7.2.md`, `VERSION` 0.7.2, `PackageReleaseNotes`, getting-started. Bramka linux-x64:
+build bez ostrzeżeń, pełny zestaw z Oracle 7210/7217 (7 GDI+), `verify-package-consumer.sh` exit 0 bez ostrzeżeń
+(nupkg 0.7.2). Pozostało: push, tag `v0.7.2`, GitHub Release i potwierdzenie testu alokacji w CI.
+
+DoD:
+- Wszystkie fragmenty C# z `docs/` i README kompilują się z rdzeniem i adapterami (skrypt ekstrakcji jak przy przeglądzie
+  0.7.1), `DocsExamplesTests` zielone, 0 zepsutych linków i kotwic (docs, README, `src/*/README.md`, releases).
+- Test alokacji stabilny: 10 kolejnych przebiegów `AllocationTests` i pełny zestaw w CI bez porażki.
+- Bramka: build Release bez ostrzeżeń, pełne testy i Oracle, `verify-package-consumer.sh` (nupkg 0.7.2 z README).
+  Bez przebiegów bez SIMD i bez ARM64 — kod biblioteki się nie zmienia.
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
-- Poprawki SPI zgłoszone przez wtyczkę HEIF. Kandydaci z tabeli luk to `ReportStoredSize` dla miniatur `thmb` i opcje
-  dekodera per wtyczka. Każda zmiana jest addytywna i potwierdzona potrzebą wtyczki.
+- Poprawki SPI zgłoszone przez wtyczkę HEIF — tylko na konkretne zgłoszenie. Kandydaci z tabeli luk (`ReportStoredSize`
+  dla miniatur `thmb`, opcje dekodera per wtyczka) czekają, aż wtyczka wykaże potrzebę (pomiar zysku `thmb`, wybór
+  elementu); bez zgłoszenia nie blokują 0.8.0. Każda zmiana jest addytywna.
 - Gain map w enkoderach wtyczek: publiczny odczyt załącznika obrazu (`GainMapMetadata` + `GainMapImage`) i
   `GainMapMetadata.ToIso()`, z tą samą serializacją co zapis JPEG z 0.6.9.
 - Generowanie gain map ISO z `HdrImage` i bazy SDR: port `generateGainMap` z libultrahdr 2.0.2 (Apache-2.0, notices).
@@ -362,3 +398,6 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.6.7** — SIMD dla HDR (deterministyczne Exp2/Log2) i operacji graficznych.
 - **0.6.8** — poprawki po review: AutoCrop animacji, Resize Min, TargetSize z limitem wątków, anulowanie VP8L.
 - **0.6.9** — gain map zachowana przy operacjach geometrycznych, zapis JPEG z mapą ISO 21496-1 (`JpegEncoderOptions.GainMap`), `ImageInfo.ContainerItemCount`, CLI `-hdr keep`.
+- **0.7.0** — integracja i stabilizacja API: SPI wtyczek dla gain map i metadanych, `EncoderOptions.Configuration`, testy end-to-end, CLI `metadata` i `resize -stream`, przewodnik migracji z 0.5.
+- **0.7.1** — `ImageDecodeContext.AttachGainMap(…, detected)`: wtyczki zgłaszają wszystkie wykryte modele gain map; przegląd dokumentacji.
+- **0.7.2** — dokumentacja skrócona o ~30%, `Mutate` a `Clone`, HEIC/HEIF przez wtyczkę `PictureSharp.Heif`; stabilny test alokacji. Bez zmian API.

@@ -21,7 +21,7 @@ namespace PictureSharp.Tests.Core;
 public class AllocationTests
 {
     // Alone: other tests renting large buffers from the shared ArrayPool at the same time made the encoder allocate
-    // its histograms again on a 4-core CI runner (4.8 MB).
+    // its histograms again on a 4-core CI runner (4.8 MB); see also Measure.
     [Test]
     [NotInParallel]
     public async Task LosslessWebPEncoding_PoolsHistograms()
@@ -166,12 +166,20 @@ public class AllocationTests
         await Assert.That(copy.ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
-    private static long Measure(Func<object> action)
+    // The minimum of a few runs: ArrayPool.Shared drops its arrays on a gen2 GC (memory pressure from other tests),
+    // and the run after that rents everything anew (4.8 MB instead of 1.4 MB for the lossless WebP histograms).
+    private static long Measure(Func<object> action, int runs = 3)
     {
         action();
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        action();
-        return GC.GetAllocatedBytesForCurrentThread() - before;
+        long minimum = long.MaxValue;
+        for (int i = 0; i < runs; i++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            action();
+            minimum = Math.Min(minimum, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+
+        return minimum;
     }
 
     private static Image Pan()
