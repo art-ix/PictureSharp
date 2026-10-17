@@ -1,8 +1,8 @@
 namespace PictureSharp.Formats;
 
 /// <summary>
-/// A format plugin: recognizes the format and supplies its decoder and/or encoder. Register it with
-/// <see cref="ImageConfigurationBuilder.AddFormat"/>; the members are read once, at registration.
+/// A format plugin: recognizes the format and supplies its decoder, encoder and metadata codec, each optional.
+/// Register it with <see cref="ImageConfigurationBuilder.AddFormat"/>; the members are read once, at registration.
 /// </summary>
 /// <example>
 /// <code>

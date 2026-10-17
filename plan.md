@@ -38,7 +38,7 @@ pracy: `progres.md` (bez commitowania).
 | --- | --- | --- |
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
 | 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Wydana (2026-10-16; bez ARM64) |
-| 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Planowana |
+| 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Wydana (2026-10-17; ARM64 zweryfikowane, bez macOS) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -51,6 +51,7 @@ Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD
 Krótkie zadania, które nie dodają funkcjonalności, ale blokują zamknięcie bramki 0.7.0:
 - ARM64 końcowej wersji 0.6.8 (testy, `*SimdTests`, fallbacki). Orange Pi jest wyłączony poleceniem użytkownika; bez
   jego zgody punkt przechodzi do bramki 0.7.0 i pozostaje otwarty.
+  Zamknięte (2026-10-17): ARM64 sprawdzone na wersji 0.7.0 (pełne testy i wariant bez intrinsics).
 - NuGet: obecność 0.6.8 wszystkich czterech paczek w indeksie; Trusted Publishing dla `PictureSharp.Drawing`,
   `PictureSharp.Skia` i `PictureSharp.AspNetCore`.
 - 0.6.6: decyzja użytkownika (2026-10-16) — testy na macOS odłożone do dostępności sprzętu; etap pozostaje otwarty.
@@ -178,8 +179,12 @@ orientacją i ICC, sekwencyjna animacja z maską i resize, metadane bez rekompre
 HDR → resize → zapis → libultrahdr w `HdrUltraHdrOracleTests`, wtyczka SPI HDR w `PluginSpiTests`). CLI: `metadata`,
 `resize -stream`, `-srgb`/`-max-pixels`/`-threads`; przewodniki: cli, hdr, indeks z ICO,
 `docs/migration-from-0.5.md`. Macierz: `integration-probe` (12 MP, czas/alokacje/anulowanie/szczytowy RSS względem
-0.6.9, bez regresji) i 10 000 klatek w `sequence-probe` (`docs/performance.md`). Otwarte: ujednolicenie API (przegląd
-opcji/nazw przed zamrożeniem migawki), pełna bramka z Oracle, ARM64 (zgoda użytkownika), notatki wydania.
+0.6.9, bez regresji) i 10 000 klatek w `sequence-probe` (`docs/performance.md`). Przegląd API przed
+zamrożeniem migawki (2026-10-17): opcje, nazwy, `MaxDegreeOfParallelism`, przeciążenia z `CancellationToken` i
+ścieżki zapisu z `EncoderOptions.Configuration` spójne; bez zmian sygnatur, poprawiony tylko opis `IImageFormatModule`.
+Bramka: linux-x64 7206/7213 (7 GDI+ pominiętych), Oracle 192/192, bez AVX2 i bez intrinsics 6963/6963, paczki
+trim/AOT bez ostrzeżeń; ARM64 (Orange Pi, za zgodą użytkownika) 6895/7075 (180 pominiętych: brak narzędzi Oracle,
+GDI+) i wariant bez intrinsics. Notatki: `docs/releases/release-0.7.0.md`. DoD spełnione poza 0.6.6 (macOS).
 
 ### SPI wtyczek w 0.7.0
 
