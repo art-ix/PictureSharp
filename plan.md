@@ -39,7 +39,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
 | 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Wydana (2026-10-16; bez ARM64) |
 | 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Wydana (2026-10-17; ARM64 zweryfikowane, bez macOS) |
-| 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Planowana |
+| 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Przygotowana (bramka zaliczona; push i publikacja na decyzję użytkownika) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -275,6 +275,15 @@ dla HEIC różni się więc od JPEG z tego samego zdjęcia (`Iso21496, Apple`). 
 Zakres (nazwa robocza): przeciążenie `AttachGainMap(GainMapMetadata metadata, GainMapImage map, HdrGainMapKinds detected)`;
 `detected` musi zawierać `metadata.Kind` (inaczej `ArgumentException`), `Selected` pozostaje `metadata.Kind`. Istniejąca
 sygnatura bez zmian (zgodność binarna), migawka API z samym dodatkiem.
+
+Stan (2026-10-17): przeciążenie `AttachGainMap(metadata, map, detected)` zaimplementowane (stara sygnatura deleguje z
+`metadata.Kind`; `ArgumentException` bez `metadata.Kind` lub z nieznanymi flagami), wtyczka testowa
+`GainMapContainerFormat` zgłasza modele jak czytnik JPEG, a `ToHdr_EqualsTheJpegPath` porównuje całe `Image.Hdr` z JPEG
+(11 przypadków). Migawka API z samym dodatkiem, `docs/extending-picturesharp.md` zaktualizowane. Przygotowanie wydania:
+notatki `docs/releases/release-0.7.1.md`, `VERSION` 0.7.1, `PackageReleaseNotes` (adaptery bez zmian). Bramka
+linux-x64: pełny zestaw 7210/7217 (7 GDI+), Oracle 192/192, bez AVX2 i bez intrinsics 6967/6967,
+`verify-package-consumer.sh` exit 0 bez ostrzeżeń (nupkg 0.7.1). ARM64 nieuruchamiane (zmiana bez kodu zależnego od
+platformy). Pozostało: push, tag `v0.7.1` i GitHub Release na decyzję użytkownika.
 
 DoD: testy `PluginSpiTests` dla obu modeli (`Detected` jak w JPEG, `Selected` i wynik `ToHdr` bez zmian), walidacja
 argumentu, dokumentacja w `docs/extending-picturesharp.md`, wspólna bramka jakości. Wtyczka HEIF przechodzi na

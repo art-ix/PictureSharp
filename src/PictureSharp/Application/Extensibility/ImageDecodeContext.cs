@@ -63,13 +63,36 @@ public sealed class ImageDecodeContext
     public void AttachGainMap(GainMapMetadata metadata, GainMapImage map)
     {
         ArgumentNullException.ThrowIfNull(metadata);
+        AttachGainMap(metadata, map, metadata.Kind);
+    }
+
+    /// <summary>
+    /// Attaches the HDR gain map like <see cref="AttachGainMap(GainMapMetadata, GainMapImage)"/> and reports every gain
+    /// map model the file declares for it in <see cref="HdrInfo.Detected"/>, e.g. ISO 21496-1 and Apple metadata
+    /// describing the same map. <see cref="HdrInfo.Selected"/> stays <see cref="GainMapMetadata.Kind"/>.
+    /// </summary>
+    /// <param name="metadata">The parsed metadata of the selected model.</param>
+    /// <param name="map">The gain map image.</param>
+    /// <param name="detected">The models the file declares; must include <see cref="GainMapMetadata.Kind"/>.</param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="detected"/> does not include <see cref="GainMapMetadata.Kind"/> or has undefined flags.
+    /// </exception>
+    public void AttachGainMap(GainMapMetadata metadata, GainMapImage map, HdrGainMapKinds detected)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
         ArgumentNullException.ThrowIfNull(map);
+        const HdrGainMapKinds known = HdrGainMapKinds.Iso21496 | HdrGainMapKinds.Apple | HdrGainMapKinds.UltraHdrXmp;
+        if ((detected & metadata.Kind) != metadata.Kind || (detected & ~known) != 0)
+        {
+            throw new ArgumentException("The detected gain map models must include the metadata's model and only defined flags.", nameof(detected));
+        }
+
         if (!Options.LoadGainMap)
         {
             return;
         }
 
-        HdrInfo info = metadata.ToHdrInfo(map.Size);
+        HdrInfo info = metadata.ToHdrInfo(map.Size) with { Detected = detected };
         if (!_context.Budget.TryReservePixels(map.Size.Width, map.Size.Height))
         {
             GainMap = GainMapAttachment.Failed(info, GainMapFailure.Corrupt,

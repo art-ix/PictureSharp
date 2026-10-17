@@ -182,7 +182,7 @@ public sealed class GainMapContainerFormat(bool editableMetadata = true) : IImag
                     GainMapMetadata metadata = sections.TryGetValue(Iso, out ReadOnlyMemory<byte> iso)
                         ? GainMapMetadata.ParseIso(iso.Span, sections[Channels].Span[0], sections.GetValueOrDefault(MapIcc).Span)
                         : GainMapMetadata.ParseApple(sections.GetValueOrDefault(Exif).Span, sections.GetValueOrDefault(MapXmp).Span);
-                    context.AttachGainMap(metadata, new JpegMap(map.ToArray(), size));
+                    context.AttachGainMap(metadata, new JpegMap(map.ToArray(), size), Detected(sections));
                 }
                 catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
                 {
@@ -193,6 +193,15 @@ public sealed class GainMapContainerFormat(bool editableMetadata = true) : IImag
 
             return image;
         }
+    }
+
+    // The models the repackaged JPEG declares, as the JPEG reader detects them.
+    private static HdrGainMapKinds Detected(Dictionary<byte, ReadOnlyMemory<byte>> sections)
+    {
+        ReadOnlySpan<byte> mapXmp = sections.GetValueOrDefault(MapXmp).Span;
+        return (sections.ContainsKey(Iso) ? HdrGainMapKinds.Iso21496 : 0)
+            | (mapXmp.IndexOf("HDRGainMapVersion"u8) >= 0 ? HdrGainMapKinds.Apple : 0)
+            | (mapXmp.IndexOf("hdrgm:"u8) >= 0 || sections[Base].Span.IndexOf("hdrgm:"u8) >= 0 ? HdrGainMapKinds.UltraHdrXmp : 0);
     }
 
     private sealed class JpegMap(byte[] data, Size size) : GainMapImage(size)

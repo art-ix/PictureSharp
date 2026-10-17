@@ -4,7 +4,7 @@ namespace PictureSharp.Formats;
 
 /// <summary>
 /// The pixels of a gain map stored by a format plugin, decoded only when needed: by <c>ToHdr</c> or by the first
-/// geometric edit of the base image. Pass it to <see cref="ImageDecodeContext.AttachGainMap"/>.
+/// geometric edit of the base image. Pass it to <see cref="ImageDecodeContext.AttachGainMap(GainMapMetadata, GainMapImage)"/>.
 /// </summary>
 /// <remarks>
 /// The object stays attached to the loaded image and its clones, so it must own the data it needs (not the load's input

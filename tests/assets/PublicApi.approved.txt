@@ -200,6 +200,7 @@ static class PictureSharp.Formats.Ico.IcoImageExtensions
 sealed class PictureSharp.Formats.ImageDecodeContext
     method Image DecodeEmbedded(System.ReadOnlyMemory<System.Byte> data)
     method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map)
+    method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map, HdrGainMapKinds detected)
     method System.Void DeclareGainMap(HdrGainMapKinds detected, System.String reason, System.Boolean corrupt = true)
     method System.Void ReserveMetadata(System.Int64 bytes)
     method System.Void ReservePixels(System.Int32 width, System.Int32 height, System.Int32 frames = 1)

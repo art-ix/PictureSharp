@@ -143,9 +143,12 @@ if (context.Options.LoadGainMap)
 }
 ```
 
+- When the file describes the same map in several models (iPhones since iOS 18 store ISO 21496-1 and Apple metadata),
+  attach the parsed model with `AttachGainMap(metadata, map, detected)`, where `detected` lists every model and must
+  include `metadata.Kind`; `Image.Hdr.Detected` then matches what a JPEG reports (0.7.1).
 - `GainMapMetadata.ParseIso` reads the ISO 21496-1 payload (from the minimum version on) and `ParseApple` the Apple
   model (EXIF MakerNote headroom and the map's XMP). In `Identify`, report `ImageInfo.Hdr = metadata.ToHdrInfo(mapSize)`
-  when `LoadGainMap` is set.
+  (with `Detected` set to the same models) when `LoadGainMap` is set.
 - The map's pixels count toward `MaxPixels`; a map over the limit, unparsable metadata or a base color other than
   sRGB or Display P3 is reported through `Image.Hdr` and never fails the load.
 - The base image's color comes from the returned image's ICC profile or `Chromaticities`/`Gamma`, so keep them when

@@ -75,8 +75,7 @@ public class PluginSpiTests
         using Image jpeg = Image.Load(HdrGainMapTests.File(name + ".jpg"), options);
         using Image plugin = Image.Load(Container(name), Hdr(options));
         await Assert.That(plugin.HasHdr).IsTrue().Because(plugin.Hdr?.UnsupportedReason ?? "");
-        await Assert.That((plugin.Hdr!.Selected, plugin.Hdr.GainMapSize, plugin.Hdr.Headroom))
-            .IsEqualTo((jpeg.Hdr!.Selected, jpeg.Hdr.GainMapSize, jpeg.Hdr.Headroom));
+        await Assert.That(plugin.Hdr).IsEqualTo(jpeg.Hdr);
         await Assert.That(plugin.GetPixelSpan().ToArray()).IsEquivalentTo(jpeg.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
 
         using HdrImage expected = jpeg.ToHdr();
@@ -84,6 +83,60 @@ public class PluginSpiTests
         await Assert.That((actual.Width, actual.Height, actual.ColorSpace, actual.Headroom))
             .IsEqualTo((expected.Width, expected.Height, expected.ColorSpace, expected.Headroom));
         await Assert.That(actual.GetPixelSpan().ToArray()).IsEquivalentTo(expected.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task AttachGainMap_ReportsEveryDetectedModel()
+    {
+        using Image image = Image.Load(Container("iso_and_apple"), Hdr());
+        await Assert.That(image.Hdr!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496 | HdrGainMapKinds.Apple);
+        await Assert.That(image.Hdr.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+    }
+
+    [Test]
+    [Arguments(HdrGainMapKinds.Apple)]                          // without the metadata's ISO model
+    [Arguments(HdrGainMapKinds.None)]
+    [Arguments(HdrGainMapKinds.Iso21496 | (HdrGainMapKinds)64)] // undefined flag
+    public async Task AttachGainMap_RejectsInconsistentDetectedModels(HdrGainMapKinds detected)
+    {
+        Dictionary<byte, ReadOnlyMemory<byte>> sections = GainMapContainerFormat.Read(Container("iso_mono_srgb"));
+        GainMapMetadata metadata = GainMapMetadata.ParseIso(sections[GainMapContainerFormat.Iso].Span, 1);
+        Exception? thrown = null;
+        var format = new PpmFormat();
+        format.Decoder = new AttachProbe(format.Decoder!, context =>
+        {
+            try
+            {
+                context.AttachGainMap(metadata, new SolidMap(), detected);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        });
+        var configuration = ImageConfiguration.Default.ToBuilder().AddFormat(format).Build();
+        using var source = new Image(2, 2, new Rgba32(1, 2, 3, 255));
+        byte[] ppm = source.Encode(new PpmEncoderOptions { Configuration = configuration });
+        using Image image = Image.Load(ppm, new DecoderOptions { Configuration = configuration, LoadGainMap = true });
+        await Assert.That(thrown).IsTypeOf<ArgumentException>();
+        await Assert.That(image.Hdr).IsNull();
+    }
+
+    private sealed class AttachProbe(IImageFormatDecoder inner, Action<ImageDecodeContext> probe) : IImageFormatDecoder
+    {
+        public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) => inner.Identify(data, options);
+
+        public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+        {
+            Image image = inner.Decode(data, context);
+            probe(context);
+            return image;
+        }
+    }
+
+    private sealed class SolidMap() : GainMapImage(new System.Drawing.Size(1, 1))
+    {
+        public override Image Decode(int maxDegreeOfParallelism, CancellationToken cancellationToken) => new(1, 1, new Rgba32(128, 128, 128, 255));
     }
 
     [Test]

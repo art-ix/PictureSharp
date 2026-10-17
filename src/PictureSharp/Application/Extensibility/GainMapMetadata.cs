@@ -6,7 +6,7 @@ namespace PictureSharp.Formats;
 
 /// <summary>
 /// The parsed metadata of an HDR gain map, independent of the container that stores it: the ISO 21496-1 payload or the
-/// Apple model. A format plugin parses it and attaches it with <see cref="ImageDecodeContext.AttachGainMap"/>, so
+/// Apple model. A format plugin parses it and attaches it with <see cref="ImageDecodeContext.AttachGainMap(GainMapMetadata, GainMapImage)"/>, so
 /// <c>ToHdr</c> and <c>ToneMap</c> work as for JPEG files. Immutable and thread-safe.
 /// </summary>
 public sealed class GainMapMetadata
