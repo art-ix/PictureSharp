@@ -31,5 +31,11 @@ internal static class LibraryServices
     /// <summary>The services of <paramref name="options"/>' configuration, or of the default one.</summary>
     public static ImageReadService ReaderFor(DecoderOptions? options) => (options?.Configuration ?? Configuration).Reader;
 
+    /// <summary>The write service of <paramref name="options"/>' configuration, or of the default one.</summary>
+    public static ImageWriteService WriterFor(EncoderOptions? options) => (options?.Configuration ?? Configuration).Writer;
+
+    /// <summary>The sequence service of <paramref name="options"/>' configuration, or of the default one.</summary>
+    public static ImageSequenceService SequencesFor(EncoderOptions? options) => (options?.Configuration ?? Configuration).Sequences;
+
     public static IconService Icons { get; } = new(CodecRegistry.IcoVariants(), Ports.Input, Ports.Output);
 }

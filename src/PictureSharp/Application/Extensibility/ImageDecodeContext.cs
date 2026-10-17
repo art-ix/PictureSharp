@@ -1,5 +1,7 @@
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
+using PictureSharp.Application.Extensibility;
+using PictureSharp.Domain.Hdr;
 
 namespace PictureSharp.Formats;
 
@@ -40,6 +42,66 @@ public sealed class ImageDecodeContext
     /// <summary>Charges decompressed ICC, EXIF or XMP bytes against <see cref="DecoderOptions.MaxMetadataBytes"/>.</summary>
     /// <exception cref="ImageFormatException">The metadata exceeds the remaining limit.</exception>
     public void ReserveMetadata(long bytes) => _context.Budget.ReserveMetadata(_format, bytes);
+
+    /// <summary>The gain map attached or declared during the decode; the decoder adapter completes it.</summary>
+    internal GainMapAttachment? GainMap { get; private set; }
+
+    /// <summary>
+    /// Attaches the HDR gain map of the image being decoded, so <c>ToHdr</c> and <c>ToneMap</c> can reconstruct HDR from
+    /// it. Does nothing unless <see cref="DecoderOptions.LoadGainMap"/> is set. The map's pixels are charged against
+    /// <see cref="DecoderOptions.MaxPixels"/>; a map over the limit is reported through <see cref="Image.Hdr"/> instead of
+    /// failing the load. The library then applies <see cref="DecoderOptions.TargetSize"/>,
+    /// <see cref="DecoderOptions.ApplyExifOrientation"/> and <see cref="DecoderOptions.ColorConversion"/> to the map as for
+    /// JPEG files.
+    /// </summary>
+    /// <remarks>
+    /// The base image's primaries and transfer curves come from the color description of the returned image: its ICC
+    /// profile, otherwise <see cref="ImageMetadata.Chromaticities"/> and <see cref="ImageMetadata.Gamma"/>, otherwise sRGB.
+    /// Keep that description on the image when attaching a map, also with <see cref="DecoderOptions.IgnoreMetadata"/>.
+    /// Only sRGB and Display P3 bases can be reconstructed; others are reported as unsupported.
+    /// </remarks>
+    public void AttachGainMap(GainMapMetadata metadata, GainMapImage map)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        ArgumentNullException.ThrowIfNull(map);
+        if (!Options.LoadGainMap)
+        {
+            return;
+        }
+
+        HdrInfo info = metadata.ToHdrInfo(map.Size);
+        if (!_context.Budget.TryReservePixels(map.Size.Width, map.Size.Height))
+        {
+            GainMap = GainMapAttachment.Failed(info, GainMapFailure.Corrupt,
+                new ImageFormatException(_format, "The gain map exceeds DecoderOptions.MaxPixels.").Message);
+            return;
+        }
+
+        GainMap = new GainMapAttachment
+        {
+            Info = info,
+            Parameters = metadata.Parameters,
+            Decoder = new ModuleGainMapDecoder(_format, map),
+        };
+    }
+
+    /// <summary>
+    /// Reports an HDR gain map the file declares but that cannot be used, e.g. because its metadata failed to parse.
+    /// The load still succeeds; <see cref="Image.Hdr"/> describes the problem and <c>ToHdr</c> throws
+    /// <see cref="ImageFormatException"/> (corrupt) or <see cref="NotSupportedException"/>. Does nothing unless
+    /// <see cref="DecoderOptions.LoadGainMap"/> is set.
+    /// </summary>
+    /// <param name="detected">The gain map models the file declares.</param>
+    /// <param name="reason">Why the map cannot be used, for diagnostics.</param>
+    /// <param name="corrupt">True for corrupt data, false for a valid but unsupported map.</param>
+    public void DeclareGainMap(HdrGainMapKinds detected, string reason, bool corrupt = true)
+    {
+        ArgumentNullException.ThrowIfNull(reason);
+        if (Options.LoadGainMap)
+        {
+            GainMap = GainMapAttachment.Failed(new HdrInfo { Detected = detected }, corrupt ? GainMapFailure.Corrupt : GainMapFailure.Unsupported, reason);
+        }
+    }
 
     /// <summary>
     /// Decodes an image embedded in a container format with the codecs of the same configuration, sharing this

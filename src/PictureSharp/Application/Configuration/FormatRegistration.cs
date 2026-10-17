@@ -18,6 +18,9 @@ internal sealed record FormatRegistration(
 
     public IImageMetadataCodec? MetadataCodec { get; init; }
 
+    /// <summary>Creates a metadata codec bound to the configuration's resolver; takes precedence over <see cref="MetadataCodec"/>.</summary>
+    public Func<ICodecResolver, IImageMetadataCodec?>? CreateMetadataCodec { get; init; }
+
     public ImageFormat Format => Detector.Format;
 
     /// <summary>Validates a plugin and snapshots its members, so later changes to the module object have no effect.</summary>
@@ -43,9 +46,13 @@ internal sealed record FormatRegistration(
             throw new ArgumentException($"The {format.Name} encoder's default options must be for the {format.Name} format.", nameof(module));
         }
 
+        IImageFormatMetadataCodec? metadataCodec = module.MetadataCodec;
         return new(
             new ModuleDetector(module, format, headerSize),
             codecs => decoder is null ? null : new ModuleDecoder(format, decoder, codecs),
-            _ => encoder is null ? null : new ModuleEncoder(format, encoder));
+            _ => encoder is null ? null : new ModuleEncoder(format, encoder))
+        {
+            CreateMetadataCodec = metadataCodec is null ? null : codecs => new ModuleMetadataCodec(format, metadataCodec, codecs),
+        };
     }
 }

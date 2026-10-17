@@ -33,6 +33,7 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     property System.Int64 MaxPixels { get; init; }
     property static DecoderOptions Default { get; }
 abstract record EncoderOptions : System.IEquatable<EncoderOptions>
+    property ImageConfiguration? Configuration { get; init; }
     property ImageFormat Format { get; }
     property MetadataKinds Metadata { get; init; }
 enum ExifGpsAltitudeReference
@@ -99,6 +100,16 @@ static class PictureSharp.Formats.Bmp.BmpImageExtensions
     method [Extension] static System.Threading.Tasks.Task SaveAsBmpAsync(Image image, System.String path, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method [Extension] static System.Void SaveAsBmp(Image image, System.IO.Stream stream, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null)
     method [Extension] static System.Void SaveAsBmp(Image image, System.String path, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null)
+abstract class PictureSharp.Formats.GainMapImage
+    method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
+    property System.Drawing.Size Size { get; }
+sealed class PictureSharp.Formats.GainMapMetadata
+    method HdrInfo ToHdrInfo(System.Drawing.Size mapSize)
+    method static PictureSharp.Formats.GainMapMetadata ParseApple(System.ReadOnlySpan<System.Byte> exif, System.ReadOnlySpan<System.Byte> mapXmp)
+    method static PictureSharp.Formats.GainMapMetadata ParseIso(System.ReadOnlySpan<System.Byte> metadata, System.Int32 mapChannels, System.ReadOnlySpan<System.Byte> alternateIcc = default)
+    property HdrGainMapKinds Kind { get; }
+    property System.Int32 ChannelCount { get; }
+    property System.Single Headroom { get; }
 enum PictureSharp.Formats.Gif.GifDither
     None = 0
     FloydSteinberg = 1
@@ -130,11 +141,15 @@ interface PictureSharp.Formats.IImageFormatEncoder
     method System.Void Encode(Image image, System.IO.Stream output, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
 interface PictureSharp.Formats.IImageFormatEncoder<TOptions> : PictureSharp.Formats.IImageFormatEncoder
     method System.Void Encode(Image image, System.IO.Stream output, TOptions options, System.Threading.CancellationToken cancellationToken)
+interface PictureSharp.Formats.IImageFormatMetadataCodec
+    method ImageMetadata Read(System.ReadOnlyMemory<System.Byte> data, PictureSharp.Formats.ImageDecodeContext context)
+    method System.Byte[] Rewrite(System.ReadOnlyMemory<System.Byte> data, ImageMetadata original, ImageMetadata metadata, PictureSharp.Formats.ImageDecodeContext context)
 interface PictureSharp.Formats.IImageFormatModule
     method System.Boolean IsSupported(System.ReadOnlySpan<System.Byte> header)
     property ImageFormat Format { get; }
     property PictureSharp.Formats.IImageFormatDecoder? Decoder { get; }
     property PictureSharp.Formats.IImageFormatEncoder? Encoder { get; }
+    property PictureSharp.Formats.IImageFormatMetadataCodec? MetadataCodec { get; }
     property System.Int32 HeaderSize { get; }
 sealed record PictureSharp.Formats.Ico.IcoDecoderOptions : System.IEquatable<PictureSharp.Formats.Ico.IcoDecoderOptions>
     ctor()
@@ -184,6 +199,8 @@ static class PictureSharp.Formats.Ico.IcoImageExtensions
     method [Extension] static System.Void SaveAsIco(Image image, System.String path, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null)
 sealed class PictureSharp.Formats.ImageDecodeContext
     method Image DecodeEmbedded(System.ReadOnlyMemory<System.Byte> data)
+    method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map)
+    method System.Void DeclareGainMap(HdrGainMapKinds detected, System.String reason, System.Boolean corrupt = true)
     method System.Void ReserveMetadata(System.Int64 bytes)
     method System.Void ReservePixels(System.Int32 width, System.Int32 height, System.Int32 frames = 1)
     method System.Void ThrowIfCancellationRequested()

@@ -186,7 +186,30 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
         throw new InvalidOperationException("HDR reconstruction failed.");
 }
 
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, a format plugin and a frame processor.");
+// Plugin SPI 0.7.0: encoding through EncoderOptions.Configuration, a plugin gain map and metadata without pixels.
+{
+    ImageConfiguration plugins = builtIn.ToBuilder().AddFormat(new RawFormat()).AddFormat(new HdrRawFormat()).Build();
+    using Image rawCopy = Image.Load(source.Encode(new RawEncoderOptions { Configuration = plugins }), new DecoderOptions { Configuration = plugins });
+    if (!rawCopy.GetPixelSpan().SequenceEqual(source.GetPixelSpan())) throw new InvalidOperationException("Plugin encoder configuration failed.");
+    static byte[] U32(uint v) => [(byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v];
+    byte[] iso = [0, 0, 0, 0, 0x40, .. U32(0), .. U32(1), .. U32(2), .. U32(1), .. U32(0), .. U32(1), .. U32(2), .. U32(1),
+        .. U32(1), .. U32(1), .. U32(0), .. U32(1), .. U32(0), .. U32(1)];
+    using var mapImage = new Image(8, 6, new Rgba32(255, 255, 255, 255));
+    byte[] file = HdrRawFormat.Write(source, mapImage, iso, "<x:xmpmeta>raw2</x:xmpmeta>"u8.ToArray());
+    var options = new DecoderOptions { Configuration = plugins, LoadGainMap = true };
+    using Image hdrSource = Image.Load(file, options);
+    if (!hdrSource.HasHdr || Image.Identify(file, options).Hdr?.Headroom != 4f)
+        throw new InvalidOperationException($"Plugin gain map failed: {hdrSource.Hdr?.UnsupportedReason}");
+    using HdrImage hdr = hdrSource.ToHdr();
+    using HdrImage sdrLinear = hdrSource.ToHdr(new HdrOptions { TargetHeadroom = 1 });
+    if (hdr.Headroom != 4f || MathF.Abs((hdr[0, 0].G / sdrLinear[0, 0].G) - 4f) > 1e-3f)
+        throw new InvalidOperationException("Plugin HDR reconstruction failed.");
+    byte[] edited = Image.EditMetadata(file, metadata => metadata.Xmp = "<x:xmpmeta>edited</x:xmpmeta>"u8.ToArray(), options);
+    if (!Image.ReadMetadata(edited, options).Xmp.AsSpan().SequenceEqual("<x:xmpmeta>edited</x:xmpmeta>"u8))
+        throw new InvalidOperationException("Plugin metadata codec failed.");
+}
+
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata) and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>
@@ -209,6 +232,75 @@ sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEn
     {
         output.Write([.. "RAW1"u8, (byte)image.Width, (byte)image.Height]);
         output.Write(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan()));
+    }
+}
+
+/// <summary>
+/// "RAW2", base and map sizes, ISO 21496-1 and XMP lengths as bytes, base and map RGBA, the ISO payload and XMP:
+/// exercises plugin gain maps and metadata codecs under trimming and AOT.
+/// </summary>
+sealed class HdrRawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatMetadataCodec
+{
+    public static ImageFormat Kind { get; } = ImageFormat.Create("RAW2", "image/x-raw2", ".raw2");
+    public ImageFormat Format => Kind;
+    public int HeaderSize => 4;
+    public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("RAW2"u8);
+    public IImageFormatDecoder Decoder => this;
+    public IImageFormatMetadataCodec MetadataCodec => this;
+
+    public static byte[] Write(Image image, Image map, byte[] iso, byte[] xmp) =>
+        [.. "RAW2"u8, (byte)image.Width, (byte)image.Height, (byte)map.Width, (byte)map.Height, (byte)iso.Length, (byte)xmp.Length,
+            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan()),
+            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(map.GetPixelSpan()), .. iso, .. xmp];
+
+    private static (int Base, int Map, int Iso, int Xmp) Layout(ReadOnlySpan<byte> data)
+    {
+        int baseLength = data[4] * data[5] * 4, mapLength = data[6] * data[7] * 4;
+        return (10, 10 + baseLength, 10 + baseLength + mapLength, 10 + baseLength + mapLength + data[8]);
+    }
+
+    public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
+    {
+        ReadOnlySpan<byte> span = data.Span;
+        var info = new ImageInfo { Format = Kind, Width = span[4], Height = span[5] };
+        if (!options.LoadGainMap) return info;
+        (_, _, int iso, _) = Layout(span);
+        return info with { Hdr = GainMapMetadata.ParseIso(span.Slice(iso, span[8]), 1).ToHdrInfo(new(span[6], span[7])) };
+    }
+
+    public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+    {
+        ReadOnlySpan<byte> span = data.Span;
+        (int baseStart, int mapStart, int iso, _) = Layout(span);
+        context.ReservePixels(span[4], span[5]);
+        Image image = Image.LoadPixelData(span.Slice(baseStart, span[4] * span[5] * 4), span[4], span[5], PixelFormat.Rgba32);
+        context.AttachGainMap(GainMapMetadata.ParseIso(span.Slice(iso, span[8]), 1),
+            new RawMap(span.Slice(mapStart, span[6] * span[7] * 4).ToArray(), new(span[6], span[7])));
+        return image;
+    }
+
+    public ImageMetadata Read(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+    {
+        ReadOnlySpan<byte> span = data.Span;
+        (_, _, _, int xmp) = Layout(span);
+        context.ReserveMetadata(span[9]);
+        return new ImageMetadata { Xmp = span.Slice(xmp, span[9]).ToArray() };
+    }
+
+    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, ImageDecodeContext context)
+    {
+        ReadOnlySpan<byte> span = data.Span;
+        (_, _, _, int xmp) = Layout(span);
+        byte[] value = metadata.Xmp ?? [];
+        byte[] result = [.. span[..xmp], .. value];
+        result[9] = (byte)value.Length;
+        return result;
+    }
+
+    private sealed class RawMap(byte[] pixels, System.Drawing.Size size) : GainMapImage(size)
+    {
+        public override Image Decode(int maxDegreeOfParallelism, CancellationToken cancellationToken) =>
+            Image.LoadPixelData(pixels, Size.Width, Size.Height, PixelFormat.Rgba32);
     }
 }
 

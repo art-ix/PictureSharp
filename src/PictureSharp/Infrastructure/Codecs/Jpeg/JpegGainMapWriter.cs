@@ -137,6 +137,15 @@ internal static class JpegGainMapWriter
                 : default;
         }
 
+        if (attachment.Decoder is not JpegGainMapDecoder)
+        {
+            // Maps attached by format plugins carry no JPEG payload to copy; writing them needs the ISO serialization
+            // planned for 0.8.0.
+            return require
+                ? throw new NotSupportedException("Only gain maps loaded from JPEG files can be written to JPEG.")
+                : default;
+        }
+
         if (Split(attachment.MapData.Span) is not { IsoPayload: not null } source)
         {
             return require ? throw new ImageFormatException(ImageFormat.Jpeg, "The HDR gain map image is corrupt.") : default;

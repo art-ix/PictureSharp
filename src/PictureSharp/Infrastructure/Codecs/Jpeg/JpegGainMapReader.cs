@@ -15,7 +15,7 @@ namespace PictureSharp.Infrastructure.Codecs.Jpeg;
 /// secondary image becomes a gain map. Never throws for HDR data: problems become a failed attachment, so the base
 /// image loads as before.
 /// </summary>
-internal static partial class JpegGainMapReader
+internal static class JpegGainMapReader
 {
     private static ReadOnlySpan<byte> ExifPrefix => "Exif\0\0"u8;
     private static ReadOnlySpan<byte> XmpPrefix => "http://ns.adobe.com/xap/1.0/\0"u8;
@@ -151,7 +151,7 @@ internal static partial class JpegGainMapReader
             // ISO wins; corrupt or unsupported ISO metadata never falls back to the Apple model.
             if (primary.Iso is { } primaryIso)
             {
-                ReadIsoVersion(file[primaryIso]);
+                GainMapMetadataParser.ReadIsoVersion(file[primaryIso], ImageFormat.Jpeg);
             }
 
             if (m.Iso is not { } iso)
@@ -159,11 +159,11 @@ internal static partial class JpegGainMapReader
                 throw Error("The gain map image has no ISO 21496-1 metadata.");
             }
 
-            parameters = ReadIso(file[iso], m.Components, file, m);
+            parameters = GainMapMetadataParser.ReadIso(file[iso], m.Components, JoinIcc(file, m.IccChunks), ImageFormat.Jpeg);
         }
         else if ((detected & HdrGainMapKinds.Apple) != 0)
         {
-            parameters = ReadApple(file, primary, mapXmp);
+            parameters = GainMapMetadataParser.ReadApple(primary.Exif is { } exif ? file[exif] : default, mapXmp, ImageFormat.Jpeg);
         }
         else
         {
@@ -200,25 +200,8 @@ internal static partial class JpegGainMapReader
     private static ImageFormatException Error(string message) => new(ImageFormat.Jpeg, message);
 
     /// <summary>The primaries and linearization of the base image from its ICC profile; no profile means sRGB.</summary>
-    private static (HdrColorSpace Space, float[]? Linearization) ReadBaseColor(ReadOnlySpan<byte> file, JpegHeader primary)
-    {
-        if (JoinIcc(file, primary.IccChunks) is not { } icc)
-        {
-            return (HdrColorSpace.LinearSrgb, null);
-        }
-
-        IccColorModel model = IccProfileParser.Parse(icc, ImageFormat.Jpeg);
-        if (model.Colorants is not { } colorants || HdrColorSpaces.Classify(colorants) is not { } space)
-        {
-            throw new NotSupportedException("HDR reconstruction supports base images in sRGB or Display P3 only.");
-        }
-
-        var linear = new float[768];
-        model.Red.Sample8().CopyTo(linear, 0);
-        model.Green!.Sample8().CopyTo(linear, 256);
-        model.Blue!.Sample8().CopyTo(linear, 512);
-        return (space, linear);
-    }
+    private static (HdrColorSpace Space, float[]? Linearization) ReadBaseColor(ReadOnlySpan<byte> file, JpegHeader primary) =>
+        HdrBaseColor.FromModel(JoinIcc(file, primary.IccChunks) is { } icc ? IccProfileParser.Parse(icc, ImageFormat.Jpeg) : null);
 
     /// <summary>Joins the APP2 chunks of an ICC profile; an incomplete or inconsistent set counts as none.</summary>
     private static byte[]? JoinIcc(ReadOnlySpan<byte> file, List<Range> chunks)

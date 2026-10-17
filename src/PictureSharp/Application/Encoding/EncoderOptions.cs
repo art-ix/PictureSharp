@@ -20,4 +20,17 @@ public abstract record EncoderOptions
         get;
         init => field = (value & ~MetadataKinds.All) == 0 ? value : throw new ArgumentOutOfRangeException(nameof(Metadata), value, "Unknown metadata kind.");
     } = MetadataKinds.All;
+
+    /// <summary>
+    /// The formats a save with these options may use; the encoder of <see cref="Format"/> is taken from it. Default:
+    /// null, which uses <c>ImageConfiguration.Default</c> at the time of the call, as
+    /// <see cref="DecoderOptions.Configuration"/> does for loading.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var formats = ImageConfiguration.Default.ToBuilder().AddFormat(new TgaFormat()).Build();
+    /// image.Save("picture.tga", new TgaEncoderOptions { Configuration = formats });
+    /// </code>
+    /// </example>
+    public ImageConfiguration? Configuration { get; init; }
 }

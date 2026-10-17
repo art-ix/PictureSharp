@@ -45,6 +45,9 @@ internal interface IGainMapDecoder
 {
     /// <summary>Decodes <paramref name="data"/> reduced by <paramref name="scale"/> (1, 2, 4 or 8) in the inverse DCT.</summary>
     DecodedGainMap Decode(ReadOnlyMemory<byte> data, int scale, int maxDegreeOfParallelism, CancellationToken cancellationToken);
+
+    /// <summary>Whether <see cref="Decode"/> accepts scales above 1; otherwise the map is always decoded at full size.</summary>
+    bool CanScale => true;
 }
 
 /// <summary>Map samples as decoded (gray maps repeat the value in R, G and B).</summary>

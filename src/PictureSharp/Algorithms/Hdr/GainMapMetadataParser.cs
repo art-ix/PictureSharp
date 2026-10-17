@@ -2,21 +2,24 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using PictureSharp.Algorithms.ColorManagement;
-using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Domain.Hdr;
 
-namespace PictureSharp.Infrastructure.Codecs.Jpeg;
+namespace PictureSharp.Algorithms.Hdr;
 
-internal static partial class JpegGainMapReader
+/// <summary>
+/// Parses gain map metadata independently of the container: the ISO 21496-1 binary payload and the Apple model
+/// (MakerNote headroom and the map's XMP). Shared by the JPEG reader and format plugins; errors carry the format given.
+/// </summary>
+internal static class GainMapMetadataParser
 {
     // ------------------------------------------------------------------ ISO 21496-1
 
     /// <summary>Checks the version of the ISO 21496-1 segment (the primary image carries only the version).</summary>
-    private static void ReadIsoVersion(ReadOnlySpan<byte> s)
+    public static void ReadIsoVersion(ReadOnlySpan<byte> s, ImageFormat? format)
     {
         if (s.Length < 4)
         {
-            throw Error("The ISO 21496-1 segment is truncated.");
+            throw new ImageFormatException(format, "The ISO 21496-1 segment is truncated.");
         }
 
         int minimumVersion = BinaryPrimitives.ReadUInt16BigEndian(s);
@@ -30,12 +33,13 @@ internal static partial class JpegGainMapReader
     // writer versions, a flags byte (0x80 multi-channel, 0x40 use base colour space, 0x08 common denominator,
     // 0x04 backward direction), log2 headrooms of the base and alternate renditions, then per channel the log2 gain
     // map min/max, gamma and the base/alternate offsets as rationals.
-    private static GainMapParameters ReadIso(ReadOnlySpan<byte> s, int mapComponents, ReadOnlySpan<byte> file, JpegHeader map)
+    // alternateIcc is the gain map's ICC profile (empty when it has none), needed unless the base colour space is used.
+    public static GainMapParameters ReadIso(ReadOnlySpan<byte> s, int mapComponents, ReadOnlySpan<byte> alternateIcc, ImageFormat? format)
     {
-        ReadIsoVersion(s);
+        ReadIsoVersion(s, format);
         if (s.Length < 5)
         {
-            throw Error("The gain map image has no ISO 21496-1 metadata, only a version.");
+            throw Error(format, "The gain map image has no ISO 21496-1 metadata, only a version.");
         }
 
         byte flags = s[4];
@@ -50,15 +54,15 @@ internal static partial class JpegGainMapReader
         int needed = commonDenominator ? 5 + 12 + (channels * 20) : 5 + 16 + (channels * 40);
         if (s.Length < needed)
         {
-            throw Error("The ISO 21496-1 metadata is truncated.");
+            throw Error(format, "The ISO 21496-1 metadata is truncated.");
         }
 
         if (channels == 3 && mapComponents != 3)
         {
-            throw Error("The ISO 21496-1 metadata describes three channels but the gain map is gray.");
+            throw Error(format, "The ISO 21496-1 metadata describes three channels but the gain map is gray.");
         }
 
-        var reader = new RationalReader(s[5..], commonDenominator);
+        var reader = new RationalReader(s[5..], commonDenominator, format);
         float baseHeadroom = reader.Unsigned();
         float alternateHeadroom = reader.Unsigned();
         float[] min = new float[3], max = new float[3], gamma = new float[3], baseOffset = new float[3], alternateOffset = new float[3];
@@ -72,7 +76,7 @@ internal static partial class JpegGainMapReader
             // The checks of libultrahdr v2.0.2 uhdr_validate_gainmap_metadata_descriptor.
             if (!(gamma[c] > 0) || min[c] > max[c] || baseOffset[c] < 0 || alternateOffset[c] < 0 || Math.Abs(min[c]) > 64 || Math.Abs(max[c]) > 64)
             {
-                throw Error("The ISO 21496-1 metadata has an invalid gamma, gain range or offset.");
+                throw Error(format, "The ISO 21496-1 metadata has an invalid gamma, gain range or offset.");
             }
         }
 
@@ -83,7 +87,7 @@ internal static partial class JpegGainMapReader
 
         if (baseHeadroom < 0 || alternateHeadroom > 64)
         {
-            throw Error("The ISO 21496-1 metadata has an invalid headroom.");
+            throw Error(format, "The ISO 21496-1 metadata has an invalid headroom.");
         }
 
         if (!(alternateHeadroom > baseHeadroom))
@@ -96,8 +100,8 @@ internal static partial class JpegGainMapReader
         {
             // The alternate rendition's primaries come from the map's ICC profile; its transfer curve (Apple writes a
             // PQ-like "Adaptive Gain Curve") does not apply, map samples are plain numbers.
-            if (JoinIcc(file, map.IccChunks) is not { } icc
-                || IccProfileParser.Parse(icc, ImageFormat.Jpeg).Colorants is not { } colorants
+            if (alternateIcc.IsEmpty
+                || IccProfileParser.Parse(alternateIcc, format).Colorants is not { } colorants
                 || HdrColorSpaces.Classify(colorants) is not { } space)
             {
                 throw new NotSupportedException("The ISO 21496-1 alternate color space must be sRGB or Display P3, declared by the gain map's ICC profile.");
@@ -122,7 +126,7 @@ internal static partial class JpegGainMapReader
     }
 
     /// <summary>Reads ISO 21496-1 fractions, with or without a common denominator.</summary>
-    private ref struct RationalReader(ReadOnlySpan<byte> data, bool common)
+    private ref struct RationalReader(ReadOnlySpan<byte> data, bool common, ImageFormat? format)
     {
         private readonly ReadOnlySpan<byte> _data = data;
         private readonly uint _denominator = common ? BinaryPrimitives.ReadUInt32BigEndian(data) : 0;
@@ -145,7 +149,7 @@ internal static partial class JpegGainMapReader
 
             if (denominator == 0)
             {
-                throw Error("The ISO 21496-1 metadata has a zero denominator.");
+                throw Error(format, "The ISO 21496-1 metadata has a zero denominator.");
             }
 
             return (signed ? (double)(int)raw : raw) / denominator;
@@ -158,19 +162,20 @@ internal static partial class JpegGainMapReader
     /// The Apple model: the headroom from MakerNote tags 33 and 48 (or, without them, the map's
     /// <c>HDRGainMapHeadroom</c> XMP), versions 1.x and 2.x of <c>HDRGainMapVersion</c>.
     /// </summary>
-    private static GainMapParameters ReadApple(ReadOnlySpan<byte> file, JpegHeader primary, ReadOnlySpan<byte> mapXmp)
+    // exif is the TIFF structure of the base image's EXIF block (empty when it has none).
+    public static GainMapParameters ReadApple(ReadOnlySpan<byte> exif, ReadOnlySpan<byte> mapXmp, ImageFormat? format)
     {
         if (ReadXmpNumber(mapXmp, "HDRGainMapVersion"u8) is not { } version || version < 0x10000 || version >= 0x30000)
         {
             throw new NotSupportedException("This Apple HDRGainMapVersion is not supported.");
         }
 
-        double? headroom = primary.Exif is { } exif && ReadAppleMakerNote(file[exif]) is ({ } maker33, { } maker48)
+        double? headroom = ReadAppleMakerNote(exif) is ({ } maker33, { } maker48)
             ? AppleHeadroom(maker33, maker48)
             : ReadXmpNumber(mapXmp, "HDRGainMapHeadroom"u8);
         if (headroom is not { } h || !double.IsFinite(h) || h < 1 || h > 1e6)
         {
-            throw Error("The Apple HDR headroom (MakerNote tags 33 and 48) is missing or invalid.");
+            throw Error(format, "The Apple HDR headroom (MakerNote tags 33 and 48) is missing or invalid.");
         }
 
         return new GainMapParameters
@@ -181,7 +186,7 @@ internal static partial class JpegGainMapReader
     }
 
     // The headroom formula of "Applying Apple HDR effect to your photos" (Apple developer documentation).
-    internal static double AppleHeadroom(double maker33, double maker48)
+    public static double AppleHeadroom(double maker33, double maker48)
     {
         double stops = maker33 < 1.0
             ? (maker48 <= 0.01 ? (-20.0 * maker48) + 1.8 : (-0.101 * maker48) + 1.601)
@@ -300,4 +305,9 @@ internal static partial class JpegGainMapReader
 
         return null;
     }
+    private static ImageFormatException Error(ImageFormat? format, string message) => new(format, message);
+
+    private static ushort Read16(ReadOnlySpan<byte> s, bool big) => big ? BinaryPrimitives.ReadUInt16BigEndian(s) : BinaryPrimitives.ReadUInt16LittleEndian(s);
+
+    private static uint Read32(ReadOnlySpan<byte> s, bool big) => big ? BinaryPrimitives.ReadUInt32BigEndian(s) : BinaryPrimitives.ReadUInt32LittleEndian(s);
 }

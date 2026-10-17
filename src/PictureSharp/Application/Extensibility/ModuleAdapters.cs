@@ -1,5 +1,7 @@
+using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
+using PictureSharp.Domain.Hdr;
 using PictureSharp.Formats;
 
 namespace PictureSharp.Application.Extensibility;
@@ -31,8 +33,10 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
 
     public DecodedImage Decode(ReadOnlyMemory<byte> data, DecodeContext context)
     {
-        Image image = decoder.Decode(data, new ImageDecodeContext(context, codecs, format))
+        var moduleContext = new ImageDecodeContext(context, codecs, format);
+        Image image = decoder.Decode(data, moduleContext)
             ?? throw new InvalidOperationException($"The {format.Name} decoder returned no image.");
+        GainMapAttachment? gainMap;
         try
         {
             if (image.FrameCount > context.Options.MaxFrames)
@@ -42,6 +46,7 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
 
             context.Options.ValidateFrames(format, image.Width, image.Height, image.FrameCount);
             image.SourceFormat = format;
+            gainMap = WithBaseColor(moduleContext.GainMap, image);
         }
         catch
         {
@@ -49,7 +54,35 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
             throw;
         }
 
-        return new(image, image.Size);
+        return new(image, image.Size) { GainMap = gainMap };
+    }
+
+    // The base primaries and linearization come from the decoded image's color description, as for JPEG.
+    private GainMapAttachment? WithBaseColor(GainMapAttachment? gainMap, Image image)
+    {
+        if (gainMap is not { CanDecode: true })
+        {
+            return gainMap;
+        }
+
+        try
+        {
+            (HdrColorSpace space, float[]? linearization) = HdrBaseColor.FromMetadata(image.Metadata, format);
+            return gainMap with
+            {
+                Parameters = gainMap.Parameters! with { MultiplicationSpace = gainMap.Parameters.MultiplicationSpace ?? space },
+                BaseSpace = space,
+                BaseLinearization = linearization,
+            };
+        }
+        catch (NotSupportedException ex)
+        {
+            return GainMapAttachment.Failed(gainMap.Info, GainMapFailure.Unsupported, ex.Message);
+        }
+        catch (Exception ex) when (CodecErrors.IsCorruptDataException(ex))
+        {
+            return GainMapAttachment.Failed(gainMap.Info, GainMapFailure.Corrupt, ex.Message);
+        }
     }
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
@@ -65,4 +98,58 @@ internal sealed class ModuleEncoder(ImageFormat format, IImageFormatEncoder enco
 
     public void Encode(Image image, Stream output, EncoderOptions options, CancellationToken cancellationToken) =>
         encoder.Encode(image, output, options, cancellationToken);
+}
+
+/// <summary>Adapts a plugin's gain map to the reconstruction, which then never asks for a reduced decode.</summary>
+internal sealed class ModuleGainMapDecoder(ImageFormat format, GainMapImage map) : IGainMapDecoder
+{
+    public bool CanScale => false;
+
+    public DecodedGainMap Decode(ReadOnlyMemory<byte> data, int scale, int maxDegreeOfParallelism, CancellationToken cancellationToken)
+    {
+        Image? decoded;
+        try
+        {
+            decoded = map.Decode(maxDegreeOfParallelism, cancellationToken);
+        }
+        catch (ImageFormatException ex) when (ex.Format != format)
+        {
+            // A map stored in another format (an embedded JPEG or HEVC item) is reported as this container's data.
+            throw new ImageFormatException(format, "The HDR gain map image is corrupt.", ex);
+        }
+
+        using Image image = decoded ?? throw new ImageFormatException(format, "The gain map decoder returned no image.");
+        if (image.Width != map.Size.Width || image.Height != map.Size.Height)
+        {
+            throw new ImageFormatException(format, "The decoded HDR gain map does not match its declared size.");
+        }
+
+        // The image is disposed here, so the attachment keeps its own copy of the pixels.
+        var pixels = GC.AllocateUninitializedArray<Rgba32>(image.Width * image.Height);
+        image.Frames[0].Pixels.AsSpan(0, pixels.Length).CopyTo(pixels);
+        return new DecodedGainMap(pixels, image.Width, image.Height);
+    }
+}
+
+/// <summary>Adapts a plugin's metadata codec; nested decodes in its context use the formats it was registered with.</summary>
+internal sealed class ModuleMetadataCodec(ImageFormat format, IImageFormatMetadataCodec codec, ICodecResolver codecs) : IImageMetadataCodec
+{
+    public ImageMetadata Read(ReadOnlyMemory<byte> data, DecodeContext context) =>
+        codec.Read(data, new ImageDecodeContext(context, codecs, format))
+        ?? throw new InvalidOperationException($"The {format.Name} metadata codec returned no metadata.");
+
+    public byte[] Rewrite(ReadOnlyMemory<byte> data, ImageMetadata original, ImageMetadata metadata, DecodeContext context)
+    {
+        byte[]? result;
+        try
+        {
+            result = codec.Rewrite(data, original, metadata, new ImageDecodeContext(context, codecs, format));
+        }
+        catch (Exception ex) when (CodecErrors.IsCorruptDataException(ex))
+        {
+            throw CodecErrors.CorruptData(format, ex);
+        }
+
+        return result ?? throw new InvalidOperationException($"The {format.Name} metadata codec returned no data.");
+    }
 }

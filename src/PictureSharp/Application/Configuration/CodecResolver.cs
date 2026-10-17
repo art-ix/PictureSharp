@@ -24,7 +24,8 @@ internal sealed class CodecResolver : ICodecResolver
         for (int i = 0; i < _codecs.Length; i++)
         {
             FormatRegistration registration = registrations[i];
-            _codecs[i] = new(registration.Detector, registration.CreateDecoder(this), registration.CreateEncoder(this), registration.MetadataCodec);
+            _codecs[i] = new(registration.Detector, registration.CreateDecoder(this), registration.CreateEncoder(this),
+                registration.CreateMetadataCodec?.Invoke(this) ?? registration.MetadataCodec);
         }
 
         Formats = Array.AsReadOnly(_codecs.Select(static codec => codec.Format).ToArray());

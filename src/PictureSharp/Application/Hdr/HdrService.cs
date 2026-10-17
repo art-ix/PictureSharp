@@ -44,7 +44,10 @@ internal static class HdrService
 
     private static DecodedGainMap DecodeMap(Image image, GainMapAttachment attachment, HdrOptions options, CancellationToken cancellationToken)
     {
-        int scale = GainMapReconstructor.MapScale(attachment.Info.GainMapSize, image.Size, attachment.StoredSize, attachment.AppliedOrientation);
+        ImageFormat format = image.SourceFormat ?? ImageFormat.Jpeg;
+        int scale = attachment.Decoder!.CanScale
+            ? GainMapReconstructor.MapScale(attachment.Info.GainMapSize, image.Size, attachment.StoredSize, attachment.AppliedOrientation)
+            : 1;
         DecodedGainMap map;
         try
         {
@@ -52,7 +55,7 @@ internal static class HdrService
         }
         catch (Exception ex) when (CodecErrors.IsCorruptDataException(ex))
         {
-            throw new ImageFormatException(ImageFormat.Jpeg, "The HDR gain map image is corrupt.", ex);
+            throw new ImageFormatException(format, "The HDR gain map image is corrupt.", ex);
         }
         catch (AggregateException ex) when (CodecErrors.Canceled(ex, cancellationToken))
         {
@@ -61,7 +64,7 @@ internal static class HdrService
 
         if (map.Width != (attachment.Info.GainMapSize.Width + scale - 1) / scale || map.Height != (attachment.Info.GainMapSize.Height + scale - 1) / scale)
         {
-            throw new ImageFormatException(ImageFormat.Jpeg, "The decoded HDR gain map does not match its header.");
+            throw new ImageFormatException(format, "The decoded HDR gain map does not match its header.");
         }
 
         return map;

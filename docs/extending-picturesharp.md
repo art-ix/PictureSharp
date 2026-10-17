@@ -62,7 +62,12 @@ image.Save("copy.tga", new TgaEncoderOptions { Rle = false });
 
 var withTga = ImageConfiguration.Default.ToBuilder().AddFormat(new TgaFormat()).Build();
 using var local = Image.Load(bytes, new DecoderOptions { Configuration = withTga });
+local.Save("local.tga", new TgaEncoderOptions { Configuration = withTga });
 ```
+
+`DecoderOptions.Configuration` and `EncoderOptions.Configuration` select the formats of a single load or save; null
+means `ImageConfiguration.Default` at the time of the call. Saves that take no options (`Save(path)`,
+`Save(stream, format)`) always use the default configuration.
 
 The contract, which the library enforces:
 
@@ -93,7 +98,76 @@ public static class TgaImageExtensions
 }
 ```
 
-Saving goes through `ImageConfiguration.Default`, so register the format there for these shortcuts to work.
+Without options, these shortcuts save through `ImageConfiguration.Default`; with options, through
+`options.Configuration` when it is set, so a plugin works without replacing the default configuration.
+
+### Orientation, color and threads
+
+- **Container orientation.** When a container stores rotations or mirrors outside EXIF (HEIF `irot`/`imir`, for
+  example), the decoder applies them to the returned pixels and sets `Metadata.Orientation` to what is still left to
+  apply, usually `ExifOrientation.TopLeft`. `DecoderOptions.ApplyExifOrientation` then rotates only by that value, so
+  the image is never turned twice, and `Identify` reports the displayed width and height.
+- **Color.** Put an ICC profile in `Metadata.IccProfile`. A container that describes color with code points
+  (nclx/CICP) instead maps the primaries to `Metadata.Chromaticities` and a pure power transfer function to
+  `Metadata.Gamma`; `Chromaticities` alone mean the sRGB curve. PQ and HLG cannot be expressed and should be reported
+  as `NotSupportedException` or left undeclared. `ConvertToSrgb` and `DecoderOptions.ColorConversion` use the same
+  description.
+- **Threads.** Decoders, encoders, metadata codecs and gain map images may be called concurrently from several loads.
+  Honor `DecoderOptions.MaxDegreeOfParallelism` or the encoder's own setting; the output must not depend on it.
+
+### HDR gain maps
+
+A decoder that finds an HDR gain map attaches it, so `Image.Hdr`, `HasHdr`, `ToHdr` and `ToneMap` work as for
+JPEG files. Only do so when `context.Options.LoadGainMap` is set; the context ignores the call otherwise.
+
+```csharp
+sealed class ContainerGainMap(byte[] mapData, Size size) : GainMapImage(size)
+{
+    // Called by ToHdr or the first geometric edit, possibly on another thread after the load returned.
+    public override Image Decode(int maxDegreeOfParallelism, CancellationToken cancellationToken) =>
+        Image.Load(mapData, new DecoderOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism });
+}
+
+// In IImageFormatDecoder.Decode, after decoding the base image:
+if (context.Options.LoadGainMap)
+{
+    try
+    {
+        GainMapMetadata metadata = GainMapMetadata.ParseIso(isoPayload, mapChannels: 1, alternateIcc);
+        context.AttachGainMap(metadata, new ContainerGainMap(mapBytes, mapSize));
+    }
+    catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
+    {
+        context.DeclareGainMap(HdrGainMapKinds.Iso21496, ex.Message, corrupt: ex is ImageFormatException);
+    }
+}
+```
+
+- `GainMapMetadata.ParseIso` reads the ISO 21496-1 payload (from the minimum version on) and `ParseApple` the Apple
+  model (EXIF MakerNote headroom and the map's XMP). In `Identify`, report `ImageInfo.Hdr = metadata.ToHdrInfo(mapSize)`
+  when `LoadGainMap` is set.
+- The map's pixels count toward `MaxPixels`; a map over the limit, unparsable metadata or a base color other than
+  sRGB or Display P3 is reported through `Image.Hdr` and never fails the load.
+- The base image's color comes from the returned image's ICC profile or `Chromaticities`/`Gamma`, so keep them when
+  attaching a map, also with `IgnoreMetadata`.
+- The library carries the map through `TargetSize`, `ApplyExifOrientation`, `ColorConversion` and geometric edits.
+  `GainMapImage.Decode` returns the map at its stored size; it must own its data and must not use the decode context.
+- Saving a plugin's gain map into JPEG (`JpegGainMapMode.Preserve`/`Require`) is not supported yet: `Preserve` writes
+  SDR and `Require` throws `NotSupportedException`.
+
+### Metadata without pixels
+
+`IImageFormatModule.MetadataCodec` enables `Image.ReadMetadata` and `Image.EditMetadata` for the format.
+`IImageFormatMetadataCodec.Read` returns the ICC, EXIF and XMP blocks, charging them with `context.ReserveMetadata`;
+`Rewrite` returns a copy of the file with the edited blocks and by default throws `NotSupportedException`, so a
+read-only implementation needs only `Read`. The library checks limits and cancellation, compares the edit with the
+original (an unchanged edit writes nothing new) and writes files atomically.
+
+### SPI compatibility
+
+The plugin interfaces change only additively within a minor version: new members get default implementations, and
+new types or optional parameters are added beside the existing ones. A breaking change happens only in a new minor
+version, with a migration note in the release notes and the API snapshot updated.
 
 ## Custom frame processors
 

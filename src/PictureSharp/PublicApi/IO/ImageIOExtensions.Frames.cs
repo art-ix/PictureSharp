@@ -43,7 +43,7 @@ public static partial class ImageIOExtensions
 
         /// <summary>Creates a GIF, APNG or WebP frame writer. Complete it explicitly to finish the file; aborting deletes the path.</summary>
         public static ImageFrameWriter CreateFrameWriter(string path, System.Drawing.Size size, EncoderOptions options, ImageFrameWriterOptions? sequenceOptions = null) =>
-            LibraryServices.Sequences.CreateWriter(path, size, options, sequenceOptions);
+            LibraryServices.SequencesFor(options).CreateWriter(path, size, options, sequenceOptions);
 
         /// <summary>Creates a frame writer with the default encoder options for the given format.</summary>
         public static ImageFrameWriter CreateFrameWriter(string path, System.Drawing.Size size, ImageFormat format, ImageFrameWriterOptions? sequenceOptions = null)
@@ -54,7 +54,7 @@ public static partial class ImageIOExtensions
 
         /// <summary>Creates a frame writer on a caller-owned stream, which stays open. See <see cref="ImageFrameWriterOptions.UseTemporaryFile"/> for outputs without seek.</summary>
         public static ImageFrameWriter CreateFrameWriter(Stream stream, System.Drawing.Size size, EncoderOptions options, ImageFrameWriterOptions? sequenceOptions = null) =>
-            LibraryServices.Sequences.CreateWriter(stream, size, options, sequenceOptions);
+            LibraryServices.SequencesFor(options).CreateWriter(stream, size, options, sequenceOptions);
 
         /// <summary>Creates a frame writer on a caller-owned stream with the default options for the given format.</summary>
         public static ImageFrameWriter CreateFrameWriter(Stream stream, System.Drawing.Size size, ImageFormat format, ImageFrameWriterOptions? sequenceOptions = null)

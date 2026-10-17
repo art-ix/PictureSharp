@@ -29,4 +29,10 @@ public interface IImageFormatModule
 
     /// <summary>The encoder, or null when the format can only be read.</summary>
     IImageFormatEncoder? Encoder => null;
+
+    /// <summary>
+    /// Reads and rewrites metadata without pixels, or null when <c>Image.ReadMetadata</c> and <c>Image.EditMetadata</c>
+    /// are not supported for the format.
+    /// </summary>
+    IImageFormatMetadataCodec? MetadataCodec => null;
 }
