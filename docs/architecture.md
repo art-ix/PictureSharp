@@ -1,24 +1,19 @@
 # PictureSharp architecture
 
-PictureSharp ships one assembly and one dependency-free NuGet package. Folders express layers; public namespaces express
-the operations a caller wants to use. Internal namespaces follow the layer and module.
+PictureSharp ships one dependency-free assembly and NuGet package. Folders express layers, public namespaces express
+functionality, internal namespaces follow the layer and module.
 
-Callers start from `Image` with one `using PictureSharp;`: `Image.Load`, `Image.Identify`, `image.Save`, `image.Mutate`
-and `ImageFormat.FromExtension` are C# 14 extension members declared in `PublicApi`, so the model type itself has no I/O
-or processing members. `PictureSharp.Processing` holds processing modes and options, `PictureSharp.Formats` the plugin
+Callers start from `Image` with `using PictureSharp;`. `Image.Load`, `Image.Identify`, `image.Save`, `image.Mutate` and
+`ImageFormat.FromExtension` are C# 14 extension members declared in `PublicApi`, so the model type has no I/O or
+processing members. `PictureSharp.Processing` holds processing modes and options, `PictureSharp.Formats` the plugin
 interfaces and `PictureSharp.Formats.<Format>` format options and shortcuts.
 
 ## Model and boundaries
 
-`Image` owns its frames and pixel buffers. `ImageFrameCollection` enforces frame dimensions and ownership; metadata and
-pixel layouts are model concepts. Animations contain full-canvas frames of a common size. ICO variants are independent
-images held by an owning `IcoImageCollection`, not animation frames.
-
-The model has no codec registry, filesystem access or processing orchestration. `Clone()` makes a deep copy; fluent
-`Clone(operation)` belongs to the processing API and copies source pixels only when an operation must change them in
-place. Pure pixel conversion and the typed EXIF reader/editor belong to the model because pixel layout and metadata
-orientation are model behavior. The EXIF parser and editor perform no I/O. Codec metadata selection belongs to
-infrastructure.
+`Image` owns its frames and pixel buffers; `ImageFrameCollection` enforces frame dimensions and ownership. Animations
+contain full-canvas frames of a common size. ICO variants are independent images in an owning `IcoImageCollection`. The
+model has no codec registry, filesystem access or orchestration; pixel conversion and the I/O-free typed EXIF
+reader/editor belong to it, codec metadata selection to infrastructure.
 
 | Folder | Responsibility | Allowed dependencies |
 | --- | --- | --- |
@@ -30,126 +25,78 @@ infrastructure.
 | `Composition` | Codec registration and construction of default services | Infrastructure, Application, Algorithms, Domain, Primitives |
 | `PublicApi` | Extension members on `Image`, `ImageFormat` and `ImageConfiguration`, format shortcuts | Composition, Application, Algorithms, Domain, Primitives |
 
-Dependencies inside a layer are allowed. Higher layers may not be referenced from lower ones; the layer graph is
-acyclic. Public API wrappers do not reference concrete infrastructure. BCL `Stream` is allowed in codec contracts;
-filesystem operations are confined to infrastructure. `Path` operations used for format lookup do not open files.
+The layer graph is acyclic and lower layers never reference higher ones. Public API wrappers do not reference concrete
+infrastructure. Codec contracts may use `Stream`; filesystem access is confined to infrastructure.
 
 ## Data flow
 
-The `Image` load and identify members select the configuration (`DecoderOptions.Configuration`, otherwise
-`ImageConfiguration.Default`) and call its read service. Input adapters enforce byte limits while reading; application
-services select codecs through `ICodecResolver`, normalize corrupt-input exceptions and apply thumbnail/orientation
-policies. A decoder returns an internal `DecodedImage` value carrying the stored size and JPEG scale; these transient
-details are absent from `Image`.
+Load and identify members take `DecoderOptions.Configuration` (or `ImageConfiguration.Default`) and call its read
+service. Input adapters enforce byte limits; application services select codecs through `ICodecResolver`, normalize
+corrupt-input exceptions and apply thumbnail and orientation policies. Decoders return an internal `DecodedImage` with
+the stored size and JPEG scale, which `Image` does not carry.
 
-`image.Save` and `image.Encode` call the write service of `EncoderOptions.Configuration`, otherwise of
-`ImageConfiguration.Default`. A file is written only after the image has been encoded into memory; stream output is
-written as the encoder goes. The input and output ports have BCL-only implementations.
+`image.Save` and `image.Encode` call the write service of the configuration. Files are written after encoding into
+memory; streams are written as the encoder goes. Processing extensions delegate to the processing service and contexts,
+which invoke algorithms; scalar and SIMD code of one responsibility share a type across partial files.
 
-`ImageProcessingExtensions` delegates to the processing service and context; contexts invoke numeric algorithms. Scalar
-and SIMD code of one responsibility lives in partial files of the same type, with architecture dispatch outside hot
-loops.
+Color management follows the same split: `Algorithms/ColorManagement` parses ICC matrix/TRC profiles and converts
+pixels, `Application/ColorManagement` chooses the description (ICC, then PNG `sRGB`, then `gAMA`/`cHRM`), and codecs
+only read and write it. `IcoFile` uses an ICO-specific codec port; PNG in ICO and PNG/JPEG in BMP reuse injected codecs.
 
-Color management is split the same way: `Algorithms/ColorManagement` parses ICC matrix/TRC profiles and converts pixels
-to sRGB without knowing about images; `Application/ColorManagement` chooses the color description (ICC, then PNG `sRGB`,
-then `gAMA`/`cHRM`) for `ConvertToSrgb()` and `DecoderOptions.ColorConversion`; PNG codecs only read and write the
-chunks into `ImageMetadata`. Linear-light resizing and compositing are float variants of the default passes in
-`Algorithms/Processing`.
-
-`IcoFile` delegates to an icon service through an ICO-specific codec port. Infrastructure validates directory entries
-and sums variant pixel budgets; application orchestration handles orientation and cleanup. PNG embedded in ICO and
-PNG/JPEG embedded in BMP reuse injected codecs without referencing composition.
-
-Only `Composition/CodecRegistry.cs` registers the built-in formats, as `FormatRegistration` entries with codec
-factories. `ImageConfiguration` (Application) is immutable: it builds a `CodecResolver` from its registrations, so
-container codecs receive the resolver of their own configuration, and creates its read and write services from the
-input/output ports supplied by composition. `LibraryServices` composes the initial default; `ImageConfiguration.Default`
-is a static extension property in `PublicApi`, so Application never references Composition. Replacing the default
-publishes a complete snapshot with a volatile write. No external DI container is required.
+Only `Composition/CodecRegistry.cs` registers built-in formats, as `FormatRegistration` entries. An immutable
+`ImageConfiguration` builds its `CodecResolver` (so container codecs use their own configuration) and its services from
+ports supplied by composition. `LibraryServices` composes the default; `ImageConfiguration.Default` is a static
+extension property in `PublicApi`, so Application never references Composition. Replacing it publishes a complete
+snapshot with a volatile write. No DI container is needed.
 
 ## Extension points
 
-Format plugins implement the public `IImageFormatModule`, `IImageFormatDecoder` and `IImageFormatEncoder` interfaces and
-are registered with `ImageConfigurationBuilder.AddFormat`/`ReplaceFormat`. `Application/Extensibility` adapts them to
-the internal codec contracts: detection failures on malformed headers count as no match, plugin results are checked
-against `MaxPixels` and `MaxFrames` and receive their `SourceFormat`, and `ImageDecodeContext` exposes the shared decode
-budget and nested decoding without exposing `DecodeContext`. A gain map attached through the context becomes the same
-internal attachment a JPEG gain map produces, so HDR reconstruction and geometric edits do not distinguish them.
-`IImageFormatMetadataCodec` is adapted to the internal metadata codec port. Built-in codecs keep their internal
-contracts and are not wrapped.
-
-`IFrameProcessor` operations run through `ProcessingState.ReplaceFrames`, like built-in geometry: every frame is
-prepared, then the aggregate commits the batch. Destination buffers are zeroed because third-party code writes them.
+Plugins implement `IImageFormatModule`, `IImageFormatDecoder` and `IImageFormatEncoder` and are registered with
+`AddFormat`/`ReplaceFormat`. `Application/Extensibility` adapts them to the internal contracts: malformed-header
+failures count as no match, results are checked against `MaxPixels` and `MaxFrames`, and `ImageDecodeContext` exposes
+the shared budget and nested decoding. A plugin gain map becomes the same internal attachment as a JPEG one, and
+`IImageFormatMetadataCodec` is adapted to the internal metadata port. Built-in codecs are not wrapped.
+`IFrameProcessor` operations run through `ProcessingState.ReplaceFrames` with zeroed destination buffers.
 
 ## Adapter packages
 
-`PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` are separate assemblies and packages outside
-the layer graph. They use only the public API (`CopyPixelDataTo/From` with `PixelFormat` and stride, `GetPixelMemory`,
-`SaveAsync`, `LoadAsync` and `DecoderOptions`) and need no internal access or library changes. Each depends on
-`PictureSharp` and its target API only; their public types live in the namespace named after the package. Tests check
-both directions on compiled references: the library references only the shared runtime, and each adapter only
-PictureSharp, its target and the runtime. See [Adapters](adapters.md).
+`PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` are separate packages outside the layer graph.
+They use only public API, each depends on PictureSharp and its target API, and their types live in the namespace named
+after the package. Tests check the compiled references in both directions. See [Adapters](adapters.md).
 
-## Enforcement and development
+## Enforcement
 
-Architecture tests map compiled types to source-layer folders, then inspect type signatures, generic arguments, fields,
-interfaces, method IL, local variables and catch clauses. They reject forbidden directions, layer cycles, filesystem
-access outside infrastructure and references to codec registration outside composition. An inspector fixture verifies
-that method calls, fields, generic arguments and exception handlers are observed.
-
-Public types remain documented and implementation types remain internal. Run `dotnet test -c Release`; architecture
-checks are included. The library remains BCL-only, managed, compatible with trimming and Native AOT, with existing
-limits, cancellation and buffer ownership semantics.
+Architecture tests map compiled types to layer folders and inspect signatures, generic arguments, fields, method IL,
+locals and catch clauses. They reject forbidden directions, cycles, filesystem access outside infrastructure and codec
+registration outside composition; a fixture proves the inspector sees calls, fields, generics and handlers. They run
+with `dotnet test -c Release`.
 
 ## Aggregate invariants and lifetime
 
 `Image` is the aggregate boundary for the frame canvas. Application prepares replacement buffers and checks
-cancellation; `Image.CommitFrames` validates the complete count, dimensions and buffer lengths before publishing any
-frame. Publication has no callbacks or cancellation points. `ImageDimensions` is an internal validated value; its
-default value is invalid. Direct frame publication is reserved for the aggregate and enforced by compiled IL tests.
-Copy-on-write uses a separate operation that cannot change dimensions.
+cancellation; `Image.CommitFrames` validates count, dimensions and buffer lengths before publishing any frame, with no
+callbacks or cancellation points. Direct frame publication is reserved to the aggregate (checked in IL); copy-on-write
+uses a separate operation that cannot change dimensions.
 
-Frame ownership uses a value token identifying an image or read session, without an extra token allocation. The
-collection alone attaches/transfers image frames; the session attaches its borrowed current frame. `Add` takes an
-unattached frame, `AddClone` copies it, and `ExportFrame` prepares metadata and the result before detaching the source
-frame. A frame duration is non-negative; codec-specific timing limits and rounding remain in codecs.
+Frame ownership uses a value token for an image or read session. Only the collection attaches or transfers frames, and
+the session attaches its borrowed current frame. Durations are non-negative; format timing limits stay in codecs.
 
-After disposing an image, its state accessors and collection operations throw `ObjectDisposedException`. `Dispose` is
-idempotent and `ToString` remains diagnostic. Existing pixel views, previously obtained frame references and metadata
-references are not revocable. Buffer replacement detaches old views. Concurrent mutation is unsupported. `HasAlpha` is a
-hint; use `IsOpaque()` to inspect actual pixels.
+After `Dispose` (idempotent) state accessors throw `ObjectDisposedException`; existing pixel views are not revocable and
+concurrent mutation is unsupported. `HasAlpha` is a hint; `IsOpaque()` inspects pixels. Options are immutable records;
+each decode gets its own `DecodeContext` and monotonic `DecodeBudget`, shared by embedded codecs through child contexts.
 
-Options are immutable records; each decode creates a separate `DecodeContext` and monotonic `DecodeBudget`. Embedded
-codecs share the operation budget through child contexts. `DecodedImage` carries stored dimensions and reduction scale
-through nested containers, including JPEG embedded in BMP.
+Frame readers and writers use the configuration's `ImageSequenceService` and internal sequential codec ports, sharing
+compositing and encoding with the batch codecs; Application owns the optional temporary file of a writer.
 
-`Image.OpenFrameReaderAsync` and `Image.CreateFrameWriter` delegate to the configuration's `ImageSequenceService`.
-Internal `ISequentialImageDecoder`/`ISequentialImageEncoder` ports create sessions for GIF, PNG/APNG and WebP. The
-reader owns its current borrowed frame through a session owner token; cloning transfers no ownership from it. Full and
-sequential decoders share GIF/APNG/WebP compositing implementations. Limits are checked before canvas allocation and
-before decoding each subsequent frame; input bytes and metadata have sequence-wide budgets.
-
-Writers borrow input frames for one call, stage one encoded fragment for async I/O and require explicit completion. GIF
-uses per-frame palettes and background disposal; APNG shares PNG serialization and chunk writing; WebP shares the
-incremental keyframe-window encoder and muxer. Declaring one frame selects the normal still encoder. Header patches use
-caller-relative offsets. Non-seekable output that requires patching is rejected unless the caller enables a temporary
-file through the output port. Application owns the temporary-file copy and cleanup; filesystem operations remain in
-infrastructure. Aborting a path writer removes its partial file. Caller streams remain open.
-
-Use C# 14 `field` for local property validation and `extension` blocks for facade operations. Keep required invariants
-as model methods, mutable models as classes, immutable options as records and small internal values as readonly structs.
-C# 14 span overload resolution is verified by compiling a consumer with the actual SDK compiler. See
-[extension guide](extending-picturesharp.md).
+Use `field` for local validation and extension blocks for facade operations; keep invariants as model methods, mutable
+models as classes, options as records and small internal values as readonly structs. See
+[Extending PictureSharp](extending-picturesharp.md).
 
 ## Metadata-only operations
 
-`Image.ReadMetadata` and `Image.EditMetadata` use an application metadata service and the internal `IImageMetadataCodec`
-port registered per built-in format; a plugin's `IImageFormatMetadataCodec` is adapted to the same port. JPEG, PNG/APNG
-and WebP implementations rewrite containers while copying compressed image/animation data unchanged. No pixel decoder or
-image encoder is invoked; an architecture test guards this boundary. Compression is used only for PNG metadata. The
-output adapter owns temporary-file creation and atomic replacement in the destination directory.
-
-`ImageMetadata.ExifProfile` owns no independent copy of the EXIF state. The domain TIFF parser validates directory
-graphs and values lazily; an edit prepares a complete replacement block before publication. Unknown retained data keeps
-its original absolute offsets. Explicit allowlisting rebuilds only selected known fields, and GPS removal scrubs the
-known directory and values rather than just removing a pointer.
+`Image.ReadMetadata` and `Image.EditMetadata` use an application metadata service and the internal
+`IImageMetadataCodec` port per format. JPEG, PNG/APNG and WebP rewrite containers while copying compressed image data
+unchanged; an architecture test guards that no pixel codec is invoked. The output adapter owns temporary files and
+atomic replacement. `ExifProfile` shares the EXIF state with `ImageMetadata`; the domain TIFF parser validates lazily,
+edits prepare a complete replacement block, unknown data keeps its offsets, and GPS removal scrubs the directory and its
+values.

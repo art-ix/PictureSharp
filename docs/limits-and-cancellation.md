@@ -1,7 +1,7 @@
 # Limits and cancellation
 
-Untrusted images can be large, deeply compressed or simply slow to process. `DecoderOptions` limits what one load may
-read and allocate, and every load, save and processing call accepts a `CancellationToken` that also stops the CPU work.
+`DecoderOptions` limits what one load may read and allocate, and every load, save and processing call accepts a
+`CancellationToken` that also stops the CPU work.
 
 ```csharp
 using PictureSharp;
@@ -30,33 +30,20 @@ image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
 | `MaxFrames` | 65536 | While the container is parsed, before any frame is decoded; also with `FirstFrameOnly` and in `Identify`. |
 | `MaxMetadataBytes` | 64 MiB | As each ICC, EXIF or XMP block is read, after decompression; the total of one image. |
 
-A limit that is exceeded throws `ImageFormatException`, whose message names the option. The limits apply to every call
-that takes `DecoderOptions`: `Load`, `Identify`, `ReadMetadata`, `EditMetadata`, `OpenFrameReaderAsync` and `IcoFile`;
-without options the defaults apply. An HDR gain map counts toward `MaxPixels`; a map over the limit is reported in
-`Image.Hdr` instead of failing the load.
+An exceeded limit throws `ImageFormatException` naming the option. Limits apply to every call taking `DecoderOptions`
+(`Load`, `Identify`, `ReadMetadata`, `EditMetadata`, `OpenFrameReaderAsync`, `IcoFile`), with defaults when none are
+given. An HDR gain map over `MaxPixels` is reported in `Image.Hdr` instead of failing the load.
 
-**Input.** Files and streams are read into memory before decoding, so `MaxInputBytes` is what bounds that buffer.
-Reading stops as soon as one byte more than the limit arrives. The length a seekable stream declares only sizes the
-first buffer: a stream that declares more than the limit is rejected before reading, and one that declares less is still
-cut off at the limit. A non-seekable stream grows its buffer as it reads, never beyond the limit.
+- **Input** is read into memory before decoding and reading stops one byte past `MaxInputBytes`. A seekable stream's
+  declared length only sizes the first buffer (a larger one is rejected up front); non-seekable streams grow up to the
+  limit.
+- **Metadata.** Compressed PNG profiles and XMP are inflated only up to the remaining budget. `IgnoreMetadata` skips the
+  blocks without counting them, and `Identify` does not decompress them. As libpng, PNG keeps the first `iCCP` and
+  `eXIf`.
+- **`TargetSize`** relaxes nothing: limits check the stored image.
 
-**Metadata.** Compressed PNG profiles and XMP (`iCCP`, compressed `iTXt`) are inflated only up to the remaining budget,
-so a small file cannot expand into gigabytes of metadata. With `IgnoreMetadata` the blocks are skipped without being
-read or decompressed, and do not count. `Identify` does not decompress PNG profiles or XMP. Like libpng, PNG keeps the
-first `iCCP` and `eXIf` chunk and ignores duplicates.
-
-**Target size.** `DecoderOptions.TargetSize` does not relax any limit: `MaxPixels` and the other limits check the stored
-image, before the reduced JPEG buffers or the full decode of other formats are allocated.
-
-**Frames.** `MaxFrames` bounds the number of frame records an animation may hold. `MaxPixels` already limits the decoded
-canvases, but an animation of many tiny frames could otherwise create millions of frame objects.
-
-### What the limits do not cover
-
-The limits bound the input buffer, the decoded pixels, the frame count and the metadata. They are not a hard cap on the
-memory of the process: decoders and encoders also need working buffers (for example the coefficients of a progressive
-JPEG, about 2 bytes per sample, or the token buffers of the WebP encoder), and the output of an encoder is not limited.
-Run untrusted work with a memory limit of the process or container if a hard cap is required.
+The limits are not a cap on process memory: codecs need working buffers (a progressive JPEG keeps about 2 bytes per
+sample of coefficients) and encoder output is unbounded. Use a process or container memory limit for a hard cap.
 
 ## Cancellation
 
@@ -68,40 +55,34 @@ Run untrusted work with a memory limit of the process or container if a hard cap
 | HDR | `image.ToHdr(options, cancellationToken)`, `hdr.ToneMap(options, cancellationToken)` |
 | Processing | `image.Mutate(operation, cancellationToken)`, `image.Clone(operation, cancellationToken)` |
 
-The asynchronous methods pass their token to the decoder or encoder as well as to the I/O. A canceled operation throws
-`OperationCanceledException` (a canceled task for the async methods); a token that is already canceled stops the call
-before any work. Inside custom operations, `ImageProcessingContext.CancellationToken` gives the token passed to `Mutate`
-or `Clone`.
+Async methods pass the token to the codec as well as the I/O. Cancellation throws `OperationCanceledException` (or
+cancels the task), and an already canceled token stops the call before any work. Custom operations read
+`ImageProcessingContext.CancellationToken`.
 
-The work checks the token in bounded portions, never per pixel:
+The token is checked in bounded portions, never per pixel, and rented buffers return to the pool:
 
 | Area | Granularity |
 | --- | --- |
 | Reading | Every buffer read from the stream. |
-| PNG, BMP, PCX | Every row; PNG also every deflate block while inflating or compressing. |
-| JPEG | Every MCU row of each scan, every block row of the inverse DCT and every 16 rows of color conversion; encoding per MCU row. |
+| PNG, BMP, PCX | Every row; PNG also every deflate block. |
+| JPEG | Every MCU row, inverse-DCT block row and 16 rows of color conversion; encoding per MCU row. |
 | GIF | Every frame and about every 64 KiB of LZW data. |
 | WebP lossy | Every macroblock row of decoding, analysis and each encoding pass. |
-| WebP lossless | Every row of decoding; encoding between its stages (transforms, backward references, entropy coding) and between configurations. |
+| WebP lossless | Every decoded row; encoding between stages and configurations. |
 | Animations | Every frame. |
 | Processing | Before every frame of every operation, and every row of resize, blur, sharpen and rotation. |
 
-Rented buffers are returned to the pool when the work is canceled.
-
 ### What a canceled call leaves behind
 
-- **Load**: nothing; no image is returned.
-- **Save to a path** (`Save(path, …)`, `SaveAsync(path, …)`, `IcoFile.Save`): the file is created only after encoding
-  has finished, so cancellation during encoding leaves no file. An asynchronous write canceled midway may leave a
-  partial file, as with any `File.WriteAllBytesAsync`.
-- **Save to a stream**: encoders write as they go, so the stream may hold partial output. Encode to a byte array
-  (`Encode`) or a temporary stream when the target must stay unchanged. `IcoFile.Save` assembles the icon in memory and
-  writes nothing.
-- **Mutate**: the image stays valid, with consistent frame sizes, and keeps the operations that finished before the
-  cancellation. Operations that produce new buffers (resize, crop, rotation, filters) publish all frames together after
-  successful preparation; cancellation before publication leaves that operation unchanged. In-place operations (color
-  changes, `Apply`) may leave some frames processed and others not.
-- **Clone**: the partly processed copy is disposed and the source is unchanged, so `Clone` is the atomic choice.
+- **Load**: nothing.
+- **Save to a path** (including `IcoFile.Save`): the file is created only after encoding, so cancellation during
+  encoding leaves no file; an async write canceled midway may leave a partial file.
+- **Save to a stream**: encoders write as they go, so the stream may hold partial output. Encode to a byte array first
+  when the target must stay unchanged.
+- **Mutate**: the image stays valid and keeps finished operations. Operations producing new buffers (resize, crop,
+  rotation, filters) publish all frames at once, so an interrupted one leaves no trace; in-place operations (color,
+  `Apply`) may leave some frames processed.
+- **Clone**: the partial copy is disposed and the source is unchanged, so `Clone` is the atomic choice.
 
 ```csharp
 using PictureSharp;

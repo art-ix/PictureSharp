@@ -1,7 +1,7 @@
 # Animation
 
-Animated WebP, APNG and GIF decode into an `Image` with several frames. Every frame is a complete canvas (blending and
-disposal are already applied), all frames have the image's size, and each has its own `Duration`.
+Animated WebP, APNG and GIF decode into an `Image` with several frames. Each frame is a complete canvas (blending and
+disposal already applied) of the image's size, with its own `Duration`.
 
 ## Reading frames
 
@@ -25,13 +25,12 @@ third.SaveAsPng("frame-3.png");
 | --- | --- |
 | `image.Frames` | The frames (`IReadOnlyList<ImageFrame>`); `Frames.RootFrame` is frame 0. |
 | `image.FrameCount`, `image.IsAnimated` | Number of frames; whether there is more than one. |
-| `image.LoopCount` | Number of plays; 0 means forever (GIF's NETSCAPE repeat count is converted as `gif2webp` does: no extension is 1 play, *n* repeats are *n* + 1 plays). |
-| `image.AnimationBackgroundColor` | Background hint stored in the container (viewers often ignore it). |
+| `image.LoopCount` | Number of plays; 0 means forever. GIF's repeat count is converted as `gif2webp` does (no extension = 1 play, *n* repeats = *n* + 1 plays). |
+| `image.AnimationBackgroundColor` | Background hint stored in the container. |
 | `frame.Duration` | Display time of a frame. |
 | `frame[x, y]`, `frame.GetRowSpan(y)`, `frame.GetPixelSpan()`, `frame.GetPixelByteSpan()` | Pixel access per frame. |
 
-Pixel members on `Image` itself (`image[x, y]`, `GetPixelSpan()`, `ToPixelData()`, ...) work on the first frame. Use
-`DecoderOptions.FirstFrameOnly` to skip the rest when you only need a still.
+Pixel members on `Image` itself work on the first frame. `DecoderOptions.FirstFrameOnly` skips the rest.
 
 ## Building an animation
 
@@ -47,8 +46,7 @@ animation.Frames[1].Duration = TimeSpan.FromMilliseconds(150);
 animation.SaveAsWebP("animation.webp", new() { Lossless = true, Exact = true, MinimizeSize = true });
 ```
 
-`CreateAnimation(duration, params images)` (or an `IEnumerable<Image>`) copies the first frame of each image; all must
-have the same size. Edit the frame list afterwards:
+`CreateAnimation` copies the first frame of each image (all of the same size). Edit the frame list afterwards:
 
 ```csharp
 using PictureSharp;
@@ -62,35 +60,31 @@ using Image extracted = animation.Frames.ExportFrame(0);       // removes the fr
 
 ## Processing animations
 
-`Mutate` and `Clone` apply every operation to every frame, so an animation can be resized, cropped, rotated or filtered
-like a still image:
+`Mutate` and `Clone` apply every operation to every frame; `DrawImage` draws the source's first frame onto each:
 
 ```csharp
 animation.Mutate(x => x.Resize(320, 0).Saturate(1.2f));
 ```
 
-`DrawImage` draws the source's first frame onto each frame (for example a watermark).
-
 ## Saving animated WebP
 
-WebP keeps all frames by default. Durations are rounded to milliseconds (0–16,777,215 ms per frame) and `LoopCount` must
-be 0–65,535.
+WebP keeps all frames. Durations are rounded to milliseconds (0–16,777,215 ms) and `LoopCount` must be 0–65,535.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `Lossless`, `Quality`, `Method`, ... | | Apply to every frame as for still images. |
-| `AllowMixed` | false | Compare lossy and lossless encoding per frame and keep the smaller; frames may become lossy even with `Lossless = true`. Leave off for a pixel-exact round-trip. |
+| `AllowMixed` | false | Keep the smaller of lossy and lossless per frame (frames may become lossy even with `Lossless = true`). |
 | `MinimizeSize` | false | Also try full-canvas candidates and disable periodic keyframes. |
-| `KeyframeMax` | 17 | Maximum distance between keyframes; 0 disables keyframe insertion, 1 makes every frame a keyframe. |
+| `KeyframeMax` | 17 | Maximum distance between keyframes; 0 disables insertion, 1 makes every frame a keyframe. |
 | `KeyframeMin` | 9 | Lower bound of the keyframe search window (normalized as in libwebp). |
 
-The encoder ports libwebp's `anim_encode.c`: it tries even-offset change rectangles, blend/no-blend and
-dispose-to-background for every frame and keeps the smallest candidate. Animated canvases are limited to 16,383 pixels
-per side for lossy, or 16,384 when lossless or mixed encoding is used.
+The encoder ports libwebp's `anim_encode.c`, trying change rectangles, blending and disposal per frame and keeping the
+smallest candidate. Canvases are limited to 16,383 pixels per side for lossy, 16,384 for lossless or mixed.
 
 ## Saving APNG
 
-PNG writes animated images as APNG unless `SaveAnimation = false`, which writes only the first frame:
+PNG writes animations as APNG unless `SaveAnimation = false`, which writes only the first frame (as JPEG, BMP and PCX
+always do):
 
 ```csharp
 using PictureSharp.Formats.Png;
@@ -98,8 +92,6 @@ using PictureSharp.Formats.Png;
 animation.SaveAsPng("animation.png");
 animation.SaveAsPng("poster.png", new() { SaveAnimation = false });
 ```
-
-JPEG, BMP and PCX always write the first frame.
 
 ## Saving animated GIF
 
@@ -112,15 +104,11 @@ animation.SaveAsGif("animation.gif");
 animation.SaveAsGif("small.gif", new() { ColorCount = 64, Dither = GifDither.FloydSteinberg });
 ```
 
-Each frame stores only the rectangle that changed, unchanged pixels become transparent and repeated frames are merged
-into one longer frame (`OptimizeFrames`). A frame is disposed to the background only where the next frame becomes
-transparent. Durations are rounded to hundredths of a second. Frames keep their exact colors when they fit in the
-palette; otherwise all frames share one quantized palette. GIF transparency is all-or-nothing, decided by
-`TransparencyThreshold` (see [Encoder options](encoder-options.md#gif)).
-
-GIF frames are composited like browsers and libwebp's `gif2webp` do: the canvas starts transparent, "restore to
-background" clears to transparent and "restore to previous" restores the canvas as it was before the frame. Decoded
-durations are the stored delays (a delay of 0 stays 0 ms).
+Each frame stores only the changed rectangle, unchanged pixels become transparent and repeated frames merge
+(`OptimizeFrames`). Durations are rounded to hundredths of a second. Frames keep exact colors when they fit the palette;
+otherwise all share one quantized palette. Transparency is all-or-nothing (`TransparencyThreshold`, see
+[Encoder options](encoder-options.md#gif)). Decoding composites like browsers and `gif2webp`: the canvas starts
+transparent and a delay of 0 stays 0 ms.
 
 ## Converting between GIF and WebP
 
@@ -137,17 +125,15 @@ using var webp = Image.Load("animated.webp");
 webp.SaveAsGif("animated.gif");
 ```
 
-`WebPConverter.Convert` follows `gif2webp` 1.6.0: frames shown for 10 ms or less get 100 ms (as browsers display them)
-and frames are lossless unless options are passed; the loop count and background color carry over. Over the test corpus
-its frames, durations and loop counts are identical to `gif2webp` output. Converting the lossless WebP back to GIF
-restores the original frames.
+`WebPConverter.Convert` follows `gif2webp` 1.6.0: frames of 10 ms or less get 100 ms, frames are lossless unless options
+are passed, and loop count and background carry over. On the corpus its output matches `gif2webp`, and converting back
+to GIF restores the original frames.
 
 ## Reading and writing frame by frame
 
-A long animation does not have to fit in memory. `Image.OpenFrameReaderAsync(pathOrStream)` reads GIF, PNG/APNG and WebP
-one frame at a time, and `Image.CreateFrameWriter` writes them the same way. The reader reads forward from the current
-stream position and accepts non-seekable input; a path reader owns its file, caller streams stay open. It holds only a
-few canvases (two for GIF and WebP, plus a restore region or the frame being decoded), not the whole animation.
+A long animation need not fit in memory. `Image.OpenFrameReaderAsync(pathOrStream)` reads GIF, PNG/APNG and WebP one
+frame at a time and `Image.CreateFrameWriter` writes them. The reader reads forward (non-seekable input works) and holds
+only a few canvases. A path reader owns its file; caller streams stay open.
 
 ```csharp
 using PictureSharp;
@@ -161,31 +147,19 @@ while (await reader.MoveNextAsync())
 Console.WriteLine($"{reader.FramesRead} frames, {reader.LoopCount} plays");
 ```
 
-`Current` is borrowed until the next move or disposal. The reader reuses it, so call `frame.Clone()` to retain it; a
-borrowed frame cannot be added directly to an image. Editing the borrowed pixels does not affect later frames.
-`ReadFramesAsync(token)` also supports `await foreach`; completing or leaving that enumeration disposes the reader.
-`LoopCount` and `Metadata` are final only at the end, since metadata and GIF's loop extension may follow image data.
-`AnimationBackgroundColor` is a container hint. Some read-ahead is allowed, so the stream may advance past the image.
+- `Current` is borrowed and reused until the next move; call `frame.Clone()` to keep it. `ReadFramesAsync(token)`
+  supports `await foreach` and disposes the reader when the enumeration ends.
+- `LoopCount` and `Metadata` are final only at the end, since metadata and GIF's loop extension may follow image data.
+- Limits apply to the whole sequence (`MaxPixels` sums all canvases). `FirstFrameOnly` returns the same image as
+  `Image.Load` and still validates the remaining limits on the next move. `TargetSize` and `ApplyExifOrientation` are
+  unsupported.
+- Corruption, I/O failure or cancellation aborts the reader. Frames match `Image.Load` in pixels and durations.
 
-Decoder limits apply to the sequence: `MaxInputBytes`, `MaxMetadataBytes`, `MaxFrames` and the sum of decoded canvas
-pixels in `MaxPixels`. `FirstFrameOnly` returns the same still/default image as `Image.Load` and parses the remaining
-sequence on the next move to validate frame/input/metadata limits without decoding more canvases. `TargetSize` and
-`ApplyExifOrientation` are unsupported in a frame reader. Early disposal skips validation of the unread tail.
-Corruption, I/O failure or cancellation aborts the reader; subsequent moves fail with `ObjectDisposedException`.
+A writer takes a complete canvas and duration per `WriteAsync` and copies what it needs before returning, so the frame
+can be reused. Sizes must match, at least one frame is required and a declared `FrameCount` must match. Always call
+`CompleteAsync`; disposal alone aborts and deletes incomplete path output (caller streams may keep partial bytes).
 
-Frames match `Image.Load` in pixels and durations, including partial rectangles, blending and disposal. Malformed APNG
-falls back to the static/default image only if detected before returning the first frame; later errors throw. Sequential
-APNG also rejects a frame count that differs from `acTL`, which the batch decoder tolerates.
-
-A writer accepts a complete canvas with its duration in each `WriteAsync` call. It copies/encodes everything it needs
-before returning, so the input frame can then be changed, reused or returned to its reader. Canvas dimensions must
-match. At least one frame is required, and a declared `FrameCount` must match exactly. A failure aborts the writer.
-Always call `CompleteAsync` to write the footer and patch headers; disposal alone aborts. A successfully completed path
-is closed immediately. Incomplete path output is deleted. Caller streams stay open and may contain partial bytes after
-failure, cancellation or abandonment. An existing path is truncated when a writer is created.
-
-This converts without collecting frames. `ImageFrameWriterOptions.From(reader)` copies the loop count, background and
-metadata known so far, because they must be written before the first frame:
+`ImageFrameWriterOptions.From(reader)` copies the loop count, background and metadata known so far:
 
 ```csharp
 using PictureSharp;
@@ -202,16 +176,11 @@ await foreach (ImageFrame frame in reader.ReadFramesAsync())
 await writer.CompleteAsync();
 ```
 
-`Image.CreateFrameWriter(path, size)` chooses GIF, APNG or WebP from the extension with default options, like
-`Save(path)`. `ImageFrameWriterOptions.Metadata` is copied at creation and filtered by `EncoderOptions.Metadata`. `From`
-takes a snapshot when it is called: blocks stored after the frames (EXIF/XMP in WebP and PNG) and a GIF loop extension
-that follows the first image cannot be transferred retroactively by a one-pass conversion. Supply known values with
-`with` or make a first pass if they must be preserved. APNG and WebP store the loop count in the initial header; GIF
-usually stores it before the first image, where the reader sees it when it opens.
+`CreateFrameWriter(path, size)` picks the format from the extension. `From` is a snapshot: blocks stored after the
+frames (EXIF/XMP in WebP and PNG) cannot be transferred in one pass; supply them with `with` or read the file twice.
 
-Frames from a reader can be processed one at a time. `CloneCurrent` returns the current frame as an independent still
-image (without metadata), and `WriteAsync(image, duration)` writes the root frame of a processed image, like
-`Frames.Add(image, duration)`. Only one canvas and the processed copy are held at a time:
+To process frames one at a time, `CloneCurrent` returns the current frame as an independent image and
+`WriteAsync(image, duration)` writes its root frame:
 
 ```csharp
 using System.Drawing;
@@ -229,25 +198,14 @@ await foreach (ImageFrame frame in reader.ReadFramesAsync())
 await writer.CompleteAsync();
 ```
 
-`WriteAsync(frame, duration)` likewise overrides the frame's own duration without changing it. Readers and writers are
-asynchronous only: they interleave I/O with work per frame and accept non-seekable streams, so there are no synchronous
-counterparts to `Load` and `Save` here.
+Readers and writers are asynchronous only, and their operations must not overlap.
 
-| Output | Non-seekable stream | Sequential encoding choices |
+| Output | Non-seekable stream | Sequential encoding |
 | --- | --- | --- |
-| GIF | Supported directly | A palette per frame, quantization/dithering per frame, full-canvas rectangles and background disposal. One transparent entry is reserved even in opaque frames. `OptimizeFrames` is ignored; repeated frames retain their own timing. No shared animation-wide palette scan. |
-| APNG | Directly with a declared `FrameCount`; otherwise requires `UseTemporaryFile = true` | `Auto` uses RGBA for every frame; explicit non-indexed color types are supported. Indexed/palette APNG is unsupported. Full-canvas source replacement preserves alpha, including RGB under zero alpha. Unknown frame count patches `acTL` and its CRC on completion. |
-| WebP | Requires `UseTemporaryFile = true` | Same candidates and keyframe search as the batch animation encoder. A bounded keyframe window is retained; the default maximum distance is 17. `KeyframeMax` controls this memory tradeoff. RIFF size and alpha flags are patched on completion. |
+| GIF | Supported | A palette per frame, full-canvas rectangles; `OptimizeFrames` is ignored. |
+| APNG | With a declared `FrameCount`, otherwise `UseTemporaryFile = true` | `Auto` uses RGBA; indexed APNG is unsupported. |
+| WebP | Requires `UseTemporaryFile = true` | Same candidates as the batch encoder; `KeyframeMax` bounds the retained window. |
 
-With `FrameCount = 1`, all three use the ordinary still encoder, including PNG palette selection, and can write directly
-to non-seekable output. Without that declaration, even one supplied frame uses the animation container. GIF/APNG
-sequence writers require `SaveAnimation = true`. Format-specific timing, color and alpha restrictions still apply. WebP
-without `Lossless = true, Exact = true` may change pixels; GIF quantizes colors and binarizes alpha.
-
-Temporary-file mode is explicit: it writes to a disk file through the output adapter, copies it to the caller stream
-only during `CompleteAsync`, and deletes it on completion, failure or disposal. It does not buffer the animation in RAM
-and does not impose a disk-size quota. Cancellation or I/O failure during the final copy may leave partial bytes in the
-caller stream. Operations on readers/writers must not overlap; CPU encoding runs on the calling thread.
-
-Memory measurements for 10/100/1000 frames are recorded in
+With `FrameCount = 1` all three use the still encoder and write to any stream. `UseTemporaryFile` writes to a disk file
+and copies it to the stream during `CompleteAsync`. Memory measurements are in
 [performance](performance.md#sequential-animation-memory-060).

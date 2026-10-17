@@ -2,14 +2,14 @@
 
 ## Installation
 
-PictureSharp targets **.NET 10** (C# 14) and has no dependencies beyond the base class library. Install it from NuGet:
+PictureSharp targets **.NET 10** (C# 14) and depends only on the base class library:
 
 ```bash
 dotnet add package PictureSharp --version 0.7.1
 ```
 
-The current version is **0.7.1**. Each version's changes are listed in the [release notes](releases/); code written for
-RasterSharp 0.5.0 is covered by the [migration guide](migration-from-0.5.md).
+Changes are listed in the [release notes](releases/); RasterSharp 0.5.0 code is covered by the
+[migration guide](migration-from-0.5.md).
 
 ## Namespaces
 
@@ -20,14 +20,11 @@ RasterSharp 0.5.0 is covered by the [migration guide](migration-from-0.5.md).
 | `PictureSharp.Formats.<Format>` | Encoder options and the `SaveAs*`/`To*` shortcuts, e.g. `PictureSharp.Formats.WebP` |
 | `PictureSharp.Formats` | The interfaces of format plugins |
 
-`Size`, `Rectangle`, `Point` and `Color` come from `System.Drawing.Primitives`, which is part of the shared framework:
-`using System.Drawing;` works on every platform without the `System.Drawing.Common` package.
+`Size`, `Rectangle`, `Point` and `Color` come from `System.Drawing.Primitives`, part of the shared framework, so
+`using System.Drawing;` works everywhere without `System.Drawing.Common`.
 
-### Global using
-
-In a project with `<ImplicitUsings>enable</ImplicitUsings>` (the default for new .NET projects) the package adds
-`global using PictureSharp;`, so that directive is optional. Windows Forms, WPF and MAUI projects, which have their own
-`Image` types, are left out. Set the property yourself to choose:
+With `<ImplicitUsings>enable</ImplicitUsings>` the package adds `global using PictureSharp;`, except in Windows Forms,
+WPF and MAUI projects, which have their own `Image` types. To choose yourself:
 
 ```xml
 <PropertyGroup>
@@ -47,13 +44,9 @@ image.Mutate(x => x.AutoOrient().Resize(800, 0).Grayscale());
 image.Save("photo-small.webp");                 // the extension selects WebP with default options
 ```
 
-Three steps cover almost every task:
-
-1. **Load** an image with `Image.Load` (or `LoadAsync`). The format is detected from the content, not the file name.
-2. **Process** it with `Mutate` or `Clone`. The lambda receives an `ImageProcessingContext`; its operations chain and
-   run in order.
-3. **Save** it with `Save(path)` or one of the `SaveAsWebP`/`SaveAsPng`/`SaveAsJpeg`/`SaveAsBmp`/`SaveAsGif`/`SaveAsPcx`
-   methods.
+1. **Load** with `Image.Load` (or `LoadAsync`); the format is detected from the content, not the file name.
+2. **Process** with `Mutate` or `Clone`; operations chain and run in order.
+3. **Save** with `Save(path)` or `SaveAsWebP`/`SaveAsPng`/`SaveAsJpeg`/`SaveAsBmp`/`SaveAsGif`/`SaveAsPcx`.
 
 ## `Mutate` or `Clone`
 
@@ -72,22 +65,18 @@ using Image square = original.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
 using Image copy = original.Clone();            // plain deep copy
 ```
 
-Use `Mutate` when you no longer need the input, and `Clone` when you produce several outputs from one source. `Clone`
-copies the source pixels only when an operation must change them in place, so `Clone(x => x.Resize(...))` never
-duplicates the full-size image first.
-
-Every operation applies to all frames of an animated image. See [Image processing](image-processing.md) for the full
-list.
+`Clone` copies pixels only when an operation must change them in place, so `Clone(x => x.Resize(...))` never duplicates
+the full image first. Operations apply to every frame; see [Image processing](image-processing.md).
 
 ## Disposal
 
-`Image` owns its pixel buffers and implements `IDisposable`. Wrap images in `using` so memory is released as soon as you
-are done; any use after `Dispose` throws `ObjectDisposedException`.
+`Image` owns its pixel buffers and implements `IDisposable`. Wrap images in `using`; use after `Dispose` throws
+`ObjectDisposedException`.
 
 ## Pixels
 
-Pixels are 8-bit `Rgba32` values with straight (not premultiplied) alpha. Higher bit depths (16-bit PNG, for example)
-are converted when decoding. `System.Drawing.Color` converts to and from `Rgba32` implicitly:
+Pixels are 8-bit `Rgba32` with straight (not premultiplied) alpha; higher bit depths are converted when decoding.
+`System.Drawing.Color` converts to and from `Rgba32` implicitly:
 
 ```csharp
 using System.Drawing;
@@ -122,11 +111,6 @@ catch (ImageFormatException ex)
 }
 ```
 
-Decoders never let index errors escape on malicious input; anything unexpected is reported as `ImageFormatException`.
-For untrusted uploads see [Limits and cancellation](limits-and-cancellation.md).
-
-## Next steps
-
-- [Loading and saving](loading-and-saving.md)
-- [Encoder options](encoder-options.md)
-- [Image processing](image-processing.md)
+Malicious input never surfaces index errors; anything unexpected becomes `ImageFormatException`. For untrusted uploads
+see [Limits and cancellation](limits-and-cancellation.md). Next: [Loading and saving](loading-and-saving.md),
+[Encoder options](encoder-options.md) and [Image processing](image-processing.md).

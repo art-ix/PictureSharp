@@ -1,7 +1,7 @@
 # Adapters: System.Drawing, SkiaSharp and ASP.NET Core
 
-The `PictureSharp` package stays dependency-free. Integration with other libraries ships as separate packages with the
-same version, each depending only on `PictureSharp` and its target API:
+`PictureSharp` stays dependency-free; integrations ship as separate packages of the same version, each depending only
+on `PictureSharp` and its target API:
 
 | Package | Depends on | Provides |
 | --- | --- | --- |
@@ -13,12 +13,9 @@ same version, each depending only on `PictureSharp` and its target API:
 dotnet add package PictureSharp.Skia
 ```
 
-## Ownership
-
-Every pixel conversion copies. The returned `Bitmap`, `SKBitmap`, `SKImage` or `Image` belongs to the caller, who
-disposes it; the source stays unchanged and can be disposed independently. Conversions from `Image` read its first
-frame; call the same methods on `image.Frames[i]` for another frame. Pixels are copied without color-space conversion:
-run `Mutate(x => x.ConvertToSrgb())` first when the image has another ICC profile.
+Every conversion copies; the result belongs to the caller and the source stays unchanged. Conversions from `Image` read
+the first frame (use `image.Frames[i]` for others). Colors are not converted: run `Mutate(x => x.ConvertToSrgb())`
+first for images with another ICC profile.
 
 ## System.Drawing (Windows)
 
@@ -41,10 +38,9 @@ using Image back = Image.FromBitmap(bitmap);
 | `Format24bppRgb`, `Format32bppRgb` | alpha dropped without compositing | opaque, `HasAlpha` false |
 | other (indexed, 16-, 48-, 64-bit) | `ArgumentOutOfRangeException` | converted to 32-bit ARGB by GDI+ |
 
-Row padding and bottom-up (negative) strides are handled. The resolution is copied in both directions. `FromBitmap`
-reads the active frame of a multi-frame bitmap. The types are marked `[SupportedOSPlatform("windows")]`, as
-`System.Drawing.Common` is supported on Windows only. `System.Drawing.Image` and `PictureSharp.Image` share a name;
-alias the types you need instead of importing `System.Drawing`.
+Padding, bottom-up strides and resolution are handled; `FromBitmap` reads the active frame. The types are Windows-only
+(`[SupportedOSPlatform("windows")]`). Because `System.Drawing.Image` clashes with `PictureSharp.Image`, alias the types
+you need instead of importing `System.Drawing`.
 
 ## SkiaSharp
 
@@ -59,12 +55,10 @@ using SKImage premultiplied = image.ToSKImage(SKColorType.Bgra8888, SKAlphaType.
 using Image fromSkia = Image.FromSKBitmap(bitmap);                           // any color and alpha type
 ```
 
-`ToSKBitmap` and `ToSKImage` accept `Rgba8888` or `Bgra8888` with `Unpremul` (bit-exact round trip) or `Premul`
-(PictureSharp's premultiplication); other combinations throw `ArgumentOutOfRangeException`. `FromSKBitmap`,
-`FromSKPixmap` and `FromSKImage` accept every color type Skia can convert (for example `Gray8` or `RgbaF16`) and always
-produce straight alpha; an `Opaque` source gives alpha 255. A texture-backed `SKImage` must be read through its GPU
-context first. Install the native assets your platform needs, for example `SkiaSharp.NativeAssets.Linux` on Linux
-servers.
+`ToSKBitmap` and `ToSKImage` accept `Rgba8888` or `Bgra8888` with `Unpremul` (bit-exact) or `Premul`; other combinations
+throw `ArgumentOutOfRangeException`. The `From*` methods accept every color type Skia can convert and produce straight
+alpha. A texture-backed `SKImage` must be read through its GPU context first. Install the native assets for your
+platform, e.g. `SkiaSharp.NativeAssets.Linux`.
 
 ## ASP.NET Core
 
@@ -105,20 +99,14 @@ app.MapPost("/upload", async (HttpRequest request) =>
 });
 ```
 
-`ImageResult` chooses the format from the `Accept` header: each offered format takes the quality of its most specific
-matching range (`image/webp` before `image/*` before `*/*`), the highest quality wins and ties keep the server order.
-Without an `Accept` header, or with `*/*`, the first format is sent. When `Accept` excludes every offered format, the
-first format is sent too, or `406 Not Acceptable` with `RespondNotAcceptable = true`.
+`ImageResult` picks the format from `Accept`: each offered format takes the quality of its most specific matching range,
+the highest quality wins and ties keep the server order. Without a usable `Accept`, the first format is sent (or `406`
+with `RespondNotAcceptable = true`). JPEG has no alpha, so do not prefer it for transparent images.
 
-The image is encoded into memory before anything is written, so the response has `Content-Type`, `Content-Length`,
-`Vary: Accept` (when more than one format is offered) and the configured `Cache-Control`, and a failed or canceled
-encoding sends no partial image. A `HEAD` request gets the headers only. Encoding and writing stop when
-`HttpContext.RequestAborted` is canceled. `Results.Extensions.Image(image)` disposes the image after the response; pass
-`disposeImage: false` to keep it, for example for a cached image. JPEG has no alpha: put a transparent image's formats
-in an order that does not prefer JPEG.
+The image is encoded into memory first, so the response has `Content-Type`, `Content-Length`, `Vary: Accept` and the
+configured `Cache-Control`, and a failed or canceled encoding sends nothing partial. `HEAD` gets headers only, and work
+stops on `RequestAborted`. The image is disposed after the response unless `disposeImage: false` is passed.
 
-`request.ReadImageAsync` decodes the request body with the given `DecoderOptions` and stops when the request is aborted.
-A body over `MaxInputBytes`, declared by `Content-Length` or found while reading, throws `BadHttpRequestException` with
-status 413 before it is buffered. Other limits behave as in `Image.LoadAsync`: corrupt or unrecognized data and an
-exceeded `MaxPixels` throw `ImageFormatException`, unsupported variants `NotSupportedException`. Server limits such as
-Kestrel's `MaxRequestBodySize` still apply first.
+`request.ReadImageAsync` decodes the body with the given `DecoderOptions`. A body over `MaxInputBytes` throws
+`BadHttpRequestException` (413) before buffering; other failures behave as in `Image.LoadAsync`. Server limits such as
+Kestrel's `MaxRequestBodySize` apply first.

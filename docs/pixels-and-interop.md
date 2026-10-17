@@ -2,8 +2,7 @@
 
 ## `Rgba32`
 
-Pixels are `Rgba32` structs: four bytes `R`, `G`, `B`, `A` in that order in memory, with straight (not premultiplied)
-alpha.
+Pixels are `Rgba32` structs: bytes `R`, `G`, `B`, `A` in memory order, with straight (not premultiplied) alpha.
 
 ```csharp
 using System.Drawing;
@@ -20,8 +19,8 @@ string hex = orange.ToHex();                          // "#FF8800FF"
 (byte r, byte g, byte b, byte a) = orange;
 ```
 
-`Rgba32.Transparent`, `Black` and `White` are predefined; `PackedValue`, `FromArgb(uint)` and `ToArgb()` convert to and
-from packed integers. Every API that takes a color takes `Rgba32`, so `Color.Red` works everywhere.
+`Rgba32.Transparent`, `Black` and `White` are predefined; `PackedValue`, `FromArgb(uint)` and `ToArgb()` convert packed
+integers. Every color parameter takes `Rgba32`, so `Color.Red` works everywhere.
 
 ## Reading and writing pixels
 
@@ -47,14 +46,12 @@ foreach (ref Rgba32 p in all)
 | `image[x, y]` | Get or set one pixel (bounds-checked). |
 | `GetRowSpan(y)` | `Span<Rgba32>` over one row. |
 | `GetPixelSpan()` | `Span<Rgba32>` over all pixels, row by row. |
-| `GetPixelMemory()` | `Memory<Rgba32>` over all pixels; `Pin()` it to pass a pointer to native code without copying. A writable view without a copy; buffer replacement detaches it from the current pixels, even when the dimensions stay the same. |
-| `GetPixelByteSpan()` | Writable RGBA bytes without a copy, independent of the encoded file format. |
+| `GetPixelMemory()` | Writable `Memory<Rgba32>` without a copy; `Pin()` it for native code. Buffer replacement detaches it. |
+| `GetPixelByteSpan()` | Writable RGBA bytes without a copy. |
 | `IsOpaque()` | True when no pixel of any frame is transparent. |
 
-Pixel access on `Image` works on the first frame. Each `image.Frames[i]` exposes the same pixel access, copying and
-conversion methods, plus `Size` and `Bounds`. `ImageFrame.IsOpaque()` checks that frame; `Image.IsOpaque()` checks all
-frames (see [Animation](animation.md)). For per-pixel work inside a processing chain, use
-`Mutate(x => x.Apply(frame => ...))`.
+Pixel access on `Image` uses the first frame; each `image.Frames[i]` has the same members plus `Size` and `Bounds` (see
+[Animation](animation.md)). Inside a processing chain use `Mutate(x => x.Apply(frame => ...))`.
 
 ## Raw buffers and pixel formats
 
@@ -82,22 +79,15 @@ using Image fromStructs = Image.LoadPixelData(rgbaPixels, width, height);   // R
 | `Rgba32Premultiplied` | 4 | R, G, B, A, color × alpha | SkiaSharp `Premul` |
 | `Bgra32Premultiplied` | 4 | B, G, R, A, color × alpha | WPF `Pbgra32`, Direct2D |
 
-`CopyPixelDataFrom(ReadOnlySpan<Rgba32>)` copies exactly one frame of pixels and ignores extra input;
-`CopyPixelDataTo(Span<Rgba32>)` leaves extra destination pixels untouched. Both reject buffers too small for a complete
-frame.
-
-`Image.HasAlpha` is a read-only hint maintained by decoding, processing, frame insertion and `Image.CopyPixelDataFrom`
-(set when the source format has alpha). Writes through pixel views and `ImageFrame` copy methods do not update it; use
-`IsOpaque()` to inspect actual transparency.
-
-`stride` is the number of bytes per row; 0 means tightly packed. `PixelFormat.BytesPerPixel()` and `HasAlpha()` help
-size buffers. `LoadPixelData` with a format without alpha sets `HasAlpha = false`.
+`stride` is bytes per row (0 means tightly packed); `PixelFormat.BytesPerPixel()` and `HasAlpha()` help size buffers.
+Copies reject buffers smaller than one frame and ignore extra data. `Image.HasAlpha` is a hint set by decoding,
+processing and `CopyPixelDataFrom`, not by writes through pixel views; `IsOpaque()` checks the actual pixels.
 
 ## Interop recipes
 
-These snippets need the other library's package; PictureSharp itself stays dependency-free. For SkiaSharp and
-System.Drawing, the `PictureSharp.Skia` and `PictureSharp.Drawing` packages wrap the same copies (`image.ToSKBitmap()`,
-`Image.FromBitmap(bitmap)` and more); see [Adapters](adapters.md).
+These snippets need the other library's package. For WinForms/System.Drawing and SkiaSharp, the `PictureSharp.Drawing`
+and `PictureSharp.Skia` packages wrap the same copies (`Image.FromBitmap(bitmap)`, `image.ToSKBitmap()`, …); see
+[Adapters](adapters.md).
 
 ### WPF
 
@@ -125,52 +115,3 @@ image.CopyPixelDataTo(bitmap.GetPixelSpan(), PixelFormat.Rgba32, bitmap.RowBytes
 using Image fromSkia = Image.LoadPixelData(skBitmap.GetPixelSpan(), skBitmap.Width, skBitmap.Height,
     PixelFormat.Bgra32Premultiplied, skBitmap.RowBytes);
 ```
-
-### WinForms / System.Drawing.Common
-
-```csharp
-using System.Drawing;
-using PictureSharp;
-
-using SD = System.Drawing.Imaging;
-
-using var bitmap = new Bitmap(image.Width, image.Height, SD.PixelFormat.Format32bppArgb);
-SD.BitmapData data = bitmap.LockBits(new Rectangle(0, 0, image.Width, image.Height),
-    SD.ImageLockMode.WriteOnly, SD.PixelFormat.Format32bppArgb);
-try
-{
-    byte[] bgra = image.ToPixelData(PictureSharp.PixelFormat.Bgra32);
-    for (int y = 0; y < image.Height; y++)
-    {
-        Marshal.Copy(bgra, y * image.Width * 4, data.Scan0 + (y * data.Stride), image.Width * 4);
-    }
-}
-finally
-{
-    bitmap.UnlockBits(data);
-}
-```
-
-## Decode and encode raw buffers
-
-The same `Image` API handles every supported format. Request the first frame explicitly when exporting one pixel buffer:
-
-```csharp
-using PictureSharp;
-using PictureSharp.Formats.WebP;
-
-byte[] data = File.ReadAllBytes("image.webp");
-ImageInfo info = Image.Identify(data);
-using Image decoded = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
-byte[] rgba = decoded.ToPixelData();
-byte[] bgra = decoded.ToPixelData(PixelFormat.Bgra32);
-var buffer = new byte[decoded.Width * decoded.Height * 4];
-decoded.CopyPixelDataTo(buffer, PixelFormat.Bgra32);
-
-using Image fromRgba = Image.LoadPixelData(rgba, decoded.Width, decoded.Height, PixelFormat.Rgba32);
-byte[] lossless = fromRgba.Encode(new WebPEncoderOptions { Lossless = true, Exact = true });
-WebPConverter.Convert("input.png", "output.webp", new() { Quality = 80 });
-```
-
-`Image.Load` detects the format from the contents. To require WebP, check
-`Image.Identify(data).Format == ImageFormat.WebP` before decoding.

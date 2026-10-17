@@ -1,6 +1,6 @@
 # Encoder options
 
-Every format has an options record deriving from `EncoderOptions`: `WebPEncoderOptions`, `PngEncoderOptions`,
+Each format has an options record deriving from `EncoderOptions`: `WebPEncoderOptions`, `PngEncoderOptions`,
 `JpegEncoderOptions`, `BmpEncoderOptions`, `GifEncoderOptions` and `PcxEncoderOptions` (ICO: [ICO icons](ico.md)). Pass
 them to `Save`, `SaveAsync`, `SaveAs*`, `Encode` or `To*`:
 
@@ -12,13 +12,12 @@ image.SaveAsWebP("photo.webp", new() { Quality = 85, Method = 6 });
 image.Save("photo.jpg", new JpegEncoderOptions { Quality = 90 });
 ```
 
-- **Checked when set.** An out-of-range value throws `ArgumentOutOfRangeException` on the line that sets it, not later
-  during encoding.
-- **Records.** Options compare by value and `with` creates variants: `var hq = options with { Quality = 95 };`.
-- **Metadata.** Every options type has `Metadata` (`MetadataKinds.All` by default) to choose which of ICC, EXIF and XMP
-  are written; see [Metadata](metadata.md).
-- **Configuration.** `Configuration` selects the formats of this save (null means `ImageConfiguration.Default`); see
+- Out-of-range values throw `ArgumentOutOfRangeException` where they are set, not during encoding.
+- Options are records: `var hq = options with { Quality = 95 };`.
+- `Metadata` (default `MetadataKinds.All`) chooses which of ICC, EXIF and XMP are written; see [Metadata](metadata.md).
+- `Configuration` selects the formats of this save; see
   [Loading and saving](loading-and-saving.md#choosing-the-formats-imageconfiguration).
+- `MaxDegreeOfParallelism` (WebP, PNG, JPEG; default -1 = automatic) never changes the output bytes.
 
 ## WebP
 
@@ -34,34 +33,23 @@ image.SaveAsWebP("target.webp", new() { TargetSize = 50_000, Passes = 6 });
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `Lossless` | false | Use the lossless VP8L bitstream instead of lossy VP8. |
-| `Quality` | 75 | 0–100. Lossy: visual quality. Lossless: compression effort (higher is smaller and slower). |
+| `Lossless` | false | Lossless VP8L instead of lossy VP8. |
+| `Quality` | 75 | 0–100. Lossy: visual quality. Lossless: compression effort. |
 | `Method` | 4 | 0 (fast) – 6 (slowest, smallest). |
-| `Preset` | `Default` | Content tuning as in `cwebp -preset`: `Picture`, `Photo`, `Drawing`, `Icon`, `Text`. |
-| `Exact` | false | Keep RGB values under fully transparent pixels (otherwise they may be changed to compress better). |
-| `NearLossless` | 100 | Lossless only: 0–100, lower values quantize pixels for smaller files; 100 is off. |
-| `AlphaQuality` | 100 | Lossy only: 0–100 quality of the alpha plane; 100 keeps alpha exact. |
-| `AlphaCompression` | true | Lossy only: compress the alpha plane losslessly (otherwise stored raw). |
-| `AlphaFilter` | `Fast` | Lossy only: `None`, `Fast` or `Best` predictive filter for alpha. |
-| `SnsStrength` | preset (50) | 0–100 spatial noise shaping. |
-| `FilterStrength` | preset (60) | 0–100 deblocking filter strength; 0 is off. |
-| `FilterSharpness` | preset (0) | 0 (sharpest) – 7. |
+| `Preset` | `Default` | As `cwebp -preset`: `Picture`, `Photo`, `Drawing`, `Icon`, `Text`. |
+| `Exact` | false | Keep RGB under fully transparent pixels. |
+| `NearLossless` | 100 | Lossless: lower values quantize pixels for smaller files; 100 is off. |
+| `AlphaQuality`, `AlphaCompression`, `AlphaFilter` | 100, true, `Fast` | Lossy alpha plane: quality (100 is exact), lossless compression, filter (`None`, `Fast`, `Best`). |
+| `SnsStrength`, `FilterStrength`, `FilterSharpness`, `Segments` | preset (50, 60, 0, 4) | Noise shaping 0–100, deblocking 0–100 (0 off), sharpness 0–7, segments 1–4. |
 | `AutoFilter` | false | Choose the filter strength automatically. |
-| `Segments` | preset (4) | 1–4 segments. |
-| `Partitions` | 0 | log2 of token partitions (0–3); as in libwebp, methods 3–6 always use one. |
-| `TargetSize` | 0 | Target file size in bytes; works with `Passes`. Takes precedence over `Quality`. |
-| `TargetPsnr` | 0 | Target PSNR in dB; works with `Passes`. |
-| `Passes` | 1 | 1–10 entropy-analysis passes. |
-| `UseSharpYuv` | false | Slower, more accurate RGB→YUV conversion (sharper color edges). |
-| `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Output does not depend on it. |
+| `Partitions` | 0 | log2 of token partitions (0–3); methods 3–6 always use one. |
+| `TargetSize`, `TargetPsnr`, `Passes` | 0, 0, 1 | Target bytes (overrides `Quality`) or PSNR, reached in 1–10 passes. |
+| `UseSharpYuv` | false | Slower, sharper RGB→YUV conversion. |
 | `AllowMixed`, `MinimizeSize`, `KeyframeMin`, `KeyframeMax` | false, false, 9, 17 | Animation only; see [Animation](animation.md#saving-animated-webp). |
 
-Preset values (`SnsStrength`/`FilterStrength`/`FilterSharpness`): `Picture` 80/35/4, `Photo` 80/30/3, `Drawing` 25/10/6,
-`Icon` 0/0/0, `Text` 0/0/0 with 2 segments. Explicit values override the preset.
-
-Across the test corpus, lossy output of opaque images and lossless output (every method, quality, `NearLossless` and
-`Exact`) are byte-identical to `cwebp` 1.6.0 with the same settings. Encoding uses several threads by default; the bytes
-are the same for any `MaxDegreeOfParallelism`. Reaching `TargetSize`/`TargetPsnr` exactly depends on the image.
+Presets set `SnsStrength`/`FilterStrength`/`FilterSharpness` to: `Picture` 80/35/4, `Photo` 80/30/3, `Drawing` 25/10/6,
+`Icon` 0/0/0, `Text` 0/0/0 with 2 segments; explicit values win. On the corpus, opaque lossy and all lossless output are
+byte-identical to `cwebp` 1.6.0 with the same settings.
 
 ## PNG
 
@@ -77,11 +65,10 @@ image.SaveAsPng("interlaced.png", new() { Interlace = true });
 | Property | Default | Meaning |
 | --- | --- | --- |
 | `CompressionLevel` | 6 | Deflate level 0 (store) – 9 (best). |
-| `ColorType` | `Auto` | `Auto` picks palette, grayscale, gray+alpha, RGB or RGBA, whichever represents the pixels losslessly and smallest. `Grayscale`/`GrayscaleAlpha` convert to luma, `Rgb` drops alpha, `Palette` fails with `InvalidOperationException` above 256 colors. |
-| `FilterStrategy` | `Adaptive` | Per-row filter choice; or a fixed `None`, `Sub`, `Up`, `Average`, `Paeth`. |
+| `ColorType` | `Auto` | `Auto` picks the smallest lossless type. `Grayscale`/`GrayscaleAlpha` convert to luma, `Rgb` drops alpha, `Palette` throws `InvalidOperationException` above 256 colors. |
+| `FilterStrategy` | `Adaptive` | Per-row filter choice, or a fixed `None`, `Sub`, `Up`, `Average`, `Paeth`. |
 | `Interlace` | false | Adam7 interlacing. |
-| `SaveAnimation` | true | Write animated images as APNG (otherwise only the first frame). |
-| `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Output does not depend on it. |
+| `SaveAnimation` | true | Write animations as APNG (otherwise only the first frame). |
 
 ## JPEG
 
@@ -97,18 +84,17 @@ image.SaveAsJpeg("on-black.jpg", new() { BackgroundColor = Color.Black });   // 
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `Quality` | 75 | 1–100 (libjpeg quality scaling). |
-| `Subsampling` | `Ratio420` | Chroma sampling: `Ratio444`, `Ratio422`, `Ratio420`, `Ratio440`. |
+| `Quality` | 75 | 1–100 (libjpeg scaling). |
+| `Subsampling` | `Ratio420` | `Ratio444`, `Ratio422`, `Ratio420`, `Ratio440`. |
 | `Progressive` | false | Progressive scans (implies optimized Huffman tables). |
-| `OptimizeCoding` | false | Optimal Huffman tables computed in an extra pass. |
+| `OptimizeCoding` | false | Optimal Huffman tables in an extra pass. |
 | `RestartInterval` | 0 | MCUs between restart markers (0–65535); 0 disables them. |
-| `BackgroundColor` | white | Opaque color under transparent pixels; JPEG has no alpha. |
-| `GainMap` | `None` | `Preserve` or `Require` writes the attached HDR gain map; see [HDR photos](hdr.md#saving-with-the-gain-map). |
-| `GainMapQuality` | 95 | 1–100 quality of a gain map that has to be re-encoded. |
-| `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Output does not depend on it. |
+| `BackgroundColor` | white | Color under transparent pixels. |
+| `GainMap` | `None` | `Preserve` or `Require` writes the HDR gain map; see [HDR photos](hdr.md#saving-with-the-gain-map). |
+| `GainMapQuality` | 95 | 1–100 quality of a re-encoded gain map. |
 
-JPEG writes the first frame only. Grayscale images are detected and written with a single component. The encoder
-reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
+JPEG writes the first frame; grayscale images get one component. Output is byte-identical to Pillow 10.2.0 /
+libjpeg-turbo 2.1.5 on the reference vectors.
 
 ## BMP
 
@@ -119,9 +105,9 @@ image.SaveAsBmp("out.bmp");                                                  // 
 image.SaveAsBmp("rgb.bmp", new() { BitsPerPixel = 24 });
 ```
 
-`BitsPerPixel` is 0 (automatic), 1, 4, 8, 24 or 32. Automatic chooses a palette when the image is opaque with at most
-256 colors, 24 bits when it is opaque, and 32 bits (with alpha) otherwise. Palette and 24-bit output drop alpha. BMP is
-written uncompressed and stores the first frame; an ICC profile is embedded in a `BITMAPV5HEADER`.
+`BitsPerPixel` is 0 (automatic), 1, 4, 8, 24 or 32. Automatic picks a palette for opaque images with up to 256 colors,
+24 bits for other opaque images and 32 bits otherwise; palette and 24-bit output drop alpha. BMP is uncompressed, stores
+the first frame and embeds ICC in a `BITMAPV5HEADER`.
 
 ## GIF
 
@@ -136,18 +122,17 @@ image.SaveAsGif("soft-edges.gif", new() { TransparencyThreshold = 32 });     // 
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `ColorCount` | 256 | 2–256 palette entries per frame, including the transparent entry when one is needed. |
-| `Quantizer` | `Auto` | Used when the colors do not fit: `MedianCut` (the `Auto` choice) or `Octree`, ported from Pillow's `Image.quantize`. |
-| `Dither` | `None` | `FloydSteinberg` error diffusion against the quantized palette (smoother gradients, larger files). |
-| `TransparencyThreshold` | 128 | Pixels with lower alpha become transparent, all others opaque: GIF has no partial transparency. |
-| `Interlace` | false | Store rows in four interlaced passes. |
-| `SaveAnimation` | true | Write all frames of animated images (otherwise only the first frame). |
-| `OptimizeFrames` | true | Animation: write only changed rectangles, mark unchanged pixels transparent and merge repeated frames. |
+| `ColorCount` | 256 | 2–256 entries per frame, including a transparent entry when needed. |
+| `Quantizer` | `Auto` | When colors do not fit: `MedianCut` (the `Auto` choice) or `Octree`, ported from Pillow. |
+| `Dither` | `None` | `FloydSteinberg` error diffusion (smoother gradients, larger files). |
+| `TransparencyThreshold` | 128 | Lower alpha becomes transparent, the rest opaque. |
+| `Interlace` | false | Four interlaced passes. |
+| `SaveAnimation` | true | Write all frames (otherwise only the first). |
+| `OptimizeFrames` | true | Write only changed rectangles and merge repeated frames. |
 
-Images whose colors fit keep them exactly: one global palette when all frames together fit, otherwise exact local
-palettes per animation frame. Otherwise a still image is quantized exactly as Pillow's `Image.quantize(colors)` (same
-palette and indices), and an animation gets one quantized palette shared by all frames. Durations are stored in
-hundredths of a second (rounded; at most 655.35 s). ICC and XMP are written as application extensions; GIF has no EXIF.
+Colors that fit are kept exactly (one global palette, or exact local palettes per frame). Otherwise a still image is
+quantized exactly as Pillow's `Image.quantize(colors)`, and an animation shares one quantized palette. Durations are
+stored in hundredths of a second (at most 655.35 s). ICC and XMP are written as extensions; GIF has no EXIF.
 
 ## PCX
 
@@ -158,18 +143,12 @@ image.SaveAsPcx("out.pcx");                                                  // 
 image.SaveAsPcx("rgb.pcx", new() { BitsPerPixel = 24 });
 ```
 
-| Property | Default | Meaning |
-| --- | --- | --- |
-| `BitsPerPixel` | 0 | `0` chooses. `1` is two exact colors, `4` is up to 16 colors on four 1-bit planes, `8` is up to 256 colors with a VGA palette, `24` is RGB and `32` is RGBA. |
-
-Automatic mode writes 32 bits when any pixel is transparent. Otherwise it uses one 1-bit plane for two colors, two
-planes for up to four, four planes for up to sixteen, an 8-bit palette up to 256 colors, and 24-bit RGB after that.
-Forced 1, 4 and 8 keep exact RGB colors and throw if the image does not fit. All forced depths except 32 drop alpha.
-32-bit PCX is the four-plane form ImageMagick writes; Pillow does not read it. Two- and four-plane files store each
-plane in `ceil(width / 8)` bytes, with no even padding, so Pillow reads the planes in the right place. Resolution is
-stored from `Image.Metadata` (values outside 1–65535 dpi are written as 96). PCX has no ICC, EXIF or XMP, and only the
-first frame is written. Pillow 10.2 misreads padded 24-bit RGB at widths 1 and 3; PictureSharp and ImageMagick read
-those files correctly.
+`BitsPerPixel` is `0` (automatic), `1` (two colors), `4` (16 colors on four planes), `8` (256 colors with a VGA
+palette), `24` (RGB) or `32` (RGBA). Automatic writes 32 bits when any pixel is transparent, otherwise the smallest
+depth that holds the colors exactly. Forced 1, 4 and 8 throw when the colors do not fit, and every forced depth except
+32 drops alpha. 32-bit PCX is the four-plane form ImageMagick writes (Pillow cannot read it). Planes are unpadded so
+Pillow reads them correctly. Resolution comes from `Image.Metadata` (outside 1–65535 dpi it is written as 96). PCX has
+no ICC, EXIF or XMP and stores the first frame.
 
 ## Recipes
 
