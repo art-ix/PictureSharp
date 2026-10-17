@@ -56,7 +56,8 @@ internal static class SequenceMemoryProbe
 
     private static async Task ReadAsync(string path, Action sample)
     {
-        await using var reader = await Image.OpenFrameReaderAsync(path);
+        // The decoded-pixel limit is sequence-wide: 10000 frames of 256×256 exceed the default MaxPixels.
+        await using var reader = await Image.OpenFrameReaderAsync(path, new DecoderOptions { MaxPixels = long.MaxValue });
         while (await reader.MoveNextAsync())
             if (reader.FramesRead % 10 == 1 || reader.FramesRead % 10 == 0) sample();
     }

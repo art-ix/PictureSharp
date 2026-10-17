@@ -1,0 +1,483 @@
+{
+  "machine": "Intel Core i5-12500H, Linux x64, .NET 10, CPUs 0-7 (taskset)",
+  "date": "2026-10-17",
+  "inputs": "integration-probe prepare: 3840x3072 JPEG q90 tiled from Kodak (orientation 6, Display P3 ICC); 4000x3000 JPEG with ISO 21496-1 RGB gain map",
+  "timing_runs_order": [
+    "0.6.9",
+    "0.7.0",
+    "0.7.0",
+    "0.6.9"
+  ],
+  "timing": {
+    "i069a": [
+      {
+        "Operation": "jpeg-load",
+        "MedianMs": 75.5575,
+        "MinMs": 70.95205,
+        "MaxMs": 147.4323,
+        "AllocatedMiB": 45.02136993408203,
+        "CancelMedianMs": 0.1774,
+        "CancelMaxMs": 1.6498
+      },
+      {
+        "Operation": "thumbnail-256",
+        "MedianMs": 64.38535,
+        "MinMs": 63.77905,
+        "MaxMs": 73.0088,
+        "AllocatedMiB": 6.201423645019531,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "load-orient-srgb-resize-webp",
+        "MedianMs": 426.4537,
+        "MinMs": 412.9068,
+        "MaxMs": 470.4881,
+        "AllocatedMiB": 156.48160552978516,
+        "CancelMedianMs": 0.2108,
+        "CancelMaxMs": 0.4615
+      },
+      {
+        "Operation": "metadata-read",
+        "MedianMs": 1.7526931034482758,
+        "MinMs": 1.7183932203389831,
+        "MaxMs": 1.7769087719298247,
+        "AllocatedMiB": 0.010598281334186423,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "metadata-edit",
+        "MedianMs": 4.047436,
+        "MinMs": 4.028144,
+        "MaxMs": 4.255879166666666,
+        "AllocatedMiB": 3.3337310791015624,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "hdr-tone-map",
+        "MedianMs": 132.607,
+        "MinMs": 130.9634,
+        "MaxMs": 138.2348,
+        "AllocatedMiB": 277.5986328125,
+        "CancelMedianMs": 0.1084,
+        "CancelMaxMs": 0.3424
+      },
+      {
+        "Operation": "hdr-resize-save",
+        "MedianMs": 72.81995,
+        "MinMs": 71.4908,
+        "MaxMs": 77.242,
+        "AllocatedMiB": 63.17444610595703,
+        "CancelMedianMs": 0.0648,
+        "CancelMaxMs": 0.3364
+      }
+    ],
+    "i070a": [
+      {
+        "Operation": "jpeg-load",
+        "MedianMs": 77.29125,
+        "MinMs": 71.18555,
+        "MaxMs": 143.9069,
+        "AllocatedMiB": 45.02130889892578,
+        "CancelMedianMs": 0.2015,
+        "CancelMaxMs": 1.6242
+      },
+      {
+        "Operation": "thumbnail-256",
+        "MedianMs": 66.63895,
+        "MinMs": 64.48955,
+        "MaxMs": 73.6623,
+        "AllocatedMiB": 6.2015533447265625,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "load-orient-srgb-resize-webp",
+        "MedianMs": 440.3435,
+        "MinMs": 424.7031,
+        "MaxMs": 480.372,
+        "AllocatedMiB": 156.4776382446289,
+        "CancelMedianMs": 0.2,
+        "CancelMaxMs": 0.4214
+      },
+      {
+        "Operation": "metadata-read",
+        "MedianMs": 1.8742648148148149,
+        "MinMs": 1.6948866666666667,
+        "MaxMs": 1.888438888888889,
+        "AllocatedMiB": 0.010602315266927084,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "metadata-edit",
+        "MedianMs": 4.356395652173913,
+        "MinMs": 4.269950000000001,
+        "MaxMs": 4.464704347826086,
+        "AllocatedMiB": 3.3337667713994565,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "hdr-tone-map",
+        "MedianMs": 132.9425,
+        "MinMs": 131.2212,
+        "MaxMs": 138.9515,
+        "AllocatedMiB": 277.5926284790039,
+        "CancelMedianMs": 0.1584,
+        "CancelMaxMs": 0.3565
+      },
+      {
+        "Operation": "hdr-resize-save",
+        "MedianMs": 73.9827,
+        "MinMs": 71.13605,
+        "MaxMs": 76.54455,
+        "AllocatedMiB": 63.17347717285156,
+        "CancelMedianMs": 0.1721,
+        "CancelMaxMs": 0.4356
+      }
+    ],
+    "i070b": [
+      {
+        "Operation": "jpeg-load",
+        "MedianMs": 80.63245,
+        "MinMs": 71.92115,
+        "MaxMs": 148.6816,
+        "AllocatedMiB": 45.02143096923828,
+        "CancelMedianMs": 0.2203,
+        "CancelMaxMs": 1.6847
+      },
+      {
+        "Operation": "thumbnail-256",
+        "MedianMs": 64.97365,
+        "MinMs": 64.2242,
+        "MaxMs": 73.3692,
+        "AllocatedMiB": 6.201625823974609,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "load-orient-srgb-resize-webp",
+        "MedianMs": 428.5452,
+        "MinMs": 415.1137,
+        "MaxMs": 466.5079,
+        "AllocatedMiB": 156.48674774169922,
+        "CancelMedianMs": 0.2943,
+        "CancelMaxMs": 0.4326
+      },
+      {
+        "Operation": "metadata-read",
+        "MedianMs": 1.885964814814815,
+        "MinMs": 1.710384745762712,
+        "MaxMs": 1.9469615384615386,
+        "AllocatedMiB": 0.010602315266927084,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "metadata-edit",
+        "MedianMs": 4.388456521739131,
+        "MinMs": 4.309558333333333,
+        "MaxMs": 4.515317391304348,
+        "AllocatedMiB": 3.333774400793988,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "hdr-tone-map",
+        "MedianMs": 131.4286,
+        "MinMs": 131.0855,
+        "MaxMs": 139.1007,
+        "AllocatedMiB": 277.59606170654297,
+        "CancelMedianMs": 0.1435,
+        "CancelMaxMs": 0.3277
+      },
+      {
+        "Operation": "hdr-resize-save",
+        "MedianMs": 72.92515,
+        "MinMs": 71.0368,
+        "MaxMs": 75.7842,
+        "AllocatedMiB": 63.17390441894531,
+        "CancelMedianMs": 0.1163,
+        "CancelMaxMs": 0.2263
+      }
+    ],
+    "i069b": [
+      {
+        "Operation": "jpeg-load",
+        "MedianMs": 74.88055,
+        "MinMs": 72.45565,
+        "MaxMs": 151.9908,
+        "AllocatedMiB": 45.02143096923828,
+        "CancelMedianMs": 0.2385,
+        "CancelMaxMs": 1.6855
+      },
+      {
+        "Operation": "thumbnail-256",
+        "MedianMs": 64.9226,
+        "MinMs": 64.5798,
+        "MaxMs": 73.3681,
+        "AllocatedMiB": 6.201545715332031,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "load-orient-srgb-resize-webp",
+        "MedianMs": 436.2938,
+        "MinMs": 418.8488,
+        "MaxMs": 481.5575,
+        "AllocatedMiB": 156.47918701171875,
+        "CancelMedianMs": 0.2744,
+        "CancelMaxMs": 0.3995
+      },
+      {
+        "Operation": "metadata-read",
+        "MedianMs": 1.7493534482758621,
+        "MinMs": 1.6935066666666667,
+        "MaxMs": 1.769221052631579,
+        "AllocatedMiB": 0.010598281334186423,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "metadata-edit",
+        "MedianMs": 4.080244,
+        "MinMs": 4.02746,
+        "MaxMs": 4.252095833333333,
+        "AllocatedMiB": 3.3337249755859375,
+        "CancelMedianMs": null,
+        "CancelMaxMs": null
+      },
+      {
+        "Operation": "hdr-tone-map",
+        "MedianMs": 131.8123,
+        "MinMs": 131.2012,
+        "MaxMs": 137.8271,
+        "AllocatedMiB": 277.59244537353516,
+        "CancelMedianMs": 0.1701,
+        "CancelMaxMs": 1.2356
+      },
+      {
+        "Operation": "hdr-resize-save",
+        "MedianMs": 73.1359,
+        "MinMs": 71.6474,
+        "MaxMs": 77.0898,
+        "AllocatedMiB": 63.17375946044922,
+        "CancelMedianMs": 0.0958,
+        "CancelMaxMs": 0.3118
+      }
+    ]
+  },
+  "peak_rss_mib": {
+    "0.6.9/jpeg-load": [
+      75.0,
+      75.1,
+      75.2
+    ],
+    "0.7.0/jpeg-load": [
+      75.1,
+      75.1,
+      75.1
+    ],
+    "0.6.9/thumbnail-256": [
+      23.6,
+      23.5,
+      23.4
+    ],
+    "0.7.0/thumbnail-256": [
+      23.4,
+      23.5,
+      23.5
+    ],
+    "0.6.9/load-orient-srgb-resize-webp": [
+      245.9,
+      246.2,
+      246.0
+    ],
+    "0.7.0/load-orient-srgb-resize-webp": [
+      245.9,
+      246.0,
+      246.2
+    ],
+    "0.6.9/metadata-read": [
+      10.5,
+      10.5,
+      10.5
+    ],
+    "0.7.0/metadata-read": [
+      10.5,
+      10.5,
+      10.6
+    ],
+    "0.6.9/metadata-edit": [
+      17.8,
+      17.7,
+      17.6
+    ],
+    "0.7.0/metadata-edit": [
+      17.6,
+      17.6,
+      17.6
+    ],
+    "0.6.9/hdr-tone-map": [
+      308.5,
+      308.3,
+      308.4
+    ],
+    "0.7.0/hdr-tone-map": [
+      307.9,
+      307.8,
+      307.7
+    ],
+    "0.6.9/hdr-resize-save": [
+      133.0,
+      133.0,
+      133.0
+    ],
+    "0.7.0/hdr-resize-save": [
+      133.0,
+      133.1,
+      133.1
+    ]
+  },
+  "sequence_probe_0.7.0": [
+    {
+      "format": "gif",
+      "frames": 1000,
+      "mode": "write",
+      "retained_mib": 0.34,
+      "rss_mib": 4.49,
+      "allocated_mib": 64.03,
+      "file_bytes": 571103,
+      "seconds": 0.606031001
+    },
+    {
+      "format": "gif",
+      "frames": 1000,
+      "mode": "read",
+      "retained_mib": 0.14,
+      "rss_mib": 2.03,
+      "allocated_mib": 1.31,
+      "file_bytes": 571103,
+      "seconds": 0.364386092
+    },
+    {
+      "format": "png",
+      "frames": 1000,
+      "mode": "write",
+      "retained_mib": 0.47,
+      "rss_mib": 6.93,
+      "allocated_mib": 630.45,
+      "file_bytes": 488954,
+      "seconds": 0.990787916
+    },
+    {
+      "format": "png",
+      "frames": 1000,
+      "mode": "read",
+      "retained_mib": 1.34,
+      "rss_mib": 3.18,
+      "allocated_mib": 259.27,
+      "file_bytes": 488954,
+      "seconds": 0.626405283
+    },
+    {
+      "format": "webp",
+      "frames": 1000,
+      "mode": "write",
+      "retained_mib": 2.49,
+      "rss_mib": 9.46,
+      "allocated_mib": 214.85,
+      "file_bytes": 96034,
+      "seconds": 1.22111483
+    },
+    {
+      "format": "webp",
+      "frames": 1000,
+      "mode": "read",
+      "retained_mib": 0.11,
+      "rss_mib": 2.12,
+      "allocated_mib": 45.42,
+      "file_bytes": 96034,
+      "seconds": 0.322351262
+    },
+    {
+      "format": "gif",
+      "frames": 10000,
+      "mode": "write",
+      "retained_mib": 0.34,
+      "rss_mib": 4.94,
+      "allocated_mib": 635.94,
+      "file_bytes": 5710761,
+      "seconds": 4.191712741
+    },
+    {
+      "format": "gif",
+      "frames": 10000,
+      "mode": "read",
+      "retained_mib": 0.14,
+      "rss_mib": 5.54,
+      "allocated_mib": 7.47,
+      "file_bytes": 5710761,
+      "seconds": 2.406133205
+    },
+    {
+      "format": "png",
+      "frames": 10000,
+      "mode": "write",
+      "retained_mib": 0.47,
+      "rss_mib": 7.53,
+      "allocated_mib": 6297.42,
+      "file_bytes": 4888505,
+      "seconds": 5.735973791
+    },
+    {
+      "format": "png",
+      "frames": 10000,
+      "mode": "read",
+      "retained_mib": 1.34,
+      "rss_mib": 4.6,
+      "allocated_mib": 2578.53,
+      "file_bytes": 4888505,
+      "seconds": 1.661535466
+    },
+    {
+      "format": "webp",
+      "frames": 10000,
+      "mode": "write",
+      "retained_mib": 5.64,
+      "rss_mib": 12.33,
+      "allocated_mib": 2141.53,
+      "file_bytes": 962522,
+      "seconds": 7.697829642
+    },
+    {
+      "format": "webp",
+      "frames": 10000,
+      "mode": "read",
+      "retained_mib": 0.94,
+      "rss_mib": 1.74,
+      "allocated_mib": 448.94,
+      "file_bytes": 962522,
+      "seconds": 1.001538625
+    }
+  ],
+  "rechecks": {
+    "note": "alternating 0.6.9/0.7.0 processes, three rounds, only the named operations",
+    "jpeg-load_thumbnail": [
+      "OLD: jpeg-load: 75.75 ms (71.58\u2013144.91), 45.0 MiB, cancel 0.2 ms (max 1.9) thumbnail-256: 66.41 ms (64.88\u201373.65), 6.2 MiB ",
+      "NEW: jpeg-load: 74.93 ms (71.34\u2013147.47), 45.0 MiB, cancel 0.2 ms (max 1.8) thumbnail-256: 64.37 ms (63.86\u201374.04), 6.2 MiB ",
+      "OLD: jpeg-load: 72.20 ms (70.98\u2013141.47), 45.0 MiB, cancel 0.2 ms (max 1.7) thumbnail-256: 67.64 ms (64.71\u201375.47), 6.2 MiB ",
+      "NEW: jpeg-load: 74.19 ms (71.49\u2013141.10), 45.0 MiB, cancel 0.2 ms (max 1.8) thumbnail-256: 66.15 ms (63.46\u201374.21), 6.2 MiB ",
+      "OLD: jpeg-load: 75.84 ms (71.70\u2013143.57), 45.0 MiB, cancel 0.2 ms (max 1.6) thumbnail-256: 64.79 ms (63.55\u201373.55), 6.2 MiB ",
+      "NEW: jpeg-load: 75.06 ms (71.08\u2013144.54), 45.0 MiB, cancel 0.2 ms (max 1.8) thumbnail-256: 64.20 ms (63.66\u201373.83), 6.2 MiB "
+    ],
+    "metadata": [
+      "0.6.9 read 1.88/1.75/1.88 ms, edit 4.75/4.49/4.73 ms",
+      "0.7.0 read 1.75/1.75/1.88 ms, edit 4.46/4.53/4.77 ms"
+    ]
+  },
+  "webp_retained_plateau": "sequence-probe webp write retained +MiB: 3000 frames 3.81, 10000 5.64, 20000 5.63; read 0.64/0.94/0.94"
+}

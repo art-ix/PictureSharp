@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.6.8 (opublikowana); 0.6.9 gotowa do wydania (VERSION 0.6.9, nieopublikowana).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.6.9 (opublikowana 2026-10-16).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -37,7 +37,7 @@ pracy: `progres.md` (bez commitowania).
 | Wersja | Zakres | Status |
 | --- | --- | --- |
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
-| 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Gotowa do wydania (DoD i bramka linux-x64; bez ARM64) |
+| 0.6.9 | HDR przy edycji: gain map w operacjach geometrycznych i zapis JPEG z mapą ISO 21496-1 | Wydana (2026-10-16; bez ARM64) |
 | 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
@@ -54,6 +54,8 @@ Krótkie zadania, które nie dodają funkcjonalności, ale blokują zamknięcie 
 - NuGet: obecność 0.6.8 wszystkich czterech paczek w indeksie; Trusted Publishing dla `PictureSharp.Drawing`,
   `PictureSharp.Skia` i `PictureSharp.AspNetCore`.
 - 0.6.6: decyzja użytkownika (2026-10-16) — testy na macOS odłożone do dostępności sprzętu; etap pozostaje otwarty.
+  Decyzja użytkownika (2026-10-17): brak możliwości wynajęcia macOS — 0.6.6 nie blokuje 0.7.0; wydanie 0.7.0 opisuje
+  wariant Apple jako niepotwierdzony na Apple.
   Bez porównania z ImageIO/Core Image wariant Apple pozostaje „zgodny z referencjami Linux, niepotwierdzony na Apple”
   i nie jest oznaczany jako zweryfikowany.
 
@@ -169,7 +171,15 @@ Zakres:
 - Uzupełnić CLI i przewodniki o ICO, miniatury, limity, sekwencyjne animacje, kolor, metadane, HDR i nowe operacje. Przykłady sprawdzane przez `DocsExamplesTests`.
 - Rozszerzyć istniejącą macierz wydajności o nowe ścieżki, czas anulowania, szczytową pamięć i długie animacje; opisać kompromisy jakości i ograniczenia.
 - Sprawdzić pakiet NuGet, trimming/NativeAOT w obsługiwanym zakresie i użycie z lokalnego feedu na x64/ARM64. Przygotować notatki migracyjne z 0.5.0, w tym zmianę nazwy pakietu i przestrzeni nazw z RasterSharp na PictureSharp.
-- Rozstrzygnąć zaległe weryfikacje: ARM64 (wymaga zgody użytkownika na Orange Pi) i status 0.6.6.
+- Rozstrzygnąć zaległe weryfikacje: ARM64 (wymaga zgody użytkownika na Orange Pi). 0.6.6 (macOS) poza bramką 0.7.0 — decyzja użytkownika 2026-10-17.
+
+Stan (2026-10-17): testy end-to-end w `tests/PictureSharp.Tests/Core/EndToEndTests.cs` (ICO, miniatura JPEG z
+orientacją i ICC, sekwencyjna animacja z maską i resize, metadane bez rekompresji, ograniczone zasoby, JPEG HDR → SDR;
+HDR → resize → zapis → libultrahdr w `HdrUltraHdrOracleTests`, wtyczka SPI HDR w `PluginSpiTests`). CLI: `metadata`,
+`resize -stream`, `-srgb`/`-max-pixels`/`-threads`; przewodniki: cli, hdr, indeks z ICO,
+`docs/migration-from-0.5.md`. Macierz: `integration-probe` (12 MP, czas/alokacje/anulowanie/szczytowy RSS względem
+0.6.9, bez regresji) i 10 000 klatek w `sequence-probe` (`docs/performance.md`). Otwarte: ujednolicenie API (przegląd
+opcji/nazw przed zamrożeniem migawki), pełna bramka z Oracle, ARM64 (zgoda użytkownika), notatki wydania.
 
 ### SPI wtyczek w 0.7.0
 
@@ -195,6 +205,7 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | Kolor bazy HDR z opisu metadanych | `JpegGainMapReader.ReadBaseColor`, tylko ICC z JPEG | HEIC z ICC lub nclx | 0.7.0 |
 | Metadane bez dekodu | `IImageMetadataCodec` internal; wtyczki → `NotSupportedException` | `ReadMetadata`/`EditMetadata` HEIC | 0.7.0 (odczyt; zapis opcjonalny) |
 | Liczba elementów kontenera w Identify | `ImageInfo` miało tylko `FrameCount`; to liczba klatek, nie elementów HEIF | DoD wtyczki 0.1.0: liczba elementów bez traktowania kafli/alfy/metadanych jako animacji | Zamknięte w 0.6.9: `ImageInfo.ContainerItemCount` (`int?`, null dla formatów wbudowanych) |
+| Konfiguracja przy zapisie | `Save`/`Encode`/`CreateWriter` szukają enkodera tylko w `ImageConfiguration.Default`; odczyt ma `DecoderOptions.Configuration` | `SaveAsHeic`/`ToHeic` i `Save(..., HeifEncoderOptions)` bez podmiany globalnej konfiguracji (testy wtyczki wołają enkoder bezpośrednio) | 0.7.0 (zgłoszone przez wtyczkę 2026-10-16) |
 | Kontrakt orientacji kontenera | nieopisany | `irot`/`imir` bez podwójnego obrotu z EXIF | 0.7.0 (dokumentacja) |
 | Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
 | Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
@@ -202,6 +213,9 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | CICP PQ/HLG | brak | HDR10 HEIC z Androida | poza 0.8.0 |
 
 Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
+0. Konfiguracja zapisu: `EncoderOptions.Configuration` (`ImageConfiguration?`, domyślnie `ImageConfiguration.Default`
+   w chwili wywołania), jak `DecoderOptions.Configuration`; używana przez `Save`, `SaveAsync`, `Encode` i
+   `CreateWriter` z opcjami.
 1. Format-neutralny model gain map: publiczne `PictureSharp.Formats.GainMapMetadata` z
    `ParseIso(payload, mapChannels, alternateIcc)`, `ParseApple(exif, mapXmp)`, `Kind`, `Headroom` i
    `ToHdrInfo(mapSize)`. Opakowuje `GainMapParameters`. Parsery `ReadIso`/`ReadIsoVersion`/`ReadApple`/`AppleHeadroom`
@@ -224,6 +238,14 @@ Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
      nie obracał drugi raz;
    - mapowanie nclx, gain map, metadane i wątki;
    - polityka zgodności SPI: zmiany łamiące tylko w wersji minor, z notatką migracyjną i migawką API.
+
+Stan (2026-10-17): punkty 0–6 zaimplementowane z nazwami roboczymi z tej listy (`DeclareGainMap(detected, reason,
+corrupt)`, `IImageFormatMetadataCodec.Rewrite` z domyślnym `NotSupportedException`, `GainMapImage` jako klasa
+abstrakcyjna). Parsery w `Algorithms/Hdr/GainMapMetadataParser.cs`, kolor bazy w `Algorithms/Hdr/HdrBaseColor.cs`;
+JPEG bez zmian wyników. Testy `PluginSpiTests` (wtyczka `GainMapContainerFormat`): `ToHdr` bitowo równe ścieżce JPEG
+dla 11 plików korpusu (ISO, Apple, orientacje, P3, przestrzeń alternatywna), `ColorConversion`, `TargetSize` i
+edycje, limity, uszkodzone i nieobsługiwane deklaracje, metadane bez dekodu, zapis przez `EncoderOptions.Configuration`.
+Migawka API z samymi dodatkami. `verify-package-consumer.sh` sprawdza wtyczkę używającą nowego SPI (zapis z `EncoderOptions.Configuration`, gain mapa, kodek metadanych) pod pełnym trimmingiem i Native AOT — DoD SPI spełnione.
 
 DoD SPI:
 - Wtyczka testowa w `tests/PictureSharp.Tests` (kontener z bazą JPEG/PNG, mapą JPEG i payloadem ISO) daje `ToHdr`
@@ -308,4 +330,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.6.5** — HDR z JPEG z gain map (Apple, ISO 21496-1): `ToHdr`, `ToneMap`, edycja metadanych z zachowaniem mapy.
 - **0.6.7** — SIMD dla HDR (deterministyczne Exp2/Log2) i operacji graficznych.
 - **0.6.8** — poprawki po review: AutoCrop animacji, Resize Min, TargetSize z limitem wątków, anulowanie VP8L.
-- **0.6.9** — gain map zachowana przy operacjach geometrycznych, zapis JPEG z mapą ISO 21496-1 (`JpegEncoderOptions.GainMap`), `ImageInfo.ContainerItemCount`, CLI `-hdr keep` (gotowe, nieopublikowane).
+- **0.6.9** — gain map zachowana przy operacjach geometrycznych, zapis JPEG z mapą ISO 21496-1 (`JpegEncoderOptions.GainMap`), `ImageInfo.ContainerItemCount`, CLI `-hdr keep`.

@@ -890,3 +890,59 @@ no full-size float buffer is allocated. Ranges are two runs of the probe. Raw da
 ```bash
 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- hdr-edit-probe docs/measurements/hdr-edit-0.6.9-x64.json
 ```
+
+## Integration measurements (0.7.0)
+
+Complete user paths on 12 MP inputs, against release 0.6.9, using the same probe and the same input bytes
+(`integration-probe`; it uses only API available in 0.6.9). The photo is a 3840×3072 JPEG (quality 90) tiled from
+30 Kodak images (external corpus), with EXIF orientation 6 and a Display P3 ICC profile. The HDR file is a 4000×3000
+JPEG with an ISO 21496-1 RGB gain map at a quarter of the resolution, as in the 0.6.9 section. The time is the median of
+nine samples of at least 100 ms each, after two warm-ups. Runs were alternated (0.6.9, 0.7.0, 0.7.0, 0.6.9), pinned to
+CPUs 0–7 on an i5-12500H, Linux x64, .NET 10, default JIT, 2026-10-17. Allocations are per call.
+
+Cancellation is requested after a quarter of the median duration. The latency is the time from the cancellation
+callback to `OperationCanceledException`, as the median (and maximum) of nine attempts.
+
+Peak memory is the process peak resident set while one call runs, in a fresh process per operation after the input
+bytes are read. The peak is reset through `/proc/self/clear_refs`, so it includes JIT and runtime start-up of the code
+path. It is the median of three processes.
+
+| Operation | 0.6.9 (ms) | 0.7.0 (ms) | Allocated | Cancel latency | Peak RSS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `Image.Load` (12 MP JPEG) | 72.2–75.8 | 74.2–80.6 | 45.0 MiB | 0.2 ms (max 1.8) | 75 MiB |
+| Thumbnail 256 px: `TargetSize`, orientation, ICC → sRGB, JPEG | 64.4–67.6 | 64.2–66.6 | 6.2 MiB | — | 24 MiB |
+| Load with orientation and ICC → sRGB, `Resize(1600, 0)`, WebP q80 | 426–436 | 429–440 | 156.5 MiB | 0.2–0.3 ms (max 0.4) | 246 MiB |
+| `ReadMetadata` | 1.75–1.88 | 1.75–1.89 | < 0.1 MiB | — | 11 MiB |
+| `EditMetadata` (EXIF model, remove GPS) | 4.05–4.75 | 4.36–4.77 | 3.3 MiB | — | 18 MiB |
+| HDR: `LoadGainMap`, `ToHdr`, `ToneMap` | 131.8–132.6 | 131.4–132.9 | 277.6 MiB | 0.1–0.2 ms (max 0.4) | 308 MiB |
+| HDR: resize to half and save with the gain map (`Require`) | 72.8–73.1 | 72.9–74.0 | 63.2 MiB | 0.1–0.2 ms (max 0.4) | 133 MiB |
+
+Allocations and peak memory are identical between the releases. The 0.7.0 plugin SPI changes adapters, configuration
+and HDR metadata parsing, all outside the pixel loops. The first sweep showed +5% for `Image.Load` and +7% for the
+metadata operations. Three further alternating rounds of only those operations put both builds in the same bimodal
+ranges (load 72–76 ms; metadata read 1.75 or 1.88 ms), so the difference is noise, not a regression. Peak memory is
+close to the decoded pixels plus the codec's working buffers. The thumbnail never holds the 12 MP image. The HDR
+reconstruction holds the 16-byte-per-pixel `HdrImage` (183 MiB for 12 MP) in addition to the base.
+
+**Long animations.** The `sequence-probe` from 0.6.0 was extended to 10,000 frames (256×256, the same sprite; one process
+per row; wall time includes process start-up). Retained memory over the warmed baseline stays bounded:
+
+| Format | Frames | Writer retained +MiB | Reader retained +MiB | Write / read time | Output |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GIF | 1,000 / 10,000 | 0.34 / 0.34 | 0.14 / 0.14 | 0.6 / 4.2 s, 0.4 / 2.4 s | 0.57 / 5.7 MB |
+| PNG | 1,000 / 10,000 | 0.47 / 0.47 | 1.34 / 1.34 | 1.0 / 5.7 s, 0.6 / 1.7 s | 0.49 / 4.9 MB |
+| WebP | 1,000 / 10,000 | 2.49 / 5.64 | 0.11 / 0.94 | 1.2 / 7.7 s, 0.3 / 1.0 s | 0.10 / 0.96 MB |
+
+WebP's retained memory grows from 1,000 to 10,000 frames and then stays flat: at 20,000 frames the writer retains
+5.63 MiB and the reader 0.94 MiB. The growth comes from shared `ArrayPool` buffers filling up, not from per-frame state.
+A frame reader applies `MaxPixels` to the decoded pixels of the whole sequence. 10,000 frames of 256×256
+(655 Mpx) exceed the default 2²⁸, so the probe raises the limit. Applications that stream long animations must do
+the same. Raw data: [integration-0.7.0-x64.json](measurements/integration-0.7.0-x64.json). Not measured on ARM64.
+
+```bash
+dotnet build -c Release benchmarks/PictureSharp.Benchmarks
+dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll integration-probe prepare /tmp/probe
+taskset -c 0-7 dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll integration-probe time /tmp/probe integration.json
+taskset -c 0-7 dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll integration-probe peak /tmp/probe hdr-tone-map
+taskset -c 0-7 dotnet benchmarks/PictureSharp.Benchmarks/bin/Release/net10.0/PictureSharp.Benchmarks.dll sequence-probe webp 10000 write /tmp/sequence.webp
+```

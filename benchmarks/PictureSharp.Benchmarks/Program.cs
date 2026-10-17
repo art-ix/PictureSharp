@@ -38,6 +38,12 @@ if (args is ["hdr-probe", string hdrOutput])
     return;
 }
 
+if (args is ["integration-probe", ..])
+{
+    IntegrationProbe.Run(args);
+    return;
+}
+
 if (args is ["sequence-probe", string format, string count, string mode, string path])
 {
     await SequenceMemoryProbe.RunAsync(format, int.Parse(count, System.Globalization.CultureInfo.InvariantCulture), mode, path);

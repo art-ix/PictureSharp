@@ -11,13 +11,15 @@
 | [Adapters](adapters.md) | The `PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` packages: `Bitmap`/`SKBitmap` conversions, `ImageResult` with `Accept` negotiation, uploads with limits |
 | [Animation](animation.md) | Frames, durations, loops, animated WebP, APNG and GIF, GIF ↔ WebP conversion |
 | [Metadata](metadata.md) | Resolution, typed EXIF, ICC/XMP and metadata editing without recompression |
-| [HDR photos](hdr.md) | JPEG gain maps (ISO 21496-1, Apple HDR Gain Map): `LoadGainMap`, `ToHdr`, `HdrImage`, `ToneMap`, metadata editing of HDR files |
+| [ICO icons](ico.md) | Multi-size icons: `IcoFile.Save`/`LoadAll`/`Identify`, variant selection, PNG and DIB entries |
+| [HDR photos](hdr.md) | JPEG gain maps (ISO 21496-1, Apple HDR Gain Map): `LoadGainMap`, `ToHdr`, `HdrImage`, `ToneMap`, keeping the map through edits and saving, metadata editing of HDR files |
 | [Color management](color-management.md) | ICC/PNG color descriptions, conversion to sRGB, linear-light resize and compositing |
+| [Migrating from 0.5.0](migration-from-0.5.md) | From the RasterSharp 0.5.0 package: package and namespace changes, moved decoder options, behavior changes |
 | [Command-line sample](cli.md) | The `samples/PictureSharp.Cli` tool |
 | [Architecture](architecture.md) | Layers, model boundaries, composition and compiled dependency checks |
 | [Domain verification](ddd-verification.md) | Domain hardening, current tests, CI, package consumers and measurements |
 | [Refactoring verification](refactoring-verification.md) | Tests, package consumers, AOT/trimming and before/after measurements |
-| [Extending PictureSharp](extending-picturesharp.md) | Format plugins, configurations, custom frame processors and shortcuts; contributing built-in formats and operations |
+| [Extending PictureSharp](extending-picturesharp.md) | Format plugins (with HDR gain maps and metadata without decoding), configurations, custom frame processors and shortcuts; contributing built-in formats and operations |
 | [Development](development.md) | Building, tests, oracles, corpus regeneration and the public API snapshot |
 | [Performance](performance.md) | VP8L measurements, benchmark commands, allocation costs and comparison limits |
 

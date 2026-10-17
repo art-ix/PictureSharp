@@ -143,6 +143,22 @@ public sealed class DocsExamplesTests : IDisposable
         await Assert.That(image.Width).IsEqualTo(800);
     }
 
+    // ------------------------------------------------------------ migration-from-0.5.md
+
+    [Test]
+    public async Task Migration_QuickStartAndMovedDecoderOptions()
+    {
+        using var image = await Image.LoadAsync(P("photo.jpg"));
+        image.Mutate(x => x.AutoOrient().Resize(1600, 0).UnsharpMask());
+        await image.SaveAsWebPAsync(P("photo.webp"), new() { Quality = 82 });
+        using Image thumbnail = image.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
+        await Assert.That(thumbnail.Size).IsEqualTo(new Size(256, 256));
+
+        using Image strict = Image.Load(P("input.png"), new DecoderOptions { Png = new() { StrictChecksums = true } });
+        using Image webp = Image.Load(P("photo.webp"), new DecoderOptions { WebP = new() { BypassFiltering = true, FancyUpsampling = false } });
+        await Assert.That(webp.Width).IsEqualTo(1600);
+    }
+
     // ------------------------------------------------------------ limits-and-cancellation.md
 
     [Test]

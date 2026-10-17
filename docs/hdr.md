@@ -184,7 +184,15 @@ dotnet run -c Release --project samples/PictureSharp.Cli -- resize IMG_8113.jpeg
 writes a JPEG with the ISO 21496-1 gain map and fails for Apple-only maps, padding and non-JPEG output; `info` on the
 result shows the edited map size.
 
+## Gain maps from format plugins
+
+Since 0.7.0 a format plugin can attach the gain map of its own container (for example HEIC with an Apple or ISO 21496-1
+map) with `ImageDecodeContext.AttachGainMap`; `LoadGainMap`, `Identify`, `ToHdr`, `ToneMap` and the geometric edits
+then work as for JPEG. Such maps are not written back: saving to JPEG with `JpegGainMapMode.Require` throws and
+`Preserve` writes SDR. See [Extending PictureSharp](extending-picturesharp.md#hdr-gain-maps).
+
 ## Limits of this release
 
-No gain map generation from HDR pixels (`HdrImage` cannot be saved), no HDR processing in `Mutate` beyond the geometric edits above, no HEIC/AVIF. Saving to PNG or WebP produces
+No gain map generation from HDR pixels (`HdrImage` cannot be saved), no HDR processing in `Mutate` beyond the geometric
+edits above, no built-in HEIC/AVIF (HEIC comes from the separate `PictureSharp.Heif` plugin). Saving to PNG or WebP produces
 SDR. Displaying HDR is up to the application, which needs a platform API that accepts linear or PQ/HLG pixels.
