@@ -1,26 +1,35 @@
 # PictureSharp documentation
 
+## Using the library
+
 | Guide | What it covers |
 | --- | --- |
-| [Getting started](getting-started.md) | Installation, the first program, `Mutate` vs `Clone`, disposal, exceptions and limits |
-| [Loading and saving](loading-and-saving.md) | `Image.Load`/`LoadAsync`, `Identify`, `DetectFormat`, `DecoderOptions`, `ImageConfiguration`, `Save` and `SaveAs*`, streams and web responses |
-| [Resource limits and cancellation](limits-and-cancellation.md) | `MaxInputBytes`, `MaxPixels`, `MaxFrames`, `MaxMetadataBytes`, cancellation tokens and what a canceled call leaves behind |
-| [Encoder options](encoder-options.md) | `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions`, `BmpEncoderOptions`, `GifEncoderOptions`, `PcxEncoderOptions` and common recipes |
-| [Image processing](image-processing.md) | Every operation available in `Mutate`/`Clone`: resize, crop, trim, pad, rotate, color, levels, histograms, filters, compositing with blend modes, alpha masks, custom operations |
-| [Pixels and interop](pixels-and-interop.md) | `Rgba32`, pixel spans, `PixelFormat` conversions, WPF/SkiaSharp/WinForms, raw buffer encoding and decoding |
-| [Adapters](adapters.md) | The `PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` packages: `Bitmap`/`SKBitmap` conversions, `ImageResult` with `Accept` negotiation, uploads with limits |
-| [Animation](animation.md) | Frames, durations, loops, animated WebP, APNG and GIF, GIF ↔ WebP conversion |
-| [Metadata](metadata.md) | Resolution, typed EXIF, ICC/XMP and metadata editing without recompression |
-| [ICO icons](ico.md) | Multi-size icons: `IcoFile.Save`/`LoadAll`/`Identify`, variant selection, PNG and DIB entries |
-| [HDR photos](hdr.md) | JPEG gain maps (ISO 21496-1, Apple HDR Gain Map): `LoadGainMap`, `ToHdr`, `HdrImage`, `ToneMap`, keeping the map through edits and saving, metadata editing of HDR files |
-| [Color management](color-management.md) | ICC/PNG color descriptions, conversion to sRGB, linear-light resize and compositing |
-| [Migrating from 0.5.0](migration-from-0.5.md) | From the RasterSharp 0.5.0 package: package and namespace changes, moved decoder options, behavior changes |
+| [Getting started](getting-started.md) | Installation, namespaces, the first program, `Mutate` and `Clone`, disposal, errors |
+| [Loading and saving](loading-and-saving.md) | `Load`, `Identify`, `DetectFormat`, decoder options, thumbnails while loading, `Save`, `ImageConfiguration` |
+| [Limits and cancellation](limits-and-cancellation.md) | Limits for untrusted input, cancellation tokens and what a canceled call leaves behind |
+| [Encoder options](encoder-options.md) | Options of the WebP, PNG, JPEG, BMP, GIF and PCX encoders, with recipes |
+| [Image processing](image-processing.md) | Every `Mutate`/`Clone` operation: resize, geometry, trimming, color, levels, histograms, filters, compositing, masks, custom operations |
+| [Pixels and interop](pixels-and-interop.md) | `Rgba32`, pixel spans, raw buffers in other pixel formats, WPF, SkiaSharp and WinForms |
+| [Animation](animation.md) | Frames, durations and loops, animated WebP, APNG and GIF, frame-by-frame reading and writing |
+| [Metadata](metadata.md) | Resolution, ICC/EXIF/XMP blocks, typed EXIF and GPS, editing files without recompression |
+| [Color management](color-management.md) | ICC and PNG color descriptions, conversion to sRGB, linear-light resizing and compositing |
+| [HDR photos](hdr.md) | JPEG gain maps (ISO 21496-1, Apple): `ToHdr`, `ToneMap`, editing and saving with the map |
+| [ICO icons](ico.md) | Multi-size icons: selecting, listing and writing variants |
+| [Adapters](adapters.md) | The `PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` packages |
 | [Command-line sample](cli.md) | The `samples/PictureSharp.Cli` tool |
-| [Architecture](architecture.md) | Layers, model boundaries, composition and compiled dependency checks |
-| [Domain verification](ddd-verification.md) | Domain hardening, current tests, CI, package consumers and measurements |
-| [Refactoring verification](refactoring-verification.md) | Tests, package consumers, AOT/trimming and before/after measurements |
-| [Extending PictureSharp](extending-picturesharp.md) | Format plugins (with HDR gain maps and metadata without decoding), configurations, custom frame processors and shortcuts; contributing built-in formats and operations |
-| [Development](development.md) | Building, tests, oracles, corpus regeneration and the public API snapshot |
-| [Performance](performance.md) | VP8L measurements, benchmark commands, allocation costs and comparison limits |
+| [Migrating from 0.5.0](migration-from-0.5.md) | From the RasterSharp 0.5.0 package to the current API |
 
-All code samples in these guides use the public API listed in [tests/assets/PublicApi.approved.txt](../tests/assets/PublicApi.approved.txt). The key samples are compiled and run by `DocsExamplesTests`.
+## Extending and contributing
+
+| Guide | What it covers |
+| --- | --- |
+| [Extending PictureSharp](extending-picturesharp.md) | Format plugins (with gain maps and metadata), custom frame processors and shortcuts; adding built-in formats and operations |
+| [Architecture](architecture.md) | Layers, model boundaries, data flow and the compiled dependency checks |
+| [Development](development.md) | Building, tests and oracles, corpus regeneration, API snapshot, releasing, trimming and Native AOT |
+| [Performance](performance.md) | Benchmark commands and measurements by area |
+| [Release notes](releases/) | Changes in each version |
+
+The samples use the public API listed in [tests/assets/PublicApi.approved.txt](../tests/assets/PublicApi.approved.txt).
+Complete samples list the namespaces they need; short fragments without `using` directives assume an existing `image`
+and the namespaces of the section's earlier samples. `DocsExamplesTests` compiles and runs the main samples against
+corpus files.

@@ -1,6 +1,8 @@
 # Encoder options
 
-Every format has an options record: `WebPEncoderOptions`, `PngEncoderOptions`, `JpegEncoderOptions`, `BmpEncoderOptions` and `GifEncoderOptions`, all deriving from `EncoderOptions`. Pass them to `Save`, `SaveAsync`, `SaveAs*`, `Encode` or `To*`:
+Every format has an options record deriving from `EncoderOptions`: `WebPEncoderOptions`, `PngEncoderOptions`,
+`JpegEncoderOptions`, `BmpEncoderOptions`, `GifEncoderOptions` and `PcxEncoderOptions` (ICO: [ICO icons](ico.md)). Pass
+them to `Save`, `SaveAsync`, `SaveAs*`, `Encode` or `To*`:
 
 ```csharp
 using PictureSharp.Formats.Jpeg;
@@ -10,9 +12,13 @@ image.SaveAsWebP("photo.webp", new() { Quality = 85, Method = 6 });
 image.Save("photo.jpg", new JpegEncoderOptions { Quality = 90 });
 ```
 
-- **Checked when set.** An out-of-range value throws `ArgumentOutOfRangeException` on the line that sets it, not later during encoding.
+- **Checked when set.** An out-of-range value throws `ArgumentOutOfRangeException` on the line that sets it, not later
+  during encoding.
 - **Records.** Options compare by value and `with` creates variants: `var hq = options with { Quality = 95 };`.
-- **Metadata.** Every options type has `Metadata` (`MetadataKinds.All` by default) to choose which of ICC, EXIF and XMP are written; see [Metadata](metadata.md).
+- **Metadata.** Every options type has `Metadata` (`MetadataKinds.All` by default) to choose which of ICC, EXIF and XMP
+  are written; see [Metadata](metadata.md).
+- **Configuration.** `Configuration` selects the formats of this save (null means `ImageConfiguration.Default`); see
+  [Loading and saving](loading-and-saving.md#choosing-the-formats-imageconfiguration).
 
 ## WebP
 
@@ -50,9 +56,12 @@ image.SaveAsWebP("target.webp", new() { TargetSize = 50_000, Passes = 6 });
 | `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Output does not depend on it. |
 | `AllowMixed`, `MinimizeSize`, `KeyframeMin`, `KeyframeMax` | false, false, 9, 17 | Animation only; see [Animation](animation.md#saving-animated-webp). |
 
-Preset values (`SnsStrength`/`FilterStrength`/`FilterSharpness`): `Picture` 80/35/4, `Photo` 80/30/3, `Drawing` 25/10/6, `Icon` 0/0/0, `Text` 0/0/0 with 2 segments. Explicit values override the preset.
+Preset values (`SnsStrength`/`FilterStrength`/`FilterSharpness`): `Picture` 80/35/4, `Photo` 80/30/3, `Drawing` 25/10/6,
+`Icon` 0/0/0, `Text` 0/0/0 with 2 segments. Explicit values override the preset.
 
-Across the test corpus, lossy output of opaque images and lossless output (every method, quality, `NearLossless` and `Exact`) are byte-identical to `cwebp` 1.6.0 with the same settings. Encoding uses several threads by default; the bytes are the same for any `MaxDegreeOfParallelism`. Reaching `TargetSize`/`TargetPsnr` exactly depends on the image.
+Across the test corpus, lossy output of opaque images and lossless output (every method, quality, `NearLossless` and
+`Exact`) are byte-identical to `cwebp` 1.6.0 with the same settings. Encoding uses several threads by default; the bytes
+are the same for any `MaxDegreeOfParallelism`. Reaching `TargetSize`/`TargetPsnr` exactly depends on the image.
 
 ## PNG
 
@@ -77,6 +86,7 @@ image.SaveAsPng("interlaced.png", new() { Interlace = true });
 ## JPEG
 
 ```csharp
+using System.Drawing;
 using PictureSharp.Formats.Jpeg;
 
 image.SaveAsJpeg("photo.jpg", new() { Quality = 88 });
@@ -93,9 +103,12 @@ image.SaveAsJpeg("on-black.jpg", new() { BackgroundColor = Color.Black });   // 
 | `OptimizeCoding` | false | Optimal Huffman tables computed in an extra pass. |
 | `RestartInterval` | 0 | MCUs between restart markers (0–65535); 0 disables them. |
 | `BackgroundColor` | white | Opaque color under transparent pixels; JPEG has no alpha. |
+| `GainMap` | `None` | `Preserve` or `Require` writes the attached HDR gain map; see [HDR photos](hdr.md#saving-with-the-gain-map). |
+| `GainMapQuality` | 95 | 1–100 quality of a gain map that has to be re-encoded. |
 | `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Output does not depend on it. |
 
-JPEG writes the first frame only. Grayscale images are detected and written with a single component. The encoder reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
+JPEG writes the first frame only. Grayscale images are detected and written with a single component. The encoder
+reference vectors are byte-identical to Pillow 10.2.0 / libjpeg-turbo 2.1.5.
 
 ## BMP
 
@@ -106,7 +119,9 @@ image.SaveAsBmp("out.bmp");                                                  // 
 image.SaveAsBmp("rgb.bmp", new() { BitsPerPixel = 24 });
 ```
 
-`BitsPerPixel` is 0 (automatic), 1, 4, 8, 24 or 32. Automatic chooses a palette when the image is opaque with at most 256 colors, 24 bits when it is opaque, and 32 bits (with alpha) otherwise. Palette and 24-bit output drop alpha. BMP is written uncompressed and stores the first frame; an ICC profile is embedded in a `BITMAPV5HEADER`.
+`BitsPerPixel` is 0 (automatic), 1, 4, 8, 24 or 32. Automatic chooses a palette when the image is opaque with at most
+256 colors, 24 bits when it is opaque, and 32 bits (with alpha) otherwise. Palette and 24-bit output drop alpha. BMP is
+written uncompressed and stores the first frame; an ICC profile is embedded in a `BITMAPV5HEADER`.
 
 ## GIF
 
@@ -129,7 +144,10 @@ image.SaveAsGif("soft-edges.gif", new() { TransparencyThreshold = 32 });     // 
 | `SaveAnimation` | true | Write all frames of animated images (otherwise only the first frame). |
 | `OptimizeFrames` | true | Animation: write only changed rectangles, mark unchanged pixels transparent and merge repeated frames. |
 
-Images whose colors fit keep them exactly: one global palette when all frames together fit, otherwise exact local palettes per animation frame. Otherwise a still image is quantized exactly as Pillow's `Image.quantize(colors)` (same palette and indices), and an animation gets one quantized palette shared by all frames. Durations are stored in hundredths of a second (rounded; at most 655.35 s). ICC and XMP are written as application extensions; GIF has no EXIF.
+Images whose colors fit keep them exactly: one global palette when all frames together fit, otherwise exact local
+palettes per animation frame. Otherwise a still image is quantized exactly as Pillow's `Image.quantize(colors)` (same
+palette and indices), and an animation gets one quantized palette shared by all frames. Durations are stored in
+hundredths of a second (rounded; at most 655.35 s). ICC and XMP are written as application extensions; GIF has no EXIF.
 
 ## PCX
 
@@ -144,7 +162,14 @@ image.SaveAsPcx("rgb.pcx", new() { BitsPerPixel = 24 });
 | --- | --- | --- |
 | `BitsPerPixel` | 0 | `0` chooses. `1` is two exact colors, `4` is up to 16 colors on four 1-bit planes, `8` is up to 256 colors with a VGA palette, `24` is RGB and `32` is RGBA. |
 
-Automatic mode writes 32 bits when any pixel is transparent. Otherwise it uses one 1-bit plane for two colors, two planes for up to four, four planes for up to sixteen, an 8-bit palette up to 256 colors, and 24-bit RGB after that. Forced 1, 4 and 8 keep exact RGB colors and throw if the image does not fit. All forced depths except 32 drop alpha. 32-bit PCX is the four-plane form ImageMagick writes; Pillow does not read it. Two- and four-plane files store each plane in `ceil(width / 8)` bytes, with no even padding, so Pillow reads the planes in the right place. Resolution is stored from `Image.Metadata` (values outside 1–65535 dpi are written as 96). PCX has no ICC, EXIF or XMP, and only the first frame is written. Pillow 10.2 misreads padded 24-bit RGB at widths 1 and 3; PictureSharp and ImageMagick read those files correctly.
+Automatic mode writes 32 bits when any pixel is transparent. Otherwise it uses one 1-bit plane for two colors, two
+planes for up to four, four planes for up to sixteen, an 8-bit palette up to 256 colors, and 24-bit RGB after that.
+Forced 1, 4 and 8 keep exact RGB colors and throw if the image does not fit. All forced depths except 32 drop alpha.
+32-bit PCX is the four-plane form ImageMagick writes; Pillow does not read it. Two- and four-plane files store each
+plane in `ceil(width / 8)` bytes, with no even padding, so Pillow reads the planes in the right place. Resolution is
+stored from `Image.Metadata` (values outside 1–65535 dpi are written as 96). PCX has no ICC, EXIF or XMP, and only the
+first frame is written. Pillow 10.2 misreads padded 24-bit RGB at widths 1 and 3; PictureSharp and ImageMagick read
+those files correctly.
 
 ## Recipes
 

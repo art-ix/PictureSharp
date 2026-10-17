@@ -19,20 +19,23 @@ using var fromAsync = await Image.LoadAsync("input.png", cancellationToken);
 | `Image.Load(ReadOnlyMemory<byte> data, ...)` | A `byte[]` binds here and is not copied. Keep it unchanged while the image is decoded. |
 | `Image.Load(ReadOnlySpan<byte> data, ...)` | The data is copied first. |
 | `Image.LoadAsync(string path \| Stream stream [, DecoderOptions? options], CancellationToken ct = default)` | Asynchronous I/O, then decoding; the token also stops the decoding. |
-| `Image.Load(..., DecoderOptions? options, CancellationToken ct)` | Every source also has an overload whose token stops the reading and decoding; see [Resource limits and cancellation](limits-and-cancellation.md). |
+| `Image.Load(..., DecoderOptions? options, CancellationToken ct)` | Every source also has an overload whose token stops the reading and decoding; see [Limits and cancellation](limits-and-cancellation.md). |
 | `Image.LoadPixelData(...)` | Creates an image from raw pixels; see [Pixels and interop](pixels-and-interop.md). |
 | `new Image(width, height [, background])` | A blank image, transparent unless a background is given. |
 
-The format is always detected from the content: a PNG named `photo.jpg` loads fine. `image.SourceFormat` tells which format was decoded (`null` for images created in memory).
+The format is always detected from the content: a PNG named `photo.jpg` loads fine. `image.SourceFormat` tells which
+format was decoded (`null` for images created in memory).
 
 ### PCX support
 
-PCX loads through the same `Image.Load` methods. It supports monochrome, packed and planar palette images, grayscale, RGB and RGBA. DCX (multiple PCX images) and legacy color images below 8 bits per plane without palette information (versions 0 and 3) are not supported. See [PCX encoder options](encoder-options.md#pcx) for output formats and compatibility notes.
+PCX loads through the same `Image.Load` methods. It supports monochrome, packed and planar palette images, grayscale,
+RGB and RGBA. DCX (multiple PCX images) and legacy color images below 8 bits per plane without palette information
+(versions 0 and 3) are not supported. See [PCX encoder options](encoder-options.md#pcx) for output formats and
+compatibility notes.
 
 ### Decoder options
 
 ```csharp
-
 var options = new DecoderOptions
 {
     ApplyExifOrientation = true,     // rotate camera photos upright while loading
@@ -58,9 +61,14 @@ using var image = Image.Load("upload.jpg", options);
 | `Png.StrictChecksums` | false | PNG: fail on CRC mismatches instead of ignoring them. |
 | `WebP.FancyUpsampling` | true | WebP lossy: smooth chroma upsampling, as libwebp. |
 | `WebP.BypassFiltering` | false | WebP lossy: skip the deblocking filter (faster, lower quality). |
+| `ColorConversion` | `None` | `ToSrgb` converts images with an ICC profile or PNG color description to sRGB; see [Color management](color-management.md). |
+| `LoadGainMap` | false | Attach the HDR gain map of JPEG files (and plugin formats); see [HDR photos](hdr.md). |
+| `Ico.PreferredSize`, `Ico.Index` | null | Which image of an ICO file to load; see [ICO icons](ico.md). |
+| `Configuration` | null | The formats this load may use; null means `ImageConfiguration.Default`. See [below](#choosing-the-formats-imageconfiguration). |
 | `MaxDegreeOfParallelism` | -1 | Threads to use; -1 is automatic, 1 is single-threaded. Decoded pixels do not depend on it. |
 
-`DecoderOptions.Default` is a shared instance with the defaults. Options are records, so `DecoderOptions.Default with { MaxPixels = 1_000_000 }` creates a variant.
+`DecoderOptions.Default` is a shared instance with the defaults. Options are records, so
+`DecoderOptions.Default with { MaxPixels = 1_000_000 }` creates a variant.
 
 ### Thumbnails while loading
 
@@ -69,31 +77,29 @@ using var image = Image.Load("upload.jpg", options);
 size (it is never enlarged).
 
 ```csharp
-
 var options = new DecoderOptions { TargetSize = new(256, 256), ApplyExifOrientation = true };
 using var thumbnail = Image.Load("photo.jpg", options);   // at most 256×256, upright
 ```
 
-- **JPEG** is decoded at 1/2, 1/4 or 1/8 scale by a reduced inverse DCT (the same as libjpeg-turbo's
-  `scale_denom`, bit-exact with it), then resampled to the final size. The decoder never builds the full-size RGBA image
-  or full-size sample planes, which saves most of the time and memory for small targets; see the measurements in
-  [Performance](performance.md#jpeg-thumbnails-in-054). The scale is the largest that keeps `TargetReducingGap` times the
-  final size on both axes (2 by default, as Pillow's `thumbnail` and libvips do); 1 saves the most and is slightly
+- **JPEG** is decoded at 1/2, 1/4 or 1/8 scale by a reduced inverse DCT (the same as libjpeg-turbo's `scale_denom`,
+  bit-exact with it), then resampled to the final size. The decoder never builds the full-size RGBA image or full-size
+  sample planes, which saves most of the time and memory for small targets; see the measurements in
+  [Performance](performance.md#jpeg-thumbnails-in-054). The scale is the largest that keeps `TargetReducingGap` times
+  the final size on both axes (2 by default, as Pillow's `thumbnail` and libvips do); 1 saves the most and is slightly
   sharper, larger values give the resampling filter more to work with. Baseline and progressive files, grayscale, CMYK
   and every chroma subsampling are supported.
-- **Progressive JPEG** still keeps the coefficients of the whole image (2 bytes per sample, e.g. 36 MB for a 12 MP
-  4:2:0 photo) because later scans refine every block; only the sample planes and pixels shrink.
+- **Progressive JPEG** still keeps the coefficients of the whole image (2 bytes per sample, e.g. 36 MB for a 12 MP 4:2:0
+  photo) because later scans refine every block; only the sample planes and pixels shrink.
 - **Other formats** (PNG, WebP, GIF, BMP, ICO, PCX) are decoded in full and then resized with `Thumbnail`, exactly as
   `Load` followed by `Mutate(x => x.Thumbnail(...))`; there is no memory saving. Every frame of an animation is resized.
-- **Orientation.** The box applies to the returned image: with `ApplyExifOrientation` a portrait photo stored
-  sideways (orientations 5–8) fits the box upright. The resize runs before the orientation is applied, on the smaller
-  image.
+- **Orientation.** The box applies to the returned image: with `ApplyExifOrientation` a portrait photo stored sideways
+  (orientations 5–8) fits the box upright. The resize runs before the orientation is applied, on the smaller image.
 - **Not identical to `Load` + `Thumbnail`.** A reduced JPEG decode is a different algorithm, so the pixels differ
-  slightly from a full decode followed by a resize (53–56 dB PSNR on 12–27 MP photos with the default gap, 39–53 dB
-  with gap 1; at least 30 dB on the small synthetic corpus); the size is the same. When the scale works
-  out to 1 (the box is less than `TargetReducingGap` times smaller), the result equals `Load` + `Thumbnail`.
-- **Limits** still check the stored size: `MaxPixels` rejects a huge JPEG even when the target is tiny.
-  `Identify` reports the stored size.
+  slightly from a full decode followed by a resize (53–56 dB PSNR on 12–27 MP photos with the default gap, 39–53 dB with
+  gap 1; at least 30 dB on the small synthetic corpus); the size is the same. When the scale works out to 1 (the box is
+  less than `TargetReducingGap` times smaller), the result equals `Load` + `Thumbnail`.
+- **Limits** still check the stored size: `MaxPixels` rejects a huge JPEG even when the target is tiny. `Identify`
+  reports the stored size.
 
 ## Inspecting without decoding
 
@@ -108,11 +114,15 @@ ImageFormat? format = Image.DetectFormat("unknown.bin");       // reads only the
 if (format == ImageFormat.Png) { /* ... */ }
 ```
 
-`Identify(ReadOnlyMemory<byte>)` does not copy the input buffer; `byte[]` binds to this overload. Keep the input unchanged during the call. The span overload copies the input.
+`Identify(ReadOnlyMemory<byte>)` does not copy the input buffer; `byte[]` binds to this overload. Keep the input
+unchanged during the call. The span overload copies the input.
 
-`ImageInfo` also reports `IsAnimated`, `BitsPerChannel`, `Orientation`, the resolution and, for WebP, `WebPCompression` (lossy, lossless or mixed). `DetectFormat(Stream)` rewinds seekable streams to where they were.
+`ImageInfo` also reports `IsAnimated`, `BitsPerChannel`, `Orientation`, the resolution and, for WebP, `WebPCompression`
+(lossy, lossless or mixed). `DetectFormat(Stream)` rewinds seekable streams to where they were.
 
-`ImageFormat` describes a format: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`. Look formats up with `ImageFormat.FromExtension("photo.JPG")` or `ImageFormat.FromMimeType("image/webp")`; `ImageFormat.All` lists them. These lookups, `CanDecode`/`CanEncode` and `DetectFormat` use `ImageConfiguration.Default`; see below.
+`ImageFormat` describes a format: `Name`, `MimeType`, `FileExtensions`, `CanDecode`, `CanEncode`. Look formats up with
+`ImageFormat.FromExtension("photo.JPG")` or `ImageFormat.FromMimeType("image/webp")`; `ImageFormat.All` lists them.
+These lookups, `CanDecode`/`CanEncode` and `DetectFormat` use `ImageConfiguration.Default`; see below.
 
 ## Saving
 
@@ -129,7 +139,8 @@ image.Save(stream, new WebPEncoderOptions { Lossless = true });
 await image.SaveAsync("out.png", cancellationToken);
 ```
 
-Each format also has dedicated methods, which accept a path or a stream and optional options (`null` means the defaults):
+Each format also has dedicated methods, which accept a path or a stream and optional options (`null` means the
+defaults):
 
 ```csharp
 using PictureSharp;
@@ -157,11 +168,17 @@ byte[] custom = image.Encode(new PngEncoderOptions { CompressionLevel = 9 });
 | GIF | `SaveAsGif` | `SaveAsGifAsync` | `ToGif` |
 | PCX | `SaveAsPcx` | `SaveAsPcxAsync` | `ToPcx` |
 
-Streams are left open and do not need to be seekable. Defaults: WebP lossy quality 75, method 4; PNG compression 6 with automatic color type; JPEG quality 75, 4:2:0; BMP automatic bit depth; GIF up to 256 colors per frame, alpha threshold 128; PCX automatic bit depth. WebP, PNG and GIF keep all animation frames; JPEG, BMP and PCX write the first frame. All option settings are in [Encoder options](encoder-options.md).
+Every encoder options type also has `Metadata` (which blocks to write) and `Configuration` (the formats this save may
+use; null means `ImageConfiguration.Default`). Streams are left open and do not need to be seekable. Defaults: WebP
+lossy quality 75, method 4; PNG compression 6 with automatic color type; JPEG quality 75, 4:2:0; BMP automatic bit
+depth; GIF up to 256 colors per frame, alpha threshold 128; PCX automatic bit depth. WebP, PNG and GIF keep all
+animation frames; JPEG, BMP and PCX write the first frame. All option settings are in
+[Encoder options](encoder-options.md).
 
 ## Choosing the formats: `ImageConfiguration`
 
-An `ImageConfiguration` is the list of formats that loading, identification and saving may use. It cannot change once built, so one instance can be shared by any number of threads; derive another with `ToBuilder()`.
+An `ImageConfiguration` is the list of formats that loading, identification and saving may use. It cannot change once
+built, so one instance can be shared by any number of threads; derive another with `ToBuilder()`.
 
 ```csharp
 using PictureSharp;
@@ -180,12 +197,13 @@ ImageConfiguration.Default = ImageConfiguration.Default.ToBuilder()
 
 | Member | Notes |
 | --- | --- |
-| `ImageConfiguration.Default` | Used when no configuration is given: by `Load`/`Identify` without `DecoderOptions.Configuration`, by `Save`/`Encode`, `DetectFormat` and `ImageFormat.All`/`FromExtension`/`FromMimeType`/`CanDecode`/`CanEncode`. Initially the built-in formats. Replacing it publishes a complete snapshot; loads already running keep the one they started with. |
-| `DecoderOptions.Configuration` | The configuration of one load or identification; `null` means `Default` at the time of the call. |
+| `ImageConfiguration.Default` | Used when no configuration is given: by loads and saves without one in their options, by `Save(path)`/`Save(stream, format)`, `DetectFormat` and `ImageFormat.All`/`FromExtension`/`FromMimeType`/`CanDecode`/`CanEncode`. Initially the built-in formats. Replacing it publishes a complete snapshot; calls already running keep the one they started with. |
+| `DecoderOptions.Configuration`, `EncoderOptions.Configuration` | The configuration of one load, identification or save; `null` means `Default` at the time of the call. |
 | `Formats`, `CanDecode`, `CanEncode`, `FromExtension`, `FromMimeType` | The same lookups as on `ImageFormat`, for this configuration. |
 | `ToBuilder()` → `KeepOnly`, `RemoveFormat`, `AddFormat`, `ReplaceFormat`, `Build` | `KeepOnly` keeps the detection order. `AddFormat` and `ReplaceFormat` take format plugins; see [Extending PictureSharp](extending-picturesharp.md). |
 
-A BMP that embeds PNG or JPEG data needs that format in the configuration; without it the load throws `NotSupportedException`. `IcoFile` always uses the built-in ICO codecs.
+A BMP that embeds PNG or JPEG data needs that format in the configuration; without it the load throws
+`NotSupportedException`. `IcoFile` always uses the built-in ICO codecs.
 
 ## Recipes
 
@@ -221,29 +239,43 @@ app.MapGet("/thumb/{name}", async (string name, int? w, CancellationToken ct) =>
 });
 ```
 
-The `PictureSharp.AspNetCore` package returns `Results.Extensions.Image(image)` instead: it negotiates WebP, PNG or JPEG from the `Accept` header, writes `Content-Length`, `Vary` and `Cache-Control`, stops on `RequestAborted` and reads uploads with `request.ReadImageAsync(options)`; see [Adapters](adapters.md#aspnet-core).
+The `PictureSharp.AspNetCore` package returns `Results.Extensions.Image(image)` instead: it negotiates WebP, PNG or JPEG
+from the `Accept` header, writes `Content-Length`, `Vary` and `Cache-Control`, stops on `RequestAborted` and reads
+uploads with `request.ReadImageAsync(options)`; see [Adapters](adapters.md#aspnet-core).
 
 ### Memory in a server
 
-A decoded image holds 4 bytes per pixel and frame: a 12-megapixel photo takes 48 MB, and an animation takes that much for every frame. Decoders and encoders rent their temporary buffers (rows, planes, histograms, compressed data) from `ArrayPool<T>.Shared`, so in a steady state a request allocates about the decoded pixels plus the encoded output. The pool keeps a few buffers for reuse and releases them under memory pressure.
+A decoded image holds 4 bytes per pixel and frame: a 12-megapixel photo takes 48 MB, and an animation takes that much
+for every frame. Decoders and encoders rent their temporary buffers (rows, planes, histograms, compressed data) from
+`ArrayPool<T>.Shared`, so in a steady state a request allocates about the decoded pixels plus the encoded output. The
+pool keeps a few buffers for reuse and releases them under memory pressure.
 
 - For thumbnails, `DecoderOptions.TargetSize` decodes JPEG at reduced scale: a 12 MP photo shrunk to 256 px peaks at a
   few megabytes instead of about 70 MB ([Thumbnails while loading](#thumbnails-while-loading)).
-- Cap untrusted input with `DecoderOptions.MaxInputBytes`, `MaxPixels` (for animations it counts all frames), `MaxFrames` and `MaxMetadataBytes`, and use `FirstFrameOnly` when a thumbnail of the first frame is enough. Pass the request's `CancellationToken` to loading, processing and saving; see [Resource limits and cancellation](limits-and-cancellation.md).
-- `ToWebP()`, `ToPng()` and the other `To*` methods return an exact-size array; `Save(stream, …)` writes directly to the response stream instead.
-- `MaxDegreeOfParallelism` on `DecoderOptions` and on the WebP, PNG and JPEG encoder options limits the threads one request uses (the output does not depend on it).
+- Cap untrusted input with `DecoderOptions.MaxInputBytes`, `MaxPixels` (for animations it counts all frames),
+  `MaxFrames` and `MaxMetadataBytes`, and use `FirstFrameOnly` when a thumbnail of the first frame is enough. Pass the
+  request's `CancellationToken` to loading, processing and saving; see
+  [Limits and cancellation](limits-and-cancellation.md).
+- `ToWebP()`, `ToPng()` and the other `To*` methods return an exact-size array; `Save(stream, …)` writes directly to the
+  response stream instead.
+- `MaxDegreeOfParallelism` on `DecoderOptions` and on the WebP, PNG and JPEG encoder options limits the threads one
+  request uses (the output does not depend on it).
 - Dispose images as soon as the response is written.
 
-### Choose the output format from a MIME type
+### Choose the output format at run time
 
 ```csharp
 using PictureSharp;
-using PictureSharp.Formats.Png;
 
-ImageFormat target = ImageFormat.FromMimeType(request.Accept) ?? ImageFormat.Png;
-image.Save(response.Body, target);
+ImageFormat target = ImageFormat.FromMimeType("image/webp")        // or FromExtension("photo.webp")
+    ?? ImageFormat.Png;
+image.Save(output, target);                                         // default options of that format
 ```
+
+To pick the format from an HTTP `Accept` header, use the `PictureSharp.AspNetCore` package described above.
 
 ### WebP conversion
 
-`WebPConverter.Convert(inputPath, outputPath, options)` preserves the `gif2webp` conversion conventions: GIF defaults to lossless and delays of 10 ms or less become 100 ms. Ordinary `Image.Load(...).SaveAsWebP(...)` preserves the original frame durations. See [Animation](animation.md).
+`WebPConverter.Convert(inputPath, outputPath, options)` preserves the `gif2webp` conversion conventions: GIF defaults to
+lossless and delays of 10 ms or less become 100 ms. Ordinary `Image.Load(...).SaveAsWebP(...)` preserves the original
+frame durations. See [Animation](animation.md).

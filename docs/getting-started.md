@@ -8,13 +8,26 @@ PictureSharp targets **.NET 10** (C# 14) and has no dependencies beyond the base
 dotnet add package PictureSharp --version 0.7.1
 ```
 
-Version **0.7.1** lets format plugins report every HDR gain map model a file declares ([0.7.1 notes](releases/release-0.7.1.md)). Version 0.7.0 lets format plugins save through their own configuration (`EncoderOptions.Configuration`) and supply HDR gain maps and metadata, and adds a [migration guide from 0.5.0](migration-from-0.5.md) ([0.7.0 notes](releases/release-0.7.0.md)). Version 0.6.9 keeps HDR gain maps through resizing, cropping, rotation and flips and saves JPEG files with the gain map (`JpegEncoderOptions.GainMap`) ([0.6.9 notes](releases/release-0.6.9.md), [HDR photos](hdr.md)). Version 0.6.8 fixes animation trimming, frame-writer completion and histogram region validation, and improves cancellation in graphics operations ([0.6.8 notes](releases/release-0.6.8.md)). Version **0.6.7** speeds up HDR reconstruction, tone mapping, blend modes, masks and trimming with SIMD and makes HDR results identical on x64 and ARM64 ([0.6.7 notes](releases/release-0.6.7.md)). Version 0.6.5 reads HDR photos with gain maps (`LoadGainMap`, `ToHdr`, `ToneMap`); see the [0.6.5 notes](releases/release-0.6.5.md) and [HDR photos](hdr.md). Version 0.6.4 added the optional adapter packages `PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` and leaves the library itself unchanged; see the [0.6.4 notes](releases/release-0.6.4.md) and [Adapters](adapters.md). Version 0.6.3 added levels and gamma, auto contrast, histograms, trimming, alpha masks and blend modes ([0.6.3 notes](releases/release-0.6.3.md)).
+The current version is **0.7.1**. Each version's changes are listed in the [release notes](releases/); code written for
+RasterSharp 0.5.0 is covered by the [migration guide](migration-from-0.5.md).
 
-Everything you need for loading, processing and saving is reached from `Image` with one `using PictureSharp;`: `Image.Load`, `Image.Identify`, `image.Mutate`, `image.Clone`, `image.Save`, together with `DecoderOptions`, `ImageInfo` and `ImageConfiguration`. Processing modes and options (`ResizeMode`, `FlipMode`, `ResizeOptions`, …) are in `PictureSharp.Processing`, format options and the `SaveAs*`/`To*` shortcuts in `PictureSharp.Formats.<Format>`, and the plugin interfaces in `PictureSharp.Formats`. Geometry types (`Size`, `Rectangle`, `Point`) and `Color` come from `System.Drawing.Primitives`, which is part of the shared framework, so `using System.Drawing;` works on every platform without `System.Drawing.Common`.
+## Namespaces
+
+| Namespace | Contents |
+| --- | --- |
+| `PictureSharp` | `Image` and its members (`Load`, `Identify`, `Mutate`, `Clone`, `Save`, …), `Rgba32`, `DecoderOptions`, `ImageInfo`, `ImageMetadata`, `ImageConfiguration` |
+| `PictureSharp.Processing` | Processing modes and options: `ResizeMode`, `ResizeOptions`, `RotateMode`, `AnchorPosition`, … |
+| `PictureSharp.Formats.<Format>` | Encoder options and the `SaveAs*`/`To*` shortcuts, e.g. `PictureSharp.Formats.WebP` |
+| `PictureSharp.Formats` | The interfaces of format plugins |
+
+`Size`, `Rectangle`, `Point` and `Color` come from `System.Drawing.Primitives`, which is part of the shared framework:
+`using System.Drawing;` works on every platform without the `System.Drawing.Common` package.
 
 ### Global using
 
-In a project with `<ImplicitUsings>enable</ImplicitUsings>` (the default for new .NET projects) the package adds `global using PictureSharp;`, so the directive above is optional. Windows Forms, WPF and MAUI projects, which have their own `Image` types, are left out. Set the property yourself to choose:
+In a project with `<ImplicitUsings>enable</ImplicitUsings>` (the default for new .NET projects) the package adds
+`global using PictureSharp;`, so that directive is optional. Windows Forms, WPF and MAUI projects, which have their own
+`Image` types, are left out. Set the property yourself to choose:
 
 ```xml
 <PropertyGroup>
@@ -37,8 +50,10 @@ image.Save("photo-small.webp");                 // the extension selects WebP wi
 Three steps cover almost every task:
 
 1. **Load** an image with `Image.Load` (or `LoadAsync`). The format is detected from the content, not the file name.
-2. **Process** it with `Mutate` or `Clone`. The lambda receives an `ImageProcessingContext`; its operations chain and run in order.
-3. **Save** it with `Save(path)` or one of the `SaveAsWebP`/`SaveAsPng`/`SaveAsJpeg`/`SaveAsBmp`/`SaveAsGif`/`SaveAsPcx` methods.
+2. **Process** it with `Mutate` or `Clone`. The lambda receives an `ImageProcessingContext`; its operations chain and
+   run in order.
+3. **Save** it with `Save(path)` or one of the `SaveAsWebP`/`SaveAsPng`/`SaveAsJpeg`/`SaveAsBmp`/`SaveAsGif`/`SaveAsPcx`
+   methods.
 
 ## `Mutate` or `Clone`
 
@@ -57,17 +72,22 @@ using Image square = original.Clone(x => x.Resize(256, 256, ResizeMode.Crop));
 using Image copy = original.Clone();            // plain deep copy
 ```
 
-Use `Mutate` when you no longer need the input, and `Clone` when you produce several outputs from one source. `Clone` copies the source pixels only when an operation must change them in place, so `Clone(x => x.Resize(...))` never duplicates the full-size image first.
+Use `Mutate` when you no longer need the input, and `Clone` when you produce several outputs from one source. `Clone`
+copies the source pixels only when an operation must change them in place, so `Clone(x => x.Resize(...))` never
+duplicates the full-size image first.
 
-Every operation applies to all frames of an animated image. See [Image processing](image-processing.md) for the full list.
+Every operation applies to all frames of an animated image. See [Image processing](image-processing.md) for the full
+list.
 
 ## Disposal
 
-`Image` owns its pixel buffers and implements `IDisposable`. Wrap images in `using` so memory is released as soon as you are done; any use after `Dispose` throws `ObjectDisposedException`.
+`Image` owns its pixel buffers and implements `IDisposable`. Wrap images in `using` so memory is released as soon as you
+are done; any use after `Dispose` throws `ObjectDisposedException`.
 
 ## Pixels
 
-Pixels are 8-bit `Rgba32` values with straight (not premultiplied) alpha. Higher bit depths (16-bit PNG, for example) are converted when decoding. `System.Drawing.Color` converts to and from `Rgba32` implicitly:
+Pixels are 8-bit `Rgba32` values with straight (not premultiplied) alpha. Higher bit depths (16-bit PNG, for example)
+are converted when decoding. `System.Drawing.Color` converts to and from `Rgba32` implicitly:
 
 ```csharp
 using System.Drawing;
@@ -92,7 +112,6 @@ See [Pixels and interop](pixels-and-interop.md) for spans, raw buffers and conve
 | Canceled `CancellationToken` passed to a load, save or processing call | `OperationCanceledException` |
 
 ```csharp
-
 try
 {
     using var image = Image.Load(upload, new DecoderOptions { MaxPixels = 50_000_000 });
@@ -103,7 +122,8 @@ catch (ImageFormatException ex)
 }
 ```
 
-Decoders never let index errors escape on malicious input; anything unexpected is reported as `ImageFormatException`. For untrusted uploads see [Resource limits and cancellation](limits-and-cancellation.md).
+Decoders never let index errors escape on malicious input; anything unexpected is reported as `ImageFormatException`.
+For untrusted uploads see [Limits and cancellation](limits-and-cancellation.md).
 
 ## Next steps
 

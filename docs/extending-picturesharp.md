@@ -1,10 +1,13 @@
 # Extending PictureSharp
 
-Applications and plugin packages extend PictureSharp through three public points: format plugins registered in an `ImageConfiguration`, custom frame processors, and C# 14 extension blocks that add shortcuts to `Image` and `ImageProcessingContext`. The second half of this guide is for contributors changing the library itself.
+Applications and plugin packages extend PictureSharp through three public points: format plugins registered in an
+`ImageConfiguration`, custom frame processors, and C# 14 extension blocks that add shortcuts to `Image` and
+`ImageProcessingContext`. The second half of this guide is for contributors changing the library itself.
 
 ## Format plugins
 
-A plugin implements `IImageFormatModule` from `PictureSharp.Formats`: the format, its signature check and a decoder and/or encoder. Create the format once with `ImageFormat.Create`; formats compare by identity.
+A plugin implements `IImageFormatModule` from `PictureSharp.Formats`: the format, its signature check and a decoder
+and/or encoder. Create the format once with `ImageFormat.Create`; formats compare by identity.
 
 ```csharp
 using PictureSharp;
@@ -71,13 +74,23 @@ means `ImageConfiguration.Default` at the time of the call. Saves that take no o
 
 The contract, which the library enforces:
 
-- `AddFormat` appends after the existing formats, so built-in signatures are checked first. A format, name, MIME type or extension that is already registered is rejected with `ArgumentException`. `ReplaceFormat` swaps the codecs of a registered format (pass the registered instance, e.g. `ImageFormat.Png`) and keeps its detection position.
-- The module's members are read once at registration; a built configuration is not affected by later changes to the module object. Decoders and encoders must be thread-safe.
-- `IsSupported` may receive fewer than `HeaderSize` bytes. Index, argument, overflow and invalid-operation errors it throws count as "not this format".
-- `Decode` should call `ReservePixels` (and `ReserveMetadata` for decompressed ICC/EXIF/XMP) before allocating. After decoding, the library checks `MaxPixels` and `MaxFrames` again, disposes an oversized result and sets `SourceFormat`. `TargetSize` and `ApplyExifOrientation` are applied to the returned image.
-- Throw `ImageFormatException` for corrupt data and `NotSupportedException` for unsupported features. Index, argument, overflow, invalid-operation and cast errors from `Identify` and `Decode` are reported to callers as `ImageFormatException`.
-- A container format decodes embedded images with `context.DecodeEmbedded(data)`: the same configuration's codecs, sharing the load's limits. The result is full size and owned by the caller.
-- Encoder options derive from `EncoderOptions` and override `Format`; `IImageFormatEncoder<TOptions>` creates default options with `new TOptions()` and rejects options of another type.
+- `AddFormat` appends after the existing formats, so built-in signatures are checked first. A format, name, MIME type or
+  extension that is already registered is rejected with `ArgumentException`. `ReplaceFormat` swaps the codecs of a
+  registered format (pass the registered instance, e.g. `ImageFormat.Png`) and keeps its detection position.
+- The module's members are read once at registration; a built configuration is not affected by later changes to the
+  module object. Decoders and encoders must be thread-safe.
+- `IsSupported` may receive fewer than `HeaderSize` bytes. Index, argument, overflow and invalid-operation errors it
+  throws count as "not this format".
+- `Decode` should call `ReservePixels` (and `ReserveMetadata` for decompressed ICC/EXIF/XMP) before allocating. After
+  decoding, the library checks `MaxPixels` and `MaxFrames` again, disposes an oversized result and sets `SourceFormat`.
+  `TargetSize` and `ApplyExifOrientation` are applied to the returned image.
+- Throw `ImageFormatException` for corrupt data and `NotSupportedException` for unsupported features. Index, argument,
+  overflow, invalid-operation and cast errors from `Identify` and `Decode` are reported to callers as
+  `ImageFormatException`.
+- A container format decodes embedded images with `context.DecodeEmbedded(data)`: the same configuration's codecs,
+  sharing the load's limits. The result is full size and owned by the caller.
+- Encoder options derive from `EncoderOptions` and override `Format`; `IImageFormatEncoder<TOptions>` creates default
+  options with `new TOptions()` and rejects options of another type.
 
 Plugins use only public API and work under trimming and Native AOT.
 
@@ -107,18 +120,18 @@ Without options, these shortcuts save through `ImageConfiguration.Default`; with
   example), the decoder applies them to the returned pixels and sets `Metadata.Orientation` to what is still left to
   apply, usually `ExifOrientation.TopLeft`. `DecoderOptions.ApplyExifOrientation` then rotates only by that value, so
   the image is never turned twice, and `Identify` reports the displayed width and height.
-- **Color.** Put an ICC profile in `Metadata.IccProfile`. A container that describes color with code points
-  (nclx/CICP) instead maps the primaries to `Metadata.Chromaticities` and a pure power transfer function to
-  `Metadata.Gamma`; `Chromaticities` alone mean the sRGB curve. PQ and HLG cannot be expressed and should be reported
-  as `NotSupportedException` or left undeclared. `ConvertToSrgb` and `DecoderOptions.ColorConversion` use the same
+- **Color.** Put an ICC profile in `Metadata.IccProfile`. A container that describes color with code points (nclx/CICP)
+  instead maps the primaries to `Metadata.Chromaticities` and a pure power transfer function to `Metadata.Gamma`;
+  `Chromaticities` alone mean the sRGB curve. PQ and HLG cannot be expressed and should be reported as
+  `NotSupportedException` or left undeclared. `ConvertToSrgb` and `DecoderOptions.ColorConversion` use the same
   description.
 - **Threads.** Decoders, encoders, metadata codecs and gain map images may be called concurrently from several loads.
   Honor `DecoderOptions.MaxDegreeOfParallelism` or the encoder's own setting; the output must not depend on it.
 
 ### HDR gain maps
 
-A decoder that finds an HDR gain map attaches it, so `Image.Hdr`, `HasHdr`, `ToHdr` and `ToneMap` work as for
-JPEG files. Only do so when `context.Options.LoadGainMap` is set; the context ignores the call otherwise.
+A decoder that finds an HDR gain map attaches it, so `Image.Hdr`, `HasHdr`, `ToHdr` and `ToneMap` work as for JPEG
+files. Only do so when `context.Options.LoadGainMap` is set; the context ignores the call otherwise.
 
 ```csharp
 sealed class ContainerGainMap(byte[] mapData, Size size) : GainMapImage(size)
@@ -149,8 +162,8 @@ if (context.Options.LoadGainMap)
 - `GainMapMetadata.ParseIso` reads the ISO 21496-1 payload (from the minimum version on) and `ParseApple` the Apple
   model (EXIF MakerNote headroom and the map's XMP). In `Identify`, report `ImageInfo.Hdr = metadata.ToHdrInfo(mapSize)`
   (with `Detected` set to the same models) when `LoadGainMap` is set.
-- The map's pixels count toward `MaxPixels`; a map over the limit, unparsable metadata or a base color other than
-  sRGB or Display P3 is reported through `Image.Hdr` and never fails the load.
+- The map's pixels count toward `MaxPixels`; a map over the limit, unparsable metadata or a base color other than sRGB
+  or Display P3 is reported through `Image.Hdr` and never fails the load.
 - The base image's color comes from the returned image's ICC profile or `Chromaticities`/`Gamma`, so keep them when
   attaching a map, also with `IgnoreMetadata`.
 - The library carries the map through `TargetSize`, `ApplyExifOrientation`, `ColorConversion` and geometric edits.
@@ -168,9 +181,9 @@ original (an unchanged edit writes nothing new) and writes files atomically.
 
 ### SPI compatibility
 
-The plugin interfaces change only additively within a minor version: new members get default implementations, and
-new types or optional parameters are added beside the existing ones. A breaking change happens only in a new minor
-version, with a migration note in the release notes and the API snapshot updated.
+The plugin interfaces change only additively within a minor version: new members get default implementations, and new
+types or optional parameters are added beside the existing ones. A breaking change happens only in a new minor version,
+with a migration note in the release notes and the API snapshot updated.
 
 ## Custom frame processors
 
@@ -206,29 +219,54 @@ image.Mutate(x => x.AutoOrient().LeftHalf().Resize(800, 0));
 
 - `GetOutputSize` is asked once per operation because all frames share one canvas; both sides must be positive.
 - `Process` receives row-major, straight-alpha pixels. The destination starts transparent black; do not keep the spans.
-- All frames are prepared before any is published. If `Process` throws or the operation is canceled, the image keeps its previous frames. Within `Clone` the source is read without being copied.
-- A struct processor runs without boxing. In-place edits that keep the size are simpler with `Apply(Action<ImageFrame>)`; see [Image processing](image-processing.md#custom-operations).
+- All frames are prepared before any is published. If `Process` throws or the operation is canceled, the image keeps its
+  previous frames. Within `Clone` the source is read without being copied.
+- A struct processor runs without boxing. In-place edits that keep the size are simpler with
+  `Apply(Action<ImageFrame>)`; see [Image processing](image-processing.md#custom-operations).
 
-# Contributing to the library
+## Contributing to the library
 
-## Add a built-in format
+### Add a built-in format
 
-Add its immutable descriptor to Domain and public format options to Application under the functional format namespace. Implement detection, identification, canonical decoding (`DecodedImage`) and encoding in an Infrastructure module. Keep codec-specific timing, binary headers and metadata selection there. Add a `FormatRegistration` only in `Composition/CodecRegistry.cs`; `CodecResolver` builds the codecs per `ImageConfiguration`, so a container codec receives the resolver of the configuration being built. Public shortcuts call the `Image` extension members. Built-in codecs use the internal contracts (`IImageDecoder` returns a `DecodedImage` with stored size and reduction scale); the public plugin SPI is adapted to them in `Application/Extensibility`.
+Add its immutable descriptor to Domain and public format options to Application under the functional format namespace.
+Implement detection, identification, canonical decoding (`DecodedImage`) and encoding in an Infrastructure module. Keep
+codec-specific timing, binary headers and metadata selection there. Add a `FormatRegistration` only in
+`Composition/CodecRegistry.cs`; `CodecResolver` builds the codecs per `ImageConfiguration`, so a container codec
+receives the resolver of the configuration being built. Public shortcuts call the `Image` extension members. Built-in
+codecs use the internal contracts (`IImageDecoder` returns a `DecodedImage` with stored size and reduction scale); the
+public plugin SPI is adapted to them in `Application/Extensibility`.
 
-Validate stored dimensions and frame counts before allocating raster buffers. Charge shared `DecodeContext.Budget` at the leaf decoder; embedded formats receive a child context, avoiding double charging the same canvas. Preserve stored dimensions and reduction scale in nested `DecodedImage` results. Charge metadata after decompression; never use mutable execution counters in options or codec singletons.
+Validate stored dimensions and frame counts before allocating raster buffers. Charge shared `DecodeContext.Budget` at
+the leaf decoder; embedded formats receive a child context, avoiding double charging the same canvas. Preserve stored
+dimensions and reduction scale in nested `DecodedImage` results. Charge metadata after decompression; never use mutable
+execution counters in options or codec singletons.
 
-Extend `CodecContractTests` and synthetic corpus/Oracle coverage for the format. Test malformed and truncated input, cancellation, shared limits and stream ownership. Extend the AOT smoke consumer and benchmark matrix. Do not normalize I/O failures into corrupt-image exceptions.
+Extend `CodecContractTests` and synthetic corpus/Oracle coverage for the format. Test malformed and truncated input,
+cancellation, shared limits and stream ownership. Extend the AOT smoke consumer and benchmark matrix. Do not normalize
+I/O failures into corrupt-image exceptions.
 
-## Add a built-in processing operation
+### Add a built-in processing operation
 
-Keep numeric work in Algorithms and orchestration in Application. For an operation producing buffers, use `ProcessingState.ReplaceFrames` with a static transform and explicit state. Return a `FrameReplacement` for each frame; the image aggregate validates and commits the whole batch. Do not call frame publication or ownership methods directly. For in-place work use writable frames so copy-on-write is honored, and retain row/frame cancellation checks.
+Keep numeric work in Algorithms and orchestration in Application. For an operation producing buffers, use
+`ProcessingState.ReplaceFrames` with a static transform and explicit state. Return a `FrameReplacement` for each frame;
+the image aggregate validates and commits the whole batch. Do not call frame publication or ownership methods directly.
+For in-place work use writable frames so copy-on-write is honored, and retain row/frame cancellation checks.
 
-Test known pixel vectors, multi-frame canvas consistency, cancellation after preparing the first frame and source independence for `Clone`. Add a representative benchmark; preserve scalar/SIMD equality and allocation-free hot loops.
+Test known pixel vectors, multi-frame canvas consistency, cancellation after preparing the first frame and source
+independence for `Clone`. Add a representative benchmark; preserve scalar/SIMD equality and allocation-free hot loops.
 
-## Change the model or public API
+### Change the model or public API
 
-Put required validation on the model operation, including internal creation paths. Keep `Size`, `Rectangle` and `TimeSpan` at public boundaries. Prefer `field` for simple validated properties; use readonly internal values for shared rules. Extension blocks group facade operations, while invariants remain instance methods. Do not convert mutable images to records or add abstraction layers without a concrete caller.
+Put required validation on the model operation, including internal creation paths. Keep `Size`, `Rectangle` and
+`TimeSpan` at public boundaries. Prefer `field` for simple validated properties; use readonly internal values for shared
+rules. Extension blocks group facade operations, while invariants remain instance methods. Do not convert mutable images
+to records or add abstraction layers without a concrete caller.
 
-Update XML docs, the API snapshot and the guides. Test public calls with arrays, spans and memory through the C# 14 consumer compilation test. Run Release, Oracle, scalar fallbacks and `bash scripts/verify-package-consumer.sh` before declaring completion. This script packs locally and verifies an isolated package consumer with full trimming and Native AOT on linux-x64.
+Update XML docs, the API snapshot and the guides. Test public calls with arrays, spans and memory through the C# 14
+consumer compilation test. Run Release, Oracle, scalar fallbacks and `bash scripts/verify-package-consumer.sh` before
+declaring completion. This script packs locally and verifies an isolated package consumer with full trimming and Native
+AOT on linux-x64.
 
-CI runs managed tests, pinned reference tools and the package consumer on pushes and pull requests; release publishing depends on the same validation workflow. Benchmarks remain a controlled local comparison on the same machine. ARM64 needs a separate hardware run and is not implied by x64 success.
+CI runs managed tests, pinned reference tools and the package consumer on pushes and pull requests; release publishing
+depends on the same validation workflow. Benchmarks remain a controlled local comparison on the same machine. ARM64
+needs a separate hardware run and is not implied by x64 success.

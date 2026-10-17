@@ -18,11 +18,17 @@ photo.Mutate(x => x
 photo.SaveAsJpeg("card.jpg", new() { Quality = 88 });
 ```
 
-- The lambda receives an `ImageProcessingContext`. Each operation returns the context, so calls chain and run in the order written.
-- `x.Size` is the size reached so far and `x.FrameCount` the number of frames; operations apply to every frame of an animation.
+- The lambda receives an `ImageProcessingContext`. Each operation returns the context, so calls chain and run in the
+  order written.
+- `x.Size` is the size reached so far and `x.FrameCount` the number of frames; operations apply to every frame of an
+  animation.
 - The context is a `ref struct`: it cannot be stored or used after the lambda returns.
-- `Clone(x => ...)` copies the source pixels only when an operation must change them in place; resizing, cropping and rotating read the source directly.
-- If an operation throws inside `Mutate`, the operations before it stay applied. With `Clone` the partial result is discarded.
+- `Clone(x => ...)` copies the source pixels only when an operation must change them in place; resizing, cropping and
+  rotating read the source directly.
+- If an operation throws inside `Mutate`, the operations before it stay applied. With `Clone` the partial result is
+  discarded.
+- An HDR gain map follows resizing, cropping, quarter-turn rotations and flips; other operations remove it. See
+  [HDR photos](hdr.md#what-keeps-or-removes-the-map).
 
 ## Resizing
 
@@ -51,6 +57,7 @@ Passing 0 for one side derives it from the aspect ratio in every mode; at least 
 ### `ResizeOptions`
 
 ```csharp
+using System.Drawing;
 using PictureSharp.Processing;
 
 image.Mutate(x => x.Resize(new ResizeOptions
@@ -75,11 +82,13 @@ image.Mutate(x => x.Resize(new ResizeOptions
 
 `Thumbnail(maxWidth, maxHeight)` is `Max` with `AllowUpscale = false`; 0 for a side means that side is unbounded.
 
-Resampling runs on premultiplied alpha, so transparent pixels never bleed their color into visible ones. `Nearest` keeps exact colors (useful for pixel art); `Box` and `Lanczos3` give the best downscaling quality.
+Resampling runs on premultiplied alpha, so transparent pixels never bleed their color into visible ones. `Nearest` keeps
+exact colors (useful for pixel art); `Box` and `Lanczos3` give the best downscaling quality.
 
 ## Geometry
 
 ```csharp
+using System.Drawing;
 using PictureSharp.Processing;
 
 image.Mutate(x => x.Crop(new Rectangle(10, 10, 200, 100)));      // or Crop(10, 10, 200, 100)
@@ -114,15 +123,20 @@ if (image.FindTrimBounds() is { } box)                                          
 }
 ```
 
-- `Alpha` mode (default) treats pixels with alpha at or below `AlphaThreshold` as margin; Pillow's `getbbox()` gives the same box for `AlphaThreshold = 0`.
-- `Background` mode treats pixels as margin when every channel, alpha included, is within `Tolerance` of the background color, like ImageMagick's `-trim -fuzz` (largest channel difference, not Euclidean distance). Fully transparent pixels always match a fully transparent background.
+- `Alpha` mode (default) treats pixels with alpha at or below `AlphaThreshold` as margin; Pillow's `getbbox()` gives the
+  same box for `AlphaThreshold = 0`.
+- `Background` mode treats pixels as margin when every channel, alpha included, is within `Tolerance` of the background
+  color, like ImageMagick's `-trim -fuzz` (largest channel difference, not Euclidean distance). Fully transparent pixels
+  always match a fully transparent background.
 - `Padding` keeps extra pixels around the content, limited by the canvas.
 - An image without content (fully transparent or uniform) is left unchanged, and `FindTrimBounds` returns `null`.
-- An animation is cropped to the union of every frame's content, so the frames keep a common canvas, their relative positions and durations.
+- An animation is cropped to the union of every frame's content, so the frames keep a common canvas, their relative
+  positions and durations.
 
 ### Rotation by any angle
 
 ```csharp
+using System.Drawing;
 using PictureSharp.Processing;
 
 image.Mutate(x => x.Rotate(15));                                               // clockwise, canvas grows, corners transparent
@@ -130,12 +144,12 @@ image.Mutate(x => x.Rotate(-30, ResamplingFilter.Bilinear, Color.White));      /
 image.Mutate(x => x.Rotate(45, ResamplingFilter.Nearest, expand: false));      // keep the size, cut the corners
 ```
 
-`Rotate(degrees, filter = Bicubic, background = transparent, expand = true)` supports the `Nearest`, `Bilinear` and `Bicubic` filters. Multiples of 90° are exact quarter turns. It matches Pillow's `Image.rotate(-degrees)`.
+`Rotate(degrees, filter = Bicubic, background = transparent, expand = true)` supports the `Nearest`, `Bilinear` and
+`Bicubic` filters. Multiples of 90° are exact quarter turns. It matches Pillow's `Image.rotate(-degrees)`.
 
 ## Color
 
 ```csharp
-
 image.Mutate(x => x.Brightness(1.2f));      // 0 = black, 1 = unchanged, >1 brighter
 image.Mutate(x => x.Contrast(0.8f));        // 0 = flat gray (mean luma), 1 = unchanged
 image.Mutate(x => x.Saturate(1.5f));        // 0 = grayscale, 1 = unchanged
@@ -144,7 +158,8 @@ image.Mutate(x => x.Sepia());
 image.Mutate(x => x.Invert());
 ```
 
-All of them keep the alpha channel. `Brightness`, `Contrast` and `Saturate` are Pillow's `ImageEnhance.Brightness`, `Contrast` and `Color`; values below 0 or above 1 extrapolate.
+All of them keep the alpha channel. `Brightness`, `Contrast` and `Saturate` are Pillow's `ImageEnhance.Brightness`,
+`Contrast` and `Color`; values below 0 or above 1 extrapolate.
 
 ### Levels and gamma
 
@@ -155,7 +170,11 @@ image.Mutate(x => x.Gamma(2.2f));                                               
 image.Mutate(x => x.Gamma(0.8f, ColorChannels.Blue));                                     // one channel only
 ```
 
-`Levels` maps each selected channel value x to `OutputBlack + (OutputWhite − OutputBlack) · clamp((x − InputBlack) / (InputWhite − InputBlack), 0, 1)^(1 / Gamma)`, like the Levels dialog of image editors and ImageMagick's `-level`/`+level`. It computes on the encoded sRGB values in double precision and rounds half up. `OutputBlack` may exceed `OutputWhite`, which inverts the image. `Gamma(g)` is `Levels` with only the gamma set. Every pixel is mapped, including fully transparent ones, and alpha is kept.
+`Levels` maps each selected channel value x to
+`OutputBlack + (OutputWhite − OutputBlack) · clamp((x − InputBlack) / (InputWhite − InputBlack), 0, 1)^(1 / Gamma)`,
+like the Levels dialog of image editors and ImageMagick's `-level`/`+level`. It computes on the encoded sRGB values in
+double precision and rounds half up. `OutputBlack` may exceed `OutputWhite`, which inverts the image. `Gamma(g)` is
+`Levels` with only the gamma set. Every pixel is mapped, including fully transparent ones, and alpha is kept.
 
 ### Automatic contrast and equalization
 
@@ -166,7 +185,9 @@ image.Mutate(x => x.AutoContrast(1f, 5f, preserveTone: true)); // one mapping fr
 image.Mutate(x => x.Equalize());                           // spread each channel's values evenly
 ```
 
-`AutoContrast` and `Equalize` reproduce Pillow's `ImageOps.autocontrast` and `ImageOps.equalize` on the RGB channels bit for bit. The histogram counts every pixel, including fully transparent ones, and alpha is kept. An animation is analysed as a whole and every frame gets the same mapping, so the frames do not flicker.
+`AutoContrast` and `Equalize` reproduce Pillow's `ImageOps.autocontrast` and `ImageOps.equalize` on the RGB channels bit
+for bit. The histogram counts every pixel, including fully transparent ones, and alpha is kept. An animation is analysed
+as a whole and every frame gets the same mapping, so the frames do not flicker.
 
 ## Histogram
 
@@ -184,12 +205,14 @@ ImageHistogram visible = image.GetHistogram(new HistogramOptions
 });
 ```
 
-`GetHistogram` counts the red, green, blue, alpha and luminance values 0–255; luminance is BT.601 luma, as `Grayscale`. By default it counts every pixel of the first frame, as Pillow's `Image.histogram()`. The image is not modified, and the result is a snapshot. `Percentile` uses the nearest rank: 0 gives the minimum, 50 the median and 100 the maximum. When no pixel is counted, `Mean` returns `NaN` and `Percentile` throws.
+`GetHistogram` counts the red, green, blue, alpha and luminance values 0–255; luminance is BT.601 luma, as `Grayscale`.
+By default it counts every pixel of the first frame, as Pillow's `Image.histogram()`. The image is not modified, and the
+result is a snapshot. `Percentile` uses the nearest rank: 0 gives the minimum, 50 the median and 100 the maximum. When
+no pixel is counted, `Mean` returns `NaN` and `Percentile` throws.
 
 ### Transparency and fills
 
 ```csharp
-
 image.Mutate(x => x.BackgroundColor(Color.White));                    // composite over white: removes transparency
 image.Mutate(x => x.Opacity(0.5f));                                   // scale alpha
 image.Mutate(x => x.MakeTransparent(Color.Magenta));                  // exact color match → alpha 0
@@ -197,12 +220,12 @@ image.Mutate(x => x.Fill(Color.Black));                               // overwri
 image.Mutate(x => x.Fill(Color.FromArgb(128, 255, 0, 0), new Rectangle(0, 0, 50, 50)));
 ```
 
-`Fill` overwrites (no blending) and clips the rectangle to the image. Use `BackgroundColor` before saving a transparent image as JPEG if white is not the background you want (or set `JpegEncoderOptions.BackgroundColor`).
+`Fill` overwrites (no blending) and clips the rectangle to the image. Use `BackgroundColor` before saving a transparent
+image as JPEG if white is not the background you want (or set `JpegEncoderOptions.BackgroundColor`).
 
 ## Blur and sharpen
 
 ```csharp
-
 image.Mutate(x => x.GaussianBlur(2.5f));                    // sigma (Pillow's GaussianBlur radius)
 image.Mutate(x => x.BoxBlur(3));                            // box radius; fractional values allowed
 image.Mutate(x => x.UnsharpMask());                         // radius 2, 150 %, threshold 3
@@ -210,11 +233,13 @@ image.Mutate(x => x.UnsharpMask(radius: 1, percent: 80, threshold: 2));
 image.Mutate(x => x.Sharpen());                             // 3×3 sharpen kernel
 ```
 
-Filters run on premultiplied alpha, so a blurred logo on a transparent background does not get a dark fringe. `GaussianBlur` approximates a Gaussian with three box passes (linear time for any sigma).
+Filters run on premultiplied alpha, so a blurred logo on a transparent background does not get a dark fringe.
+`GaussianBlur` approximates a Gaussian with three box passes (linear time for any sigma).
 
 ## Drawing images
 
 ```csharp
+using System.Drawing;
 using PictureSharp.Processing;
 
 using var watermark = Image.Load("logo.png");
@@ -222,7 +247,8 @@ image.Mutate(x => x.DrawImage(watermark, AnchorPosition.BottomRight, opacity: 0.
 image.Mutate(x => x.DrawImage(watermark, new Point(20, 20)));
 ```
 
-`DrawImage` composites the first frame of the source over every frame (source-over, like `Image.alpha_composite`), clipped to the image. The location may be negative; the source may be the image being processed.
+`DrawImage` composites the first frame of the source over every frame (source-over, like `Image.alpha_composite`),
+clipped to the image. The location may be negative; the source may be the image being processed.
 
 ### Blend modes
 
@@ -237,9 +263,15 @@ image.Mutate(x => x.DrawImage(texture, AnchorPosition.Center, new DrawImageOptio
 }));
 ```
 
-`BlendMode` selects how the source color mixes with the backdrop: `Normal`, `Multiply`, `Screen`, `Overlay`, `Darken`, `Lighten`, `Difference`, `HardLight`, `SoftLight`, `ColorDodge`, `ColorBurn` and `Exclusion`. These are the separable modes of [W3C Compositing and Blending Level 1](https://www.w3.org/TR/compositing-1/), the same as CSS `mix-blend-mode`. Where the backdrop is transparent, the source shows unchanged; the mixed color is then composited source-over with the source alpha scaled by `Opacity`. Transparent source pixels leave the image untouched.
+`BlendMode` selects how the source color mixes with the backdrop: `Normal`, `Multiply`, `Screen`, `Overlay`, `Darken`,
+`Lighten`, `Difference`, `HardLight`, `SoftLight`, `ColorDodge`, `ColorBurn` and `Exclusion`. These are the separable
+modes of [W3C Compositing and Blending Level 1](https://www.w3.org/TR/compositing-1/), the same as CSS `mix-blend-mode`.
+Where the backdrop is transparent, the source shows unchanged; the mixed color is then composited source-over with the
+source alpha scaled by `Opacity`. Transparent source pixels leave the image untouched.
 
-`Normal` keeps the Pillow-compatible 8-bit blend of `DrawImage`. The other modes compute in float precision on straight alpha. With `LinearLight` they decode sRGB first and encode the result afterwards, which changes the look of most modes; image editors usually blend the encoded values (the default).
+`Normal` keeps the Pillow-compatible 8-bit blend of `DrawImage`. The other modes compute in float precision on straight
+alpha. With `LinearLight` they decode sRGB first and encode the result afterwards, which changes the look of most modes;
+image editors usually blend the encoded values (the default).
 
 ## Alpha masks
 
@@ -256,7 +288,11 @@ image.Mutate(x => x.ApplyMask(vignette, AnchorPosition.Center, new MaskOptions
 image.Mutate(x => x.ApplyMask(shape, new Point(40, 10), new MaskOptions { Invert = true }));  // cut the shape out
 ```
 
-`ApplyMask` multiplies the alpha of every frame by the mask value, `A' = round(A · v / 255)`, where v is the mask's alpha or the BT.601 luma of its color (`Luminance` ignores the mask's alpha). `Invert` uses `255 − v`. Color channels are never changed, so a later mask or a `BackgroundColor` still sees the original colors. The first frame of the mask applies to every frame. The mask may be positioned anywhere and is clipped to the image. Pixels it does not cover are kept, or become fully transparent with `MaskOutside.Transparent`. The mask may be the image being processed.
+`ApplyMask` multiplies the alpha of every frame by the mask value, `A' = round(A · v / 255)`, where v is the mask's
+alpha or the BT.601 luma of its color (`Luminance` ignores the mask's alpha). `Invert` uses `255 − v`. Color channels
+are never changed, so a later mask or a `BackgroundColor` still sees the original colors. The first frame of the mask
+applies to every frame. The mask may be positioned anywhere and is clipped to the image. Pixels it does not cover are
+kept, or become fully transparent with `MaskOutside.Transparent`. The mask may be the image being processed.
 
 ## Custom operations
 
@@ -294,7 +330,9 @@ public static class MyOperations
 image.Mutate(x => x.Resize(600, 0).Polaroid());
 ```
 
-An operation that produces new buffers, possibly of another size, implements `IFrameProcessor` and runs through `ApplyProcessor`. All frames are prepared first and published together, so an exception or cancellation leaves the image unchanged; within `Clone` the source is read without being copied:
+An operation that produces new buffers, possibly of another size, implements `IFrameProcessor` and runs through
+`ApplyProcessor`. All frames are prepared first and published together, so an exception or cancellation leaves the image
+unchanged; within `Clone` the source is read without being copied:
 
 ```csharp
 using System.Drawing;
@@ -320,8 +358,16 @@ public readonly struct Transpose : IFrameProcessor          // a struct avoids a
 image.Mutate(x => x.ApplyProcessor(new Transpose()).Resize(800, 0));
 ```
 
-`GetOutputSize` is asked once, because every frame shares one canvas; the destination starts transparent black. See [Extending PictureSharp](extending-picturesharp.md#custom-frame-processors) for the full contract.
+`GetOutputSize` is asked once, because every frame shares one canvas; the destination starts transparent black. See
+[Extending PictureSharp](extending-picturesharp.md#custom-frame-processors) for the full contract.
 
 ## Compatibility with Pillow
 
-Every operation reproduces Pillow 10.2.0 pixel for pixel: `Image.resize`, `ImageOps.contain`/`fit`/`pad` (with `centering` as `Position`), `Image.alpha_composite`, `ImageEnhance`, `ImageFilter.BoxBlur`/`GaussianBlur`/`UnsharpMask`/`SHARPEN`, `Image.rotate` and `ImageOps.exif_transpose`. Blur, sharpening and interpolated rotation match Pillow run on an `RGBa` (premultiplied) image. As in Pillow, semi-transparent colors pass through 8-bit premultiplied values, so their RGB may shift slightly; opaque colors are preserved exactly. `Sepia` uses the classic 0.393/0.769/0.189 matrix (Pillow has no sepia operation).
+The operations with a Pillow counterpart reproduce Pillow 10.2.0 pixel for pixel: `Image.resize`,
+`ImageOps.contain`/`fit`/`pad` (with `centering` as `Position`), `Image.alpha_composite`, `ImageEnhance`,
+`ImageFilter.BoxBlur`/`GaussianBlur`/`UnsharpMask`/`SHARPEN`, `Image.rotate` and `ImageOps.exif_transpose`. Blur,
+sharpening and interpolated rotation match Pillow run on an `RGBa` (premultiplied) image. As in Pillow, semi-transparent
+colors pass through 8-bit premultiplied values, so their RGB may shift slightly; opaque colors are preserved exactly.
+`Sepia` uses the classic 0.393/0.769/0.189 matrix (Pillow has no sepia operation). Operations without a Pillow
+counterpart (levels, blend modes other than `Normal`, masks, trimming in background mode) follow the formulas given in
+their sections.

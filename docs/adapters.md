@@ -17,8 +17,8 @@ dotnet add package PictureSharp.Skia
 
 Every pixel conversion copies. The returned `Bitmap`, `SKBitmap`, `SKImage` or `Image` belongs to the caller, who
 disposes it; the source stays unchanged and can be disposed independently. Conversions from `Image` read its first
-frame; call the same methods on `image.Frames[i]` for another frame. Pixels are copied without color-space
-conversion: run `Mutate(x => x.ConvertToSrgb())` first when the image has another ICC profile.
+frame; call the same methods on `image.Frames[i]` for another frame. Pixels are copied without color-space conversion:
+run `Mutate(x => x.ConvertToSrgb())` first when the image has another ICC profile.
 
 ## System.Drawing (Windows)
 
@@ -61,10 +61,10 @@ using Image fromSkia = Image.FromSKBitmap(bitmap);                           // 
 
 `ToSKBitmap` and `ToSKImage` accept `Rgba8888` or `Bgra8888` with `Unpremul` (bit-exact round trip) or `Premul`
 (PictureSharp's premultiplication); other combinations throw `ArgumentOutOfRangeException`. `FromSKBitmap`,
-`FromSKPixmap` and `FromSKImage` accept every color type Skia can convert (for example `Gray8` or `RgbaF16`) and
-always produce straight alpha; an `Opaque` source gives alpha 255. A texture-backed `SKImage` must be read through
-its GPU context first. Install the native assets your platform needs, for example `SkiaSharp.NativeAssets.Linux` on
-Linux servers.
+`FromSKPixmap` and `FromSKImage` accept every color type Skia can convert (for example `Gray8` or `RgbaF16`) and always
+produce straight alpha; an `Opaque` source gives alpha 255. A texture-backed `SKImage` must be read through its GPU
+context first. Install the native assets your platform needs, for example `SkiaSharp.NativeAssets.Linux` on Linux
+servers.
 
 ## ASP.NET Core
 
@@ -110,15 +110,15 @@ matching range (`image/webp` before `image/*` before `*/*`), the highest quality
 Without an `Accept` header, or with `*/*`, the first format is sent. When `Accept` excludes every offered format, the
 first format is sent too, or `406 Not Acceptable` with `RespondNotAcceptable = true`.
 
-The image is encoded into memory before anything is written, so the response has `Content-Type`,
-`Content-Length`, `Vary: Accept` (when more than one format is offered) and the configured `Cache-Control`, and a
-failed or canceled encoding sends no partial image. A `HEAD` request gets the headers only. Encoding and writing
-stop when `HttpContext.RequestAborted` is canceled. `Results.Extensions.Image(image)` disposes the image after the
-response; pass `disposeImage: false` to keep it, for example for a cached image. JPEG has no alpha: put a
-transparent image's formats in an order that does not prefer JPEG.
+The image is encoded into memory before anything is written, so the response has `Content-Type`, `Content-Length`,
+`Vary: Accept` (when more than one format is offered) and the configured `Cache-Control`, and a failed or canceled
+encoding sends no partial image. A `HEAD` request gets the headers only. Encoding and writing stop when
+`HttpContext.RequestAborted` is canceled. `Results.Extensions.Image(image)` disposes the image after the response; pass
+`disposeImage: false` to keep it, for example for a cached image. JPEG has no alpha: put a transparent image's formats
+in an order that does not prefer JPEG.
 
-`request.ReadImageAsync` decodes the request body with the given `DecoderOptions` and stops when the request is
-aborted. A body over `MaxInputBytes`, declared by `Content-Length` or found while reading, throws
-`BadHttpRequestException` with status 413 before it is buffered. Other limits behave as in `Image.LoadAsync`:
-corrupt or unrecognized data and an exceeded `MaxPixels` throw `ImageFormatException`, unsupported variants
-`NotSupportedException`. Server limits such as Kestrel's `MaxRequestBodySize` still apply first.
+`request.ReadImageAsync` decodes the request body with the given `DecoderOptions` and stops when the request is aborted.
+A body over `MaxInputBytes`, declared by `Content-Length` or found while reading, throws `BadHttpRequestException` with
+status 413 before it is buffered. Other limits behave as in `Image.LoadAsync`: corrupt or unrecognized data and an
+exceeded `MaxPixels` throw `ImageFormatException`, unsupported variants `NotSupportedException`. Server limits such as
+Kestrel's `MaxRequestBodySize` still apply first.

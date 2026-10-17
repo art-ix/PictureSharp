@@ -6,6 +6,9 @@ A plugin SPI addition requested by the HEIF plugin. No breaking API changes sinc
   declares for the attached map. A HEIC file from iOS 18 (ISO 21496-1 and Apple metadata for one map) now gets the same
   `Image.Hdr.Detected` as the JPEG of the same photo. `detected` must include `metadata.Kind`; the existing overload is
   unchanged. See [Extending PictureSharp](../extending-picturesharp.md#hdr-gain-maps).
+- **Docs:** the guides were reviewed against the 0.7 API and simplified: corrected statements about color management,
+  saving to a path and ICO cancellation, decoder and JPEG options that were missing, a shorter CLI guide and
+  [Performance](../performance.md) ordered newest first. All C# samples compile.
 
 The adapter packages are released at the same version without changes.
 
