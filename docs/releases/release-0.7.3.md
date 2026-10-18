@@ -14,4 +14,5 @@ Encoding and decoding times are unchanged (within ±2% on `PngCompressionBenchma
 
 The adapter packages are released at the same version without changes.
 
-**Validation:** all 7159 tests passed on linux-x64 (Release).
+**Validation:** all tests passed on linux-x64 (including oracle runs, runs without AVX2 and without hardware
+intrinsics, trimming and Native AOT). ARM64 was not run because no platform-specific code changed.

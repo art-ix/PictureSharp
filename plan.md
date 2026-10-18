@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.3 (przygotowana 2026-10-18, niewydana).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.3 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -41,7 +41,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.0 | Integracja wszystkich obszarów, SPI wtyczek dla gain map i metadanych, stabilizacja API i wydanie | Wydana (2026-10-17; ARM64 zweryfikowane, bez macOS) |
 | 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Wydana (2026-10-17; bez ARM64) |
 | 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Wydana (2026-10-17; bez ARM64) |
-| 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Przygotowana (2026-10-18; commit bez tagu) |
+| 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -338,8 +338,10 @@ Zakres:
 - Metadane PNG: iCCP i iTXt rozpakowywane bez kopii do nowej tablicy (`Inflater.InflateZlib(ReadOnlySpan<byte>, …)`),
   profil ICC kompresowany przez `CompressZlibPooled`, słowo kluczowe XMP jako wspólna stała `u8` w `PngConstants`.
 
-Stan (2026-10-18): pełny zestaw testów 7159/7159 (Release, linux-x64); `PngCompressionBenchmarks` przed/po w notatkach
-wydania. Do wydania: bramka (Oracle, `verify-package-consumer.sh`), tag `v0.7.3`, NuGet.
+Stan (2026-10-18): `PngCompressionBenchmarks` przed/po w `docs/performance.md` (alokacje −0,38 MB na kodowanie,
+−0,3–0,8 MB na dekodowanie, czasy bez zmian). Bramka linux-x64: build bez ostrzeżeń, pełny zestaw 7210/7217 (7 GDI+),
+Oracle 192/192, bez AVX2 i bez intrinsics 6535/6535, `verify-package-consumer.sh` exit 0 bez ostrzeżeń (nupkg 0.7.3).
+ARM64 nieuruchamiane (zmiana bez kodu zależnego od platformy). Wydana 2026-10-18 (tag `v0.7.3`, GitHub Release, NuGet).
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
