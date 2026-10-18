@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 
 namespace PictureSharp.Infrastructure.Codecs.Jpeg;
@@ -22,6 +23,9 @@ internal ref struct JpegBitReader
 
     /// <summary>Position of the first byte not yet loaded (a marker once the segment is exhausted).</summary>
     public readonly int Position => _pos;
+
+    /// <summary>True once the segment's data is exhausted: a marker or the end of the file was reached.</summary>
+    public readonly bool AtMarker => _atMarker;
 
     /// <summary>Set when more bits were consumed than the segment holds; cleared by a successful restart.</summary>
     public bool InsufficientData;
@@ -102,6 +106,88 @@ internal ref struct JpegBitReader
             _bits <<= n;
             _count -= n;
         }
+    }
+
+    /// <summary>
+    /// Fast path of <see cref="Decode"/>, <see cref="Receive"/> and their callers: loads at least 57 bits unless a
+    /// marker or the end of the data comes first. True when at least 32 bits are buffered, enough for any Huffman code
+    /// with its extra bits; false means the caller should go back to the checked methods.
+    /// </summary>
+    // port: libjpeg-turbo jdhuff.h FILL_BIT_BUFFER_FAST
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool EnsureFast()
+    {
+        if (_count < 32)
+        {
+            FillFast();
+        }
+
+        return _count >= 32;
+    }
+
+    /// <summary>The next <see cref="JpegHuffmanTable.LookupBits"/> bits, after <see cref="EnsureFast"/>.</summary>
+    public readonly int Peek => (int)(_bits >> (64 - JpegHuffmanTable.LookupBits));
+
+    /// <summary>Drops <paramref name="n"/> buffered bits (at most 32, after <see cref="EnsureFast"/>).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(int n)
+    {
+        _bits <<= n;
+        _count -= n;
+    }
+
+    /// <summary><see cref="Decode"/> after <see cref="EnsureFast"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int DecodeFast(JpegHuffmanTable table)
+    {
+        int entry = table.Lookup[Peek];
+        if (entry != 0)
+        {
+            Skip(entry >> 8);
+            return entry & 0xFF;
+        }
+
+        return DecodeSlow(table);
+    }
+
+    /// <summary><see cref="GetBits"/> (1 to 16 bits) after <see cref="EnsureFast"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int GetBitsFast(int n)
+    {
+        int v = (int)(_bits >> (64 - n));
+        Skip(n);
+        return v;
+    }
+
+    /// <summary><see cref="Receive"/> (1 to 16 bits) after <see cref="EnsureFast"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int ReceiveFast(int n)
+    {
+        int v = (int)(_bits >> (64 - n));
+        Skip(n);
+        // port: libjpeg-turbo jdhuff.h HUFF_EXTEND
+        return v < 1 << (n - 1) ? v + (-1 << n) + 1 : v;
+    }
+
+    // Eight bytes at once when none of them is 0xFF; otherwise byte by byte with the marker checks of Fill.
+    private void FillFast()
+    {
+        if (_pos + 8 <= _data.Length && !_atMarker)
+        {
+            ulong word = BinaryPrimitives.ReadUInt64BigEndian(_data[_pos..]);
+            ulong inverse = ~word;
+            if (((inverse - 0x0101010101010101UL) & ~inverse & 0x8080808080808080UL) == 0)
+            {
+                int bytes = (64 - _count) >> 3;
+                int used = _count + (bytes * 8);
+                _bits |= (word >> _count) & ~((1UL << (64 - used)) - 1);
+                _count = used;
+                _pos += bytes;
+                return;
+            }
+        }
+
+        Fill();
     }
 
     // port: libjpeg-turbo jdhuff.c jpeg_fill_bit_buffer

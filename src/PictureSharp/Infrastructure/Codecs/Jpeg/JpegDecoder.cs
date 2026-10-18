@@ -140,7 +140,20 @@ internal sealed class JpegDecoder : IImageDecoder
     private static void TransformRow(JpegComponent c, short[] coefficients, short[] quant, int by)
     {
         int size = c.BlockSize;
-        for (int bx = 0; bx < c.WidthInBlocks; bx++)
+        int bx = 0;
+        if (size == 8)
+        {
+            // Pairs of blocks for the vector IDCT, which handles two at once.
+            for (; bx + 1 < c.WidthInBlocks; bx += 2)
+            {
+                int block = (by * c.BlocksPerLine) + bx;
+                Span<byte> row = c.Plane.AsSpan(by * size * c.PlaneStride);
+                JpegIdct.Transform(coefficients.AsSpan(block * 64, 64), quant, row[(bx * size)..], c.PlaneStride,
+                    coefficients.AsSpan((block + 1) * 64, 64), quant, row[((bx + 1) * size)..], c.PlaneStride);
+            }
+        }
+
+        for (; bx < c.WidthInBlocks; bx++)
         {
             int block = (by * c.BlocksPerLine) + bx;
             JpegIdct.Transform(coefficients.AsSpan(block * 64, 64), quant, c.Plane.AsSpan((by * size * c.PlaneStride) + (bx * size)), c.PlaneStride, size);

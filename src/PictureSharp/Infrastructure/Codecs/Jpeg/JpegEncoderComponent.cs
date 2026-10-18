@@ -4,7 +4,7 @@ using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Infrastructure.Codecs.Jpeg;
 
-internal sealed class JpegEncoderComponent : IDisposable
+internal sealed partial class JpegEncoderComponent : IDisposable
 {
     public int Horizontal { get; }
     public int Vertical { get; }
@@ -79,10 +79,20 @@ internal sealed class JpegEncoderComponent : IDisposable
     }
 
     // The converted samples are 0–255 for any input: libjpeg's coefficients and offsets keep the sums in range.
-    private static void ConvertColors(ReadOnlySpan<Rgba32> pixels, byte[][] planes, int offset, Rgba32 background)
+    internal static void ConvertColors(ReadOnlySpan<Rgba32> pixels, byte[][] planes, int offset, Rgba32 background)
     {
+        bool gray = planes.Length == 1;
         Span<byte> y = planes[0].AsSpan(offset, pixels.Length);
-        if (planes.Length == 1)
+        Span<byte> cb = gray ? default : planes[1].AsSpan(offset, pixels.Length);
+        Span<byte> cr = gray ? default : planes[2].AsSpan(offset, pixels.Length);
+        int done = ConvertColorsSimd(pixels, y, cb, cr, background);
+        ConvertColorsScalar(pixels[done..], y[done..], gray ? default : cb[done..], gray ? default : cr[done..], background);
+    }
+
+    // port: libjpeg-turbo jccolor.c rgb_ycc_convert, rgb_gray_convert; empty chroma spans convert luma only
+    internal static void ConvertColorsScalar(ReadOnlySpan<Rgba32> pixels, Span<byte> y, Span<byte> cb, Span<byte> cr, Rgba32 background)
+    {
+        if (cb.IsEmpty)
         {
             for (int i = 0; i < pixels.Length; i++)
             {
@@ -93,8 +103,6 @@ internal sealed class JpegEncoderComponent : IDisposable
             return;
         }
 
-        Span<byte> cb = planes[1].AsSpan(offset, pixels.Length);
-        Span<byte> cr = planes[2].AsSpan(offset, pixels.Length);
         for (int i = 0; i < pixels.Length; i++)
         {
             Rgba32 p = Composite(pixels[i], background);
@@ -108,29 +116,16 @@ internal sealed class JpegEncoderComponent : IDisposable
     private void PrepareRow(byte[] plane, int width, int height, int by, int maxH, int maxV, JpegFdct.Divisors divisors)
     {
         int dx = maxH / Horizontal, dy = maxV / Vertical;
-        int shift = dx * dy == 4 ? 2 : dx * dy == 2 ? 1 : 0;
         Span<int> samples = stackalloc int[64];
         for (int bx = 0; bx < WidthInBlocks; bx++)
         {
             int x0 = bx * 8 * dx, y0 = by * 8 * dy;
-            bool inside = x0 + 8 * dx <= width && y0 + 8 * dy <= height;
-            for (int y = 0; y < 8; y++)
+            if (x0 + 8 * dx <= width && y0 + 8 * dy <= height)
             {
-                for (int x = 0; x < 8; x++)
-                {
-                    int sum = 0;
-                    for (int sy = 0; sy < dy; sy++)
-                    {
-                        int row = (inside ? y0 + y * dy + sy : Math.Min(y0 + y * dy + sy, height - 1)) * width;
-                        for (int sx = 0; sx < dx; sx++)
-                            sum += plane[row + (inside ? x0 + x * dx + sx : Math.Min(x0 + x * dx + sx, width - 1))];
-                    }
-
-                    // Sums are non-negative, so the shift equals libjpeg's division.
-                    int bias = dx == 2 ? (dy == 2 ? 1 + (x & 1) : x & 1) : dx * dy / 2;
-                    samples[y * 8 + x] = ((sum + bias) >> shift) - 128;
-                }
+                ReadOnlySpan<byte> source = plane.AsSpan((y0 * width) + x0);
+                if (!LoadBlockSimd(source, width, dx, dy, samples)) LoadBlock(source, width, dx, dy, samples);
             }
+            else LoadEdgeBlock(plane, width, height, x0, y0, dx, dy, samples);
 
             JpegFdct.Transform(samples);
             JpegFdct.QuantizeZigzag(samples, divisors, Block(bx, by));
@@ -143,6 +138,49 @@ internal sealed class JpegEncoderComponent : IDisposable
             block[0] = Block(bx - 1, by)[0];
         }
     }
+
+    // A block inside the plane: averages dx × dy samples (1 or 2 each way) with libjpeg's alternating bias.
+    internal static void LoadBlock(ReadOnlySpan<byte> source, int width, int dx, int dy, Span<int> samples)
+    {
+        int shift = dx + dy - 2;
+        for (int y = 0; y < 8; y++)
+        {
+            ReadOnlySpan<byte> row0 = source.Slice(y * dy * width, 8 * dx);
+            ReadOnlySpan<byte> row1 = dy == 2 ? source.Slice(((y * 2) + 1) * width, 8 * dx) : row0;
+            for (int x = 0; x < 8; x++)
+            {
+                int sum = dx == 2 ? row0[2 * x] + row0[(2 * x) + 1] : row0[x];
+                if (dy == 2) sum += dx == 2 ? row1[2 * x] + row1[(2 * x) + 1] : row1[x];
+                samples[(y * 8) + x] = ((sum + Bias(x, dx, dy)) >> shift) - 128;
+            }
+        }
+    }
+
+    // A block crossing the right or bottom edge replicates the last column and row.
+    private static void LoadEdgeBlock(byte[] plane, int width, int height, int x0, int y0, int dx, int dy, Span<int> samples)
+    {
+        int shift = dx + dy - 2;
+        for (int y = 0; y < 8; y++)
+        {
+            for (int x = 0; x < 8; x++)
+            {
+                int sum = 0;
+                for (int sy = 0; sy < dy; sy++)
+                {
+                    int row = Math.Min(y0 + (y * dy) + sy, height - 1) * width;
+                    for (int sx = 0; sx < dx; sx++)
+                        sum += plane[row + Math.Min(x0 + (x * dx) + sx, width - 1)];
+                }
+
+                // Sums are non-negative, so the shift equals libjpeg's division.
+                samples[(y * 8) + x] = ((sum + Bias(x, dx, dy)) >> shift) - 128;
+            }
+        }
+    }
+
+    // port: libjpeg-turbo jcsample.c h2v1_downsample (bias 0,1,...), h2v2_downsample (1,2,...), int_downsample (half)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Bias(int x, int dx, int dy) => dx == 2 ? (dy == 2 ? 1 + (x & 1) : x & 1) : dx * dy / 2;
 
     private void PadRows()
     {

@@ -100,9 +100,18 @@ internal sealed partial class JpegFile
         }
     }
 
-    /// <summary>Gives the rented planes and coefficients back once the pixels are converted.</summary>
+    /// <summary>Gives the rented planes, coefficients and Huffman lookups back once the pixels are converted.</summary>
     public void ReturnBuffers()
     {
+        foreach (JpegHuffmanTable?[] tables in (ReadOnlySpan<JpegHuffmanTable?[]>)[_dcTables, _acTables])
+        {
+            for (int i = 0; i < tables.Length; i++)
+            {
+                tables[i]?.Return();
+                tables[i] = null;
+            }
+        }
+
         foreach (JpegComponent c in Frame?.Components ?? [])
         {
             if (c.Plane is { Length: > 0 } plane)

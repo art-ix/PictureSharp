@@ -46,6 +46,11 @@ internal sealed partial class JpegFile
         try
         {
             file.ReadMarkers(data, options, headerOnly, cancellationToken, scale);
+            if (headerOnly)
+            {
+                file.ReturnBuffers();   // Huffman lookups built from DHT segments before the first scan
+            }
+
             return file;
         }
         catch

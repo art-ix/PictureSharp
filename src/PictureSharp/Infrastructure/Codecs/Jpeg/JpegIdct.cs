@@ -54,6 +54,17 @@ internal static partial class JpegIdct
         }
     }
 
+    /// <summary>Transforms two 8x8 blocks; where the vector code handles both at once it is faster than two calls.</summary>
+    public static void Transform(ReadOnlySpan<short> blockA, ReadOnlySpan<short> quantA, Span<byte> outputA, int strideA,
+        ReadOnlySpan<short> blockB, ReadOnlySpan<short> quantB, Span<byte> outputB, int strideB)
+    {
+        if (!TransformSimd(blockA, quantA, outputA, strideA, blockB, quantB, outputB, strideB))
+        {
+            Transform(blockA, quantA, outputA, strideA);
+            Transform(blockB, quantB, outputB, strideB);
+        }
+    }
+
     // port: libjpeg-turbo jidctint.c jpeg_idct_islow
     internal static void TransformScalar(ReadOnlySpan<short> block, ReadOnlySpan<short> quant, Span<byte> output, int stride)
     {

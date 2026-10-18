@@ -48,6 +48,12 @@ dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*PngCompressionBenchmarks*' --launchCount 1 --warmupCount 2 --iterationCount 6
 
+# JPEG decoding of fixed files and encoding of fixed sources, on one thread and by default.
+PICTURESHARP_BENCHMARK_JPEG_FILES='/absolute/photo.jpg:/absolute/progressive.jpg' \
+PICTURESHARP_BENCHMARK_JPEG_SOURCES='/absolute/photo.png' \
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
+  --filter '*JpegDecodeBenchmarks*' '*JpegEncodeBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 9
+
 # 80-case regression matrix without BenchmarkDotNet (seven samples of at least 120 ms per case).
 taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- matrix-probe /tmp/picturesharp-matrix.json
 ```
@@ -61,6 +67,7 @@ Newest first:
 
 | Section | Covers |
 | --- | --- |
+| [JPEG optimization (0.7.4)](#jpeg-optimization-074) | JPEG decoding and encoding on one thread and by default, against 0.7.3 and Pillow |
 | [Own deflate versus System.IO.Compression (0.7.2)](#own-deflate-versus-systemiocompression-072) | Why PNG keeps its own deflate/inflate instead of `ZLibStream` |
 | [Integration measurements (0.7.0)](#integration-measurements-070) | Complete user paths on 12 MP inputs: time, allocations, peak memory, cancellation latency |
 | [Editing and saving HDR photos (0.6.9)](#editing-and-saving-hdr-photos-069) | Resizing, cropping and saving JPEG photos with a gain map |
@@ -83,6 +90,67 @@ Newest first:
 Regression checks against the previous release use the 80-case `matrix-probe` matrix in ABBA order on CPUs 0–7; cases
 above +5% are rechecked alternating in separate AssemblyLoadContexts (15 samples of at least 180 ms). These are
 lightweight probes, not full BenchmarkDotNet studies.
+
+## JPEG optimization (0.7.4)
+
+0.7.4 speeds up JPEG without changing results: decoded pixels and encoded bytes are identical to 0.7.3 with AVX2,
+without AVX2 and without hardware intrinsics, including truncated and corrupt files (about 5,000 decodes and encodes
+compared with the 0.7.3 code). A stage profile came first and set the order of the work; it differed from the plan:
+
+| Stage (1920×1440 q75 4:2:0, one thread) | 0.7.3 (ms) | 0.7.4 (ms) |
+| --- | ---: | ---: |
+| Decoding: Huffman entropy | ~6.3 | ~4.6 |
+| Decoding: inverse DCT | ~2.9 | ~1.7 |
+| Decoding: upsampling and YCbCr→RGBA | 7.6 | 1.5 |
+| Encoding: gathering and downsampling block samples | ~26 | ~2 |
+| Encoding: RGB→YCbCr, forward DCT and quantization | ~15 | ~7 |
+
+- **Decoder entropy:** a fast path like libjpeg-turbo's `decode_mcu_fast` decodes whole MCUs from a 64-bit buffer
+  refilled eight bytes at a time; an 11-bit lookup resolves short codes together with their coefficient value. When
+  the data runs short (a marker), the MCU is decoded again by the checked path, so corrupt data behaves as before.
+  Progressive AC refinement finds the coefficients to correct from a bit mask instead of testing every position.
+- **Inverse DCT:** AVX2 with `pmaddwd` on two blocks at once, using libjpeg-turbo's integer arithmetic.
+- **Upsampling and color:** fancy upsampling and YCbCr→RGBA with `Vector256`/`Vector128`.
+- **Encoder:** interior blocks gather and average their samples without clamping (vectorized), RGB→YCbCr and
+  quantization are vectorized; the quantizer divides in single precision, exact for every DCT output.
+
+BenchmarkDotNet means (`JpegDecodeBenchmarks`, `JpegEncodeBenchmarks`, 9 iterations), i5-12500H. Inputs are local and
+fixed: a 12 MP iPhone photo (4:2:0), and 1920×1440 JPEGs saved by Pillow from the same photo (q75 4:2:0, q90 4:4:4, q75
+progressive). Encoding uses the same image as PNG at 1920×1440 and at 12 MP. Pillow 10.2.0 (libjpeg-turbo with SIMD)
+times are single-threaded minima measured separately, for context:
+
+| Operation | Threads | 0.7.3 (ms) | 0.7.4 (ms) | Change | Pillow (ms) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Decode 1920×1440 q75 4:2:0 | 1 | 18.54 | 9.30 | −50% | 6.5 |
+| | default | 12.28 | 8.02 | −35% | |
+| Decode 1920×1440 q90 4:4:4 | 1 | 23.83 | 15.95 | −33% | 11.2 |
+| | default | 20.29 | 15.37 | −24% | |
+| Decode 1920×1440 progressive | 1 | 33.06 | 18.97 | −43% | 18.6 |
+| | default | 23.73 | 17.20 | −28% | |
+| Decode 12 MP photo | 1 | 108.13 | 54.46 | −50% | 51.4 |
+| | default | 75.70 | 50.20 | −34% | |
+| Encode 1920×1440 q75 4:2:0 | 1 | 48.64 | 14.87 | −69% | 5.7 |
+| | default | 13.65 | 8.67 | −36% | |
+| Encode 1920×1440 q90 4:4:4 | 1 | 79.45 | 25.88 | −67% | — |
+| | default | 22.75 | 15.34 | −33% | |
+| Encode 1920×1440 progressive | 1 | 71.21 | 37.43 | −47% | — |
+| | default | 35.56 | 31.21 | −12% | |
+| Encode 12 MP q75 4:2:0 | 1 | 203.39 | 62.41 | −69% | — |
+| | default | 47.82 | 32.91 | −31% | |
+| Encode 12 MP q90 4:4:4 | 1 | 312.05 | 111.42 | −64% | — |
+| | default | 89.18 | 59.95 | −33% | |
+| Encode 12 MP progressive | 1 | 288.81 | 150.23 | −48% | — |
+| | default | 136.85 | 119.48 | −13% | |
+
+Allocations are unchanged (10.56 MB for a 1920×1440 decode, 0.5 MB for a q75 encode); Huffman lookup tables now come
+from the shared pool, so small files allocate less than before. Single-threaded baseline decoding is 1.43× libjpeg-turbo
+at 4:2:0 in this run (1.2–1.3× in the stage profile), 1.06× for the 12 MP photo and 1.42× at q90 4:4:4, where Huffman
+decoding dominates; progressive decoding is level with it. The q75 encoder is 2.6× Pillow on one thread (8.5× in 0.7.3);
+progressive encoding gained least, because its entropy coding (statistics and refinement passes) was not changed. Raw
+data: [jpeg-0.7.4-x64-decode-before.csv](measurements/jpeg-0.7.4-x64-decode-before.csv),
+[-after](measurements/jpeg-0.7.4-x64-decode-after.csv),
+[jpeg-0.7.4-x64-encode-before.csv](measurements/jpeg-0.7.4-x64-encode-before.csv),
+[-after](measurements/jpeg-0.7.4-x64-encode-after.csv).
 
 ## Own deflate versus System.IO.Compression (0.7.2)
 

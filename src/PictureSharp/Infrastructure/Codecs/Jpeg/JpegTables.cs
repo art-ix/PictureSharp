@@ -22,6 +22,19 @@ internal static class JpegTables
         63, 63, 63, 63, 63, 63, 63, 63,
     ];
 
+    /// <summary>Natural (row-major) index to zigzag index: the inverse of <see cref="NaturalOrder"/>.</summary>
+    public static ReadOnlySpan<byte> ZigzagOrder =>
+    [
+        0, 1, 5, 6, 14, 15, 27, 28,
+        2, 4, 7, 13, 16, 26, 29, 42,
+        3, 8, 12, 17, 25, 30, 41, 43,
+        9, 11, 18, 24, 31, 40, 44, 53,
+        10, 19, 23, 32, 39, 45, 52, 54,
+        20, 22, 33, 38, 46, 51, 55, 60,
+        21, 34, 37, 47, 50, 56, 59, 61,
+        35, 36, 48, 49, 57, 58, 62, 63,
+    ];
+
     // Default tables from Annex K.3, installed for streams without DHT (Motion JPEG).
     // port: libjpeg-turbo jstdhuff.c std_huff_tables
 

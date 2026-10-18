@@ -76,6 +76,11 @@ internal static partial class JpegFdct
     /// </summary>
     public static void QuantizeZigzag(ReadOnlySpan<int> data, Divisors divisors, Span<short> result)
     {
+        if (!QuantizeZigzagSimd(data, divisors, result)) QuantizeZigzagScalar(data, divisors, result);
+    }
+
+    internal static void QuantizeZigzagScalar(ReadOnlySpan<int> data, Divisors divisors, Span<short> result)
+    {
         int[] half = divisors.Half;
         ulong[] reciprocal = divisors.Reciprocal;
         ReadOnlySpan<byte> order = JpegTables.NaturalOrder;

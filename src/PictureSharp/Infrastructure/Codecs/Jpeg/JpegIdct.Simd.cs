@@ -16,9 +16,15 @@ internal static partial class JpegIdct
     {
         if (Avx2.IsSupported)
         {
-            return TransformAvx2(block, quant, output, stride);
+            return TransformAvx2(block, quant, output, stride, block, quant, output, stride);
         }
 
         return AdvSimd.Arm64.IsSupported && TransformArm(block, quant, output, stride);
     }
+
+    /// <summary>Runs the vector transform of two blocks at once where this CPU has one.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TransformSimd(ReadOnlySpan<short> blockA, ReadOnlySpan<short> quantA, Span<byte> outputA, int strideA,
+        ReadOnlySpan<short> blockB, ReadOnlySpan<short> quantB, Span<byte> outputB, int strideB) =>
+        Avx2.IsSupported && TransformAvx2(blockA, quantA, outputA, strideA, blockB, quantB, outputB, strideB);
 }

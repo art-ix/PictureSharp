@@ -4,7 +4,10 @@ using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Jpeg;
 
-/// <summary>Vector DCTs, quantization, coefficient masks and the bit writer equal their scalar definitions.</summary>
+/// <summary>
+/// Vector DCTs, quantization, sampling, color conversion, coefficient masks and the bit writer equal their scalar
+/// definitions.
+/// </summary>
 public class JpegSimdTests
 {
     [Test]
@@ -34,10 +37,13 @@ public class JpegSimdTests
             var natural = new short[64];
             JpegFdct.Quantize(data, table, natural);
             var zigzag = new short[64];
+            var scalar = new short[64];
             JpegFdct.QuantizeZigzag(data, new JpegFdct.Divisors(table), zigzag);
+            JpegFdct.QuantizeZigzagScalar(data, new JpegFdct.Divisors(table), scalar);
             for (int k = 0; k < 64; k++)
             {
                 await Assert.That(zigzag[k]).IsEqualTo(natural[JpegTables.NaturalOrder[k]]);
+                await Assert.That(scalar[k]).IsEqualTo(natural[JpegTables.NaturalOrder[k]]);
             }
         }
     }
@@ -71,6 +77,130 @@ public class JpegSimdTests
             JpegIdct.Transform(block, quant, simd, stride);
             await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
         }
+    }
+
+    [Test]
+    public async Task InverseDctPair_MatchesScalar_WhenEitherBlockIsOutOfRange()
+    {
+        var rng = new Random(66);
+        for (int trial = 0; trial < 2000; trial++)
+        {
+            (short[] blockA, short[] quantA) = RandomBlock(rng, trial % 4 == 1);
+            (short[] blockB, short[] quantB) = RandomBlock(rng, trial % 4 == 2);
+            const int strideA = 13, strideB = 9;
+            var expectedA = new byte[(7 * strideA) + 8];
+            var expectedB = new byte[(7 * strideB) + 8];
+            JpegIdct.TransformScalar(blockA, quantA, expectedA, strideA);
+            JpegIdct.TransformScalar(blockB, quantB, expectedB, strideB);
+            var actualA = new byte[expectedA.Length];
+            var actualB = new byte[expectedB.Length];
+            JpegIdct.Transform(blockA, quantA, actualA, strideA, blockB, quantB, actualB, strideB);
+            await Assert.That(actualA).IsEquivalentTo(expectedA, CollectionOrdering.Matching);
+            await Assert.That(actualB).IsEquivalentTo(expectedB, CollectionOrdering.Matching);
+        }
+
+        static (short[] Block, short[] Quant) RandomBlock(Random rng, bool extreme)
+        {
+            var block = new short[64];
+            var quant = new short[64];
+            for (int i = 0; i < 64; i++)
+            {
+                quant[i] = extreme ? (short)rng.Next(1, short.MaxValue) : (short)rng.Next(1, 100);
+                if (rng.Next(i < 10 ? 2 : 6) == 0)
+                {
+                    block[i] = extreme ? (short)rng.Next(short.MinValue, short.MaxValue) : (short)rng.Next(-12000 / quant[i] - 1, 12000 / quant[i] + 1);
+                }
+            }
+
+            return (block, quant);
+        }
+    }
+
+    [Test]
+    public async Task Upsampling_AndYccToRgb_MatchScalar()
+    {
+        var rng = new Random(67);
+        foreach (int width in new[] { 3, 8, 9, 10, 16, 17, 18, 31, 33, 100, 257 })
+        {
+            byte[] near = RandomBytes(rng, width), far = RandomBytes(rng, width);
+            var simd = new byte[(2 * width) + 16];
+            var scalar = new byte[(2 * width) + 16];
+            JpegColorConverter.H2V2(near, far, simd);
+            JpegColorConverter.H2V2(near, far, scalar, simd: false);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
+            JpegColorConverter.H2V1(near, simd);
+            JpegColorConverter.H2V1(near, scalar, simd: false);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
+            foreach (int bias in new[] { 1, 2 })
+            {
+                JpegColorConverter.H1V2(near, far, bias, simd);
+                JpegColorConverter.H1V2(near, far, bias, scalar, simd: false);
+                await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
+            }
+
+            byte[] y = RandomBytes(rng, width);
+            var rgbSimd = new Rgba32[width];
+            var rgbScalar = new Rgba32[width];
+            JpegColorConverter.YccToRgb(y, near, far, rgbSimd);
+            JpegColorConverter.YccToRgb(y, near, far, rgbScalar, simd: false);
+            await Assert.That(rgbSimd).IsEquivalentTo(rgbScalar, CollectionOrdering.Matching);
+        }
+
+        // Extremes saturate in every channel.
+        byte[] ends = [0, 255, 0, 255, 0, 255, 0, 255, 255, 0, 255, 0, 255, 0, 255, 0, 0, 255];
+        var a = new Rgba32[ends.Length];
+        var b = new Rgba32[ends.Length];
+        JpegColorConverter.YccToRgb(ends, ends.Reverse().ToArray(), ends, a);
+        JpegColorConverter.YccToRgb(ends, ends.Reverse().ToArray(), ends, b, simd: false);
+        await Assert.That(a).IsEquivalentTo(b, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task EncoderSampling_AndColorConversion_MatchScalar()
+    {
+        var rng = new Random(68);
+        const int width = 37;
+        byte[] plane = RandomBytes(rng, width * 20);
+        foreach ((int dx, int dy) in new[] { (1, 1), (2, 1), (1, 2), (2, 2) })
+        {
+            var simd = new int[64];
+            var scalar = new int[64];
+            if (!JpegEncoderComponent.LoadBlockSimd(plane.AsSpan(3), width, dx, dy, simd))
+            {
+                continue;   // no vector hardware: only the scalar code runs
+            }
+
+            JpegEncoderComponent.LoadBlock(plane.AsSpan(3), width, dx, dy, scalar);
+            await Assert.That(simd).IsEquivalentTo(scalar, CollectionOrdering.Matching);
+        }
+
+        // Opaque runs, translucent pixels inside groups of eight, a gray image and a tail.
+        var pixels = new Rgba32[203];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = new Rgba32((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256), (byte)(i % 29 == 0 ? rng.Next(256) : 255));
+        }
+
+        var background = new Rgba32(30, 90, 200, 255);
+        foreach (int components in new[] { 1, 3 })
+        {
+            byte[][] planes = Enumerable.Range(0, components).Select(_ => new byte[pixels.Length + 5]).ToArray();
+            byte[][] expected = Enumerable.Range(0, components).Select(_ => new byte[pixels.Length + 5]).ToArray();
+            JpegEncoderComponent.ConvertColors(pixels, planes, 5, background);
+            JpegEncoderComponent.ConvertColorsScalar(pixels, expected[0].AsSpan(5), components == 1 ? default : expected[1].AsSpan(5),
+                components == 1 ? default : expected[2].AsSpan(5), background);
+            for (int c = 0; c < components; c++)
+            {
+                await Assert.That(planes[c]).IsEquivalentTo(expected[c], CollectionOrdering.Matching);
+            }
+        }
+    }
+
+    private static byte[] RandomBytes(Random rng, int length)
+    {
+        var bytes = new byte[length];
+        rng.NextBytes(bytes);
+        return bytes;
     }
 
     [Test]

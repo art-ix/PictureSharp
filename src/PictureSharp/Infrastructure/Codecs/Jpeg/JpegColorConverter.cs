@@ -17,7 +17,7 @@ internal enum JpegColorSpace
 /// Upsamples the component planes to full resolution and converts them to RGBA, bit-exact with libjpeg-turbo
 /// (fancy upsampling, <c>jdcolor.c</c>) followed by Pillow's CMYK handling for four-component images.
 /// </summary>
-internal static class JpegColorConverter
+internal static partial class JpegColorConverter
 {
     private const int ScaleBits = 16;
     private const int OneHalf = 1 << (ScaleBits - 1);
@@ -28,9 +28,10 @@ internal static class JpegColorConverter
     private static readonly int[] CrToG = new int[256];
     private static readonly int[] CbToG = new int[256];
 
+    private static int Fix(double x) => (int)((x * (1 << ScaleBits)) + 0.5);
+
     static JpegColorConverter()
     {
-        static int Fix(double x) => (int)((x * (1 << ScaleBits)) + 0.5);
         for (int i = 0, x = -128; i < 256; i++, x++)
         {
             CrToR[i] = ((Fix(1.40200) * x) + OneHalf) >> ScaleBits;
@@ -185,13 +186,7 @@ internal static class JpegColorConverter
                     (int nearRow, int farRow) = Neighbours(c, y);
                     ReadOnlySpan<byte> near = plane.AsSpan(nearRow * stride, dw);
                     ReadOnlySpan<byte> far = plane.AsSpan(farRow * stride, dw);
-                    // port: libjpeg-turbo jdsample.c h1v2_fancy_upsample
-                    int bias = (y & 1) != 0 ? 2 : 1;
-                    for (int x = 0; x < dw; x++)
-                    {
-                        buffer[x] = (byte)(((near[x] * 3) + far[x] + bias) >> 2);
-                    }
-
+                    H1V2(near, far, (y & 1) != 0 ? 2 : 1, buffer);
                     return buffer;
                 }
 
@@ -231,55 +226,58 @@ internal static class JpegColorConverter
         return (row, far);
     }
 
+    // port: libjpeg-turbo jdsample.c h1v2_fancy_upsample (one output row)
+    internal static void H1V2(ReadOnlySpan<byte> near, ReadOnlySpan<byte> far, int bias, Span<byte> dst, bool simd = true)
+    {
+        for (int x = simd ? H1V2Simd(near, far, bias, dst) : 0; x < near.Length; x++)
+        {
+            dst[x] = (byte)(((near[x] * 3) + far[x] + bias) >> 2);
+        }
+    }
+
     // port: libjpeg-turbo jdsample.c h2v1_fancy_upsample
-    private static void H2V1(ReadOnlySpan<byte> src, Span<byte> dst)
+    internal static void H2V1(ReadOnlySpan<byte> src, Span<byte> dst, bool simd = true)
     {
         int n = src.Length;
-        int o = 0;
         int v = src[0];
-        dst[o++] = (byte)v;
-        dst[o++] = (byte)(((v * 3) + src[1] + 2) >> 2);
-        for (int x = 1; x < n - 1; x++)
+        dst[0] = (byte)v;
+        dst[1] = (byte)(((v * 3) + src[1] + 2) >> 2);
+        for (int x = 1 + (simd ? H2V1Simd(src, dst) : 0); x < n - 1; x++)
         {
             v = src[x] * 3;
-            dst[o++] = (byte)((v + src[x - 1] + 1) >> 2);
-            dst[o++] = (byte)((v + src[x + 1] + 2) >> 2);
+            dst[2 * x] = (byte)((v + src[x - 1] + 1) >> 2);
+            dst[(2 * x) + 1] = (byte)((v + src[x + 1] + 2) >> 2);
         }
 
         v = src[n - 1];
-        dst[o++] = (byte)(((v * 3) + src[n - 2] + 1) >> 2);
-        dst[o] = (byte)v;
+        dst[(2 * n) - 2] = (byte)(((v * 3) + src[n - 2] + 1) >> 2);
+        dst[(2 * n) - 1] = (byte)v;
     }
 
     // port: libjpeg-turbo jdsample.c h2v2_fancy_upsample (one output row)
-    private static void H2V2(ReadOnlySpan<byte> near, ReadOnlySpan<byte> far, Span<byte> dst)
+    internal static void H2V2(ReadOnlySpan<byte> near, ReadOnlySpan<byte> far, Span<byte> dst, bool simd = true)
     {
         int n = near.Length;
-        int o = 0;
         int thisSum = (near[0] * 3) + far[0];
-        int nextSum = (near[1] * 3) + far[1];
-        dst[o++] = (byte)(((thisSum * 4) + 8) >> 4);
-        dst[o++] = (byte)(((thisSum * 3) + nextSum + 7) >> 4);
-        int lastSum = thisSum;
-        thisSum = nextSum;
-        for (int x = 2; x < n; x++)
+        dst[0] = (byte)(((thisSum * 4) + 8) >> 4);
+        dst[1] = (byte)(((thisSum * 3) + (near[1] * 3) + far[1] + 7) >> 4);
+        for (int x = 1 + (simd ? H2V2Simd(near, far, dst) : 0); x < n - 1; x++)
         {
-            nextSum = (near[x] * 3) + far[x];
-            dst[o++] = (byte)(((thisSum * 3) + lastSum + 8) >> 4);
-            dst[o++] = (byte)(((thisSum * 3) + nextSum + 7) >> 4);
-            lastSum = thisSum;
-            thisSum = nextSum;
+            thisSum = (near[x] * 3) + far[x];
+            dst[2 * x] = (byte)(((thisSum * 3) + (near[x - 1] * 3) + far[x - 1] + 8) >> 4);
+            dst[(2 * x) + 1] = (byte)(((thisSum * 3) + (near[x + 1] * 3) + far[x + 1] + 7) >> 4);
         }
 
-        dst[o++] = (byte)(((thisSum * 3) + lastSum + 8) >> 4);
-        dst[o] = (byte)(((thisSum * 4) + 7) >> 4);
+        thisSum = (near[n - 1] * 3) + far[n - 1];
+        dst[(2 * n) - 2] = (byte)(((thisSum * 3) + (near[n - 2] * 3) + far[n - 2] + 8) >> 4);
+        dst[(2 * n) - 1] = (byte)(((thisSum * 4) + 7) >> 4);
     }
 
     // port: libjpeg-turbo jdcolor.c ycc_rgb_convert
-    private static void YccToRgb(ReadOnlySpan<byte> yRow, ReadOnlySpan<byte> cbRow, ReadOnlySpan<byte> crRow, Span<Rgba32> dst)
+    internal static void YccToRgb(ReadOnlySpan<byte> yRow, ReadOnlySpan<byte> cbRow, ReadOnlySpan<byte> crRow, Span<Rgba32> dst, bool simd = true)
     {
         int[] crr = CrToR, cbb = CbToB, crg = CrToG, cbg = CbToG;
-        for (int x = 0; x < dst.Length; x++)
+        for (int x = simd ? YccToRgbSimd(yRow, cbRow, crRow, dst) : 0; x < dst.Length; x++)
         {
             int y = yRow[x];
             int cb = cbRow[x];

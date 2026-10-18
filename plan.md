@@ -6,8 +6,8 @@
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
-Dalej: skrócona dokumentacja i stabilizacja testów (0.7.2), poprawki SPI zgłoszone przez wtyczkę HEIF i generowanie
-gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
+Dalej: optymalizacja rdzenia — JPEG (0.7.4, gotowa do wydania), WebP lossy i potok przetwarzania (0.7.5) — potem poprawki SPI
+zgłoszone przez wtyczkę HEIF i generowanie gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
 (własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
 Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
 są poza planem.
@@ -15,6 +15,8 @@ są poza planem.
 Decyzje użytkownika (2026-10-16): kolejność rdzenia 0.6.9 → 0.7.0 → 0.8.0; HEIF jako wtyczka z portem dekodera i
 enkodera HEVC intra w C#, nie jako wrapper natywnego libheif; wtyczka w osobnym repozytorium z własnym SemVer; rdzeń
 0.8.0 = poprawki SPI zgłoszone przez wtyczkę + dalszy HDR.
+Decyzja użytkownika (2026-10-18): przed 0.8.0 dwa wydania optymalizacji rdzenia (0.7.4, 0.7.5) bez zmian API i
+wyników.
 
 Istniejące API i ograniczenia: `README.md`, `docs/`, XML docs, `tests/assets/PublicApi.approved.txt`. Pomiary:
 `docs/performance.md`. Ukończone wydania: [changelog](#changelog), `docs/releases/` i historia Git. Lokalna historia
@@ -42,6 +44,8 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Wydana (2026-10-17; bez ARM64) |
 | 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Wydana (2026-10-17; bez ARM64) |
 | 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Wydana (2026-10-18; bez ARM64) |
+| 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Gotowa do wydania (2026-10-18; bez ARM64) |
+| 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -343,6 +347,99 @@ Stan (2026-10-18): `PngCompressionBenchmarks` przed/po w `docs/performance.md` (
 Oracle 192/192, bez AVX2 i bez intrinsics 6535/6535, `verify-package-consumer.sh` exit 0 bez ostrzeżeń (nupkg 0.7.3).
 ARM64 nieuruchamiane (zmiana bez kodu zależnego od platformy). Wydana 2026-10-18 (tag `v0.7.3`, GitHub Release, NuGet).
 
+## Optymalizacja rdzenia — zasady dla 0.7.4 i 0.7.5
+
+Dwa wydania serwisowe bez zmian publicznego API (migawka identyczna z 0.7.3) i bez zmian wyników: piksele dekoderów,
+bajty enkoderów i wyniki operacji bitowo równe 0.7.3 we wszystkich trybach, także z wyłączonym AVX2 i bez intrinsics.
+Wybór miejsc wynika z dotychczasowych pomiarów (`docs/performance.md`): JPEG i WebP lossy to najczęstsze ścieżki
+użytkownika i największe odstępy od bibliotek natywnych; PNG, WebP lossless i GIF są już na poziomie odniesień.
+
+- Najpierw profil, potem zmiana: przed każdym krokiem pomiar etapów (liczniki czasowe tylko lokalnie, poza repo) na
+  stałych wejściach; kolejność kroków według udziału w czasie, nie według listy poniżej.
+- Pomiary jednowątkowe i domyślne, BenchmarkDotNet dla wyników do dokumentacji, `matrix-probe` (80 przypadków, ABBA)
+  jako kontrola regresji pozostałych ścieżek, alokacje z `AllocationTests` bez wzrostu.
+- Porty z kodu C referencji (libjpeg-turbo, libwebp 1.6.0) z komentarzem źródłowym, ta sama arytmetyka; ścieżki SIMD
+  w plikach `*.Simd.cs`/`*.X86.cs`/`*.Arm.cs`, testy identyczności ze skalarem.
+- Zmiana, która nie daje co najmniej 5% na mierzonej ścieżce albo pogarsza inną o ponad 3%, jest wycofywana i
+  opisywana w `progres.md` (jak migracja na `ZLibStream` w 0.7.2).
+- Nowe SIMD sprawdzone na rzeczywistym ARM64 (Orange Pi, za zgodą użytkownika); bez zgody wydanie opisuje ARM64 jako
+  niezweryfikowane.
+
+## 0.7.4 — optymalizacja JPEG
+
+Stan wyjściowy (0.4.6/0.7.0, x64, Pillow 10.2.0 jako odniesienie libjpeg-turbo): dekodowanie 1920×1440 16,9 ms wobec
+10,5 ms (1,6×), progresywne 36,3 wobec 28,7 ms, 12 MP 67,7 wobec 52,4 ms; zapis q75 4:2:0 na jednym wątku 49 ms wobec
+6,7 ms. `Image.Load` 12 MP w `integration-probe` 72–76 ms. Zgodnie z wcześniejszą diagnozą dominuje sekwencyjny
+Huffman; dekodowanie dotyka też miniatur (`TargetSize`), HDR (baza i mapa) i adapterów.
+
+Zakres (do potwierdzenia profilem):
+1. Profil etapów na wejściach z 0.4.6 i `integration-probe` (baseline 4:2:0 i 4:4:4, progresywny, 12 MP, miniatura
+   256 px): entropia, IDCT, upsampling, konwersja koloru, kopie i alokacje; wynik w `progres.md` przed zmianami.
+2. Dekoder entropii: szybka ścieżka `HUFF_DECODE_FAST`/`decode_mcu_fast` z libjpeg-turbo `jdhuff.c` (64-bitowy bufor
+   bitów, łączona tablica podglądu kod + rozszerzenie dla krótkich kodów, wykrywanie markera poza pętlą gorącą,
+   wolna ścieżka bez zmian semantyki przy uszkodzonych danych); dla progresywnego odpowiedniki z `jdphuff.c`
+   (`decode_mcu_AC_first`/`AC_refine`).
+3. Upsampling i konwersja: wektorowy fancy upsampling h2v1/h2v2 (`jdsample.c`, ta sama arytmetyka zaokrągleń) i
+   YCbCr→RGBA w tym samym przebiegu wiersza MCU, bez pełnowymiarowych planów pośrednich tam, gdzie dziś istnieją.
+4. Enkoder: `encode_one_block` z `jchuff.c` z 64-bitowym `put_buffer` i zliczaniem zer przez `LeadingZeroCount`;
+   wektorowe RGB→YCbCr i downsampling 4:2:0 (`jccolor.c`, `jcsample.c`) na ścieżce jednowątkowej.
+5. Równoległość dekodera (opcjonalnie, po krokach 2–4): restart intervals, jeśli plik je ma — niezależne segmenty
+   entropii dekodowane równolegle, wynik niezależny od liczby wątków.
+
+DoD:
+- Piksele dekodera i bajty enkodera bitowo równe 0.7.3 na całym korpusie, referencjach libjpeg-turbo (`reference.json`,
+  miniatury `TargetSize`), HDR (`hdr_reference`, `hdr_edit`) i zdjęciach `Category=Local`; testy uszkodzonych i obciętych
+  danych, markerów w środku skanu i limitów bez nowych typów wyjątków; fuzz `RandomMutations` dla JPEG.
+- Pomiar przed/po (BenchmarkDotNet, `ThumbnailBenchmarks`, `integration-probe`): cel dekodowania baseline 1T ≤ 1,3×
+  libjpeg-turbo, zapis q75 1T ≤ 3× (dziś ~7×); niespełniony cel opisany w notatkach z przyczyną, bez blokowania
+  wydania, jeśli zysk jest ≥ 5%.
+- Brak regresji w `matrix-probe` powyżej 3%, alokacje bez wzrostu, testy SIMD ze skalarem na x64 i ARM64.
+- `docs/performance.md` (nowa sekcja 0.7.4), notatki wydania, wspólna bramka jakości.
+
+Stan (2026-10-18): profil etapów zmienił kolejność kroków (najpierw zbieranie próbek i kolor w enkoderze oraz
+upsampling i YCbCr→RGBA w dekoderze, potem entropia). Dekoder: szybka ścieżka MCU (`decode_mcu_fast`, 64-bitowy bufor,
+podgląd 11 bitów z wartością współczynnika, tablice z puli), szybkie AC first/refine w progresywnym (maska niezerowych),
+IDCT AVX2 na `pmaddwd` dla dwóch bloków, wektorowy fancy upsampling i YCbCr→RGBA. Enkoder: zbieranie próbek bez
+przycinania we wnętrzu, wektorowe RGB→YCbCr i kwantyzacja (dzielenie float, dokładne dla wyjść DCT); krok 5
+(równoległe restart intervals) i 64-bitowy `put_buffer` pominięte — entropia enkodera baseline to ≤ 6 ms. Wycofany
+skrót IDCT dla bloków z samym DC (< 5%). Wyniki bitowo równe 0.7.3 (≈ 5000 dekodów i kodowań, także uszkodzone i
+obcięte dane, w trybach AVX2, bez AVX2 i bez intrinsics). BenchmarkDotNet 1T: dekod 1920×1440 4:2:0 18,5 → 9,3 ms
+(1,43× Pillow; cel 1,3× niespełniony, dominuje entropia), 12 MP 108 → 54 ms (1,06×), progresywny 33 → 19 ms (na
+poziomie Pillow); zapis q75 48,6 → 14,9 ms (2,6×, cel ≤ 3× spełniony). Alokacje bez wzrostu. Bramka linux-x64: build bez
+ostrzeżeń, pełny zestaw 7213/7220 (7 GDI+), Oracle 192/192, bez AVX2 i bez intrinsics 6970/6970. `matrix-probe`
+(na polecenie użytkownika tylko przypadki JPEG, ABBA): dekodowanie −45…−54%, kodowanie −14…−67%, alokacje bez wzrostu.
+ARM64 nieuruchomione. Notatki `docs/releases/release-0.7.4.md`, `VERSION` 0.7.4.
+
+## 0.7.5 — optymalizacja WebP lossy i potoku przetwarzania
+
+Stan wyjściowy (0.5.0, x64, jeden wątek, libwebp 1.6.0 z SIMD): kodowanie lossy 1,5–2,1× wolniejsze od libwebp
+(12 MP 1530 wobec 741 ms), dekodowanie 1,5–2,1× (12 MP 136 wobec 90 ms). Ścieżka użytkownika „Load z orientacją i ICC →
+`Resize(1600, 0)` → WebP q80” trwa 430–440 ms i alokuje 156,5 MiB; `ConvertToSrgb()` 12 MP 38 ms, resize w świetle
+liniowym 1,5–1,7× wolniejszy od domyślnego.
+
+Zakres (do potwierdzenia profilem):
+1. Profil enkodera i dekodera VP8 oraz ścieżki integracyjnej (analiza, decyzja trybów, trellis, tokeny, kodowanie
+   arytmetyczne; dekoder: współczynniki, rekonstrukcja, filtr, YUV→RGBA; potok: dekod, ICC, resize, kodowanie).
+2. Enkoder VP8: brakujące wektorowe porty z `enc_sse2.c`/`enc_sse41.c` (dziś są `FTransform`, `ITransform`, `Disto`,
+   `Sse`, `QuantizeBlock`): `CollectHistogram` (analiza), predykcje `Intra16Preds`/`IntraChromaPreds`/`Intra4Preds`,
+   `SSE16x16`/`SSE8x8`/`SSE4x4`, `Mean16x4`; bajty identyczne z `cwebp` 1.6.0 jak dziś.
+3. Dekoder VP8: predykcje intra z `dec_sse2.c`/`dec_sse41.c` (poza obecnym TrueMotion), pętla `GetCoeffs` według
+   profilu, YUV→RGBA w tym samym przebiegu co filtr wiersza makrobloków (mniej przejść po pamięci).
+4. Potok: `ConvertToSrgb` (matrix/TRC) z wektorową macierzą i krzywymi tablicowymi tam, gdzie zysk jest mierzalny;
+   resize w świetle liniowym bez pełnowymiarowego bufora `Vector4` (pasma wierszy); mniej pełnowymiarowych kopii
+   między dekodem, `ApplyExifOrientation`, ICC i resize (cel: alokacje ścieżki integracyjnej ≤ 110 MiB).
+5. Kandydat z 0.6.7: liniowe tryby mieszania `DrawImage` ograniczone lookupami sRGB — tylko jeśli profil wykaże
+   tańszą deterministyczną formę bez zmiany wyników.
+
+DoD:
+- Bajty WebP lossy identyczne z 0.7.3 i `cwebp` 1.6.0 tam, gdzie dziś są; piksele dekodera zgodne z `dwebp`
+  (`reference.json`), wyniki ICC, resize i mieszania bitowo równe 0.7.3, także bez AVX2 i bez intrinsics.
+- Pomiar przed/po: cel kodowania lossy 1T ≤ 1,5× libwebp, dekodowania ≤ 1,3×, ścieżka integracyjna −20% czasu;
+  niespełniony cel opisany w notatkach (jak w 0.7.4).
+- Brak regresji w `matrix-probe` powyżej 3%, `AllocationTests` bez wzrostu, testy SIMD ze skalarem na x64 i ARM64,
+  anulowanie i deterministyczność równoległości bez zmian.
+- `docs/performance.md` (sekcja 0.7.5), notatki wydania, wspólna bramka jakości.
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -421,3 +518,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.1** — `ImageDecodeContext.AttachGainMap(…, detected)`: wtyczki zgłaszają wszystkie wykryte modele gain map; przegląd dokumentacji.
 - **0.7.2** — dokumentacja skrócona o ~30%, `Mutate` a `Clone`, HEIC/HEIF przez wtyczkę `PictureSharp.Heif`; stabilny test alokacji. Bez zmian API.
 - **0.7.3** — mniej alokacji w deflate/inflate PNG (pulowane bufory, ponownie używane tablice Huffmana) i przy metadanych PNG. Bez zmian API i bajtów wyjściowych.
+- **0.7.4** — szybszy JPEG: dekodowanie ~2×, kodowanie ~3× na jednym wątku (szybka ścieżka Huffmana, IDCT AVX2 parami, wektorowy kolor, próbkowanie i kwantyzacja). Bez zmian API i wyników.

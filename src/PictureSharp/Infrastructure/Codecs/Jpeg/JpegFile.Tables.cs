@@ -57,7 +57,9 @@ internal sealed partial class JpegFile
             }
 
             JpegHuffmanTable table = JpegHuffmanTable.Build(counts, s[..total]);
-            (index >= 0x10 ? _acTables : _dcTables)[index & 3] = table;
+            JpegHuffmanTable?[] tables = index >= 0x10 ? _acTables : _dcTables;
+            tables[index & 3]?.Return();
+            tables[index & 3] = table;
             s = s[total..];
         }
 
