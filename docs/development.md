@@ -60,6 +60,17 @@ python3 -I tests/assets/gif_reference.py
 quantizer follows the Pillow 10.2.0 C sources in `reference/pillow-10.2.0/`. Optional external corpora are described in
 [plan.md](../plan.md).
 
+JPEG encoder changes that leave byte equality with libjpeg-turbo are judged at equal file size with the libjxl metric
+tools `ssimulacra2` and `butteraugli_main` (on `PATH` or in `--tools-dir`) and Pillow with libjpeg-turbo:
+
+```bash
+python3 -I scripts/compare_jpeg_quality.py samples/*.jpg --max-side 1024 --tools-dir ~/Projekty/ai
+```
+
+The script encodes each image with both encoders over a quality range, decodes both with Pillow and reports SSIMULACRA2
+and Butteraugli (max, 3-norm) differences at equal size and the BD-rate (negative: PictureSharp files are smaller at
+equal quality). References are converted to untagged sRGB first. Output goes to `reference/jpeg-quality/`.
+
 ## What the tests verify
 
 Categories: `Oracle` (external tools, skipped when missing), `Slow` (fuzzing, thread counts, in-flight cancellation; CI
