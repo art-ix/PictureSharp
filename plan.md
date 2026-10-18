@@ -2,11 +2,11 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.4 (opublikowana 2026-10-18); 0.7.5 gotowa do wydania.** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.5 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
-Dalej: optymalizacja rdzenia — WebP lossy i potok przetwarzania (0.7.5) — potem poprawki SPI
+Dalej: poprawki SPI
 zgłoszone przez wtyczkę HEIF i generowanie gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
 (własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
 Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
@@ -45,7 +45,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Wydana (2026-10-17; bez ARM64) |
 | 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
-| 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Gotowa do wydania (bez ARM64) |
+| 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -457,7 +457,7 @@ spełniony), kodim23 3,2 ms (1,59×), małe obrazy −8…−9%; ścieżka integ
 liniowy 12 MP ½ 21 → 15–16 ms. Pozorna regresja dekodowania małej grafiki okazała się artefaktem rozgrzewki JIT w `webp-probe` (poprawiona: ≥ 1 s).
 `matrix-probe`: WebP lossy −6…−31%, alokacje bez zmian. Testy: pełny 7167/7167 (z Oracle i Slow), bez AVX2 i bez
 intrinsics 6975/6975, adaptery 51/51 (7 GDI+ pominiętych). ARM64 nieuruchomione. Notatki
-`docs/releases/release-0.7.5.md`, `VERSION` 0.7.5.
+`docs/releases/release-0.7.5.md`, `VERSION` 0.7.5. Wydana 2026-10-18 (tag `v0.7.5`, GitHub Release, NuGet).
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
