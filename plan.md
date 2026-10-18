@@ -2,11 +2,11 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.3 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.4 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
-Dalej: optymalizacja rdzenia — JPEG (0.7.4, gotowa do wydania), WebP lossy i potok przetwarzania (0.7.5) — potem poprawki SPI
+Dalej: optymalizacja rdzenia — WebP lossy i potok przetwarzania (0.7.5) — potem poprawki SPI
 zgłoszone przez wtyczkę HEIF i generowanie gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
 (własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
 Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
@@ -44,7 +44,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.1 | Poprawka SPI zgłoszona przez wtyczkę HEIF: wszystkie wykryte modele gain map przy `AttachGainMap` | Wydana (2026-10-17; bez ARM64) |
 | 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Wydana (2026-10-17; bez ARM64) |
 | 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Wydana (2026-10-18; bez ARM64) |
-| 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Gotowa do wydania (2026-10-18; bez ARM64) |
+| 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
@@ -408,7 +408,8 @@ obcięte dane, w trybach AVX2, bez AVX2 i bez intrinsics). BenchmarkDotNet 1T: d
 poziomie Pillow); zapis q75 48,6 → 14,9 ms (2,6×, cel ≤ 3× spełniony). Alokacje bez wzrostu. Bramka linux-x64: build bez
 ostrzeżeń, pełny zestaw 7213/7220 (7 GDI+), Oracle 192/192, bez AVX2 i bez intrinsics 6970/6970. `matrix-probe`
 (na polecenie użytkownika tylko przypadki JPEG, ABBA): dekodowanie −45…−54%, kodowanie −14…−67%, alokacje bez wzrostu.
-ARM64 nieuruchomione. Notatki `docs/releases/release-0.7.4.md`, `VERSION` 0.7.4.
+ARM64 nieuruchomione. Notatki `docs/releases/release-0.7.4.md`, `VERSION` 0.7.4. Wydana 2026-10-18 (tag `v0.7.4`,
+GitHub Release, NuGet).
 
 ## 0.7.5 — optymalizacja WebP lossy i potoku przetwarzania
 
