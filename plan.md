@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.6 (przygotowana 2026-10-18, niewydana).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.6 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -46,7 +46,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
-| 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Przygotowana (2026-10-18; bez ARM64), czeka na wydanie |
+| 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Wydana (2026-10-18; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -500,7 +500,8 @@ zamiast grupy w `PluginSpiTests`; `ConsumerCompilationTests` z rekordem z innego
 AotSmoke z formatem `RAW3`, `docs/extending-picturesharp.md` („Decoder options”), `docs/loading-and-saving.md`.
 Bramka linux-x64: build bez ostrzeżeń, pełny zestaw 7235/7242 (7 GDI+), `verify-package-consumer.sh` exit 0 bez
 ostrzeżeń. Bez przebiegów bez AVX2/intrinsics i ARM64 (brak kodu zależnego od platformy). Notatki
-`docs/releases/release-0.7.6.md`, `VERSION` 0.7.6, `PackageReleaseNotes`. Otwarte: przejście wtyczek Tiff,
+`docs/releases/release-0.7.6.md`, `VERSION` 0.7.6, `PackageReleaseNotes`. Wydana 2026-10-18 (tag `v0.7.6`,
+GitHub Release, NuGet). Otwarte: przejście wtyczek Tiff,
 Formats.Extra i Heif na mechanizm (w ich repozytoriach).
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
