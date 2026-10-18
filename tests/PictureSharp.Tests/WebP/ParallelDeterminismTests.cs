@@ -1,6 +1,7 @@
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
 using PictureSharp.Infrastructure.Codecs.WebP.Lossless;
+using PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
 
@@ -46,6 +47,20 @@ public class ParallelDeterminismTests
         byte[] single = image.ToWebP(options with { MaxDegreeOfParallelism = 1 });
         await Assert.That(image.ToWebP(options with { MaxDegreeOfParallelism = -1 })).IsEquivalentTo(single, CollectionOrdering.Matching);
         await Assert.That(image.ToWebP(options with { MaxDegreeOfParallelism = 3 })).IsEquivalentTo(single, CollectionOrdering.Matching);
+    }
+
+    // The wavefront pass updates the per-segment maximum edge from several threads; a lost update changed the
+    // filter strength (and the bytes) of about 1% of method 6 encodes of a photo in 0.7.4.
+    [Test]
+    public async Task MaxEdge_KeepsTheLargestValueUnderContention()
+    {
+        for (int round = 0; round < 20; round++)
+        {
+            var segment = new Vp8Segment();
+            int[] values = Enumerable.Range(0, 20000).Select(i => (i * 7919 + round) % 100003).ToArray();
+            Parallel.For(0, values.Length, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i => Vp8ModeDecision.StoreMaxEdge(segment, values[i]));
+            await Assert.That(segment.MaxEdge).IsEqualTo(values.Max());
+        }
     }
 
     [Test]

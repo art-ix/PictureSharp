@@ -14,6 +14,12 @@ if (args is ["matrix-probe", string outputPath])
     return;
 }
 
+if (args is ["webp-probe", string webpOutput, .. var webpFiles])
+{
+    WebPProbe.Run(webpOutput, webpFiles);
+    return;
+}
+
 if (args is ["metadata-probe", string metadataOutput])
 {
     MetadataBenchmarks.Probe(metadataOutput);

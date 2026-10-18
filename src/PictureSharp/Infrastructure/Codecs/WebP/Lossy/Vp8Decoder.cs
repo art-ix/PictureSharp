@@ -1,4 +1,7 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using PictureSharp.Algorithms.ColorConversion;
 using PictureSharp.Primitives.Parallelism;
 using static PictureSharp.Infrastructure.Codecs.WebP.Lossy.Vp8Dsp;
@@ -710,26 +713,26 @@ internal sealed class Vp8Decoder
             : br.GetBit(183) != 0 ? TmPred : HPred);
     }
 
-    // port: GetLargeValue (Paragraph 13.2)
-    private static int GetLargeValue(Vp8BitReader br, ReadOnlySpan<byte> p)
+    // port: GetLargeValue (Paragraph 13.2). p points at the 11 probabilities of the current context.
+    private static int GetLargeValue(Vp8BitReader br, ref byte p)
     {
         int v;
-        if (br.GetBit(p[3]) == 0)
+        if (br.GetBit(Unsafe.Add(ref p, 3)) == 0)
         {
-            if (br.GetBit(p[4]) == 0)
+            if (br.GetBit(Unsafe.Add(ref p, 4)) == 0)
             {
                 v = 2;
             }
             else
             {
-                v = 3 + br.GetBit(p[5]);
+                v = 3 + br.GetBit(Unsafe.Add(ref p, 5));
             }
         }
         else
         {
-            if (br.GetBit(p[6]) == 0)
+            if (br.GetBit(Unsafe.Add(ref p, 6)) == 0)
             {
-                if (br.GetBit(p[7]) == 0)
+                if (br.GetBit(Unsafe.Add(ref p, 7)) == 0)
                 {
                     v = 5 + br.GetBit(159);
                 }
@@ -741,8 +744,8 @@ internal sealed class Vp8Decoder
             }
             else
             {
-                int bit1 = br.GetBit(p[8]);
-                int bit0 = br.GetBit(p[9 + bit1]);
+                int bit1 = br.GetBit(Unsafe.Add(ref p, 8));
+                int bit0 = br.GetBit(Unsafe.Add(ref p, 9 + bit1));
                 int cat = (2 * bit1) + bit0;
                 ReadOnlySpan<byte> tab = cat switch
                 {
@@ -764,51 +767,62 @@ internal sealed class Vp8Decoder
         return v;
     }
 
-    // Offset of the probabilities for coefficient type 't', coefficient index 'n' and context 'ctx'.
-    private static int ProbaOffset(int t, int n, int ctx) => ((((t * NumBands) + Vp8Tables.Bands[n]) * NumCtx) + ctx) * NumProbas;
-
     // port: GetCoeffsFast. Returns the position of the last non-zero coeff plus one.
+    // The bit reader state stays in locals (GetLargeValue, rarer, works on the reader itself), and p points at the
+    // probabilities like libwebp's prob[n]->probas[ctx]: type < 4, band < 8, ctx < 3 and the 11 entries of a
+    // context keep it inside _bands, and n <= 16 stays inside Bands, so these reads go unchecked.
     private int GetCoeffs(Vp8BitReader br, int type, int ctx, int dqDc, int dqAc, int n, Span<short> output)
     {
-        byte[] bands = _bands;
-        int p = ProbaOffset(type, n, ctx);
+        if (output.Length < 16)
+        {
+            throw new ArgumentOutOfRangeException(nameof(output));
+        }
+
+        ref byte probas = ref MemoryMarshal.GetArrayDataReference(_bands);
+        ref byte bands = ref MemoryMarshal.GetReference(Vp8Tables.Bands);
+        int typeBands = type * NumBands;
+        ref byte p = ref Unsafe.Add(ref probas, (((typeBands + Unsafe.Add(ref bands, n)) * NumCtx) + ctx) * NumProbas);
+        br.LoadState(out ulong value, out uint range, out int bits);
         for (; n < 16; ++n)
         {
-            if (br.GetBit(bands[p]) == 0)
+            if (br.GetBit(ref value, ref range, ref bits, p) == 0)
             {
-                return n;  // previous coeff was last non-zero coeff
+                break;  // previous coeff was last non-zero coeff
             }
 
-            while (br.GetBit(bands[p + 1]) == 0)
+            while (br.GetBit(ref value, ref range, ref bits, Unsafe.Add(ref p, 1)) == 0)
             {
                 // sequence of zero coeffs
-                ++n;
-                if (n == 16)
+                if (++n == 16)
                 {
+                    br.StoreState(value, range, bits);
                     return 16;
                 }
 
-                p = ProbaOffset(type, n, 0);
+                p = ref Unsafe.Add(ref probas, (typeBands + Unsafe.Add(ref bands, n)) * NumCtx * NumProbas);
             }
 
             // non zero coeff
-            int pCtx = ProbaOffset(type, n + 1, 0);
+            ref byte pCtx = ref Unsafe.Add(ref probas, (typeBands + Unsafe.Add(ref bands, n + 1)) * NumCtx * NumProbas);
             int v;
-            if (br.GetBit(bands[p + 2]) == 0)
+            if (br.GetBit(ref value, ref range, ref bits, Unsafe.Add(ref p, 2)) == 0)
             {
                 v = 1;
-                p = pCtx + NumProbas;      // context 1
+                p = ref Unsafe.Add(ref pCtx, NumProbas);      // context 1
             }
             else
             {
-                v = GetLargeValue(br, bands.AsSpan(p, NumProbas));
-                p = pCtx + (2 * NumProbas); // context 2
+                br.StoreState(value, range, bits);
+                v = GetLargeValue(br, ref p);
+                br.LoadState(out value, out range, out bits);
+                p = ref Unsafe.Add(ref pCtx, 2 * NumProbas);  // context 2
             }
 
-            output[Vp8Tables.Zigzag[n]] = (short)(br.GetSigned(v) * (n > 0 ? dqAc : dqDc));
+            output[Vp8Tables.Zigzag[n]] = (short)(br.GetSigned(ref value, ref range, ref bits, v) * (n > 0 ? dqAc : dqDc));
         }
 
-        return 16;
+        br.StoreState(value, range, bits);
+        return n;
     }
 
     private static uint NzCodeBits(uint nzCoeffs, int nz, int dcNz)
@@ -1050,16 +1064,7 @@ internal sealed class Vp8Decoder
             // pixels at a time for alignment reason, and because of in-loop filter.
             if (mbX > 0)
             {
-                for (int j = -1; j < 16; ++j)
-                {
-                    Copy32b(b, YOff + (j * Bps) + 12, YOff + (j * Bps) - 4);
-                }
-
-                for (int j = -1; j < 8; ++j)
-                {
-                    Copy32b(b, UOff + (j * Bps) + 4, UOff + (j * Bps) - 4);
-                    Copy32b(b, VOff + (j * Bps) + 4, VOff + (j * Bps) - 4);
-                }
+                RotateLeftSamples(b);
             }
 
             // bring top samples into the cache
@@ -1068,9 +1073,9 @@ internal sealed class Vp8Decoder
 
             if (mbY > 0)
             {
-                Array.Copy(_topY, mbX * 16, b, YOff - Bps, 16);
-                Array.Copy(_topU, mbX * 8, b, UOff - Bps, 8);
-                Array.Copy(_topV, mbX * 8, b, VOff - Bps, 8);
+                _topY.AsSpan(mbX * 16, 16).CopyTo(b.AsSpan(YOff - Bps));
+                _topU.AsSpan(mbX * 8, 8).CopyTo(b.AsSpan(UOff - Bps));
+                _topV.AsSpan(mbX * 8, 8).CopyTo(b.AsSpan(VOff - Bps));
             }
 
             // predict and add residuals
@@ -1087,7 +1092,7 @@ internal sealed class Vp8Decoder
                     }
                     else
                     {
-                        Array.Copy(_topY, (mbX + 1) * 16, b, topRight, 4);
+                        _topY.AsSpan((mbX + 1) * 16, 4).CopyTo(b.AsSpan(topRight));
                     }
                 }
 
@@ -1131,27 +1136,71 @@ internal sealed class Vp8Decoder
             // stash away top samples for next block
             if (mbY < _mbH - 1)
             {
-                Array.Copy(b, YOff + (15 * Bps), _topY, mbX * 16, 16);
-                Array.Copy(b, UOff + (7 * Bps), _topU, mbX * 8, 8);
-                Array.Copy(b, VOff + (7 * Bps), _topV, mbX * 8, 8);
+                b.AsSpan(YOff + (15 * Bps), 16).CopyTo(_topY.AsSpan(mbX * 16));
+                b.AsSpan(UOff + (7 * Bps), 8).CopyTo(_topU.AsSpan(mbX * 8));
+                b.AsSpan(VOff + (7 * Bps), 8).CopyTo(_topV.AsSpan(mbX * 8));
             }
 
             // Transfer reconstructed samples from the work buffer to the planes.
             int yOut = (mbY * 16 * _yStride) + (mbX * 16);
             int uvOut = (mbY * 8 * _uvStride) + (mbX * 8);
-            for (int j = 0; j < 16; ++j)
-            {
-                Array.Copy(b, YOff + (j * Bps), _planeY, yOut + (j * _yStride), 16);
-            }
-
-            for (int j = 0; j < 8; ++j)
-            {
-                Array.Copy(b, UOff + (j * Bps), _planeU, uvOut + (j * _uvStride), 8);
-                Array.Copy(b, VOff + (j * Bps), _planeV, uvOut + (j * _uvStride), 8);
-            }
+            CopyBlock(b, YOff, _planeY, yOut, _yStride, 16, 16);
+            CopyBlock(b, UOff, _planeU, uvOut, _uvStride, 8, 8);
+            CopyBlock(b, VOff, _planeV, uvOut, _uvStride, 8, 8);
         }
 
-        static void Copy32b(byte[] buf, int src, int dst) => Array.Copy(buf, src, buf, dst, 4);
+        static void Copy32b(byte[] buf, int src, int dst) => MemoryMarshal.Write(buf.AsSpan(dst), MemoryMarshal.Read<uint>(buf.AsSpan(src)));
+    }
+
+    // Moves the right four columns of the previous macroblock (and the top-left row) to the left of the work buffer.
+    // Every offset is a constant inside _yuvB (YuvSize bytes), checked once.
+    private static void RotateLeftSamples(byte[] b)
+    {
+        if (b.Length < YuvSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(b));
+        }
+
+        ref byte w = ref MemoryMarshal.GetArrayDataReference(b);
+        for (int j = -1; j < 16; ++j)
+        {
+            ref byte row = ref Unsafe.Add(ref w, YOff + (j * Bps));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref row, -4), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref row, 12)));
+        }
+
+        for (int j = -1; j < 8; ++j)
+        {
+            ref byte u = ref Unsafe.Add(ref w, UOff + (j * Bps)), v = ref Unsafe.Add(ref w, VOff + (j * Bps));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref u, -4), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref u, 4)));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref v, -4), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref v, 4)));
+        }
+    }
+
+    // Copies a width x height block (width 8 or 16) from the Bps-strided work buffer to a plane, checking the
+    // ranges once.
+    private static void CopyBlock(byte[] src, int srcOff, byte[] dst, int dstOff, int dstStride, int width, int height)
+    {
+        if ((uint)srcOff > (uint)(src.Length - (((height - 1) * Bps) + width)) ||
+            (uint)dstOff > (uint)(dst.Length - (((height - 1) * dstStride) + width)))
+        {
+            throw new ArgumentOutOfRangeException(nameof(dstOff));
+        }
+
+        ref byte s = ref MemoryMarshal.GetArrayDataReference(src);
+        ref byte d = ref MemoryMarshal.GetArrayDataReference(dst);
+        for (int j = 0; j < height; ++j)
+        {
+            ref byte from = ref Unsafe.Add(ref s, srcOff + (j * Bps));
+            ref byte to = ref Unsafe.Add(ref d, dstOff + (j * dstStride));
+            if (width == 16)
+            {
+                Vector128.LoadUnsafe(ref from).StoreUnsafe(ref to);
+            }
+            else
+            {
+                Unsafe.WriteUnaligned(ref to, Unsafe.ReadUnaligned<ulong>(ref from));
+            }
+        }
     }
 
     // ------------------------------------------------------------------ filtering

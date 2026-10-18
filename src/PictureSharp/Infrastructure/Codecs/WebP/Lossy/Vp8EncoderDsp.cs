@@ -114,15 +114,20 @@ internal static partial class Vp8EncoderDsp
     }
 
     // port: src/dsp/enc.c CollectHistogram_C, VP8SetHistogramData
-    public static (int MaxValue, int LastNonZero) CollectHistogram(ReadOnlySpan<byte> source, ReadOnlySpan<byte> prediction, int start, int end)
+    internal static (int MaxValue, int LastNonZero) CollectHistogramScalar(ReadOnlySpan<byte> source, ReadOnlySpan<byte> prediction, int start, int end)
     {
         Span<int> distribution = stackalloc int[32]; distribution.Clear();
         Span<short> coefficients = stackalloc short[16];
         for (int b = start; b < end; b++)
         {
-            FTransform(source[Scan[b]..], prediction[Scan[b]..], coefficients);
+            FTransformScalar(source[Scan[b]..], prediction[Scan[b]..], coefficients);
             foreach (short c in coefficients) distribution[Math.Min(Math.Abs((int)c) >> 3, 31)]++;
         }
+        return HistogramStats(distribution);
+    }
+
+    private static (int MaxValue, int LastNonZero) HistogramStats(ReadOnlySpan<int> distribution)
+    {
         int max = 0, last = 1;
         for (int i = 0; i < distribution.Length; i++)
             if (distribution[i] > 0) { max = Math.Max(max, distribution[i]); last = i; }
@@ -175,7 +180,7 @@ internal static partial class Vp8EncoderDsp
             default:
                 if (left.IsEmpty) VerticalPred(output, top.IsEmpty ? default : top, size, 129);
                 else if (top.IsEmpty) HorizontalPred(output, left, size);
-                else TrueMotion(output, left, top, size);
+                else TrueMotionScalar(output, left, top, size);
                 break;
         }
     }
@@ -209,13 +214,13 @@ internal static partial class Vp8EncoderDsp
     }
 
     // port: src/dsp/enc.c Intra16Preds_C
-    public static void PredLuma16(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top)
+    internal static void PredLuma16Scalar(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top)
     {
         for (int mode = 0; mode < 4; mode++) Predict(output[Pred16Offsets[mode]..], left, top, 16, mode);
     }
 
     // port: src/dsp/enc.c IntraChromaPreds_C
-    public static void PredChroma8(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top)
+    internal static void PredChroma8Scalar(Span<byte> output, ReadOnlySpan<byte> left, ReadOnlySpan<byte> top)
     {
         for (int mode = 0; mode < 4; mode++)
         {
@@ -230,7 +235,7 @@ internal static partial class Vp8EncoderDsp
     private static byte Avg2(int a, int b) => (byte)((a + b + 1) >> 1);
 
     // port: src/dsp/enc.c Intra4Preds_C
-    public static void PredLuma4(Span<byte> output, ReadOnlySpan<byte> boundary)
+    internal static void PredLuma4Scalar(Span<byte> output, ReadOnlySpan<byte> boundary)
     {
         DC4(output[1536..], boundary);
         TM4(output[1540..], boundary);

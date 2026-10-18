@@ -126,6 +126,82 @@ internal sealed class Vp8BitReader
         return (v ^ mask) - mask;
     }
 
+    // The same operations on a copy of the coder state held by the caller: a hot loop keeps it in registers
+    // instead of reading and writing the fields for every bit (C compilers do this through strict aliasing).
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void LoadState(out ulong value, out uint range, out int bits)
+    {
+        value = _value;
+        range = _range;
+        bits = _bits;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void StoreState(ulong value, uint range, int bits)
+    {
+        _value = value;
+        _range = range;
+        _bits = bits;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private (ulong Value, int Bits) Refill(ulong value, int bits)
+    {
+        _value = value;
+        _bits = bits;
+        LoadNewBytes();
+        return (_value, _bits);
+    }
+
+    // VP8GetBit on the caller's state.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int GetBit(ref ulong value, ref uint range, ref int bits, int prob)
+    {
+        if (bits < 0)
+        {
+            (value, bits) = Refill(value, bits);
+        }
+
+        int pos = bits;
+        uint r = range;
+        uint split = (r * (uint)prob) >> 8;
+        int bit;
+        if ((uint)(value >> pos) > split)
+        {
+            r -= split;
+            value -= (ulong)(split + 1) << pos;
+            bit = 1;
+        }
+        else
+        {
+            r = split + 1;
+            bit = 0;
+        }
+
+        int shift = 7 ^ BitOperations.Log2(r);
+        bits -= shift;
+        range = (r << shift) - 1;
+        return bit;
+    }
+
+    // VP8GetSigned on the caller's state.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int GetSigned(ref ulong value, ref uint range, ref int bits, int v)
+    {
+        if (bits < 0)
+        {
+            (value, bits) = Refill(value, bits);
+        }
+
+        int pos = bits;
+        uint split = range >> 1;
+        int mask = (int)(split - (uint)(value >> pos)) >> 31;  // -1 or 0
+        bits -= 1;
+        range = (range + (uint)mask) | 1;
+        value -= (ulong)((split + 1) & (uint)mask) << pos;
+        return (v ^ mask) - mask;
+    }
+
     // port: VP8GetValue
     public int GetValue(int bits)
     {

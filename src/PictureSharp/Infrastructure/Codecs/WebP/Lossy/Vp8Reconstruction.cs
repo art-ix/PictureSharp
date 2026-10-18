@@ -8,7 +8,7 @@ internal static class Vp8Reconstruction
         ReadOnlySpan<byte> prediction = it.Predictions.AsSpan(Vp8EncoderDsp.Pred16Offsets[mode]);
         Vp8Segment segment = it.Context.Segments[it.Block.Segment];
         Span<short> tmp = stackalloc short[256], dc = stackalloc short[16];
-        for (int n = 0; n < 16; n++) Vp8EncoderDsp.FTransform(it.Input.AsSpan(Vp8EncoderDsp.Scan[n]), prediction[Vp8EncoderDsp.Scan[n]..], tmp[(n * 16)..]);
+        for (int n = 0; n < 16; n += 2) Vp8EncoderDsp.FTransform2(it.Input.AsSpan(Vp8EncoderDsp.Scan[n]), prediction[Vp8EncoderDsp.Scan[n]..], tmp[(n * 16)..]);
         Vp8EncoderDsp.FTransformWht(tmp, dc);
         uint nz = Vp8EncoderDsp.QuantizeBlock(dc, rd.Dc, segment.Y2) ? 1u << 24 : 0;
         if (it.DoTrellis) it.NzToBytes();
@@ -33,12 +33,19 @@ internal static class Vp8Reconstruction
     // port: src/enc/quant_enc.c ReconstructIntra4
     public static bool Intra4(Vp8EncoderIterator it, Vp8EncoderProba probabilities, Span<short> levels, byte[] output, int offset, int mode)
     {
-        Vp8Segment segment = it.Context.Segments[it.Block.Segment];
-        ReadOnlySpan<byte> prediction = it.Predictions.AsSpan(Vp8EncoderDsp.Pred4Offsets[mode]);
         Span<short> tmp = stackalloc short[16];
-        Vp8EncoderDsp.FTransform(it.Input.AsSpan(Vp8EncoderDsp.Scan[it.I4]), prediction, tmp);
-        bool nonzero = it.DoTrellis
-            ? Vp8Trellis.Quantize(probabilities, tmp, levels, it.TopNz[it.I4 & 3] + it.LeftNz[it.I4 >> 2], 3, segment.Y1, segment.LambdaTrellisI4)
+        return Intra4(it.Context.Segments[it.Block.Segment], probabilities, it.Input.AsSpan(Vp8EncoderDsp.Scan[it.I4]),
+            it.Predictions.AsSpan(Vp8EncoderDsp.Pred4Offsets[mode]), tmp, levels, output, offset,
+            it.DoTrellis ? it.TopNz[it.I4 & 3] + it.LeftNz[it.I4 >> 2] : -1);
+    }
+
+    // ReconstructIntra4 with the per-block values supplied by the caller; trellisContext < 0 disables trellis.
+    public static bool Intra4(Vp8Segment segment, Vp8EncoderProba probabilities, ReadOnlySpan<byte> source, ReadOnlySpan<byte> prediction,
+        Span<short> tmp, Span<short> levels, byte[] output, int offset, int trellisContext)
+    {
+        Vp8EncoderDsp.FTransform(source, prediction, tmp);
+        bool nonzero = trellisContext >= 0
+            ? Vp8Trellis.Quantize(probabilities, tmp, levels, trellisContext, 3, segment.Y1, segment.LambdaTrellisI4)
             : Vp8EncoderDsp.QuantizeBlock(tmp, levels, segment.Y1);
         Vp8EncoderDsp.ITransform(prediction, tmp, output, offset);
         return nonzero;
@@ -50,7 +57,7 @@ internal static class Vp8Reconstruction
         ReadOnlySpan<byte> prediction = it.Predictions.AsSpan(Vp8EncoderDsp.Pred8Offsets[mode]);
         Vp8Matrix matrix = it.Context.Segments[it.Block.Segment].Uv;
         Span<short> tmp = stackalloc short[128];
-        for (int n = 0; n < 8; n++) Vp8EncoderDsp.FTransform(it.Input.AsSpan(16 + Vp8EncoderDsp.Scan[16 + n]), prediction[Vp8EncoderDsp.Scan[16 + n]..], tmp[(n * 16)..]);
+        for (int n = 0; n < 8; n += 2) Vp8EncoderDsp.FTransform2(it.Input.AsSpan(16 + Vp8EncoderDsp.Scan[16 + n]), prediction[Vp8EncoderDsp.Scan[16 + n]..], tmp[(n * 16)..]);
         if (it.Context.UseErrorDiffusion) CorrectDc(it, matrix, tmp, ref rd);
         uint nz = 0;
         for (int n = 0; n < 8; n++)

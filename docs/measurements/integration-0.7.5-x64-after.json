@@ -1,0 +1,65 @@
+[
+  {
+    "Operation": "jpeg-load",
+    "MedianMs": 43.20596666666666,
+    "MinMs": 41.32143333333333,
+    "MaxMs": 65.02375,
+    "AllocatedMiB": 45.01946258544922,
+    "CancelMedianMs": 0.1226,
+    "CancelMaxMs": 1.6366
+  },
+  {
+    "Operation": "thumbnail-256",
+    "MedianMs": 43.25823333333333,
+    "MinMs": 42.32253333333333,
+    "MaxMs": 50.82535,
+    "AllocatedMiB": 3.3909632364908853,
+    "CancelMedianMs": null,
+    "CancelMaxMs": null
+  },
+  {
+    "Operation": "load-orient-srgb-resize-webp",
+    "MedianMs": 214.5846,
+    "MinMs": 195.1917,
+    "MaxMs": 225.385,
+    "AllocatedMiB": 106.12254333496094,
+    "CancelMedianMs": 0.1775,
+    "CancelMaxMs": 0.6601
+  },
+  {
+    "Operation": "metadata-read",
+    "MedianMs": 1.7666929824561404,
+    "MinMs": 1.714164406779661,
+    "MaxMs": 1.8018160714285716,
+    "AllocatedMiB": 0.0066375732421875,
+    "CancelMedianMs": null,
+    "CancelMaxMs": null
+  },
+  {
+    "Operation": "metadata-edit",
+    "MedianMs": 4.014734615384615,
+    "MinMs": 3.9748653846153847,
+    "MaxMs": 4.410004347826087,
+    "AllocatedMiB": 3.3298868032602162,
+    "CancelMedianMs": null,
+    "CancelMaxMs": null
+  },
+  {
+    "Operation": "hdr-tone-map",
+    "MedianMs": 111.6689,
+    "MinMs": 106.6897,
+    "MaxMs": 159.525,
+    "AllocatedMiB": 277.5925750732422,
+    "CancelMedianMs": 0.3461,
+    "CancelMaxMs": 0.8142
+  },
+  {
+    "Operation": "hdr-resize-save",
+    "MedianMs": 45.379333333333335,
+    "MinMs": 42.0302,
+    "MaxMs": 49.617266666666666,
+    "AllocatedMiB": 63.17562611897787,
+    "CancelMedianMs": 0.0711,
+    "CancelMaxMs": 0.1459
+  }
+]

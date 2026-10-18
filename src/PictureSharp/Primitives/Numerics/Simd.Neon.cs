@@ -79,6 +79,11 @@ internal static partial class Simd
         };
     }
 
+    /// <summary><c>(a + b + 1) &gt;&gt; 1</c> per byte (pavgb / urhadd).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<byte> AverageRounded(Vector128<byte> a, Vector128<byte> b) =>
+        Sse2.IsSupported ? Sse2.Average(a, b) : AdvSimd.FusedAddRoundedHalving(a, b);
+
     /// <summary>Signed saturating narrowing of <paramref name="a"/> then <paramref name="b"/> (packssdw / sqxtn).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<short> PackSignedSaturate(Vector128<int> a, Vector128<int> b) =>

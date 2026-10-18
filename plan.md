@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.4 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.4 (opublikowana 2026-10-18); 0.7.5 gotowa do wydania.** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -45,7 +45,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.2 | Skrócona i uzupełniona dokumentacja, stabilny test alokacji, porządki w planie; bez zmian API i kodu biblioteki | Wydana (2026-10-17; bez ARM64) |
 | 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
-| 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Planowana |
+| 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Gotowa do wydania (bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -441,6 +441,24 @@ DoD:
   anulowanie i deterministyczność równoległości bez zmian.
 - `docs/performance.md` (sekcja 0.7.5), notatki wydania, wspólna bramka jakości.
 
+Stan (2026-10-18): punkt wyjścia zmierzony od nowa na kodzie 0.7.4 (wcześniejszy akapit łączy dane z 0.5.0, 0.6.2 i
+0.7.0): kodowanie 1T kodim23 45,5 ms / 12 MP 1673 ms wobec libwebp 22,9 / 787 ms (2,0× / 2,1×), dekodowanie 12 MP 142
+wobec 100 ms, ścieżka integracyjna 355 ms i 153,4 MiB. Profil i mikrobenchmark prymitywów względem `libwebp.a`
+wskazały 32-bitowe pasy (`pmulld`) zamiast 16-bitowych libwebp. Enkoder: porty `enc_sse2.c`/`enc_sse41.c` w 16 bitach
+(`FTransform`, `FTransform2`, `CollectHistogram`, `SSE4x4`, `TTransform`, `QuantizeBlock`, `ITransform` z kontrolą
+zakresu), predykcje 4×4/8×8/16×16, wektorowe `IsFlat`/`Last`, jedna tablica tokenów z puli, inwarianty `PickIntra4`.
+Dekoder: stan dekodera arytmetycznego w zmiennych lokalnych w `GetCoeffs`, kopie bloków bez narzutu. Potok: obrót w
+kafelkach 32×32, równoległe `ConvertToSrgb` (w miejscu przy dekodowaniu z `ToSrgb`), resize w świetle liniowym w
+pasmach wierszy. Kroki 1–4 zrealizowane, krok 5 (`DrawImage` liniowe) pominięty. Naprawiony błąd 0.7.4:
+niedeterministyczne wielowątkowe kodowanie lossy (wyścig na `MaxEdge`, ~1% kodowań m6). Wyniki bitowo równe 0.7.4
+(≈ 2800 wyjść w trybach AVX2, bez AVX2 i bez intrinsics; bajty identyczne z `cwebp`). Pomiary 1T: kodowanie kodim23
+31,3 ms (1,36×), 12 MP 1208 ms (1,54×, cel 1,5× nieznacznie niespełniony), dekodowanie 12 MP 129,9 ms (1,29×, cel
+spełniony), kodim23 3,2 ms (1,59×), małe obrazy −8…−9%; ścieżka integracyjna 210–215 ms (−40%), 106,1 MiB (cel ≤ 110 spełniony); resize
+liniowy 12 MP ½ 21 → 15–16 ms. Pozorna regresja dekodowania małej grafiki okazała się artefaktem rozgrzewki JIT w `webp-probe` (poprawiona: ≥ 1 s).
+`matrix-probe`: WebP lossy −6…−31%, alokacje bez zmian. Testy: pełny 7167/7167 (z Oracle i Slow), bez AVX2 i bez
+intrinsics 6975/6975, adaptery 51/51 (7 GDI+ pominiętych). ARM64 nieuruchomione. Notatki
+`docs/releases/release-0.7.5.md`, `VERSION` 0.7.5.
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -520,3 +538,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.2** — dokumentacja skrócona o ~30%, `Mutate` a `Clone`, HEIC/HEIF przez wtyczkę `PictureSharp.Heif`; stabilny test alokacji. Bez zmian API.
 - **0.7.3** — mniej alokacji w deflate/inflate PNG (pulowane bufory, ponownie używane tablice Huffmana) i przy metadanych PNG. Bez zmian API i bajtów wyjściowych.
 - **0.7.4** — szybszy JPEG: dekodowanie ~2×, kodowanie ~3× na jednym wątku (szybka ścieżka Huffmana, IDCT AVX2 parami, wektorowy kolor, próbkowanie i kwantyzacja). Bez zmian API i wyników.
+- **0.7.5** — szybszy WebP lossy (kodowanie −28…−32% na jednym wątku, dekodowanie −8…−11%) i potok wczytaj → orientacja → sRGB → resize → zapis (−40%, 106 MiB); naprawiony niedeterminizm wielowątkowego kodowania lossy. Bez zmian API i wyników.

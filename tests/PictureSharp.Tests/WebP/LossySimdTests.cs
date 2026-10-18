@@ -128,6 +128,58 @@ public class LossySimdTests
             await Assert.That(actualInput).IsEquivalentTo(expectedInput, CollectionOrdering.Matching);
         }
     }
+
+    [Test]
+    public async Task FTransform2_MatchesScalar()
+    {
+        var rng = new Random(9);
+        short[] expected = new short[32], actual = new short[32];
+        for (int i = 0; i < Iterations; i++)
+        {
+            byte[] source = RandomBlock(rng), prediction = RandomBlock(rng);
+            Vp8EncoderDsp.FTransformScalar(source, prediction, expected);
+            Vp8EncoderDsp.FTransformScalar(source.AsSpan(4), prediction.AsSpan(4), expected.AsSpan(16));
+            Vp8EncoderDsp.FTransform2(source, prediction, actual);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        }
+    }
+
+    [Test]
+    [Arguments(0, 16)]
+    [Arguments(16, 24)]
+    public async Task CollectHistogram_MatchesScalar(int start, int end)
+    {
+        var rng = new Random(10 + start);
+        for (int i = 0; i < Iterations; i++)
+        {
+            byte[] source = RandomBlock(rng), prediction = RandomBlock(rng);
+            await Assert.That(Vp8EncoderDsp.CollectHistogram(source, prediction, start, end))
+                .IsEqualTo(Vp8EncoderDsp.CollectHistogramScalar(source, prediction, start, end));
+        }
+    }
+
+    [Test]
+    public async Task IntraPredictions_MatchScalar()
+    {
+        var rng = new Random(11);
+        byte[] expected = new byte[1792], actual = new byte[1792];
+        for (int i = 0; i < Iterations; i++)
+        {
+            byte[] edges = RandomBlock(rng, 64);
+            // Every combination of missing left and top samples, as at the image borders.
+            ReadOnlySpan<byte> left = (i & 1) != 0 ? edges.AsSpan(0, 33) : default;
+            ReadOnlySpan<byte> top = (i & 2) != 0 ? edges.AsSpan(33, 16) : default;
+            rng.NextBytes(expected);
+            expected.CopyTo(actual, 0);
+            Vp8EncoderDsp.PredLuma16Scalar(expected, left.IsEmpty ? default : left[..17], top);
+            Vp8EncoderDsp.PredLuma16(actual, left.IsEmpty ? default : left[..17], top);
+            Vp8EncoderDsp.PredChroma8Scalar(expected, left, top);
+            Vp8EncoderDsp.PredChroma8(actual, left, top);
+            Vp8EncoderDsp.PredLuma4Scalar(expected, edges.AsSpan(49, 13));
+            Vp8EncoderDsp.PredLuma4(actual, edges.AsSpan(49, 13));
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        }
+    }
 }
 
 /// <summary>The SIMD YUV to RGB conversion must give exactly the scalar pixels.</summary>

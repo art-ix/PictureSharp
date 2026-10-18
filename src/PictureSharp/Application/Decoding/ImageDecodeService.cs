@@ -38,7 +38,8 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
             if (options.ColorConversion == ColorConversionMode.ToSrgb)
             {
                 converted = image.Metadata.IccData is not null || image.Metadata.HasColorDescription;
-                ImageProcessingService.Mutate(image, static x => x.ConvertToSrgb(), cancellationToken);
+                // The image is disposed below if anything fails, so it may be converted in place.
+                ImageProcessingService.Mutate(image, static x => x.ConvertToSrgbInPlace(), cancellationToken);
             }
 
             ApplyTargetSize(result, options, cancellationToken);

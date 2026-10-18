@@ -20,35 +20,40 @@ internal static partial class Resizer
         bool needVertical = height != srcHeight || y0 != 0 || y1 != height;
         (int ksizeH, int[] boundsH, double[] weightsH) = PrecomputeWeights(srcWidth, x0, x1, width, filter);
         (int ksizeV, int[] boundsV, double[] weightsV) = PrecomputeWeights(srcHeight, y0, y1, height, filter);
+        float[] kH = ToSingle(weightsH), kV = ToSingle(weightsV);
 
-        // Only the source rows the vertical taps cover are converted; the bounds become relative to the first one.
-        int firstRow = needVertical ? boundsV[0] : 0;
-        int rowCount = needVertical ? boundsV[(height * 2) - 2] + boundsV[(height * 2) - 1] - firstRow : srcHeight;
-        for (int i = 0; i < height; i++)
+        // Output rows go in bands: a band converts and resamples horizontally only the source rows its vertical taps
+        // cover, so no buffer spans the image. Rows shared with the neighbouring band are computed again by the same
+        // operations, so the result does not depend on the banding.
+        int bands = (height + LinearBandRows - 1) / LinearBandRows;
+        long workPerBand = (long)Math.Min(LinearBandRows, height) * ((width * (ksizeV + 1)) + (srcWidth * (srcHeight / Math.Max(1, height))));
+        ForRows(bands, workPerBand, parallel, band =>
         {
-            boundsV[i * 2] -= firstRow;
-        }
-
-        Vector4[] linear = ArrayPool<Vector4>.Shared.Rent(rowCount * srcWidth);
-        Vector4[]? horizontal = needHorizontal ? ArrayPool<Vector4>.Shared.Rent(rowCount * width) : null;
-        Vector4[]? vertical = needVertical ? ArrayPool<Vector4>.Shared.Rent(height * width) : null;
-        try
-        {
-            ForRows(rowCount, srcWidth, parallel, y =>
-                ToLinearPremultiplied(src.AsSpan((firstRow + y) * srcWidth, srcWidth), linear.AsSpan(y * srcWidth, srcWidth)));
-
-            Vector4[] current = linear;
-            int currentWidth = srcWidth;
-            if (horizontal is not null)
+            int first = band * LinearBandRows, last = Math.Min(height, first + LinearBandRows);
+            // Vertical taps start and end at non-decreasing source rows.
+            int sourceStart = needVertical ? boundsV[first * 2] : first;
+            int sourceEnd = needVertical ? boundsV[(last - 1) * 2] + boundsV[((last - 1) * 2) + 1] : last;
+            int rows = sourceEnd - sourceStart;
+            Vector4[] horizontal = ArrayPool<Vector4>.Shared.Rent(rows * width);
+            Vector4[]? line = needHorizontal ? ArrayPool<Vector4>.Shared.Rent(srcWidth) : null;
+            Vector4[]? vertical = needVertical ? ArrayPool<Vector4>.Shared.Rent(width) : null;
+            try
             {
-                float[] k = ToSingle(weightsH);
-                ForRows(rowCount, (long)width * ksizeH, parallel, y =>
+                for (int r = 0; r < rows; r++)
                 {
-                    ReadOnlySpan<Vector4> inRow = linear.AsSpan(y * srcWidth, srcWidth);
-                    Span<Vector4> outRow = horizontal.AsSpan(y * width, width);
+                    ReadOnlySpan<Rgba32> sourceRow = src.AsSpan((sourceStart + r) * srcWidth, srcWidth);
+                    Span<Vector4> outRow = horizontal.AsSpan(r * width, width);
+                    if (line is null)
+                    {
+                        ToLinearPremultiplied(sourceRow, outRow);
+                        continue;
+                    }
+
+                    Span<Vector4> inRow = line.AsSpan(0, srcWidth);
+                    ToLinearPremultiplied(sourceRow, inRow);
                     for (int xx = 0; xx < width; xx++)
                     {
-                        ReadOnlySpan<float> w = k.AsSpan(xx * ksizeH, boundsH[(xx * 2) + 1]);
+                        ReadOnlySpan<float> w = kH.AsSpan(xx * ksizeH, boundsH[(xx * 2) + 1]);
                         ReadOnlySpan<Vector4> px = inRow.Slice(boundsH[xx * 2], w.Length);
                         Vector4 sum = Vector4.Zero;
                         for (int x = 0; x < w.Length; x++)
@@ -58,45 +63,45 @@ internal static partial class Resizer
 
                         outRow[xx] = sum;
                     }
-                });
-                current = horizontal;
-                currentWidth = width;
-            }
+                }
 
-            if (vertical is not null)
-            {
-                float[] k = ToSingle(weightsV);
-                Vector4[] input = current;
-                ForRows(height, (long)width * ksizeV, parallel, yy =>
+                for (int yy = first; yy < last; yy++)
                 {
-                    ReadOnlySpan<float> w = k.AsSpan(yy * ksizeV, boundsV[(yy * 2) + 1]);
-                    int ymin = boundsV[yy * 2];
-                    Span<Vector4> outRow = vertical.AsSpan(yy * width, width);
+                    Span<Rgba32> target = dst.AsSpan(yy * width, width);
+                    if (vertical is null)
+                    {
+                        FromLinearPremultiplied(horizontal.AsSpan((yy - sourceStart) * width, width), target);
+                        continue;
+                    }
+
+                    ReadOnlySpan<float> w = kV.AsSpan(yy * ksizeV, boundsV[(yy * 2) + 1]);
+                    int ymin = boundsV[yy * 2] - sourceStart;
+                    Span<Vector4> outRow = vertical.AsSpan(0, width);
                     outRow.Clear();
                     for (int y = 0; y < w.Length; y++)
                     {
-                        ReadOnlySpan<Vector4> inRow = input.AsSpan((ymin + y) * width, width);
+                        ReadOnlySpan<Vector4> inRow = horizontal.AsSpan((ymin + y) * width, width);
                         float c = w[y];
                         for (int x = 0; x < outRow.Length; x++)
                         {
                             outRow[x] += inRow[x] * c;
                         }
                     }
-                });
-                current = vertical;
-            }
 
-            Vector4[] result = current;
-            ForRows(height, width, parallel, y =>
-                FromLinearPremultiplied(result.AsSpan(y * width, width), dst.AsSpan(y * width, width)));
-        }
-        finally
-        {
-            ArrayPool<Vector4>.Shared.Return(linear);
-            if (horizontal is not null) ArrayPool<Vector4>.Shared.Return(horizontal);
-            if (vertical is not null) ArrayPool<Vector4>.Shared.Return(vertical);
-        }
+                    FromLinearPremultiplied(outRow, target);
+                }
+            }
+            finally
+            {
+                ArrayPool<Vector4>.Shared.Return(horizontal);
+                if (line is not null) ArrayPool<Vector4>.Shared.Return(line);
+                if (vertical is not null) ArrayPool<Vector4>.Shared.Return(vertical);
+            }
+        });
     }
+
+    // Output rows per band of ResampleLinear.
+    private const int LinearBandRows = 32;
 
     private static float[] ToSingle(double[] weights)
     {

@@ -54,6 +54,10 @@ PICTURESHARP_BENCHMARK_JPEG_SOURCES='/absolute/photo.png' \
 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*JpegDecodeBenchmarks*' '*JpegEncodeBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 9
 
+# Lossy WebP encode (q75, m4) and decode from memory, one thread and default, measured like the native libwebp
+# reference program (median of 21 calls, 7 above 4 MP); PICTURESHARP_WEBP_PROBE_OUT=<dir> also writes the bytes.
+taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- webp-probe /tmp/webp.json /absolute/kodim23.png
+
 # 80-case regression matrix without BenchmarkDotNet (seven samples of at least 120 ms per case).
 taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- matrix-probe /tmp/picturesharp-matrix.json
 ```
@@ -67,6 +71,7 @@ Newest first:
 
 | Section | Covers |
 | --- | --- |
+| [WebP lossy and pipeline optimization (0.7.5)](#webp-lossy-and-pipeline-optimization-075) | Lossy WebP on one thread and by default against 0.7.4 and libwebp; the load → orient → sRGB → resize → WebP path |
 | [JPEG optimization (0.7.4)](#jpeg-optimization-074) | JPEG decoding and encoding on one thread and by default, against 0.7.3 and Pillow |
 | [Own deflate versus System.IO.Compression (0.7.2)](#own-deflate-versus-systemiocompression-072) | Why PNG keeps its own deflate/inflate instead of `ZLibStream` |
 | [Integration measurements (0.7.0)](#integration-measurements-070) | Complete user paths on 12 MP inputs: time, allocations, peak memory, cancellation latency |
@@ -90,6 +95,96 @@ Newest first:
 Regression checks against the previous release use the 80-case `matrix-probe` matrix in ABBA order on CPUs 0–7; cases
 above +5% are rechecked alternating in separate AssemblyLoadContexts (15 samples of at least 180 ms). These are
 lightweight probes, not full BenchmarkDotNet studies.
+
+## WebP lossy and pipeline optimization (0.7.5)
+
+0.7.5 speeds up lossy WebP and the common processing path without changing results: encoded bytes (identical to
+`cwebp` 1.6.0 as before), decoded pixels and processing results equal 0.7.4 with AVX2, without AVX2 and without hardware
+intrinsics. About 2,800 outputs were compared after every step: encoder options (methods, qualities, presets, filters,
+segments, partitions, alpha, target size and PSNR, threads), the decoder corpus and libwebp test data including
+truncated and bit-flipped files, and pipeline operations (decoding with orientation and ICC conversion, `ConvertToSrgb`
+for every corpus profile, linear-light resizing with five filters, linear `DrawImage`).
+
+A profile and a micro-benchmark of the encoder primitives against the same functions in `libwebp.a` set the order of
+the work. The 0.7.4 vector code computed in 32-bit lanes with `pmulld`, where libwebp uses 16-bit `pmaddwd`/`pmulhw`:
+predictions were 5–9×, `FTransform` 2.4×, `SSE4x4` 2.8×, `ITransform` 1.9× and quantization 1.6× slower than libwebp.
+
+- **Encoder DSP:** ports of `enc_sse2.c`/`enc_sse41.c` in 16-bit lanes through the shared `Vector128` helpers (also
+  ARM64): `FTransform` and `FTransform2` (two blocks), `CollectHistogram`, `SSE4x4`, `TTransform`/`Disto` (with the
+  weights transposed, so any weights give the scalar result), `QuantizeBlock` (exact for every `short` input with the
+  encoder's matrices) and `ITransform` (16-bit when every coefficient is within ±2048, which keeps all intermediate values
+  in range; otherwise the 32-bit transform). Byte inputs keep every 16-bit intermediate in range, so these equal the C code.
+- **Predictions:** 4×4 modes are assembled from the 3-tap and 2-tap averages of the edge, computed once; 8×8 and 16×16
+  predictions are filled with vectors. Vector `IsFlat` and `Last`.
+- **Mode decision and tokens:** invariants hoisted from the `PickIntra4` loop; the token buffer is one pooled array that
+  doubles instead of 8192-entry pages (a 12 MP image needed about 1,200 pages, most of them allocated anew on every encode
+  because the shared pool keeps few arrays per size); tokens are emitted with the coder state in locals.
+- **Decoder:** coefficient parsing (`GetCoeffs`) keeps the arithmetic decoder's state in locals, so value and bit count
+  stay in registers (C compilers achieve this through strict aliasing), and reads the probabilities by reference;
+  reconstruction copies blocks and rotates the left samples without per-call overhead.
+- **Pipeline:** quarter-turn rotations fill the output in 32×32 tiles (the previous loop wrote one pixel per output row);
+  `ConvertToSrgb` converts bands of 64 K pixels in parallel, and in place while an image is decoded with
+  `ColorConversion = ToSrgb` (the image is not visible to the caller yet; the public operation still commits new buffers
+  together); linear-light resizing works in bands of 32 output rows, each converting and resampling horizontally only the
+  source rows it needs, instead of three image-sized `Vector4` buffers.
+- **Withdrawn:** a 16-bit inverse transform in the decoder (3% slower there), unchecked `ResidualCost` and an inline
+  refill of the bit reader (no gain).
+
+`webp-probe` against the C program linked with `libwebp.a` 1.6.0 (q75 m4 `WebPEncode`, `WebPDecodeRGBA`, median of 21
+calls, 7 for 12 MP), i5-12500H, CPUs 0–7. The 12 MP input is a local 4032×3024 photo saved as PNG; both libraries write
+the same bytes for every input:
+
+| Input | Operation | Threads | 0.7.4 (ms) | 0.7.5 (ms) | Change | libwebp 1T (ms) | 0.7.5 / libwebp |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| photo 256×192 | encode | 1 | 6.99 | 4.87 | −30% | 3.43 | 1.42× |
+| | decode | 1 | 0.653 | 0.597 | −9% | 0.376 | 1.59× |
+| graphic 200×150 | encode | 1 | 5.85 | 4.60 | −21% | 2.93 | 1.57× |
+| | decode | 1 | 0.696 | 0.642 | −8% | 0.485 | 1.32× |
+| kodim23 768×512 | encode | 1 | 45.6 | 31.3 | −31% | 22.9 | 1.36× |
+| | | default | 20.1 | 15.0 | −25% | | |
+| | decode | 1 | 3.49 | 3.18 | −9% | 2.01 | 1.59× |
+| | | default | 2.75 | 2.24 | −18% | | |
+| 12 MP photo | encode | 1 | 1677 | 1208 | −28% | 787 | 1.54× |
+| | | default | 572 | 414 | −28% | | |
+| | decode | 1 | 141.8 | 129.9 | −8% | 100.3 | 1.29× |
+| | | default | 107.7 | 96.2 | −11% | | |
+
+Encoding allocates 4.7 MB instead of 30 MB for the 12 MP photo. `webp-probe` now warms up for at least 1 s: with 50
+short calls only, decode paths that an input reaches first could still run unoptimized (the JIT promotes methods after
+a 100 ms pause in new compilations), which made small decodes look 2–4× slower in some runs and inputs.
+
+The goals of this release were 1.5× libwebp for single-threaded encoding and 1.3× for decoding. Encoding meets it on
+Kodak and the 256×192 photo (1.36×, 1.42×) and misses it slightly on the 12 MP photo and the graphic (1.54×, 1.57×),
+where coefficient cost estimation (`ResidualCost`, 15%) and the remaining per-mode work of `PickIntra4` dominate.
+Decoding meets it on the 12 MP photo (1.29×) and is at 1.32× on the graphic; the photographic small and Kodak inputs stay
+at 1.6×, where prediction, reconstruction and the loop filter outweigh coefficient parsing.
+
+The integration path of 0.7.0 (`integration-probe`, 12 MP JPEG with EXIF orientation 6 and a Display P3 profile):
+
+| Operation | 0.7.4 | 0.7.5 | Change |
+| --- | ---: | ---: | ---: |
+| `load-orient-srgb-resize-webp` time | 355 ms | 210–215 ms | −40% |
+| allocated | 153.4 MiB | 106.1 MiB | −31% |
+| cancellation latency (median, max) | 0.3 ms, 0.4 ms | 0.2 ms, 0.7 ms | |
+
+Within it, loading with orientation went from 137 to 55 ms (the rotation from about 93 to 12 ms) and the ICC conversion
+from 61 to about 10 ms. `thumbnail-256` allocates 3.4 MiB instead of 6.2 MiB (conversion in place); the other
+operations of the probe stay within run-to-run variation. Linear-light halving of the 12 MP photo takes
+15–16 ms instead of 21 ms (Lanczos3 on encoded values: 15.5 ms) and no longer leaves about 340 MB of float buffers in the
+shared pool.
+
+`matrix-probe` (corpus inputs, the 1600×1200 graphic and `kodim23`; best of two 0.7.4 and three 0.7.5 sweeps): lossy WebP
+−6% to −31%; allocations unchanged. Cases above +5% were operations this release did not touch (BMP and PNG decoding of
+short inputs) plus the default-thread decode of the 256×192 photo, whose minima in alternating runs are lower in 0.7.5
+(0.59–0.63 against 0.66–0.79 ms).
+
+Fixed on the way: multi-threaded lossy encoding (method 3 and above) updated the per-segment maximum DC edge without
+synchronization; a lost update lowered the loop-filter strength, so about 1% of method 6 encodes of `kodim23` differed
+from `cwebp`. The update is now an atomic maximum and 600 of 600 encodes match.
+
+Raw data: [webp-0.7.5-x64.csv](measurements/webp-0.7.5-x64.csv), [matrix-0.7.5-x64.csv](measurements/matrix-0.7.5-x64.csv),
+[integration-0.7.5-x64-before.json](measurements/integration-0.7.5-x64-before.json),
+[-after](measurements/integration-0.7.5-x64-after.json).
 
 ## JPEG optimization (0.7.4)
 

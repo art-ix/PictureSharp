@@ -105,7 +105,7 @@ public readonly ref partial struct ImageProcessingContext
         if (newBuffers)
         {
             _state.ReplaceFrames((turns, flipX), static (frame, state, token) =>
-                new FrameReplacement(frame.Height, frame.Width, Geometry.RotateQuarterPixels(frame.Pixels, frame.Width, frame.Height, state.turns, state.flipX)),
+                new FrameReplacement(frame.Height, frame.Width, Geometry.RotateQuarterPixels(frame.Pixels, frame.Width, frame.Height, state.turns, state.flipX, token)),
                 GainMapEdit.RotateFlip(turns, flipX));
             ImageMetadata metadata = Target.Metadata;
             (metadata.HorizontalResolution, metadata.VerticalResolution) = (metadata.VerticalResolution, metadata.HorizontalResolution);

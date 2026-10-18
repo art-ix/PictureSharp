@@ -3,6 +3,7 @@ using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.ColorManagement;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Processing;
@@ -29,16 +30,8 @@ public readonly ref partial struct ImageProcessingContext
             // New buffers are committed together, so a canceled conversion leaves pixels and profile consistent.
             _state.ReplaceFrames(conversion, static (frame, conversion, token) =>
             {
-                ReadOnlySpan<Rgba32> source = frame.GetPixelSpan();
-                Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(source.Length);
-                const int band = 1 << 16;
-                for (int start = 0; start < source.Length; start += band)
-                {
-                    token.ThrowIfCancellationRequested();
-                    int length = Math.Min(band, source.Length - start);
-                    conversion.Convert(source.Slice(start, length), pixels.AsSpan(start, length));
-                }
-
+                Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(frame.Width * frame.Height);
+                ConvertBands(conversion, pixels.Length, frame.Pixels, pixels, token);
                 return new FrameReplacement(frame.Width, frame.Height, pixels);
             });
         }
@@ -46,6 +39,51 @@ public readonly ref partial struct ImageProcessingContext
         metadata.IccProfile = null;
         metadata.ClearColorDescription();
         return this;
+    }
+
+    /// <summary>
+    /// <see cref="ConvertToSrgb"/> converting the pixels in place. Only for an image that nobody else sees until it
+    /// completes, such as one being decoded: a canceled conversion leaves it half converted.
+    /// </summary>
+    internal ImageProcessingContext ConvertToSrgbInPlace()
+    {
+        ImageMetadata metadata = Target.Metadata;
+        if (ColorDescriptionResolver.ToSrgb(metadata, Target.SourceFormat) is { } conversion)
+        {
+            foreach (ImageFrame frame in _state.WritableFrames)
+            {
+                ConvertBands(conversion, frame.Width * frame.Height, frame.Pixels, frame.Pixels, _state.CancellationToken);
+            }
+        }
+
+        metadata.IccProfile = null;
+        metadata.ClearColorDescription();
+        return this;
+    }
+
+    // Pixels convert independently, so bands of them may run on several threads (like Resize).
+    private static void ConvertBands(SrgbConversion conversion, int count, Rgba32[] source, Rgba32[] target, CancellationToken token)
+    {
+        const int band = 1 << 16;
+        int bands = (count + band - 1) / band;
+        if (Parallelism.IsWorthwhile(-1, count, 1 << 18))
+        {
+            Parallel.For(0, bands, Parallelism.Options(-1, token), ConvertBand);
+        }
+        else
+        {
+            for (int i = 0; i < bands; i++)
+            {
+                ConvertBand(i);
+            }
+        }
+
+        void ConvertBand(int index)
+        {
+            token.ThrowIfCancellationRequested();
+            int start = index * band, length = Math.Min(band, count - start);
+            conversion.Convert(source.AsSpan(start, length), target.AsSpan(start, length));
+        }
     }
 
     /// <summary>Converts to grayscale (BT.601 luma, as Pillow's "L" mode); alpha is kept.</summary>

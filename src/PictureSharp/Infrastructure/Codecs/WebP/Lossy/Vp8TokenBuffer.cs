@@ -3,10 +3,11 @@ using System.Runtime.CompilerServices;
 
 namespace PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 
+// libwebp chains fixed-size pages; one array that doubles keeps a large image's tokens in a single pooled
+// buffer (thousands of small pages would mostly miss the shared pool and be allocated on every encode).
 internal sealed class Vp8TokenBuffer : IDisposable
 {
-    private const int PageSize = 8192;
-    private readonly List<ushort[]> _pages = [];
+    private ushort[] _tokens = ArrayPool<ushort>.Shared.Rent(8192);
     private int _count;
 
     // port: src/enc/token_enc.c AddToken, AddConstantToken, TBufferNewPage
@@ -22,17 +23,14 @@ internal sealed class Vp8TokenBuffer : IDisposable
     public long Emit(Vp8BitWriter? writer, ReadOnlySpan<byte> probabilities)
     {
         long size = 0;
-        for (int page = 0, remaining = _count; remaining > 0; page++, remaining -= PageSize)
+        ReadOnlySpan<ushort> tokens = _tokens.AsSpan(0, _count);
+        if (writer is null)
         {
-            ReadOnlySpan<ushort> tokens = _pages[page].AsSpan(0, Math.Min(remaining, PageSize));
-            if (writer is null)
-            {
-                foreach (ushort token in tokens) size += Vp8EncoderProba.BitCost((token & 0x8000) != 0, Probability(token, probabilities));
-            }
-            else
-            {
-                foreach (ushort token in tokens) writer.Put((token & 0x8000) != 0, Probability(token, probabilities));
-            }
+            foreach (ushort token in tokens) size += Vp8EncoderProba.BitCost((token & 0x8000) != 0, Probability(token, probabilities));
+        }
+        else
+        {
+            writer.PutTokens(tokens, probabilities);
         }
         return size;
     }
@@ -43,12 +41,18 @@ internal sealed class Vp8TokenBuffer : IDisposable
 
     public void AddRaw(ushort token)
     {
-        int page = _count / PageSize, offset = _count % PageSize;
-        if (page == _pages.Count) _pages.Add(ArrayPool<ushort>.Shared.Rent(PageSize));
-        _pages[page][offset] = token;
-        _count++;
+        if (_count == _tokens.Length) Grow();
+        _tokens[_count++] = token;
+    }
+
+    private void Grow()
+    {
+        ushort[] next = ArrayPool<ushort>.Shared.Rent(_tokens.Length * 2);
+        _tokens.AsSpan(0, _count).CopyTo(next);
+        ArrayPool<ushort>.Shared.Return(_tokens);
+        _tokens = next;
     }
 
     public void Clear() => _count = 0;
-    public void Dispose() { foreach (ushort[] page in _pages) ArrayPool<ushort>.Shared.Return(page); _pages.Clear(); }
+    public void Dispose() => ArrayPool<ushort>.Shared.Return(_tokens);
 }

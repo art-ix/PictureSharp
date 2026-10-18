@@ -1,0 +1,65 @@
+[
+  {
+    "Operation": "jpeg-load",
+    "MedianMs": 42.2368,
+    "MinMs": 40.92763333333333,
+    "MaxMs": 111.8718,
+    "AllocatedMiB": 45.019482930501304,
+    "CancelMedianMs": 0.1775,
+    "CancelMaxMs": 1.5441
+  },
+  {
+    "Operation": "thumbnail-256",
+    "MedianMs": 46.84543333333334,
+    "MinMs": 45.8012,
+    "MaxMs": 52.16435,
+    "AllocatedMiB": 6.199246724446614,
+    "CancelMedianMs": null,
+    "CancelMaxMs": null
+  },
+  {
+    "Operation": "load-orient-srgb-resize-webp",
+    "MedianMs": 355.3454,
+    "MinMs": 341.2129,
+    "MaxMs": 373.7774,
+    "AllocatedMiB": 153.3748550415039,
+    "CancelMedianMs": 0.271,
+    "CancelMaxMs": 0.3789
+  },
+  {
+    "Operation": "metadata-read",
+    "MedianMs": 1.8894849056603775,
+    "MinMs": 1.7318931034482759,
+    "MaxMs": 1.9352846153846153,
+    "AllocatedMiB": 0.006642179669074292,
+    "CancelMedianMs": null,
+    "CancelMaxMs": null
+  },
+  {
+    "Operation": "metadata-edit",
+    "MedianMs": 4.430830434782608,
+    "MinMs": 4.372034782608695,
+    "MaxMs": 4.890576190476191,
+    "AllocatedMiB": 3.329805788786515,
+    "CancelMedianMs": null,
+    "CancelMaxMs": null
+  },
+  {
+    "Operation": "hdr-tone-map",
+    "MedianMs": 103.2317,
+    "MinMs": 101.8317,
+    "MaxMs": 117.8051,
+    "AllocatedMiB": 277.59373474121094,
+    "CancelMedianMs": 0.3012,
+    "CancelMaxMs": 0.6346
+  },
+  {
+    "Operation": "hdr-resize-save",
+    "MedianMs": 45.0933,
+    "MinMs": 42.26283333333333,
+    "MaxMs": 52.83056666666667,
+    "AllocatedMiB": 63.17610422770182,
+    "CancelMedianMs": 0.0552,
+    "CancelMaxMs": 0.0889
+  }
+]

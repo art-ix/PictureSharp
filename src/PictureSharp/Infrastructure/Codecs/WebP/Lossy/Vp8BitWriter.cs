@@ -28,6 +28,33 @@ internal sealed class Vp8BitWriter : IDisposable
         return bit;
     }
 
+    // VP8PutBit for each token of a Vp8TokenBuffer (port: src/enc/token_enc.c VP8EmitTokens), with the coder
+    // state in locals: it only goes back to the fields for Flush.
+    public void PutTokens(ReadOnlySpan<ushort> tokens, ReadOnlySpan<byte> probabilities)
+    {
+        int range = _range, value = _value, bits = _bits;
+        foreach (ushort token in tokens)
+        {
+            int probability = (token & 0x4000) != 0 ? token & 255 : probabilities[token & 0x3fff];
+            int split = (range * probability) >> 8;
+            if ((token & 0x8000) != 0) { value += split + 1; range -= split + 1; }
+            else range = split;
+            if (range < 127)
+            {
+                int shift = 7 - BitOperations.Log2((uint)(range + 1));
+                range = ((range + 1) << shift) - 1;
+                value <<= shift; bits += shift;
+                if (bits > 0)
+                {
+                    _value = value; _bits = bits;
+                    Flush();
+                    value = _value; bits = _bits;
+                }
+            }
+        }
+        _range = range; _value = value; _bits = bits;
+    }
+
     // port: src/utils/bit_writer_utils.c VP8PutBitUniform, VP8PutBits, VP8PutSignedBits
     public bool Put(bool bit) => Put(bit, 128);
     public void PutBits(uint value, int bits)

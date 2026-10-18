@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -91,35 +93,43 @@ internal static class Geometry
     }
 
     /// <summary>Produces a new buffer for an odd number of quarter turns.</summary>
-    public static Rgba32[] RotateQuarterPixels(Rgba32[] src, int w, int h, int rotation, bool flipX)
+    /// <remarks>
+    /// Output pixel (dx, dy) comes from source column x = dy (90°) or w - 1 - dy (270°) and row y = dx, or h - 1 - dx when
+    /// exactly one of "90°" and <paramref name="flipX"/> holds. The output is filled in 32x32 tiles so that the column
+    /// reads of the source stay within a few kilobytes instead of striding through the whole image.
+    /// </remarks>
+    public static Rgba32[] RotateQuarterPixels(Rgba32[] src, int w, int h, int rotation, bool flipX, CancellationToken cancellationToken = default)
     {
+        const int Tile = 32;
         // 90° or 270°: dimensions swap.
         int nw = h;
         int nh = w;
-        var dst = GC.AllocateUninitializedArray<Rgba32>(src.Length);
-        for (int y = 0; y < h; y++)
+        if (src.Length < (long)w * h)
         {
-            ReadOnlySpan<Rgba32> row = src.AsSpan(y * w, w);
-            for (int x = 0; x < w; x++)
+            throw new ArgumentException("The buffer is smaller than the image.", nameof(src));
+        }
+
+        var dst = GC.AllocateUninitializedArray<Rgba32>(src.Length);
+        bool reverseX = rotation != 1, reverseY = (rotation == 1) != flipX;
+        ref Rgba32 source = ref MemoryMarshal.GetArrayDataReference(src);
+        for (int dy0 = 0; dy0 < nh; dy0 += Tile)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int dy1 = Math.Min(dy0 + Tile, nh);
+            for (int dx0 = 0; dx0 < nw; dx0 += Tile)
             {
-                int dx, dy;
-                if (rotation == 1)
+                int dx1 = Math.Min(dx0 + Tile, nw);
+                for (int dy = dy0; dy < dy1; dy++)
                 {
-                    dx = h - 1 - y;
-                    dy = x;
+                    int x = reverseX ? w - 1 - dy : dy;
+                    Span<Rgba32> row = dst.AsSpan((dy * nw) + dx0, dx1 - dx0);
+                    for (int i = 0; i < row.Length; i++)
+                    {
+                        int dx = dx0 + i, y = reverseY ? h - 1 - dx : dx;
+                        // 0 <= x < w and 0 <= y < h, so the index is inside the checked length.
+                        row[i] = Unsafe.Add(ref source, (y * w) + x);
+                    }
                 }
-                else
-                {
-                    dx = y;
-                    dy = w - 1 - x;
-                }
-
-                if (flipX)
-                {
-                    dx = nw - 1 - dx;
-                }
-
-                dst[(dy * nw) + dx] = row[x];
             }
         }
 

@@ -1,12 +1,15 @@
+using System.Runtime.Intrinsics;
+
 namespace PictureSharp.Infrastructure.Codecs.WebP.Lossy;
 
-internal static class Vp8ModeDecision
+internal static partial class Vp8ModeDecision
 {
     private static ReadOnlySpan<ushort> WeightY => [38, 32, 20, 9, 32, 28, 17, 7, 20, 17, 10, 4, 9, 7, 4, 2];
 
     // port: src/dsp/quant.h IsFlat, IsFlatSource16
     private static bool IsFlat(ReadOnlySpan<short> levels, int blocks, int threshold)
     {
+        if (Vector128.IsHardwareAccelerated && levels.Length >= blocks * 16) return IsFlatSimd(levels, blocks, threshold);
         int score = 0;
         for (int b = 0; b < blocks; b++)
             for (int i = 1; i < 16; i++) if (levels[b * 16 + i] != 0 && ++score > threshold) return false;
@@ -84,7 +87,20 @@ internal static class Vp8ModeDecision
         }
         best.SetScore(segment.LambdaMode); it.SetIntra16Mode(best.ModeI16);
         if ((best.Nz & 0x100ffff) == 0x1000000 && best.D > segment.MinDisto)
-            segment.MaxEdge = Math.Max(segment.MaxEdge, Math.Max(Math.Abs((int)best.Dc[1]), Math.Max(Math.Abs((int)best.Dc[2]), Math.Abs((int)best.Dc[4]))));
+            StoreMaxEdge(segment, Math.Max(Math.Abs((int)best.Dc[1]), Math.Max(Math.Abs((int)best.Dc[2]), Math.Abs((int)best.Dc[4]))));
+    }
+
+    // The wavefront pass runs PickIntra16 on several threads for the same segment; an atomic maximum keeps the
+    // result independent of their interleaving (a plain read-modify-write could lose the larger value).
+    internal static void StoreMaxEdge(Vp8Segment segment, int edge)
+    {
+        int current = Volatile.Read(ref segment.MaxEdge);
+        while (edge > current)
+        {
+            int previous = Interlocked.CompareExchange(ref segment.MaxEdge, edge, current);
+            if (previous == current) return;
+            current = previous;
+        }
     }
 
     // port: src/enc/quant_enc.c PickBestIntra4
@@ -94,28 +110,31 @@ internal static class Vp8ModeDecision
         Vp8Segment segment = it.Context.Segments[it.Block.Segment];
         Vp8ModeScore aggregate = default; aggregate.Init(); aggregate.H = 211; aggregate.SetScore(segment.LambdaMode);
         int headerBits = 0;
-        Span<short> levels = stackalloc short[16];
+        Span<short> levels = stackalloc short[16], tmp = stackalloc short[16];
         // Only the score fields of these are used; declaring them once avoids clearing their level arrays per mode.
         Vp8ModeScore best = default, candidate = default;
+        byte[] predictions = it.Predictions;
+        ReadOnlySpan<byte> reconstructed = predictions.AsSpan(1672);
         it.StartI4();
         do
         {
             best.Init(); int bestMode = -1;
-            int offset = Vp8EncoderDsp.Scan[it.I4];
+            int offset = Vp8EncoderDsp.Scan[it.I4], context = it.TopNz[it.I4 & 3] + it.LeftNz[it.I4 >> 2];
+            int trellisContext = it.DoTrellis ? context : -1;
             ReadOnlySpan<byte> source = it.Input.AsSpan(offset);
             ReadOnlySpan<ushort> costs = ModeCosts(it, rd.Modes);
             it.MakeI4Predictions();
             for (int mode = 0; mode < 10; mode++)
             {
                 candidate.ClearScore();
-                candidate.Nz = Vp8Reconstruction.Intra4(it, probabilities, levels, it.Predictions, 1672, mode) ? 1u << it.I4 : 0;
-                ReadOnlySpan<byte> reconstructed = it.Predictions.AsSpan(1672);
+                candidate.Nz = Vp8Reconstruction.Intra4(segment, probabilities, source, predictions.AsSpan(Vp8EncoderDsp.Pred4Offsets[mode]),
+                    tmp, levels, predictions, 1672, trellisContext) ? 1u << it.I4 : 0;
                 candidate.D = Vp8EncoderDsp.Sse(source, reconstructed, 4, 4);
                 candidate.SD = (segment.TLambda * Vp8EncoderDsp.Disto(source, reconstructed, WeightY, 4) + 128) >> 8;
                 candidate.H = costs[mode]; candidate.R = mode > 0 && IsFlat(levels, 1, 3) ? 140 : 0;
                 candidate.SetScore(segment.LambdaI4);
                 if (bestMode >= 0 && candidate.Score >= best.Score) continue;
-                candidate.R += probabilities.ResidualCost(3, 0, it.TopNz[it.I4 & 3] + it.LeftNz[it.I4 >> 2], levels);
+                candidate.R += probabilities.ResidualCost(3, 0, context, levels);
                 candidate.SetScore(segment.LambdaI4);
                 if (bestMode < 0 || candidate.Score < best.Score)
                 {
