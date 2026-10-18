@@ -44,6 +44,10 @@ PICTURESHARP_BENCHMARK_MATRIX_FILES='/absolute/kodim23.png:/absolute/photo-12mp.
 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
   --filter '*MatrixBenchmarks*' '*AnimationBenchmarks*' --launchCount 1 --warmupCount 3 --iterationCount 9
 
+# PNG deflate levels 1, 6 and 9 on one thread and on all of them, on large images built from the corpus.
+dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- \
+  --filter '*PngCompressionBenchmarks*' --launchCount 1 --warmupCount 2 --iterationCount 6
+
 # 80-case regression matrix without BenchmarkDotNet (seven samples of at least 120 ms per case).
 taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- matrix-probe /tmp/picturesharp-matrix.json
 ```
@@ -57,6 +61,7 @@ Newest first:
 
 | Section | Covers |
 | --- | --- |
+| [Own deflate versus System.IO.Compression (0.7.2)](#own-deflate-versus-systemiocompression-072) | Why PNG keeps its own deflate/inflate instead of `ZLibStream` |
 | [Integration measurements (0.7.0)](#integration-measurements-070) | Complete user paths on 12 MP inputs: time, allocations, peak memory, cancellation latency |
 | [Editing and saving HDR photos (0.6.9)](#editing-and-saving-hdr-photos-069) | Resizing, cropping and saving JPEG photos with a gain map |
 | [SIMD for HDR and graphics (0.6.7)](#simd-for-hdr-and-graphics-067) | `ToHdr`, `ToneMap`, blend modes, masks and trimming on x64 and ARM64 |
@@ -78,6 +83,53 @@ Newest first:
 Regression checks against the previous release use the 80-case `matrix-probe` matrix in ABBA order on CPUs 0–7; cases
 above +5% are rechecked alternating in separate AssemblyLoadContexts (15 samples of at least 180 ms). These are
 lightweight probes, not full BenchmarkDotNet studies.
+
+## Own deflate versus System.IO.Compression (0.7.2)
+
+PNG uses its own deflate/inflate (`Algorithms/Compression/`) rather than `ZLibStream`/`DeflateStream`, which wrap the
+zlib-ng shipped with the runtime. On 2026-10-18 the core was ported to `ZLibStream`/`DeflateStream` and measured against
+0.7.2; the port was reverted because it made default PNG encoding up to 6× slower.
+
+Setup: `PngCompressionBenchmarks` (BenchmarkDotNet, one launch, two warm-ups, six iterations), i5-12500H, .NET 10.0.
+Inputs are built from the corpus: `photo.png` upscaled bicubic to 4000×3000, `graphic.png` upscaled nearest to 2000×1500,
+and a synthetic 2000×1500 gradient with ±6 noise. Each version decodes the file it encoded itself. Raw data:
+[deflate-0.7.2-x64-own.csv](measurements/deflate-0.7.2-x64-own.csv) and
+[deflate-0.7.2-x64-bcl.csv](measurements/deflate-0.7.2-x64-bcl.csv).
+
+| Image | Level | Threads | Encode own | Encode BCL | Decode own | Decode BCL | Size own | Size BCL |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Photo 4000×3000 | 1 | all | 92 ms | 234 ms | 70 ms | 81 ms | 6.31 MB | 7.27 MB |
+| | 1 | 1 | 243 ms | 263 ms | 124 ms | 135 ms | | |
+| | 6 | all | 271 ms | 1.62 s | 58 ms | 58 ms | 5.405 MB | 5.407 MB |
+| | 6 | 1 | 1.52 s | 1.65 s | 92 ms | 111 ms | | |
+| | 9 | all | 3.81 s | 28.4 s | 57 ms | 57 ms | 4.817 MB | 4.819 MB |
+| | 9 | 1 | 29.2 s | 30.4 s | 86 ms | 103 ms | | |
+| Noisy 2000×1500 | 1 | all | 54 ms | 79 ms | 27 ms | 30 ms | 4.15 MB | 3.90 MB |
+| | 1 | 1 | 103 ms | 85 ms | 38 ms | 40 ms | | |
+| | 6 | all | 110 ms | 518 ms | 20 ms | 29 ms | 3.515 MB | 3.520 MB |
+| | 6 | 1 | 666 ms | 521 ms | 31 ms | 40 ms | | |
+| | 9 | all | 205 ms | 1.09 s | 19 ms | 29 ms | 3.425 MB | 3.430 MB |
+| | 9 | 1 | 1.34 s | 1.09 s | 30 ms | 39 ms | | |
+| Graphic 2000×1500 | 1 | all | 11.1 ms | 10.9 ms | 9.5 ms | 9.4 ms | 32.8 kB | 31.0 kB |
+| | 6 | all | 11.3 ms | 14.3 ms | 9.0 ms | 9.4 ms | 16.9 kB | 16.9 kB |
+| | 9 | all | 12.7 ms | 19.0 ms | 9.1 ms | 9.5 ms | 8.5 kB | 8.5 kB |
+
+Why the own implementation stays:
+
+- **Parallel encoding.** Inputs of 256 KiB and more are deflated in parallel segments joined to the exact sequential
+  parse, so the default (level 6, all threads) is 4.7–6× faster than `ZLibStream`, which compresses on one thread.
+  On one thread the two are within −20% to +10% of each other; zlib-ng is faster only on noisy data.
+- **Faster decoding.** Inflate is equal or up to 1.5× faster, and the pipelined decoder unfilters rows while it runs.
+- **Same compression.** Levels 6 and 9 differ by less than 0.2%; level 1 goes either way (photo +15% with zlib-ng,
+  noise −6%).
+- **Deterministic output.** The bytes do not depend on the thread count or the runtime version; zlib-ng output may
+  change between runtimes, so byte-comparing tests would break.
+- **Behaviour the BCL streams lack.** `ZLibStream` accepts a truncated stream silently, writes nothing for empty input
+  and reports every error as the same `InvalidDataException`; the own inflater detects truncation, enforces output
+  limits per block and stops at the expected size like libpng.
+
+`ZLibStream` allocated 2–20% less managed memory (at most about 0.9 MB less per operation); its native buffers are not
+counted. Revisit this only with new measurements, for example if the runtime gains a parallel or span-based deflate.
 
 ## Integration measurements (0.7.0)
 
