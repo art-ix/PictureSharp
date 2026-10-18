@@ -209,7 +209,19 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
         throw new InvalidOperationException("Plugin metadata codec failed.");
 }
 
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata) and a frame processor.");
+// Plugin decoder options 0.7.6: a plugin reads its own FormatOptions record in Identify and Decode.
+{
+    ImageConfiguration paged = builtIn.ToBuilder().AddFormat(new PagedRawFormat()).Build();
+    byte[] file = [.. "RAW3"u8, 2, 2, 1, 255, 0, 0, 255, 255, 0, 0, 255, 3, 2, .. Enumerable.Repeat((byte)7, 3 * 2 * 4)];
+    var second = new DecoderOptions { Configuration = paged, FormatOptions = [new PagedRawOptions { Page = 1 }] };
+    using Image first = Image.Load(file, new DecoderOptions { Configuration = paged });
+    using Image page = Image.Load(file, second);
+    ImageInfo info = Image.Identify(file, second);
+    if (first.Width != 2 || page.Width != 3 || page[0, 0] != new Rgba32(7, 7, 7, 7) || info.Width != 3 || info.ContainerItemCount != 2)
+        throw new InvalidOperationException("Plugin decoder options failed.");
+}
+
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options) and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>
@@ -302,6 +314,42 @@ sealed class HdrRawFormat : IImageFormatModule, IImageFormatDecoder, IImageForma
         public override Image Decode(int maxDegreeOfParallelism, CancellationToken cancellationToken) =>
             Image.LoadPixelData(pixels, Size.Width, Size.Height, PixelFormat.Rgba32);
     }
+}
+
+/// <summary>"RAW3", a page count, then per page width and height as bytes and RGBA: exercises plugin decoder options under trimming and AOT.</summary>
+sealed class PagedRawFormat : IImageFormatModule, IImageFormatDecoder
+{
+    public static ImageFormat Kind { get; } = ImageFormat.Create("RAW3", "image/x-raw3", ".raw3");
+    public ImageFormat Format => Kind;
+    public int HeaderSize => 4;
+    public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("RAW3"u8);
+    public IImageFormatDecoder Decoder => this;
+
+    private static (int Offset, int Width, int Height, int Count) Select(ReadOnlySpan<byte> data, DecoderOptions options)
+    {
+        int index = options.GetFormatOptions<PagedRawOptions>()?.Page ?? 0, count = data[4], offset = 5;
+        if (index >= count) throw new ImageFormatException(Kind, "The page is outside the file.");
+        for (int i = 0; i < index; i++) offset += 2 + data[offset] * data[offset + 1] * 4;
+        return (offset + 2, data[offset], data[offset + 1], count);
+    }
+
+    public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
+    {
+        (_, int width, int height, int count) = Select(data.Span, options);
+        return new() { Format = Kind, Width = width, Height = height, ContainerItemCount = count };
+    }
+
+    public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+    {
+        (int offset, int width, int height, _) = Select(data.Span, context.Options);
+        context.ReservePixels(width, height);
+        return Image.LoadPixelData(data.Span.Slice(offset, width * height * 4), width, height, PixelFormat.Rgba32);
+    }
+}
+
+sealed record PagedRawOptions : FormatDecoderOptions
+{
+    public int Page { get; init; }
 }
 
 sealed record RawEncoderOptions : EncoderOptions

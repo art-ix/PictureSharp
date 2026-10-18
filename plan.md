@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.5 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.6 (przygotowana 2026-10-18, niewydana).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -46,6 +46,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.3 | Mniej alokacji w deflate/inflate PNG i przy metadanych PNG; bajty wyjściowe i API bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
+| 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Przygotowana (2026-10-18; bez ARM64), czeka na wydanie |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -222,7 +223,7 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | Wszystkie wykryte modele gain map | `AttachGainMap` ustawia `HdrInfo.Detected` tylko na `metadata.Kind` | HEIC z iOS 18 (ISO `tmap` i Apple `hdrgainmap` przy jednej mapie) zgłasza `Detected = Iso21496`, a JPEG z tego samego zdjęcia `Iso21496, Apple` | 0.7.1 (zgłoszone przez wtyczkę 2026-10-17) |
 | Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
 | Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
-| Opcje dekodera per wtyczka | `DecoderOptions.Ico/Png/WebP` zamknięte | np. wybór elementu | 0.8.0, jeśli potrzebne |
+| Opcje dekodera per wtyczka | `DecoderOptions.Ico/Png/WebP` zamknięte | wybór elementu HEIF (HEIF), poziomu mip/warstwy DDS (Formats.Extra), strony TIFF (Tiff) | Zamknięte w 0.7.6: `DecoderOptions.FormatOptions` z rekordami pochodnymi od `FormatDecoderOptions` |
 | CICP PQ/HLG | brak | HDR10 HEIC z Androida | poza 0.8.0 |
 
 Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
@@ -459,12 +460,57 @@ liniowy 12 MP ½ 21 → 15–16 ms. Pozorna regresja dekodowania małej grafiki 
 intrinsics 6975/6975, adaptery 51/51 (7 GDI+ pominiętych). ARM64 nieuruchomione. Notatki
 `docs/releases/release-0.7.5.md`, `VERSION` 0.7.5. Wydana 2026-10-18 (tag `v0.7.5`, GitHub Release, NuGet).
 
+## 0.7.6 — opcje dekodera per wtyczka
+
+Zgłoszenia (2026-10-18), trzy niezależne wtyczki: `PictureSharp.Formats.Extra` (poziom mip lub warstwa DDS),
+`PictureSharp.Tiff` (strona pliku wielostronicowego) i `PictureSharp.Heif` (wybór elementu kontenera). `DecoderOptions`
+ma tylko zamknięte sekcje formatów wbudowanych (`Ico`, `Png`, `WebP`), więc wtyczka zewnętrzna nie ma jak przyjąć od
+użytkownika parametrów dekodowania i dekoduje to, co sama wybierze.
+
+Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
+- Publiczny kontrakt SPI w `PictureSharp.Formats`: opcje wtyczki jako typ-rekord pochodny od bazowego typu opcji
+  (np. `PluginDecoderOptions`), niesiony przez `DecoderOptions` (np. właściwość `Plugin` lub zbiór opcji indeksowany
+  typem) i przekazywany wtyczce przez `ImageDecodeContext`. Bez refleksji, więc trimming i Native AOT bez zmian.
+- Wtyczka odczytuje swoje opcje z kontekstu i ignoruje obce; format wbudowany ignoruje opcje wtyczek.
+- Spójność: opcje obejmują też `Identify`, `Load`, czytniki klatek i `ReadMetadata`, tam gdzie ich wybór zmienia
+  wynik (np. rozmiar wybranej strony). Wiązanie z `ImageConfiguration` jak `DecoderOptions.Configuration`.
+- Limity rdzenia (`MaxPixels`, `MaxInputBytes`, anulowanie) działają bez zmian na wybranym elemencie.
+- Zmiana wyłącznie addytywna: istniejące sygnatury i zachowanie wbudowanych formatów bez zmian, migawka API z samymi
+  dodatkami.
+
+DoD:
+- Testy `PluginSpiTests`: wtyczka testowa z wyborem elementu (poprawny wybór, wartość poza zakresem, brak opcji =
+  zachowanie dotychczasowe, opcje obcej wtyczki ignorowane, `Identify` zgodne z `Load`).
+- `docs/extending-picturesharp.md` z przykładem; `samples/PictureSharp.AotSmoke` obejmuje nowy mechanizm;
+  `verify-package-consumer.sh` bez ostrzeżeń trimmera i AOT.
+- Wtyczki Tiff, Formats.Extra i Heif przechodzą na mechanizm w swoich kolejnych wersjach (minimalny PictureSharp 0.7.6).
+- Wspólna bramka jakości.
+
+Decyzja użytkownika (2026-10-18): zbiór typowany (`FormatOptions`), nie pojedyncza właściwość `Plugin`, żeby jeden obiekt
+opcji obsłużył naraz kilka wtyczek.
+
+Stan (2026-10-18): `PictureSharp.Formats.FormatDecoderOptions` (abstrakcyjny rekord), `DecoderOptions.FormatOptions`
+(`IReadOnlyList`, kopia tylko do odczytu, null lub duplikat typu → `ArgumentException`, domyślnie pusta) i
+`DecoderOptions.GetFormatOptions<T>()` (bez refleksji). Adaptery bez zmian: `Identify` dostaje `DecoderOptions`,
+`Decode` i kodek metadanych `context.Options`, `DecodeEmbedded` przekazuje opcje przez `with`. Czytniki klatek nie mają
+SPI dla wtyczek, więc pozostają poza zakresem (opisane w dokumentacji). Testy `FormatOptionsTests` z wtyczką
+`PagedContainerFormat` (17: wybór strony w `Load`/`Identify`/`ReadMetadata`, brak opcji, obce opcje, poza zakresem →
+`ImageFormatException`, limity i anulowanie, `DecodeEmbedded`, 8 enkoderów wbudowanych bez zmian, walidacja kolekcji)
+zamiast grupy w `PluginSpiTests`; `ConsumerCompilationTests` z rekordem z innego zestawu. Migawka API: 3 dodatki.
+AotSmoke z formatem `RAW3`, `docs/extending-picturesharp.md` („Decoder options”), `docs/loading-and-saving.md`.
+Bramka linux-x64: build bez ostrzeżeń, pełny zestaw 7235/7242 (7 GDI+), `verify-package-consumer.sh` exit 0 bez
+ostrzeżeń. Bez przebiegów bez AVX2/intrinsics i ARM64 (brak kodu zależnego od platformy). Notatki
+`docs/releases/release-0.7.6.md`, `VERSION` 0.7.6, `PackageReleaseNotes`. Otwarte: przejście wtyczek Tiff,
+Formats.Extra i Heif na mechanizm (w ich repozytoriach).
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
 - Poprawki SPI zgłoszone przez wtyczkę HEIF — tylko na konkretne zgłoszenie. Kandydaci z tabeli luk (`ReportStoredSize`
-  dla miniatur `thmb`, opcje dekodera per wtyczka) czekają, aż wtyczka wykaże potrzebę (pomiar zysku `thmb`, wybór
-  elementu); bez zgłoszenia nie blokują 0.8.0. Każda zmiana jest addytywna.
+  dla miniatur `thmb`) czeka, aż wtyczka wykaże potrzebę (pomiar zysku `thmb`); bez zgłoszenia nie blokuje 0.8.0.
+  Opcje dekodera per wtyczka przeniesione do 0.7.6. Każda zmiana jest addytywna.
+- Miejsce w `ImageMetadata` na metadane specyficzne dla formatu (np. hotspot XBM/CUR, zgłoszenie Formats.Extra
+  2026-10-18) — do decyzji, czy wchodzi do 0.8.0.
 - Gain map w enkoderach wtyczek: publiczny odczyt załącznika obrazu (`GainMapMetadata` + `GainMapImage`) i
   `GainMapMetadata.ToIso()`, z tą samą serializacją co zapis JPEG z 0.6.9.
 - Generowanie gain map ISO z `HdrImage` i bazy SDR: port `generateGainMap` z libultrahdr 2.0.2 (Apache-2.0, notices).
@@ -490,7 +536,7 @@ Zależności od wydań rdzenia:
 | --- | --- | --- |
 | 0.1.0–0.3.0 | Kontener i `Identify` (z `ContainerItemCount`), dekoder i enkoder HEVC intra, kolor, alfa, metadane | 0.6.9 |
 | 0.4.0–0.5.0 | Gain map → `ToHdr`, `ReadMetadata` bez dekodu; SIMD i pomiary | 0.7.0 (SPI wtyczek); pełne `HdrInfo.Detected` od 0.7.1 |
-| dalej | Zapis gain map w HEIC, ewentualnie `thmb` i opcje dekodera | 0.8.0 |
+| dalej | Zapis gain map w HEIC, ewentualnie `thmb`; wybór elementu przez opcje dekodera per wtyczka | 0.7.6 (opcje), 0.8.0 (reszta) |
 
 ## Poza planem — kandydaci po 0.8.0
 
@@ -539,3 +585,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.3** — mniej alokacji w deflate/inflate PNG (pulowane bufory, ponownie używane tablice Huffmana) i przy metadanych PNG. Bez zmian API i bajtów wyjściowych.
 - **0.7.4** — szybszy JPEG: dekodowanie ~2×, kodowanie ~3× na jednym wątku (szybka ścieżka Huffmana, IDCT AVX2 parami, wektorowy kolor, próbkowanie i kwantyzacja). Bez zmian API i wyników.
 - **0.7.5** — szybszy WebP lossy (kodowanie −28…−32% na jednym wątku, dekodowanie −8…−11%) i potok wczytaj → orientacja → sRGB → resize → zapis (−40%, 106 MiB); naprawiony niedeterminizm wielowątkowego kodowania lossy. Bez zmian API i wyników.
+- **0.7.6** — opcje dekodera per wtyczka: `DecoderOptions.FormatOptions` z rekordami `FormatDecoderOptions` (strona TIFF, poziom mip DDS, element HEIF). Formaty wbudowane bez zmian.

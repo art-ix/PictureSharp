@@ -34,6 +34,10 @@ public class ConsumerCompilationTests
             {
                 public override ImageFormat Format => ReadOnlyFormat.Kind;
             }
+            public sealed record RoDecoderOptions : FormatDecoderOptions
+            {
+                public int Page { get; init; }
+            }
             public static class Consumer
             {
                 public static void Run(byte[] bytes, Span<byte> span, ReadOnlySpan<byte> readOnly, ReadOnlyMemory<byte> memory)
@@ -56,6 +60,8 @@ public class ConsumerCompilationTests
                     ImageConfiguration.Default = ImageConfiguration.Default.ToBuilder().RemoveFormat(ImageFormat.Pcx).AddFormat(new ReadOnlyFormat()).Build();
                     _ = new RoEncoderOptions() with { Metadata = MetadataKinds.None };
                     var options = new DecoderOptions { Png = new() { StrictChecksums = true } };
+                    var paged = options with { FormatOptions = [new RoDecoderOptions { Page = 1 }] };
+                    _ = paged.GetFormatOptions<RoDecoderOptions>()?.Page;
                     using Image a = Image.Load(bytes, options);
                     using Image b = Image.Load(span, options);
                     using Image c = Image.Load(readOnly, options);

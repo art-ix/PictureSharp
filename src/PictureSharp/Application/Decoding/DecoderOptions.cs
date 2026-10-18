@@ -1,3 +1,4 @@
+using PictureSharp.Formats;
 using PictureSharp.Formats.Ico;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
@@ -122,4 +123,48 @@ public sealed record DecoderOptions
 
     /// <summary>ICO variant selection.</summary>
     public IcoDecoderOptions Ico { get; init => field = value ?? throw new ArgumentNullException(nameof(Ico)); } = new();
+
+    /// <summary>
+    /// Decoding settings of plugin formats, at most one per type, for example the page or element a container plugin
+    /// decodes. A plugin reads its own settings with <see cref="GetFormatOptions{T}"/> and ignores the others; built-in
+    /// formats ignore them all. The list is copied when set; record equality compares it by reference. Default: empty.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">The list is null.</exception>
+    /// <exception cref="ArgumentException">The list contains null or two settings of the same type.</exception>
+    public IReadOnlyList<FormatDecoderOptions> FormatOptions { get; init => field = Snapshot(value); } = [];
+
+    /// <summary>The settings of type <typeparamref name="T"/> from <see cref="FormatOptions"/>, or null when there are none.</summary>
+    public T? GetFormatOptions<T>() where T : FormatDecoderOptions
+    {
+        foreach (FormatDecoderOptions options in FormatOptions)
+        {
+            if (options is T match)
+                return match;
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<FormatDecoderOptions> Snapshot(IReadOnlyList<FormatDecoderOptions> value)
+    {
+        ArgumentNullException.ThrowIfNull(value, nameof(FormatOptions));
+        if (value.Count == 0)
+            return [];
+
+        var copy = new FormatDecoderOptions[value.Count];
+        for (int i = 0; i < copy.Length; i++)
+        {
+            FormatDecoderOptions item = value[i] ?? throw new ArgumentException("Format options must not contain null.", nameof(FormatOptions));
+            for (int j = 0; j < i; j++)
+            {
+                if (copy[j].GetType() == item.GetType())
+                    throw new ArgumentException($"Format options contain two {item.GetType().Name} entries.", nameof(FormatOptions));
+            }
+
+            copy[i] = item;
+        }
+
+        // Read-only wrapper, so a cast back to the array cannot change shared options.
+        return Array.AsReadOnly(copy);
+    }
 }

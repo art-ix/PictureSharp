@@ -159,6 +159,44 @@ and XMP blocks (charged with `context.ReserveMetadata`); `Rewrite` returns the f
 `NotSupportedException` by default. The library checks limits and cancellation, skips unchanged edits and writes files
 atomically.
 
+### Decoder options
+
+A plugin that lets the caller choose what to decode (a TIFF page, a DDS mip level, a HEIF item) derives its settings
+from `FormatDecoderOptions`. Callers pass them in `DecoderOptions.FormatOptions`, and the plugin reads its own record
+with `GetFormatOptions<T>()` (0.7.6):
+
+```csharp
+public sealed record TgaDecoderOptions : FormatDecoderOptions
+{
+    public int Page { get; init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(Page)); }
+}
+
+// In the plugin: the same selection in Identify, Decode and the metadata codec.
+public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
+{
+    int page = options.GetFormatOptions<TgaDecoderOptions>()?.Page ?? 0;
+    // ... describe that page
+}
+
+public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+{
+    int page = context.Options.GetFormatOptions<TgaDecoderOptions>()?.Page ?? 0;
+    // ... ReservePixels and decode that page
+}
+
+// In the application:
+using var image = Image.Load(path, new DecoderOptions { FormatOptions = [new TgaDecoderOptions { Page = 2 }] });
+```
+
+- Without its record a plugin decodes what it did before. It ignores the records of other plugins, and built-in
+  formats ignore them all, so one `DecoderOptions` can carry settings for several plugins.
+- `FormatOptions` holds at most one record per type and is copied when set; null entries and duplicate types throw
+  `ArgumentException`.
+- Check values in the record (`ArgumentOutOfRangeException`); throw `ImageFormatException` when the selection is not in
+  the file, as `Ico.Index` does. `ContainerItemCount` still counts every item.
+- Limits, cancellation and `ReservePixels` apply to the selected item. `DecodeEmbedded` passes the same options to the
+  embedded image. Frame readers (`OpenFrameReaderAsync`) do not support plugin formats.
+
 ### SPI compatibility
 
 Plugin interfaces change only additively within a minor version (default interface members, new types or optional

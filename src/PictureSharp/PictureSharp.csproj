@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.7.5 makes lossy WebP faster (about 30% faster encoding and 8–11% faster decoding on one thread) and the load, orient, convert to sRGB, resize and save path about 40% faster with fewer allocations; it also fixes rare run-to-run differences in multi-threaded lossy WebP encoding. Decoded pixels, encoded bytes and processing results are otherwise unchanged; no public API changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.5/docs/releases/release-0.7.5.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.6 lets format plugins take decoder options from the caller (DecoderOptions.FormatOptions, FormatDecoderOptions), for example a TIFF page, a DDS mip level or a HEIF item. Built-in formats are unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.6/docs/releases/release-0.7.6.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

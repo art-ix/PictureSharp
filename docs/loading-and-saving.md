@@ -79,6 +79,7 @@ using var image = Image.Load("upload.jpg", options);
 | `LoadGainMap` | false | Attach the HDR gain map; see [HDR photos](hdr.md). |
 | `Ico.PreferredSize`, `Ico.Index` | null | Which image of an ICO file to load; see [ICO icons](ico.md). |
 | `Configuration` | null | The formats this load may use; see [below](#choosing-the-formats-imageconfiguration). |
+| `FormatOptions` | empty | Settings of plugin formats, e.g. which page to load; see [Extending PictureSharp](extending-picturesharp.md#decoder-options). |
 | `MaxDegreeOfParallelism` | -1 | Threads; -1 is automatic. Pixels do not depend on it. |
 
 `DecoderOptions.Default` holds the defaults; options are records, so `DecoderOptions.Default with { MaxPixels =

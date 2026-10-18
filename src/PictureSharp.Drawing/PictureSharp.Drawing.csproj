@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.Drawing</RootNamespace>
     <PackageId>PictureSharp.Drawing</PackageId>
     <Description>Copies PictureSharp images to and from System.Drawing.Bitmap (Windows).</Description>
-    <PackageReleaseNotes>0.7.5: unchanged adapter, released with PictureSharp 0.7.5 (faster lossy WebP and processing pipeline). Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.5/docs/releases/release-0.7.5.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.6: unchanged adapter, released with PictureSharp 0.7.6 (plugin decoder options). Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.6/docs/releases/release-0.7.6.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;system.drawing;bitmap;gdi+;interop</PackageTags>
   </PropertyGroup>
 
