@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.7.2 is a documentation release: shorter guides, Mutate versus Clone in getting started and HEIC/HEIF through the PictureSharp.Heif plugin. No public API or library code changes since 0.7.1. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.2/docs/releases/release-0.7.2.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.3 allocates less when encoding and decoding PNG: deflate and inflate reuse their buffers and Huffman tables, and PNG metadata is inflated without extra copies. Output bytes are unchanged; no public API changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.3/docs/releases/release-0.7.3.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

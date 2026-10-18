@@ -54,6 +54,11 @@ internal sealed class Inflater
     private Action<byte[], int>? _progress;
     private CancellationToken _cancellationToken;
 
+    // Dynamic-block tables, rebuilt in place for every block.
+    private HuffmanCode[]? _codeLengthTable;
+    private HuffmanCode[]? _litLenTable;
+    private HuffmanCode[]? _distTable;
+
     private Inflater(byte[] input, int offset, int length, int expectedSize, long maxOutput, bool pooled = false)
     {
         _input = input;
@@ -86,8 +91,24 @@ internal sealed class Inflater
         return inflater.TakeOutput();
     }
 
+    /// <summary>Like <see cref="InflateZlib(byte[], int, int, int, long, bool, bool, Action{byte[], int}?, CancellationToken)"/> for a span, copied into a pooled buffer.</summary>
+    public static byte[] InflateZlib(ReadOnlySpan<byte> input, int expectedSize, long maxOutput, CancellationToken cancellationToken = default)
+    {
+        byte[] rented = ArrayPool<byte>.Shared.Rent(input.Length);
+        try
+        {
+            input.CopyTo(rented);
+            return InflateZlib(rented, 0, input.Length, expectedSize, maxOutput, cancellationToken: cancellationToken);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
     /// <summary>
-    /// Like <see cref="InflateZlib"/>, but the output starts in a buffer rented from the shared pool: read
+    /// Like <see cref="InflateZlib(byte[], int, int, int, long, bool, bool, Action{byte[], int}?, CancellationToken)"/>,
+    /// but the output starts in a buffer rented from the shared pool: read
     /// <see cref="PooledOutput.Data"/>[..<see cref="PooledOutput.Length"/>], then call <see cref="PooledOutput.Return"/>
     /// once nothing reads it any more (including <paramref name="progress"/> consumers).
     /// </summary>
@@ -612,7 +633,7 @@ internal sealed class Inflater
             clLengths[CodeLengthOrder[i]] = (int)ReadBits(3);
         }
 
-        HuffmanCode[] clTable = BuildTable(clLengths, CodeLengthRootBits)
+        HuffmanCode[] clTable = BuildTable(clLengths, CodeLengthRootBits, ref _codeLengthTable)
             ?? throw new InvalidDataStreamException("Invalid deflate code length code.");
 
         Span<int> lengths = stackalloc int[286 + 32];
@@ -662,14 +683,14 @@ internal sealed class Inflater
             throw new InvalidDataStreamException("Deflate block has no end-of-block code.");
         }
 
-        HuffmanCode[] litLen = BuildTable(lengths[..hlit], LitLenRootBits)
+        HuffmanCode[] litLen = BuildTable(lengths[..hlit], LitLenRootBits, ref _litLenTable)
             ?? throw new InvalidDataStreamException("Invalid deflate literal/length code.");
 
         ReadOnlySpan<int> distLengths = lengths.Slice(hlit, hdist);
         HuffmanCode[]? dist = null;
         if (distLengths.ContainsAnyExcept(0))
         {
-            dist = BuildTable(distLengths, DistRootBits)
+            dist = BuildTable(distLengths, DistRootBits, ref _distTable)
                 ?? throw new InvalidDataStreamException("Invalid deflate distance code.");
         }
 
@@ -678,9 +699,9 @@ internal sealed class Inflater
 
     /// <summary>
     /// Builds a lookup table; besides complete codes, accepts the single-code case (one symbol of
-    /// length 1) like zlib. Returns null for invalid codes.
+    /// length 1) like zlib. Returns null for invalid codes. Reuses <paramref name="table"/> when it is large enough.
     /// </summary>
-    private static HuffmanCode[]? BuildTable(ReadOnlySpan<int> lengths, int rootBits)
+    private static HuffmanCode[]? BuildTable(ReadOnlySpan<int> lengths, int rootBits, ref HuffmanCode[]? table)
     {
         int used = 0;
         int single = -1;
@@ -701,16 +722,22 @@ internal sealed class Inflater
             }
 
             // Code "0" decodes the symbol; code "1" is invalid (bits = 0 marks it).
-            var table = new HuffmanCode[1 << rootBits];
-            for (int i = 0; i < table.Length; i += 2)
+            int size = 1 << rootBits;
+            if (table is null || table.Length < size)
+            {
+                table = new HuffmanCode[size];
+            }
+
+            for (int i = 0; i < size; i += 2)
             {
                 table[i] = new HuffmanCode(1, single);
+                table[i + 1] = default;
             }
 
             return table;
         }
 
-        return HuffmanTableBuilder.Build(rootBits, lengths);
+        return HuffmanTableBuilder.BuildInto(rootBits, lengths, ref table) ? table : null;
     }
 
     private static (HuffmanCode[] LitLen, HuffmanCode[] Dist) BuildFixedTables()

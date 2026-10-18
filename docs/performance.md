@@ -128,8 +128,12 @@ Why the own implementation stays:
   and reports every error as the same `InvalidDataException`; the own inflater detects truncation, enforces output
   limits per block and stops at the expected size like libpng.
 
-`ZLibStream` allocated 2–20% less managed memory (at most about 0.9 MB less per operation); its native buffers are not
-counted. Revisit this only with new measurements, for example if the runtime gains a parallel or span-based deflate.
+In 0.7.2 `ZLibStream` allocated 2–20% less managed memory (at most about 0.9 MB less per operation); its native buffers
+are not counted. 0.7.3 closed that gap without changing the time or the output: the deflater rents its block symbol
+buffers (−0.38 MB per encode, −20% for the graphic) and the inflater rebuilds its Huffman tables in place (−0.3 to
+−0.8 MB per decode, which now allocates only the decoded image). Raw data:
+[deflate-0.7.3-x64-own.csv](measurements/deflate-0.7.3-x64-own.csv). Revisit the choice only with new measurements,
+for example if the runtime gains a parallel or span-based deflate.
 
 ## Integration measurements (0.7.0)
 

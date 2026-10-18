@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Text;
 using PictureSharp.Algorithms.Compression;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Domain.Metadata;
@@ -54,9 +53,7 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
 
         if (MetadataSelection.Select(meta.XmpData, options.Metadata, MetadataKinds.Xmp) is { } xmp)
         {
-            // iTXt: keyword, NUL, compression flag, compression method, language tag NUL, translated keyword NUL, text
-            byte[] header = [.. Encoding.ASCII.GetBytes(PngConstants.XmpKeyword), 0, 0, 0, 0, 0];
-            writer.Write("iTXt", [.. header, .. xmp]);
+            writer.Write("iTXt", [.. PngConstants.XmpHeader, .. xmp]);
         }
 
         writer.Write("IEND", []);
@@ -89,9 +86,8 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
 
         if (icc is not null)
         {
-            byte[] name = "ICC Profile\0\0"u8.ToArray();
-            byte[] compressed = Deflater.CompressZlib(icc, 9);
-            writer.Write("iCCP", [.. name, .. compressed]);
+            using Deflater compressed = Deflater.CompressZlibPooled(icc, 9, 1);
+            writer.Write("iCCP", [.. "ICC Profile\0\0"u8, .. compressed.Output]);
         }
 
         if (meta.HorizontalResolution != 96f || meta.VerticalResolution != 96f)

@@ -12,7 +12,6 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
     private readonly record struct Chunk(int Start, int Length, int Body, int Size, uint Type, MetadataKinds Kind);
     private const uint Ihdr = 0x49484452, Idat = 0x49444154, Iend = 0x49454e44, Phys = 0x70485973;
     private const uint Gama = PngColorDescription.Gama, Chrm = PngColorDescription.Chrm, Srgb = PngColorDescription.Srgb;
-    private static ReadOnlySpan<byte> XmpKeyword => "XML:com.adobe.xmp\0"u8;
 
     public ImageMetadata Read(ReadOnlyMemory<byte> data, DecodeContext context)
     {
@@ -35,7 +34,7 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
                     metadata.IccData ??= icc;
                     break;
                 case MetadataKinds.Xmp:
-                    ReadOnlySpan<byte> rest = value[XmpKeyword.Length..];
+                    ReadOnlySpan<byte> rest = value[PngConstants.XmpKeyword.Length..];
                     if (rest.Length < 4 || rest[0] > 1 || rest[1] != 0) throw Error("Invalid XMP iTXt header.");
                     bool compressed = rest[0] != 0;
                     rest = rest[2..];
@@ -90,7 +89,7 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
             }
             if (metadata.ExifData is { Length: > 0 } exif) MetadataContainer.PngChunk(output, "eXIf"u8, exif, context.CancellationToken);
             if (metadata.XmpData is { Length: > 0 } xmp)
-                MetadataContainer.PngChunk(output, "iTXt"u8, [.. XmpKeyword, 0, 0, 0, 0, .. xmp], context.CancellationToken);
+                MetadataContainer.PngChunk(output, "iTXt"u8, [.. PngConstants.XmpHeader, .. xmp], context.CancellationToken);
             if (resolution)
             {
                 double x = Math.Round(metadata.HorizontalResolution / 0.0254), y = Math.Round(metadata.VerticalResolution / 0.0254);
@@ -120,11 +119,10 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
 
     private static byte[] Inflate(ReadOnlySpan<byte> value, DecodeContext context)
     {
-        byte[] input = value.ToArray();
         try
         {
-            byte[] result = Inflater.InflateZlib(input, 0, input.Length, (int)Math.Min(4096, context.Budget.RemainingMetadata),
-                context.Budget.RemainingMetadata, cancellationToken: context.CancellationToken);
+            byte[] result = Inflater.InflateZlib(value, (int)Math.Min(4096, context.Budget.RemainingMetadata),
+                context.Budget.RemainingMetadata, context.CancellationToken);
             context.Budget.ReserveMetadata(ImageFormat.Png, result.Length);
             return result;
         }
@@ -167,7 +165,7 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
                 if (type == 0x6663544c) actualFrames++;
             }
             MetadataKinds kind = type == 0x65584966 ? MetadataKinds.Exif : type == 0x69434350 ? MetadataKinds.Icc
-                : type == 0x69545874 && body.StartsWith(XmpKeyword) ? MetadataKinds.Xmp : MetadataKinds.None;
+                : type == 0x69545874 && body.StartsWith(PngConstants.XmpKeyword) ? MetadataKinds.Xmp : MetadataKinds.None;
             int length = (int)size + 12;
             chunks.Add(new(position, length, position + 8, (int)size, type, kind));
             position += length;

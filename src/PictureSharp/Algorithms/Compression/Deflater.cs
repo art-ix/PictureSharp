@@ -63,11 +63,12 @@ internal sealed partial class Deflater : IDisposable
     private readonly BitWriter _out = new();
 
     // Current block: symbols are (length << 16 | distance) for matches or a literal byte with length 0.
-    private readonly int[] _symLength = new int[BlockSymbols];
-    private readonly int[] _symValue = new int[BlockSymbols];
-    private readonly int[] _distCodes = new int[BlockSymbols];
+    private readonly int[] _symLength = ArrayPool<int>.Shared.Rent(BlockSymbols);
+    private readonly int[] _symValue = ArrayPool<int>.Shared.Rent(BlockSymbols);
+    private readonly int[] _distCodes = ArrayPool<int>.Shared.Rent(BlockSymbols);
     private int _symCount;
     private int _blockStart;
+    private bool _disposed;
 
     private readonly CancellationToken _cancellationToken;
 
@@ -135,7 +136,15 @@ internal sealed partial class Deflater : IDisposable
     /// <summary>The compressed bytes of <see cref="CompressZlibPooled"/>.</summary>
     public ReadOnlySpan<byte> Output => _out.Written;
 
-    public void Dispose() => _out.Dispose();
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _out.Dispose();
+        ArrayPool<int>.Shared.Return(_symLength);
+        ArrayPool<int>.Shared.Return(_symValue);
+        ArrayPool<int>.Shared.Return(_distCodes);
+    }
 
     /// <summary>Compresses <paramref name="data"/> into a raw deflate stream.</summary>
     public static byte[] Compress(ReadOnlySpan<byte> data, int level, int maxDegreeOfParallelism = 1)
@@ -300,8 +309,9 @@ internal sealed partial class Deflater : IDisposable
         litLengths[..hlit].CopyTo(allLengths);
         distLengths[..hdist].CopyTo(allLengths[hlit..]);
         allLengths = allLengths[..(hlit + hdist)];
-        var rle = new List<(int Symbol, int Extra)>(allLengths.Length);
-        RunLengthEncode(allLengths, rle);
+        // Every code length yields at most one entry.
+        Span<(int Symbol, int Extra)> rle = stackalloc (int, int)[NumLitLen + NumDist];
+        rle = rle[..RunLengthEncode(allLengths, rle)];
         Span<int> clFreq = stackalloc int[19];
         clFreq.Clear();
         foreach ((int sym, _) in rle)
@@ -475,8 +485,10 @@ internal sealed partial class Deflater : IDisposable
     }
 
     // Encodes code lengths with the 16 (repeat previous), 17 and 18 (repeat zero) codes.
-    private static void RunLengthEncode(ReadOnlySpan<byte> lengths, List<(int Symbol, int Extra)> output)
+    // Returns the number of entries written to output.
+    private static int RunLengthEncode(ReadOnlySpan<byte> lengths, Span<(int Symbol, int Extra)> output)
     {
+        int count = 0;
         int i = 0;
         while (i < lengths.Length)
         {
@@ -493,33 +505,35 @@ internal sealed partial class Deflater : IDisposable
                 while (run >= 11)
                 {
                     int r = Math.Min(run, 138);
-                    output.Add((18, r - 11));
+                    output[count++] = (18, r - 11);
                     run -= r;
                 }
 
                 if (run >= 3)
                 {
-                    output.Add((17, run - 3));
+                    output[count++] = (17, run - 3);
                     run = 0;
                 }
             }
             else
             {
-                output.Add((value, 0));
+                output[count++] = (value, 0);
                 run--;
                 while (run >= 3)
                 {
                     int r = Math.Min(run, 6);
-                    output.Add((16, r - 3));
+                    output[count++] = (16, r - 3);
                     run -= r;
                 }
             }
 
             while (run-- > 0)
             {
-                output.Add((value, 0));
+                output[count++] = (value, 0);
             }
         }
+
+        return count;
     }
 
     /// <summary>LSB-first bit writer into a growable pooled buffer.</summary>

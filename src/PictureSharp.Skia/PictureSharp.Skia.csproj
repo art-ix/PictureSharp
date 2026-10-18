@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.Skia</RootNamespace>
     <PackageId>PictureSharp.Skia</PackageId>
     <Description>Copies PictureSharp images to and from SkiaSharp SKBitmap, SKImage and SKPixmap with an explicit alpha policy.</Description>
-    <PackageReleaseNotes>0.7.2: unchanged adapter, released with PictureSharp 0.7.2 (shorter documentation). Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.2/docs/releases/release-0.7.2.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.3: unchanged adapter, released with PictureSharp 0.7.3 (fewer allocations in PNG deflate/inflate). Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.3/docs/releases/release-0.7.3.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;skiasharp;skia;skbitmap;interop</PackageTags>
   </PropertyGroup>
 

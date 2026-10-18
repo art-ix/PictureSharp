@@ -295,17 +295,16 @@ internal sealed partial class PngDecoder
                 return null;
             }
 
-            byte[] compressed = body[(nul + 2)..].ToArray();
-            return InflateMetadata(compressed, options);  // null for a broken profile, which libpng ignores too
+            return InflateMetadata(body[(nul + 2)..], options);  // null for a broken profile, which libpng ignores too
         }
 
         /// <summary>Inflates a metadata block within the remaining <see cref="DecoderOptions.MaxMetadataBytes"/>; null when corrupt.</summary>
-        private byte[]? InflateMetadata(byte[] compressed, DecoderOptions options)
+        private byte[]? InflateMetadata(ReadOnlySpan<byte> compressed, DecoderOptions options)
         {
             byte[] inflated;
             try
             {
-                inflated = Inflater.InflateZlib(compressed, 0, compressed.Length, 4096, options.MaxMetadataBytes - MetadataBytes);
+                inflated = Inflater.InflateZlib(compressed, 4096, options.MaxMetadataBytes - MetadataBytes);
             }
             catch (OutputLimitExceededException)
             {
@@ -323,7 +322,7 @@ internal sealed partial class PngDecoder
         internal byte[]? ReadXmp(ReadOnlySpan<byte> body, DecoderOptions options)
         {
             int nul = body.IndexOf((byte)0);
-            if (nul < 0 || !body[..nul].SequenceEqual(Encoding.ASCII.GetBytes(PngConstants.XmpKeyword)) || nul + 3 > body.Length)
+            if (nul < 0 || !body[..(nul + 1)].SequenceEqual(PngConstants.XmpKeyword) || nul + 3 > body.Length)
             {
                 return null;
             }
@@ -350,7 +349,7 @@ internal sealed partial class PngDecoder
                 return rest.ToArray();
             }
 
-            return InflateMetadata(rest.ToArray(), options);
+            return InflateMetadata(rest, options);
         }
     }
 }

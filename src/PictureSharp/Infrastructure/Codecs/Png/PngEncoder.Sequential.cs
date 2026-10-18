@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Text;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Sequences;
 using PictureSharp.Domain.Metadata;
@@ -67,8 +66,7 @@ internal sealed partial class PngEncoder
             var writer = new ChunkWriter(_buffer);
             if (MetadataSelection.Select(metadata.XmpData, options.Metadata, MetadataKinds.Xmp) is { } xmp)
             {
-                byte[] header = [.. Encoding.ASCII.GetBytes(PngConstants.XmpKeyword), 0, 0, 0, 0, 0];
-                writer.Write("iTXt", [.. header, .. xmp]);
+                writer.Write("iTXt", [.. PngConstants.XmpHeader, .. xmp]);
             }
 
             writer.Write("IEND", []);

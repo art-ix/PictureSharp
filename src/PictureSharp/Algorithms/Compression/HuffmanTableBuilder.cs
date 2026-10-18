@@ -31,6 +31,34 @@ internal static class HuffmanTableBuilder
         }
 
         var table = new HuffmanCode[totalSize];
+        Fill(table, rootBits, codeLengths);
+        return table;
+    }
+
+    /// <summary>
+    /// Builds the lookup table for <paramref name="codeLengths"/> into <paramref name="table"/>, replacing it with a
+    /// larger array only when it is too small. Returns false for an invalid (incomplete or over-subscribed) code.
+    /// </summary>
+    /// <remarks>Entries past the built table are left as they were; decoding a valid code never reaches them.</remarks>
+    public static bool BuildInto(int rootBits, ReadOnlySpan<int> codeLengths, ref HuffmanCode[]? table)
+    {
+        int totalSize = BuildTable(null, rootBits, codeLengths, default);
+        if (totalSize == 0)
+        {
+            return false;
+        }
+
+        if (table is null || table.Length < totalSize)
+        {
+            table = new HuffmanCode[totalSize];
+        }
+
+        Fill(table, rootBits, codeLengths);
+        return true;
+    }
+
+    private static void Fill(HuffmanCode[] table, int rootBits, ReadOnlySpan<int> codeLengths)
+    {
         ushort[] sorted = ArrayPool<ushort>.Shared.Rent(codeLengths.Length);
         try
         {
@@ -40,8 +68,6 @@ internal static class HuffmanTableBuilder
         {
             ArrayPool<ushort>.Shared.Return(sorted);
         }
-
-        return table;
     }
 
     // Returns reverse(reverse(key, len) + 1, len), where reverse(key, len) is the

@@ -21,7 +21,11 @@ internal static class PngConstants
     public static ReadOnlySpan<byte> Adam7XStep => [8, 8, 4, 4, 2, 2, 1];
     public static ReadOnlySpan<byte> Adam7YStep => [8, 8, 8, 4, 4, 2, 2];
 
-    public const string XmpKeyword = "XML:com.adobe.xmp";
+    /// <summary>The XMP iTXt keyword with its NUL terminator.</summary>
+    public static ReadOnlySpan<byte> XmpKeyword => "XML:com.adobe.xmp\0"u8;
+
+    /// <summary>An uncompressed XMP iTXt header: keyword, NUL, compression flag and method, empty language and translated keyword.</summary>
+    public static ReadOnlySpan<byte> XmpHeader => "XML:com.adobe.xmp\0\0\0\0\0"u8;
 
     public static int Channels(PngColor color) => color switch
     {
