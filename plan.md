@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.7 (przygotowana 2026-10-20, czeka na publikację; ostatnia opublikowana 0.7.6).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.7 (opublikowana 2026-10-20).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -47,7 +47,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Wydana (2026-10-18; bez ARM64) |
-| 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Przygotowana (2026-10-20; bez ARM64) |
+| 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Wydana (2026-10-20; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -536,8 +536,8 @@ Stan (2026-10-20): zaimplementowane wszystkie operacje i `Parallelism.ForBands` 
 ~35 ms, ShadowsHighlights 99 ms, Clarity 83 ms, Denoise 298 ms (`docs/performance.md`); bez SIMD. Bramka linux-x64:
 build bez ostrzeżeń, pełny zestaw 7272/7279 (7 GDI+ pominiętych), `verify-package-consumer.sh` exit 0. Nazwy API
 przyjęte przez użytkownika (polecenie przygotowania wydania 2026-10-20). Notatki `docs/releases/release-0.7.7.md`,
-`VERSION` 0.7.7, `PackageReleaseNotes`, AotSmoke z korekcją fotograficzną. Otwarte: commit, tag `v0.7.7`, GitHub
-Release i NuGet na polecenie użytkownika; ARM64 za zgodą.
+`VERSION` 0.7.7, `PackageReleaseNotes`, AotSmoke z korekcją fotograficzną. Wydana 2026-10-20 (tag `v0.7.7`, GitHub
+Release, NuGet). Otwarte: ARM64 za zgodą użytkownika.
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
