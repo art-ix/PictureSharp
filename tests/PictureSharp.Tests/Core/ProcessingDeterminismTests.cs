@@ -35,4 +35,35 @@ public class ProcessingDeterminismTests
         };
         await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);
     }
+
+    public static TestCases<string, string> PhotoAdjustCases() => new()
+    {
+        { "exposure", "6d787b6b54601b1710cfa35d72436800a874729f76d3b978c94a3b367f3b1cd4" },
+        { "white_balance", "1b90037a3298f1bfef700b4021bc2f8130c44883d14eb50318ef990773fca6cb" },
+        { "vibrance", "a2d79e11bd744f545580bc595492476252629d8218963f948dfddce15903dfb1" },
+        { "vignette", "205a7482063f51b1f1c631ed1dc909c42ed7904cbf7570c8a7150df3d84712c1" },
+        { "shadows_highlights", "50031b065e0bbd3cf670f89fef36f7e2bdddb0faf96c70cdb72336429de77e2b" },
+        { "clarity", "a532c676e5f7cf84bdca2e54a70b981c4c489d45b79ac2b3f03c5ae7e5d2e2cf" },
+        { "denoise", "6ba50dde8fda0d610ac5970c2a821426c5c3ca412e569b0a5074c0b35dc5c594" },
+    };
+
+    // 720 × 480 pixels: enough for the parallel bands, so the hashes also pin the result against the thread count
+    // (compare a run with DOTNET_PROCESSOR_COUNT=1).
+    [Test]
+    [MethodDataSource(nameof(PhotoAdjustCases))]
+    public async Task PhotoAdjustment_IsIdenticalOnEveryArchitecture(string name, string expected)
+    {
+        using Image source = ProcessingOracleTests.Noise(720, 480, 9);
+        using Image result = source.Clone(x => _ = name switch
+        {
+            "exposure" => x.Exposure(0.7f),
+            "white_balance" => x.WhiteBalance(0.6f, -0.3f),
+            "vibrance" => x.Vibrance(0.6f),
+            "vignette" => x.Vignette(new VignetteOptions { Amount = 0.8f, Midpoint = 0.3f, Feather = 0.7f }),
+            "shadows_highlights" => x.ShadowsHighlights(0.6f, -0.6f, 5f),
+            "clarity" => x.Clarity(0.7f, 5f),
+            _ => x.Denoise(0.7f, 3),
+        });
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);
+    }
 }

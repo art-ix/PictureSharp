@@ -1,0 +1,42 @@
+[
+  {
+    "Operation": "CopyOnly",
+    "Nanoseconds": 2373634.375,
+    "AllocatedBytes": 48001114.89655172
+  },
+  {
+    "Operation": "Exposure",
+    "Nanoseconds": 12061084.615384616,
+    "AllocatedBytes": 48002101.538461536
+  },
+  {
+    "Operation": "WhiteBalance",
+    "Nanoseconds": 11984900,
+    "AllocatedBytes": 48002048
+  },
+  {
+    "Operation": "Vibrance",
+    "Nanoseconds": 36013200,
+    "AllocatedBytes": 48005059.2
+  },
+  {
+    "Operation": "Vignette",
+    "Nanoseconds": 34260960,
+    "AllocatedBytes": 48005606.4
+  },
+  {
+    "Operation": "ShadowsHighlights",
+    "Nanoseconds": 98455450,
+    "AllocatedBytes": 48031352
+  },
+  {
+    "Operation": "Clarity",
+    "Nanoseconds": 82788100,
+    "AllocatedBytes": 48031256
+  },
+  {
+    "Operation": "Denoise",
+    "Nanoseconds": 297519200,
+    "AllocatedBytes": 48125512
+  }
+]

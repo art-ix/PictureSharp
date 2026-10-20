@@ -172,6 +172,40 @@ image.Mutate(x => x.Equalize());                           // spread each channe
 Both reproduce Pillow's `ImageOps.autocontrast` and `ImageOps.equalize` on RGB bit for bit, counting every pixel and
 keeping alpha. An animation is analysed as a whole and every frame gets the same mapping, so nothing flickers.
 
+## Photo adjustments
+
+```csharp
+image.Mutate(x => x
+    .Exposure(0.5f)                     // stops (EV): +1 doubles the light
+    .WhiteBalance(0.3f, -0.1f)          // temperature and tint, −1..1
+    .ShadowsHighlights(0.4f, -0.3f)     // lift shadows, recover highlights, −1..1
+    .Clarity(0.3f)                      // local contrast, −1..1
+    .Vibrance(0.4f)                     // saturation of muted colors, −1..1
+    .Vignette(0.3f));                   // darken the edges, −1..1
+image.Mutate(x => x.Vignette(new VignetteOptions { Amount = 0.6f, Midpoint = 0.3f, Feather = 0.8f }));
+image.Mutate(x => x.Denoise(0.5f));     // edge-preserving smoothing, 0..1, window radius 2
+```
+
+0 leaves the image unchanged. Alpha is kept, every frame is processed, and the results are identical on every
+architecture and thread count. Luma uses Rec. 709 weights; "linear" means sRGB decoded to linear light.
+
+| Operation | Formula |
+| --- | --- |
+| `Exposure(stops)` | linear · 2^stops, clipped at white |
+| `WhiteBalance(t, tint)` | linear R · 2^(0.5t), G · 2^(−0.5 tint), B · 2^(−0.5t), all divided by their luma so gray keeps its brightness |
+| `Vibrance(a)` | chroma around the luma scaled by 1 + a · (1 − s) for a > 0, s = (max − min) / max; by 1 + a for a < 0 (−1 is grayscale) |
+| `Vignette` | linear · 2^(−2 · Amount · w); w is a smoothstep of the distance from the center (relative to half the diagonal, so 1 is a corner) from `Midpoint` to `Midpoint + Feather · (1 − Midpoint)`; defaults 0.5 and 1 |
+| `ShadowsHighlights(s, h, radius)` | linear · 2^(1.5 · (s · (1 − B)² + h · B²)), B a Gaussian blur of the luma (0–1) |
+| `Clarity(a, radius)` | each channel + 255 · a · (P − B) · 4P(1 − P), P the luma (0–1), B its Gaussian blur |
+| `Denoise(strength, radius)` | guided filter (He et al., 2010) per premultiplied channel, windows (2r + 1)², ε = (0.05 · strength)² |
+
+`ShadowsHighlights` and `Clarity` take the blur's standard deviation in pixels; 0 (the default) uses 2% of the shorter
+side. The Gaussian is three box passes whose windows are clipped at the image edges. Like any local tone operator,
+a large amount next to a strong edge can leave a halo. `Denoise` flattens areas whose variation is small compared with
+ε and keeps edges; fully transparent pixels keep their color. These operations have no Pillow counterpart:
+`tests/assets/photo_adjust_reference.py` implements the formulas above with numpy, and the results match it within
+one level.
+
 ## Histogram
 
 ```csharp

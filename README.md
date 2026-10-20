@@ -25,6 +25,7 @@ Every format is both read and written. Variants and options for each one are lis
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
+- Photo adjustments: exposure, white balance, shadows/highlights, clarity, vibrance, vignette and edge-preserving denoise
 - Conversion of ICC and PNG color descriptions to sRGB, linear-light resize and compositing
 - Fast JPEG thumbnails decoded at 1/2, 1/4 or 1/8 scale
 - Frame-by-frame reading and writing of GIF, APNG and WebP animations

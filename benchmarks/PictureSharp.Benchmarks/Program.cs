@@ -32,6 +32,12 @@ if (args is ["graphics-probe", string graphicsOutput])
     return;
 }
 
+if (args is ["photo-probe", string photoOutput])
+{
+    PhotoAdjustBenchmarks.Probe(photoOutput);
+    return;
+}
+
 if (args is ["hdr-edit-probe", string hdrEditOutput])
 {
     HdrEditBenchmarks.Probe(hdrEditOutput);

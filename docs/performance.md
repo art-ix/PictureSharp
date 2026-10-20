@@ -71,6 +71,7 @@ Newest first:
 
 | Section | Covers |
 | --- | --- |
+| [Photo adjustments (0.7.7)](#photo-adjustments-077) | Exposure, white balance, vibrance, vignette, shadows/highlights, clarity and denoise on 12 MP |
 | [WebP lossy and pipeline optimization (0.7.5)](#webp-lossy-and-pipeline-optimization-075) | Lossy WebP on one thread and by default against 0.7.4 and libwebp; the load → orient → sRGB → resize → WebP path |
 | [JPEG optimization (0.7.4)](#jpeg-optimization-074) | JPEG decoding and encoding on one thread and by default, against 0.7.3 and Pillow |
 | [Own deflate versus System.IO.Compression (0.7.2)](#own-deflate-versus-systemiocompression-072) | Why PNG keeps its own deflate/inflate instead of `ZLibStream` |
@@ -95,6 +96,34 @@ Newest first:
 Regression checks against the previous release use the 80-case `matrix-probe` matrix in ABBA order on CPUs 0–7; cases
 above +5% are rechecked alternating in separate AssemblyLoadContexts (15 samples of at least 180 ms). These are
 lightweight probes, not full BenchmarkDotNet studies.
+
+## Photo adjustments (0.7.7)
+
+`photo-probe` (`PhotoAdjustBenchmarks`): 4000 × 3000 `photo_alpha.png`, each operation on a copy-on-write `Clone`,
+median of seven samples, Intel Core i5-12500H, linux-x64. "8 threads" runs on CPUs 0–7, "1 thread" with
+`DOTNET_PROCESSOR_COUNT=1` on CPU 0. Both give identical pixels (`ProcessingDeterminismTests`). Every row allocates the
+45.8 MiB result; planes for the blurs and the guided filter come from `ArrayPool`.
+
+| Operation | 1 thread | 8 threads |
+| --- | ---: | ---: |
+| `CopyOnly` (control) | 2.4 ms | 2.4 ms |
+| `Exposure(0.7)` | 12.1 ms | 12.1 ms |
+| `WhiteBalance(0.4, −0.2)` | 12.1 ms | 12.0 ms |
+| `Vibrance(0.5)` | 130.6 ms | 36.0 ms |
+| `Vignette(0.6)` | 122.8 ms | 34.3 ms |
+| `ShadowsHighlights(0.5, −0.5)`, σ = 60 px | 520.0 ms | 98.5 ms |
+| `Clarity(0.5)`, σ = 60 px | 435.1 ms | 82.8 ms |
+| `Denoise(0.5)`, radius 2 | 1580.0 ms | 297.5 ms |
+
+Exposure and white balance are 3 × 256 lookup tables. The others are scalar and split into bands of rows (columns in
+the vertical box pass). No SIMD yet: the box passes keep double sums, and the per-pixel cost is dominated by
+`DeterministicMath.Exp2` and the sRGB tables. Raw results: [8 threads](measurements/photo-adjust-0.7.7-probe-x64.json),
+[1 thread](measurements/photo-adjust-0.7.7-probe-x64-1thread.json).
+
+```bash
+taskset -c 0-7 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- photo-probe photo.json
+DOTNET_PROCESSOR_COUNT=1 taskset -c 0 dotnet run -c Release --project benchmarks/PictureSharp.Benchmarks -- photo-probe photo-1.json
+```
 
 ## WebP lossy and pipeline optimization (0.7.5)
 

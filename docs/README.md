@@ -8,7 +8,7 @@
 | [Loading and saving](loading-and-saving.md) | `Load`, `Identify`, decoder options, thumbnails while loading, `Save`, `ImageConfiguration` |
 | [Limits and cancellation](limits-and-cancellation.md) | Limits for untrusted input and cancellation tokens |
 | [Encoder options](encoder-options.md) | WebP, PNG, JPEG, BMP, GIF and PCX encoder options |
-| [Image processing](image-processing.md) | Every `Mutate`/`Clone` operation and custom operations |
+| [Image processing](image-processing.md) | Every `Mutate`/`Clone` operation, photo adjustments and custom operations |
 | [Pixels and interop](pixels-and-interop.md) | `Rgba32`, pixel spans, raw buffers, WPF, SkiaSharp and WinForms |
 | [Animation](animation.md) | Frames, animated WebP, APNG and GIF, frame-by-frame I/O |
 | [Metadata](metadata.md) | ICC/EXIF/XMP, typed EXIF and GPS, editing without recompression |

@@ -7,6 +7,12 @@ using PictureSharp.Processing;
 
 using var source = new Image(32, 24, new Rgba32(20, 80, 160, 255));
 source.Mutate(x => x.Resize(16, 12).Brightness(1.1f));
+using (Image adjusted = source.Clone(x => x.Exposure(0.3f).WhiteBalance(0.2f).Vibrance(0.2f).Vignette(0.3f)
+    .ShadowsHighlights(0.2f, -0.2f).Clarity(0.2f).Denoise(0.3f)))
+{
+    if (adjusted.Size != source.Size || adjusted[8, 6] == source[8, 6])
+        throw new InvalidOperationException("Photo adjustments failed.");
+}
 foreach (ImageFormat format in ImageFormat.All)
 {
     byte[] bytes = source.Encode(format);

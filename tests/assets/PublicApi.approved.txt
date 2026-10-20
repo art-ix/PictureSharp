@@ -762,16 +762,19 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext BackgroundColor(Rgba32 color)
     method PictureSharp.Processing.ImageProcessingContext BoxBlur(System.Single radius)
     method PictureSharp.Processing.ImageProcessingContext Brightness(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext Clarity(System.Single amount, System.Single radius = 0)
     method PictureSharp.Processing.ImageProcessingContext Contrast(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext ConvertToSrgb()
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Drawing.Rectangle rectangle)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 width, System.Int32 height, PictureSharp.Processing.AnchorPosition position = Center)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 x, System.Int32 y, System.Int32 width, System.Int32 height)
+    method PictureSharp.Processing.ImageProcessingContext Denoise(System.Single strength, System.Int32 radius = 2)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, PictureSharp.Processing.DrawImageOptions options)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, System.Single opacity = 1)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, PictureSharp.Processing.DrawImageOptions options)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, System.Single opacity = 1)
     method PictureSharp.Processing.ImageProcessingContext Equalize()
+    method PictureSharp.Processing.ImageProcessingContext Exposure(System.Single stops)
     method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color)
     method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color, System.Drawing.Rectangle region)
     method PictureSharp.Processing.ImageProcessingContext Flip(PictureSharp.Processing.FlipMode flipMode)
@@ -793,9 +796,14 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext RotateFlip(PictureSharp.Processing.RotateMode rotateMode, PictureSharp.Processing.FlipMode flipMode)
     method PictureSharp.Processing.ImageProcessingContext Saturate(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Sepia()
+    method PictureSharp.Processing.ImageProcessingContext ShadowsHighlights(System.Single shadows, System.Single highlights, System.Single radius = 0)
     method PictureSharp.Processing.ImageProcessingContext Sharpen()
     method PictureSharp.Processing.ImageProcessingContext Thumbnail(System.Int32 maxWidth, System.Int32 maxHeight, PictureSharp.Processing.ResamplingFilter filter = Lanczos3)
     method PictureSharp.Processing.ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Int32 threshold = 3)
+    method PictureSharp.Processing.ImageProcessingContext Vibrance(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext Vignette(PictureSharp.Processing.VignetteOptions options)
+    method PictureSharp.Processing.ImageProcessingContext Vignette(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext WhiteBalance(System.Single temperature, System.Single tint = 0)
     property System.Drawing.Size Size { get; }
     property System.Int32 FrameCount { get; }
     property System.Threading.CancellationToken CancellationToken { get; }
@@ -851,6 +859,11 @@ sealed record PictureSharp.Processing.ToneMappingOptions : System.IEquatable<Pic
     property System.Single Exposure { get; init; }
     property System.Single? WhitePoint { get; init; }
     property static PictureSharp.Processing.ToneMappingOptions Default { get; }
+sealed record PictureSharp.Processing.VignetteOptions : System.IEquatable<PictureSharp.Processing.VignetteOptions>
+    ctor()
+    property System.Single Amount { get; init; }
+    property System.Single Feather { get; init; }
+    property System.Single Midpoint { get; init; }
 enum RenderingIntent
     Perceptual = 0
     RelativeColorimetric = 1

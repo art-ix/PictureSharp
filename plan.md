@@ -2,9 +2,9 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.6 (opublikowana 2026-10-18).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.7 (przygotowana 2026-10-20, czeka na publikację; ostatnia opublikowana 0.7.6).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
-kolorem, operacje graficzne, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
+kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
 Dalej: poprawki SPI
 zgłoszone przez wtyczkę HEIF i generowanie gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
@@ -47,6 +47,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.4 | Optymalizacja JPEG: entropia (dekoder i enkoder), upsampling i konwersja koloru, ścieżka jednowątkowa; wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Wydana (2026-10-18; bez ARM64) |
+| 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Przygotowana (2026-10-20; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -504,6 +505,40 @@ ostrzeżeń. Bez przebiegów bez AVX2/intrinsics i ARM64 (brak kodu zależnego o
 GitHub Release, NuGet). Otwarte: przejście wtyczek Tiff,
 Formats.Extra i Heif na mechanizm (w ich repozytoriach).
 
+## 0.7.7 — korekcja fotograficzna
+
+Wtyczka HEIF ma `HeifPhotosEdit` (suwaki Apple Photos na tabelach dopasowanych do eksportów Photos), a rdzeń ma tylko
+`Brightness`/`Contrast`/`Saturate` z Pillow. Ogólne korekty zdjęć należą do rdzenia; tabele Apple zostają we wtyczce.
+
+Decyzje użytkownika (2026-10-20): osobne wydanie przed 0.8.0; własne wzory opisane w dokumentacji, wyrocznią jest
+referencja numpy (`tests/assets/photo_adjust_reference.py`), nie Pillow; jednostki naturalne (`Exposure` w EV, reszta
+−1…1 lub 0…1, 0 = bez zmian); odszumianie i lokalny kontrast jako dwie metody.
+
+Zakres (nazwy robocze, do zatwierdzenia migawki API):
+- `Exposure(stops)`, `WhiteBalance(temperature, tint)`: krzywe kanałów w świetle liniowym jako LUT (`ToneLut`).
+- `Vibrance(amount)`, `Vignette(amount)` / `Vignette(VignetteOptions)`: per piksel, winieta w świetle liniowym.
+- `ShadowsHighlights(shadows, highlights, radius)`, `Clarity(amount, radius)`: lokalnie, z rozmytą płaszczyzną lumy
+  (Gauss z trzech filtrów pudełkowych).
+- `Denoise(strength, radius)`: guided filter (He i in.) z samoprowadzeniem, na kanałach premultiplied.
+- Potęgi przez `DeterministicMath`, sRGB przez `SrgbTransfer`: wynik identyczny na każdej architekturze i niezależny
+  od liczby wątków. Istniejące operacje i wyniki bez zmian.
+
+DoD:
+- Testy właściwości (tożsamość przy 0, walidacja, alfa, animacja, monotoniczność), anulowanie, SHA-256 w
+  `ProcessingDeterminismTests`, Oracle z numpy z tolerancją ±1.
+- `docs/image-processing.md` z wzorami i przykładami (`DocsExamplesTests`), migawka API z samymi dodatkami.
+- Benchmark 12 MP (`PhotoAdjustBenchmarks`, `photo-probe`); równoległość i SIMD tylko według pomiarów.
+- Wspólna bramka jakości.
+
+Stan (2026-10-20): zaimplementowane wszystkie operacje i `Parallelism.ForBands` (pasma wierszy i kolumn). Oracle numpy:
+65/66 przypadków identycznych, 1 w ±1; hashe 720×480 takie same przy 8 i 1 wątku. Po kontroli wizualnej domyślny
+`VignetteOptions.Feather` = 1 i ε denoise = (0.05·strength)². 12 MP na 8 wątkach: LUT ~12 ms, Vibrance/Vignette
+~35 ms, ShadowsHighlights 99 ms, Clarity 83 ms, Denoise 298 ms (`docs/performance.md`); bez SIMD. Bramka linux-x64:
+build bez ostrzeżeń, pełny zestaw 7272/7279 (7 GDI+ pominiętych), `verify-package-consumer.sh` exit 0. Nazwy API
+przyjęte przez użytkownika (polecenie przygotowania wydania 2026-10-20). Notatki `docs/releases/release-0.7.7.md`,
+`VERSION` 0.7.7, `PackageReleaseNotes`, AotSmoke z korekcją fotograficzną. Otwarte: commit, tag `v0.7.7`, GitHub
+Release i NuGet na polecenie użytkownika; ARM64 za zgodą.
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -587,3 +622,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.4** — szybszy JPEG: dekodowanie ~2×, kodowanie ~3× na jednym wątku (szybka ścieżka Huffmana, IDCT AVX2 parami, wektorowy kolor, próbkowanie i kwantyzacja). Bez zmian API i wyników.
 - **0.7.5** — szybszy WebP lossy (kodowanie −28…−32% na jednym wątku, dekodowanie −8…−11%) i potok wczytaj → orientacja → sRGB → resize → zapis (−40%, 106 MiB); naprawiony niedeterminizm wielowątkowego kodowania lossy. Bez zmian API i wyników.
 - **0.7.6** — opcje dekodera per wtyczka: `DecoderOptions.FormatOptions` z rekordami `FormatDecoderOptions` (strona TIFF, poziom mip DDS, element HEIF). Formaty wbudowane bez zmian.
+- **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.

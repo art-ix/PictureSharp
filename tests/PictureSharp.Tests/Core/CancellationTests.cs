@@ -239,6 +239,11 @@ public class CancellationInFlightTests
     [Arguments("blur")]
     [Arguments("rotate")]
     [Arguments("sharpen")]
+    [Arguments("vibrance")]
+    [Arguments("vignette")]
+    [Arguments("shadows")]
+    [Arguments("clarity")]
+    [Arguments("denoise")]
     public async Task Processing_StopsPromptlyWhenCanceled(string operation)
     {
         using Image source = Noise(3072, 3072);
@@ -247,6 +252,11 @@ public class CancellationInFlightTests
             "resize" => x.Resize(3000, 2900, ResamplingFilter.Lanczos3),
             "blur" => x.GaussianBlur(12f),
             "rotate" => x.Rotate(13f, ResamplingFilter.Bicubic),
+            "vibrance" => x.Vibrance(0.5f),
+            "vignette" => x.Vignette(0.5f),
+            "shadows" => x.ShadowsHighlights(0.5f, -0.5f),
+            "clarity" => x.Clarity(0.5f),
+            "denoise" => x.Denoise(0.5f, 4),
             _ => x.Sharpen(),
         }, token).Dispose());
     }

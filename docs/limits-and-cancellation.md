@@ -70,7 +70,7 @@ The token is checked in bounded portions, never per pixel, and rented buffers re
 | WebP lossy | Every macroblock row of decoding, analysis and each encoding pass. |
 | WebP lossless | Every decoded row; encoding between stages and configurations. |
 | Animations | Every frame. |
-| Processing | Before every frame of every operation, and every row of resize, blur, sharpen and rotation. |
+| Processing | Before every frame of every operation, and every row (or 64 Ki pixels) of resize, blur, sharpen, rotation and the photo adjustments. |
 
 ### What a canceled call leaves behind
 
@@ -80,8 +80,9 @@ The token is checked in bounded portions, never per pixel, and rented buffers re
 - **Save to a stream**: encoders write as they go, so the stream may hold partial output. Encode to a byte array first
   when the target must stay unchanged.
 - **Mutate**: the image stays valid and keeps finished operations. Operations producing new buffers (resize, crop,
-  rotation, filters) publish all frames at once, so an interrupted one leaves no trace; in-place operations (color,
-  `Apply`) may leave some frames processed.
+  rotation, filters, `ShadowsHighlights`, `Clarity`, `Denoise`) publish all frames at once, so an interrupted one
+  leaves no trace; in-place operations (color, `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `Apply`) may leave
+  some frames, or part of a frame, processed.
 - **Clone**: the partial copy is disposed and the source is unchanged, so `Clone` is the atomic choice.
 
 ```csharp

@@ -479,6 +479,17 @@ public sealed class DocsExamplesTests : IDisposable
             .Gamma(0.8f, ColorChannels.Blue));
         await Assert.That(toned.Size).IsEqualTo(image.Size);
 
+        using Image corrected = image.Clone(x => x
+            .Exposure(0.5f)
+            .WhiteBalance(0.3f, -0.1f)
+            .ShadowsHighlights(0.4f, -0.3f)
+            .Clarity(0.3f)
+            .Vibrance(0.4f)
+            .Vignette(0.3f)
+            .Vignette(new VignetteOptions { Amount = 0.6f, Midpoint = 0.3f, Feather = 0.8f })
+            .Denoise(0.5f));
+        await Assert.That(corrected.Size).IsEqualTo(image.Size);
+
         using Image texture = Image.Load(P("logo.png"));
         using Image blended = image.Clone(x => x
             .DrawImage(texture, Point.Empty, new DrawImageOptions { BlendMode = BlendMode.Multiply })
