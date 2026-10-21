@@ -24,8 +24,8 @@ Every format except TIFF is both read and written. Variants and options for each
 ¹ With the [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif) plugin package, also 100% C#:
 `dotnet add package PictureSharp.Heif`.
 
-² Read only, with the [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff) plugin, also 100% C#: classic TIFF
-and BigTIFF with LZW, Deflate, PackBits, JPEG and CCITT compression. Not on NuGet yet.
+² Read only, with the [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff) plugin package, also 100% C#:
+`dotnet add package PictureSharp.Tiff`.
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
