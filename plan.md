@@ -49,6 +49,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Wydana (2026-10-18; bez ARM64) |
 | 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Wydana (2026-10-20; bez ARM64) |
 | 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
+| 0.7.9 | Wymuszenie trzech składowych w zapisie JPEG (zgłoszenie wtyczki Tiff dla pasków JPEG); addytywnie | Zgłoszona |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -575,6 +576,27 @@ Notatki `docs/releases/release-0.7.8.md`, `VERSION` 0.7.8,
 193/193, `verify-package-consumer.sh` exit 0 bez ostrzeżeń; wtyczka Tiff na lokalnej paczce 0.7.8: 499/499. Bez
 przebiegów ARM64 (brak kodu zależnego od platformy). Wydana 2026-10-21 (tag `v0.7.8`, GitHub Release, NuGet). Otwarte:
 commit przejścia wtyczki Tiff na `DecodeEmbeddedPart` po publikacji paczki.
+
+## 0.7.9 — trzy składowe w zapisie JPEG
+
+Zgłoszenie (2026-10-21), wtyczka `PictureSharp.Tiff` 0.4.3 (zapis TIFF z kompresją JPEG): każdy pasek obrazu jest
+kodowany osobno przez publiczny enkoder JPEG (`Image.Encode` z `JpegEncoderOptions`). Enkoder sam przechodzi na jedną
+składową, gdy wszystkie piksele mają R = G = B, a przełącznik `color` w `JpegEncoder.EncodeImage` jest wewnętrzny
+(używa go tylko zapis gain map). Pasek z samych szarych pikseli w kolorowym TIFF-ie dostaje więc jedną składową, choć
+IFD deklaruje trzy próbki YCbCr, a libtiff takiego paska nie odczyta.
+
+Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
+- Publiczna opcja w `JpegEncoderOptions`, np. `ColorMode` (`Auto` — obecne wykrywanie szarości, domyślne;
+  `Color` — zawsze trzy składowe YCbCr z podpróbkowaniem z `Subsampling`; ewentualnie `Grayscale` — jedna składowa
+  z luminancji BT.601). Wariant minimalny: `bool` wymuszający kolor.
+- Zapis gain map korzysta z nowej opcji zamiast wewnętrznego parametru; wyniki bitowo bez zmian.
+- Domyślne zachowanie i bajty wyjściowe bez zmian; migawka API z samymi dodatkami.
+
+DoD:
+- Testy: szary obraz z wymuszonym kolorem ma trzy składowe i dekoduje się tak samo jak z jedną (w granicach
+  kwantyzacji); `Auto` bitowo bez zmian na dotychczasowych wektorach; walidacja wartości enuma.
+- `docs/encoder-options.md`; wspólna bramka jakości; wtyczka Tiff przechodzi na opcję w 0.4.3 z minimalnym
+  PictureSharp 0.7.9.
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
