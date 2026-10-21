@@ -135,6 +135,7 @@ public class JpegEncoderTests
             () => new() { Quality = 0 }, () => new() { Quality = 101 },
             () => new() { RestartInterval = -1 }, () => new() { RestartInterval = 65536 },
             () => new() { Subsampling = (JpegSubsampling)(-1) }, () => new() { Subsampling = (JpegSubsampling)4 },
+            () => new() { ColorMode = (JpegColorMode)(-1) }, () => new() { ColorMode = (JpegColorMode)3 },
             () => new() { BackgroundColor = Color.Transparent }, () => new() { Metadata = (MetadataKinds)8 },
         };
         for (int i = 0; i < 100; i++)
@@ -178,5 +179,78 @@ public class JpegEncoderTests
         using Image decoded = Image.Load(image.ToJpeg());
         await Assert.That(decoded.Metadata.HorizontalResolution).IsEqualTo(65535);
         await Assert.That(decoded.Metadata.VerticalResolution).IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ColorMode_Color_KeepsThreeComponentsForGrey_AndDecodesLikeOne(bool progressive)
+    {
+        using Image gray = Gradient(37, 21, gray: true);
+        byte[] auto = gray.ToJpeg(new JpegEncoderOptions { Progressive = progressive });
+        byte[] color = gray.ToJpeg(new JpegEncoderOptions { Progressive = progressive, ColorMode = JpegColorMode.Color });
+        await Assert.That((Components(auto), Components(color))).IsEqualTo((1, 3));
+        // Grey pixels have Cb = Cr = 128, whose coefficients quantize to zero, so the pixels are the same.
+        using Image fromAuto = Image.Load(auto.AsMemory());
+        using Image fromColor = Image.Load(color.AsMemory());
+        await Assert.That(Corpus.Sha256(fromColor.ToPixelData(PixelFormat.Rgba32))).IsEqualTo(Corpus.Sha256(fromAuto.ToPixelData(PixelFormat.Rgba32)));
+    }
+
+    [Test]
+    public async Task ColorMode_Grayscale_WritesTheLumaOfColourPixels()
+    {
+        using Image source = Gradient(37, 21, gray: false);
+        using Image luma = source.Clone();
+        Span<Rgba32> pixels = luma.GetPixelSpan();
+        foreach (ref Rgba32 p in pixels)
+        {
+            byte y = (byte)((19595 * p.R + 38470 * p.G + 7471 * p.B + 32768) >> 16);
+            p = new Rgba32(y, y, y, 255);
+        }
+
+        byte[] grayscale = source.ToJpeg(new JpegEncoderOptions { ColorMode = JpegColorMode.Grayscale });
+        await Assert.That(Components(grayscale)).IsEqualTo(1);
+        await Assert.That(grayscale.SequenceEqual(luma.ToJpeg())).IsTrue();
+    }
+
+    [Test]
+    [Arguments(true, JpegColorMode.Grayscale)]
+    [Arguments(false, JpegColorMode.Color)]
+    public async Task ColorMode_MatchingAuto_GivesTheSameBytes(bool gray, JpegColorMode mode)
+    {
+        using Image image = Gradient(19, 9, gray);
+        await Assert.That(image.ToJpeg(new JpegEncoderOptions { ColorMode = mode }).SequenceEqual(image.ToJpeg())).IsTrue();
+    }
+
+    [Test]
+    [Arguments(JpegGainMapMode.Preserve)]
+    [Arguments(JpegGainMapMode.Require)]
+    public async Task ColorMode_GrayscaleWithAGainMap_Throws(JpegGainMapMode mode)
+    {
+        using var image = new Image(4, 4);
+        using var stream = new MemoryStream();
+        Assert.ThrowsExactly<ArgumentException>(() => image.Save(stream, new JpegEncoderOptions { ColorMode = JpegColorMode.Grayscale, GainMap = mode }));
+        await Assert.That(stream.Length).IsEqualTo(0);
+    }
+
+    private static Image Gradient(int width, int height, bool gray)
+    {
+        var image = new Image(width, height);
+        Span<Rgba32> pixels = image.GetPixelSpan();
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                byte r = (byte)(x * 7 + y * 3), g = (byte)(x * 2 + y * 11), b = (byte)(x * x + y);
+                pixels[y * width + x] = gray ? new Rgba32(r, r, r, 255) : new Rgba32(r, g, b, 255);
+            }
+        return image;
+    }
+
+    /// <summary>The component count of the first SOF segment.</summary>
+    private static int Components(byte[] jpeg)
+    {
+        for (int i = 2; i + 9 < jpeg.Length; i += 2 + (jpeg[i + 2] << 8 | jpeg[i + 3]))
+            if (jpeg[i + 1] is 0xC0 or 0xC1 or 0xC2) return jpeg[i + 9];
+        throw new InvalidOperationException("No SOF segment.");
     }
 }

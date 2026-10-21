@@ -52,7 +52,7 @@ internal static class JpegGainMapWriter
                 Metadata = MetadataKinds.None,
                 MaxDegreeOfParallelism = options.MaxDegreeOfParallelism,
             };
-            JpegEncoder.EncodeImage(mapImage, mapStream, mapOptions, cancellationToken, color: source.Components == 3);
+            JpegEncoder.EncodeImage(mapImage, mapStream, mapOptions with { ColorMode = source.Components == 3 ? JpegColorMode.Color : JpegColorMode.Auto }, cancellationToken);
             mapJpeg = mapStream.ToArray();
             map = Split(mapJpeg) ?? throw new InvalidOperationException("The encoded gain map has no scan.");
         }
@@ -66,7 +66,7 @@ internal static class JpegGainMapWriter
         }
 
         var baseStream = new MemoryStream();
-        JpegEncoder.EncodeImage(image, baseStream, options with { GainMap = JpegGainMapMode.None, Metadata = kinds }, cancellationToken, color: true);
+        JpegEncoder.EncodeImage(image, baseStream, options with { GainMap = JpegGainMapMode.None, Metadata = kinds, ColorMode = JpegColorMode.Color }, cancellationToken);
         byte[] baseJpeg = baseStream.ToArray();
         Parts primary = Split(baseJpeg) ?? throw new InvalidOperationException("The encoded base image has no scan.");
         cancellationToken.ThrowIfCancellationRequested();

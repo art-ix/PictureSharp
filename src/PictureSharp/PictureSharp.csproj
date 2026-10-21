@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.7.8 adds ImageDecodeContext.DecodeEmbeddedPart for plugins that store an image as strips or tiles in another format (JPEG tiles in TIFF): each part decodes within its own allowance instead of being charged against MaxPixels and MaxFrames next to the reserved image. Existing API and results unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.8/docs/releases/release-0.7.8.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.9 adds JpegEncoderOptions.ColorMode (Auto, Color, Grayscale) to choose one or three JPEG components; Auto keeps the earlier behaviour and output. Existing API and results unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.9/docs/releases/release-0.7.9.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

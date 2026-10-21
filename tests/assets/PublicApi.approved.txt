@@ -211,9 +211,14 @@ sealed class PictureSharp.Formats.ImageDecodeContext
     method System.Void ThrowIfCancellationRequested()
     property DecoderOptions Options { get; }
     property System.Threading.CancellationToken CancellationToken { get; }
+enum PictureSharp.Formats.Jpeg.JpegColorMode
+    Auto = 0
+    Color = 1
+    Grayscale = 2
 sealed record PictureSharp.Formats.Jpeg.JpegEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PictureSharp.Formats.Jpeg.JpegEncoderOptions>
     ctor()
     property ImageFormat Format { get; }
+    property PictureSharp.Formats.Jpeg.JpegColorMode ColorMode { get; init; }
     property PictureSharp.Formats.Jpeg.JpegGainMapMode GainMap { get; init; }
     property PictureSharp.Formats.Jpeg.JpegSubsampling Subsampling { get; init; }
     property Rgba32 BackgroundColor { get; init; }

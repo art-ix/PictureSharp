@@ -86,6 +86,7 @@ image.SaveAsJpeg("on-black.jpg", new() { BackgroundColor = Color.Black });   // 
 | --- | --- | --- |
 | `Quality` | 75 | 1–100 (libjpeg scaling). |
 | `Subsampling` | `Ratio420` | `Ratio444`, `Ratio422`, `Ratio420`, `Ratio440`. |
+| `ColorMode` | `Auto` | `Auto` writes one component when every pixel is grey; `Color` always writes YCbCr; `Grayscale` always writes the luma alone. |
 | `Progressive` | false | Progressive scans (implies optimized Huffman tables). |
 | `OptimizeCoding` | false | Optimal Huffman tables in an extra pass. |
 | `RestartInterval` | 0 | MCUs between restart markers (0–65535); 0 disables them. |

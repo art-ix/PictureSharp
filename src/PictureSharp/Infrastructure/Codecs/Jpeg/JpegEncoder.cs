@@ -10,20 +10,22 @@ internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
 
     public void Encode(Image image, Stream output, JpegEncoderOptions options, CancellationToken cancellationToken)
     {
+        if (options.ColorMode == JpegColorMode.Grayscale && options.GainMap != JpegGainMapMode.None)
+            throw new ArgumentException("A JPEG with a gain map needs a colour base image; use JpegColorMode.Auto or Color.", nameof(options));
         if (options.GainMap == JpegGainMapMode.None)
             EncodeImage(image, output, options, cancellationToken);
         else
             JpegGainMapWriter.Encode(image, output, options, cancellationToken);
     }
 
-    /// <summary>Encodes one JPEG image; <paramref name="color"/> keeps three components even for gray pixels.</summary>
-    internal static void EncodeImage(Image image, Stream output, JpegEncoderOptions options, CancellationToken cancellationToken, bool color = false)
+    /// <summary>Encodes one JPEG image with one or three components as <see cref="JpegEncoderOptions.ColorMode"/> says.</summary>
+    internal static void EncodeImage(Image image, Stream output, JpegEncoderOptions options, CancellationToken cancellationToken)
     {
         if (image.Width > 65535 || image.Height > 65535)
             throw new ArgumentOutOfRangeException(nameof(image), "JPEG dimensions must not exceed 65535.");
         JpegMarkerWriter.ValidateMetadata(image.Metadata, options.Metadata);
-        bool gray = !color;
-        foreach (Rgba32 pixel in gray ? image.GetPixelSpan() : default)
+        bool gray = options.ColorMode != JpegColorMode.Color;
+        foreach (Rgba32 pixel in options.ColorMode == JpegColorMode.Auto ? image.GetPixelSpan() : default)
         {
             Rgba32 p = JpegEncoderComponent.Composite(pixel, options.BackgroundColor);
             if (p.R != p.G || p.R != p.B) { gray = false; break; }

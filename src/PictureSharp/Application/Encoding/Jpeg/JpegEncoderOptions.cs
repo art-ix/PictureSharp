@@ -15,6 +15,13 @@ public sealed record JpegEncoderOptions : EncoderOptions
     /// <summary>Chroma subsampling. Default: 4:2:0.</summary>
     public JpegSubsampling Subsampling { get; init => field = Check.Defined(value); } = JpegSubsampling.Ratio420;
 
+    /// <summary>
+    /// Whether to write one grey component or three YCbCr components. Default: <see cref="JpegColorMode.Auto"/>.
+    /// <see cref="JpegColorMode.Grayscale"/> with a <see cref="GainMap"/> mode other than <see cref="JpegGainMapMode.None"/>
+    /// makes saving fail with <see cref="ArgumentException"/>, since a gain map needs a colour base image.
+    /// </summary>
+    public JpegColorMode ColorMode { get; init => field = Check.Defined(value); }
+
     /// <summary>Use progressive scans and optimized Huffman tables.</summary>
     public bool Progressive { get; init; }
 

@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.8 (opublikowana 2026-10-21).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.9 (opublikowana 2026-10-21).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -49,7 +49,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Wydana (2026-10-18; bez ARM64) |
 | 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Wydana (2026-10-20; bez ARM64) |
 | 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
-| 0.7.9 | Wymuszenie trzech składowych w zapisie JPEG (zgłoszenie wtyczki Tiff dla pasków JPEG); addytywnie | Zgłoszona |
+| 0.7.9 | `JpegEncoderOptions.ColorMode` (Auto, Color, Grayscale): liczba składowych JPEG, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -598,6 +598,18 @@ DoD:
 - `docs/encoder-options.md`; wspólna bramka jakości; wtyczka Tiff przechodzi na opcję w 0.4.3 z minimalnym
   PictureSharp 0.7.9.
 
+Decyzja użytkownika (2026-10-21): enum `JpegColorMode { Auto, Color, Grayscale }` we właściwości `ColorMode`.
+
+Stan (2026-10-21): `JpegColorMode` i `JpegEncoderOptions.ColorMode` (walidacja `Check.Defined`); wewnętrzny parametr
+`color` usunięty, zapis gain map ustawia `ColorMode = Color` (bajty bez zmian). `Grayscale` z `GainMap` ≠ `None` →
+`ArgumentException` przed zapisem. Testy w `JpegEncoderTests`: `Color` dla szarego obrazu daje 3 składowe i te same
+piksele co 1 składowa (także progresywnie), `Grayscale` dla koloru = kodowanie obrazu luminancji bajt w bajt, tryb
+zgodny z `Auto` = te same bajty, nieznane wartości enuma i konflikt z gain map. Migawka API: 2 dodatki.
+`docs/encoder-options.md`, notatki `docs/releases/release-0.7.9.md`, `VERSION` 0.7.9, `PackageReleaseNotes`.
+Bramka linux-x64: build bez ostrzeżeń, pełny zestaw 7287/7294 (7 GDI+ pominiętych), Oracle 193/193,
+`verify-package-consumer.sh` exit 0 bez ostrzeżeń. Bez przebiegów ARM64 (brak kodu zależnego od platformy). Wydana
+2026-10-21 (tag `v0.7.9`, GitHub Release, NuGet).
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -683,3 +695,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.6** — opcje dekodera per wtyczka: `DecoderOptions.FormatOptions` z rekordami `FormatDecoderOptions` (strona TIFF, poziom mip DDS, element HEIF). Formaty wbudowane bez zmian.
 - **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.
 - **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.
+- **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.

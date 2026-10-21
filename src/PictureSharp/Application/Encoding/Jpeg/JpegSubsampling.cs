@@ -1,6 +1,6 @@
 namespace PictureSharp.Formats.Jpeg;
 
-/// <summary>Chroma sampling for color JPEG images. Grayscale images use a single component.</summary>
+/// <summary>Chroma sampling for color JPEG images. Images written with one component (see <see cref="JpegColorMode"/>) have no chroma.</summary>
 public enum JpegSubsampling
 {
     /// <summary>Full chroma resolution.</summary>
