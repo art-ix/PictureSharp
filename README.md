@@ -18,14 +18,13 @@ libjpeg-turbo and Pillow.
 | HEIC ¹ | iPhone photos | ✔ | | read |
 | TIFF ² | scans, print, archives | ✔ | | |
 
-Every format is both read and written. Variants and options for each one are listed in
+Variants and options for each format are listed in
 [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md#supported-formats).
+HEIC and TIFF come from plugin packages, also 100% C#:
 
-¹ With the [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif) plugin package, also 100% C#:
-`dotnet add package PictureSharp.Heif`.
+¹ [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif): `dotnet add package PictureSharp.Heif`
 
-² With the [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff) plugin package, also 100% C#:
-`dotnet add package PictureSharp.Tiff` (writing from 0.5.0; multi-page files read one page at a time).
+² [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff): `dotnet add package PictureSharp.Tiff`
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
