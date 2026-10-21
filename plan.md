@@ -225,6 +225,7 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
 | Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
 | Opcje dekodera per wtyczka | `DecoderOptions.Ico/Png/WebP` zamknięte | wybór elementu HEIF (HEIF), poziomu mip/warstwy DDS (Formats.Extra), strony TIFF (Tiff) | Zamknięte w 0.7.6: `DecoderOptions.FormatOptions` z rekordami pochodnymi od `FormatDecoderOptions` |
+| Dekodowanie osadzonego obrazu w zarezerwowanym budżecie | `ImageDecodeContext.DecodeEmbedded` dolicza każdy wynik do `MaxPixels` obok już zarezerwowanego obrazu kontenera | paski i kafle JPEG w TIFF (Tiff 0.3.0): plik potrzebuje ok. 2× swojej liczby pikseli | Do decyzji (zgłoszone przez wtyczkę Tiff 2026-10-21) |
 | CICP PQ/HLG | brak | HDR10 HEIC z Androida | poza 0.8.0 |
 
 Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
