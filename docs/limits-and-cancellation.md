@@ -41,6 +41,9 @@ given. An HDR gain map over `MaxPixels` is reported in `Image.Hdr` instead of fa
   blocks without counting them, and `Identify` does not decompress them. As libpng, PNG keeps the first `iCCP` and
   `eXIf`.
 - **`TargetSize`** relaxes nothing: limits check the stored image.
+- **Parts.** A plugin that stores its image as strips or tiles in another format (JPEG tiles in TIFF) reserves the image
+  and decodes each part with its own allowance of the part size, which must fit in `MaxPixels`; parts are not frames.
+  With one part alive at a time, such a load holds at most twice `MaxPixels` of pixels.
 
 The limits are not a cap on process memory: codecs need working buffers (a progressive JPEG keeps about 2 bytes per
 sample of coefficients) and encoder output is unbounded. Use a process or container memory limit for a hard cap.

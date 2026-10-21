@@ -202,6 +202,7 @@ static class PictureSharp.Formats.Ico.IcoImageExtensions
     method [Extension] static System.Void SaveAsIco(Image image, System.String path, PictureSharp.Formats.Ico.IcoEncoderOptions? options = null)
 sealed class PictureSharp.Formats.ImageDecodeContext
     method Image DecodeEmbedded(System.ReadOnlyMemory<System.Byte> data)
+    method Image DecodeEmbeddedPart(System.ReadOnlyMemory<System.Byte> data, System.Int32 width, System.Int32 height)
     method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map)
     method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map, HdrGainMapKinds detected)
     method System.Void DeclareGainMap(HdrGainMapKinds detected, System.String reason, System.Boolean corrupt = true)

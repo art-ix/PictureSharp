@@ -128,7 +128,8 @@ public sealed class ImageDecodeContext
 
     /// <summary>
     /// Decodes an image embedded in a container format with the codecs of the same configuration, sharing this
-    /// decode's limits. The result is full size; the caller owns it.
+    /// decode's limits. The result is full size; the caller owns it. For strips or tiles of an image already
+    /// reserved with <see cref="ReservePixels"/>, use <see cref="DecodeEmbeddedPart"/>.
     /// </summary>
     public Image DecodeEmbedded(ReadOnlyMemory<byte> data)
     {
@@ -137,5 +138,43 @@ public sealed class ImageDecodeContext
         // A reduced JPEG decode would lose its stored size here; the outer load applies TargetSize instead.
         DecodeContext child = _context.Child(_context.Options with { TargetSize = null });
         return decoder.Decode(data, child).Image;
+    }
+
+    /// <summary>
+    /// Decodes one part (a strip, tile or band) of the image this decoder produces, stored in an embedded format, with
+    /// the codecs of the same configuration. The part covers <paramref name="width"/> x <paramref name="height"/>
+    /// pixels of the image, possibly overhanging its edge, and may not decode to more. Parts are not charged against
+    /// the image reserved with <see cref="ReservePixels"/>: each part gets its own <see cref="DecoderOptions.MaxPixels"/>
+    /// allowance of <paramref name="width"/> x <paramref name="height"/> and is not a frame, so a decode holds at most
+    /// the image and one part when the caller disposes each part before decoding the next. A part is decoded as
+    /// stored: full size, without EXIF orientation, gain map, color conversion or metadata. The caller owns the result.
+    /// </summary>
+    /// <param name="data">The embedded image, e.g. a JPEG strip.</param>
+    /// <param name="width">The width of the part in the image, at least 1.</param>
+    /// <param name="height">The height of the part in the image, at least 1.</param>
+    /// <exception cref="ImageFormatException">
+    /// The part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>, the embedded image is larger
+    /// than the part, or it is corrupt or not recognized.
+    /// </exception>
+    public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height)
+    {
+        ThrowIfCancellationRequested();
+        if (width < 1 || height < 1 || (long)width * height > Options.MaxPixels)
+        {
+            throw new ImageFormatException(_format, "The embedded part size is not positive or exceeds DecoderOptions.MaxPixels.");
+        }
+
+        IImageDecoder decoder = _codecs.GetDecoderFor(data.Span);
+        DecodeContext part = _context.Detached(_context.Options with
+        {
+            MaxPixels = (long)width * height,
+            MaxFrames = 1,
+            TargetSize = null,
+            ApplyExifOrientation = false,
+            LoadGainMap = false,
+            IgnoreMetadata = true,
+            ColorConversion = ColorConversionMode.None,
+        });
+        return decoder.Decode(data, part).Image;
     }
 }

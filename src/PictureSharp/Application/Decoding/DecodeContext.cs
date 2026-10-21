@@ -24,6 +24,14 @@ internal sealed class DecodeContext
         return new(options with { MaxMetadataBytes = Math.Min(options.MaxMetadataBytes, Budget.RemainingMetadata) }, CancellationToken, Budget);
     }
 
+    /// <summary>A context with its own budget, for a part of an image whose pixels this budget already holds.</summary>
+    public DecodeContext Detached(DecoderOptions options)
+    {
+        CancellationToken.ThrowIfCancellationRequested();
+        options = options with { MaxMetadataBytes = Math.Min(options.MaxMetadataBytes, Budget.RemainingMetadata) };
+        return new(options, CancellationToken, new DecodeBudget(options));
+    }
+
     public void CheckInput(long length)
     {
         CancellationToken.ThrowIfCancellationRequested();

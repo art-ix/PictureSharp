@@ -227,7 +227,18 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
         throw new InvalidOperationException("Plugin decoder options failed.");
 }
 
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options) and a frame processor.");
+// Embedded parts 0.7.8: strips in another format decode within the image's MaxPixels and are not frames.
+{
+    ImageConfiguration striped = builtIn.ToBuilder().AddFormat(new StripedRawFormat()).Build();
+    using var top = new Image(4, 2, new Rgba32(255, 0, 0, 255));
+    using var bottom = new Image(4, 2, new Rgba32(0, 0, 255, 255));
+    byte[] file = StripedRawFormat.Write(4, 2, top.ToPng(), bottom.ToPng());
+    using Image image = Image.Load(file, new DecoderOptions { Configuration = striped, MaxPixels = 4 * 4, MaxFrames = 1 });
+    if (image.Height != 4 || image[3, 1] != top[0, 0] || image[0, 2] != bottom[0, 0])
+        throw new InvalidOperationException("Plugin embedded parts failed.");
+}
+
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options, embedded parts) and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>
@@ -350,6 +361,39 @@ sealed class PagedRawFormat : IImageFormatModule, IImageFormatDecoder
         (int offset, int width, int height, _) = Select(data.Span, context.Options);
         context.ReservePixels(width, height);
         return Image.LoadPixelData(data.Span.Slice(offset, width * height * 4), width, height, PixelFormat.Rgba32);
+    }
+}
+
+/// <summary>"RAW4", width, strip height and strip count as bytes, then per strip a 16-bit length and an embedded image: exercises embedded parts under trimming and AOT.</summary>
+sealed class StripedRawFormat : IImageFormatModule, IImageFormatDecoder
+{
+    public static ImageFormat Kind { get; } = ImageFormat.Create("RAW4", "image/x-raw4", ".raw4");
+    public ImageFormat Format => Kind;
+    public int HeaderSize => 4;
+    public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("RAW4"u8);
+    public IImageFormatDecoder Decoder => this;
+
+    public static byte[] Write(int width, int stripHeight, params byte[][] strips) =>
+        [.. "RAW4"u8, (byte)width, (byte)stripHeight, (byte)strips.Length, .. strips.SelectMany(s => (byte[])[(byte)(s.Length >> 8), (byte)s.Length, .. s])];
+
+    public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
+        new() { Format = Kind, Width = data.Span[4], Height = data.Span[5] * data.Span[6] };
+
+    public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+    {
+        int width = data.Span[4], stripHeight = data.Span[5], count = data.Span[6], offset = 7;
+        context.ReservePixels(width, stripHeight * count);
+        var image = new Image(width, stripHeight * count);
+        for (int i = 0; i < count; i++)
+        {
+            int length = data.Span[offset] << 8 | data.Span[offset + 1];
+            using Image strip = context.DecodeEmbeddedPart(data.Slice(offset + 2, length), width, stripHeight);
+            if (strip.Width != width || strip.Height != stripHeight) throw new ImageFormatException(Kind, "The strip size is wrong.");
+            strip.GetPixelSpan().CopyTo(image.GetPixelSpan()[(i * width * stripHeight)..]);
+            offset += 2 + length;
+        }
+
+        return image;
     }
 }
 

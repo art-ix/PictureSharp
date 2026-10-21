@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.7 (opublikowana 2026-10-20).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.8 (opublikowana 2026-10-21).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -48,6 +48,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.5 | Optymalizacja WebP lossy (VP8) i potoku przetwarzania (ICC → sRGB, światło liniowe, kopie pośrednie); wyniki bitowo bez zmian | Wydana (2026-10-18; bez ARM64) |
 | 0.7.6 | Opcje dekodera per wtyczka (SPI): wybór strony, poziomu mip lub elementu kontenera; bez zmian zachowania wbudowanych formatów | Wydana (2026-10-18; bez ARM64) |
 | 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Wydana (2026-10-20; bez ARM64) |
+| 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -225,7 +226,7 @@ Luki, których wtyczka nie obejdzie (typy są `internal`):
 | Gain map i serializacja ISO w enkoderze | internal | zapis HEIC z gain map | 0.8.0 |
 | Rozmiar źródłowy przy mniejszym wyniku | `DecodedImage.StoredSize` internal | miniatura z elementu `thmb` | 0.8.0, jeśli wtyczka wykaże zysk |
 | Opcje dekodera per wtyczka | `DecoderOptions.Ico/Png/WebP` zamknięte | wybór elementu HEIF (HEIF), poziomu mip/warstwy DDS (Formats.Extra), strony TIFF (Tiff) | Zamknięte w 0.7.6: `DecoderOptions.FormatOptions` z rekordami pochodnymi od `FormatDecoderOptions` |
-| Dekodowanie osadzonego obrazu w zarezerwowanym budżecie | `ImageDecodeContext.DecodeEmbedded` dolicza każdy wynik do `MaxPixels` obok już zarezerwowanego obrazu kontenera | paski i kafle JPEG w TIFF (Tiff 0.3.0): plik potrzebuje ok. 2× swojej liczby pikseli | Do decyzji (zgłoszone przez wtyczkę Tiff 2026-10-21) |
+| Dekodowanie osadzonego obrazu w zarezerwowanym budżecie | `ImageDecodeContext.DecodeEmbedded` dolicza każdy wynik do `MaxPixels` obok już zarezerwowanego obrazu kontenera | paski i kafle JPEG w TIFF (Tiff 0.3.0): plik potrzebuje ok. 2× swojej liczby pikseli | Zamknięte w 0.7.8: `ImageDecodeContext.DecodeEmbeddedPart` z własnym limitem części (zgłoszone przez wtyczkę Tiff 2026-10-21) |
 | CICP PQ/HLG | brak | HDR10 HEIC z Androida | poza 0.8.0 |
 
 Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
@@ -540,6 +541,41 @@ przyjęte przez użytkownika (polecenie przygotowania wydania 2026-10-20). Notat
 `VERSION` 0.7.7, `PackageReleaseNotes`, AotSmoke z korekcją fotograficzną. Wydana 2026-10-20 (tag `v0.7.7`, GitHub
 Release, NuGet). Otwarte: ARM64 za zgodą użytkownika.
 
+## 0.7.8 — dekodowanie części obrazu
+
+Zgłoszenie (2026-10-21), wtyczka `PictureSharp.Tiff` 0.3.0: paski i kafle JPEG dekodowane przez
+`ImageDecodeContext.DecodeEmbedded` są doliczane do wspólnego, monotonicznego budżetu obok obrazu już zarezerwowanego
+przez `ReservePixels`. Plik JPEG-TIFF potrzebuje więc ok. 2× swojej liczby pikseli w `MaxPixels`, a plik z ponad 65 536
+kaflami nie przechodzi `MaxFrames`.
+
+Decyzje użytkownika (2026-10-21): nowa metoda zamiast zmiany `DecodeEmbedded` (ICNS w Formats.Extra i kontenery
+osadzające całe obrazy nadal są rozliczane); wtyczka Tiff przechodzi na nią w ramach 0.3.0, przed pierwszym wydaniem.
+
+Zakres:
+- `ImageDecodeContext.DecodeEmbeddedPart(data, width, height)`: część (pasek, kafel, pas) obrazu wtyczki w formacie
+  osadzonym. Walidacja `width, height >= 1` i `width * height <= MaxPixels` (inaczej `ImageFormatException` formatu
+  wtyczki). Część dostaje odłączony kontekst (`DecodeContext.Detached`) z nowym budżetem: `MaxPixels = width * height`,
+  `MaxFrames = 1`, pozostały budżet metadanych, ten sam token anulowania; bez `TargetSize`, orientacji EXIF, gain map,
+  konwersji koloru i metadanych. Dekoder osadzony przerywa się przed alokacją, gdy część deklaruje więcej.
+- Gwarancja pamięci: obraz + jedna żywa część ≤ 2 × `MaxPixels`; kontener odpowiada za pokrycie obrazu częściami.
+- `DecodeEmbedded` bez zmian.
+
+DoD:
+- `EmbeddedPartTests` z formatem testowym `TiledContainerFormat` (siatka kafli PNG/JPEG): `MaxPixels` równy obrazowi,
+  więcej kafli niż `MaxFrames`, kafel większy niż zadeklarowany, deklaracja ponad `MaxPixels`, kafel dekodowany tak, jak
+  zapisany (EXIF, ICC, `TargetSize`), anulowanie między kaflami, uszkodzony kafel, regresja rozliczania `DecodeEmbedded`.
+- Migawka API z jednym dodatkiem; `docs/extending-picturesharp.md`, `docs/limits-and-cancellation.md`,
+  `docs/architecture.md`; AotSmoke z formatem `RAW4` (dwa paski PNG).
+- Wspólna bramka jakości; wtyczka Tiff przechodzi na metodę z minimalnym PictureSharp 0.7.8.
+
+Stan (2026-10-21): zaimplementowane `DecodeContext.Detached` i `DecodeEmbeddedPart`; `EmbeddedPartTests` 8/8; migawka
+API (+1), dokumentacja, AotSmoke z `RAW4`; README z wierszem TIFF (wtyczka `PictureSharp.Tiff`, repozytorium opublikowane 2026-10-21).
+Notatki `docs/releases/release-0.7.8.md`, `VERSION` 0.7.8,
+`PackageReleaseNotes`. Bramka linux-x64: build bez ostrzeżeń, pełny zestaw 7280/7287 (7 GDI+ pominiętych), Oracle
+193/193, `verify-package-consumer.sh` exit 0 bez ostrzeżeń; wtyczka Tiff na lokalnej paczce 0.7.8: 499/499. Bez
+przebiegów ARM64 (brak kodu zależnego od platformy). Wydana 2026-10-21 (tag `v0.7.8`, GitHub Release, NuGet). Otwarte:
+commit przejścia wtyczki Tiff na `DecodeEmbeddedPart` po publikacji paczki.
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -624,3 +660,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.5** — szybszy WebP lossy (kodowanie −28…−32% na jednym wątku, dekodowanie −8…−11%) i potok wczytaj → orientacja → sRGB → resize → zapis (−40%, 106 MiB); naprawiony niedeterminizm wielowątkowego kodowania lossy. Bez zmian API i wyników.
 - **0.7.6** — opcje dekodera per wtyczka: `DecoderOptions.FormatOptions` z rekordami `FormatDecoderOptions` (strona TIFF, poziom mip DDS, element HEIF). Formaty wbudowane bez zmian.
 - **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.
+- **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.

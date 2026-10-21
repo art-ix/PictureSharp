@@ -5,7 +5,7 @@
 PictureSharp targets **.NET 10** (C# 14) and depends only on the base class library:
 
 ```bash
-dotnet add package PictureSharp --version 0.7.7
+dotnet add package PictureSharp --version 0.7.8
 ```
 
 Changes are listed in the [release notes](releases/); RasterSharp 0.5.0 code is covered by the

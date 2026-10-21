@@ -84,6 +84,8 @@ the session attaches its borrowed current frame. Durations are non-negative; for
 After `Dispose` (idempotent) state accessors throw `ObjectDisposedException`; existing pixel views are not revocable and
 concurrent mutation is unsupported. `HasAlpha` is a hint; `IsOpaque()` inspects pixels. Options are immutable records;
 each decode gets its own `DecodeContext` and monotonic `DecodeBudget`, shared by embedded codecs through child contexts.
+A part of an already reserved image (`ImageDecodeContext.DecodeEmbeddedPart`) gets a detached context with its own
+budget of the part size, one frame and the remaining metadata.
 
 Frame readers and writers use the configuration's `ImageSequenceService` and internal sequential codec ports, sharing
 compositing and encoding with the batch codecs; Application owns the optional temporary file of a writer.
