@@ -23,6 +23,9 @@ bit-identical.
   replaces settings for one part only: `Jpeg` (for example plain CMYK strips) and `MaxDegreeOfParallelism` (for
   example 1 when the container decodes several parts at once). A null setting keeps the load's own; the overload
   without options behaves as before. See [Extending PictureSharp](../extending-picturesharp.md).
+  An XML documentation reference `<see cref="ImageDecodeContext.DecodeEmbeddedPart"/>` without parameters is now
+  ambiguous (warning CS0419, an error with `TreatWarningsAsErrors`); name the overload, for example
+  `DecodeEmbeddedPart(ReadOnlyMemory{byte}, int, int)`.
 
 The adapter packages are released at the same version without changes.
 
