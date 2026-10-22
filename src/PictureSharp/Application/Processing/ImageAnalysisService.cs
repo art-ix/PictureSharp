@@ -48,6 +48,13 @@ internal static class ImageAnalysisService
         return ImageProcessingContext.AnalyzeNegative(image, options, cancellationToken);
     }
 
+    public static FilmFrame? FindFilmFrame(Image image, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ImageProcessingContext.FindFilmFrame(image, cancellationToken);
+    }
+
     public static Rectangle? FindTrimBounds(Image image, AutoCropOptions? options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(image);

@@ -16,16 +16,19 @@ internal static class NegativeCalibrator
     // Without a film-base region, the base is this percentile of each channel: the lightest pixels, past stray
     // highlights such as a scratch.
     private const float BasePercentile = 99.7f;
-    private const float ClippedWarning = 0.01f, LowRangeWarning = 0.3f;
+    private const float ClippedWarning = 0.01f, LowRangeWarning = 0.3f, TextureWarning = 6f, IlluminationWarning = 0.25f;
 
     /// <summary>The linear light below which samples count as this floor in the density.</summary>
     public const double DensityFloor = 1.0 / 1024;
 
-    /// <summary>Measures <paramref name="pixels"/> (one frame, stored values) with <paramref name="options"/>.</summary>
-    public static NegativeAnalysis Analyze(ReadOnlySpan<Rgba32> pixels, int width, int height, NegativeOptions options,
+    /// <summary>
+    /// Measures <paramref name="pixels"/> (one frame, stored values) with <paramref name="options"/>, inside
+    /// <paramref name="frame"/> and with its rebate as the film base when there is one.
+    /// </summary>
+    public static NegativeAnalysis Analyze(ReadOnlySpan<Rgba32> pixels, int width, int height, NegativeOptions options, FilmFrame? frame,
         CancellationToken cancellationToken)
     {
-        Rectangle region = options.Region ?? new Rectangle(0, 0, width, height);
+        Rectangle region = options.Region ?? frame?.MeasuredRegion ?? new Rectangle(0, 0, width, height);
         bool gray = options.FilmType == FilmType.BlackAndWhiteNegative;
         int step = Math.Max(1, (int)Math.Ceiling(Math.Sqrt((double)region.Width * region.Height / SampleTarget)));
         long[] candidates = new long[3 * 256];
@@ -71,9 +74,18 @@ internal static class NegativeCalibrator
         // An image whose every pixel is clipped is still measured, from all of them.
         long[] counts = usable > 0 ? candidates : all;
         Span<double> filmBase = stackalloc double[3];
+        ChannelValues? rebate = options.FilmBaseRegion is null ? frame?.FilmBase : null;
         if (options.FilmBaseRegion is { } baseRegion)
         {
             MedianOfRegion(pixels, width, baseRegion, gray, filmBase, cancellationToken);
+        }
+        else if (rebate is { } measured)
+        {
+            for (int c = 0; c < 3; c++)
+            {
+                // A black-and-white base is gray: the luma's weights applied to linear light are close enough.
+                filmBase[c] = gray ? (0.2126 * measured.Red) + (0.7152 * measured.Green) + (0.0722 * measured.Blue) : measured[c];
+            }
         }
         else
         {
@@ -117,9 +129,16 @@ internal static class NegativeCalibrator
             warnings |= NegativeWarnings.ChannelClipped;
         }
 
-        if (options.FilmBaseRegion is null)
+        if (options.FilmBaseRegion is null && rebate is null)
         {
             warnings |= NegativeWarnings.FilmBaseEstimated;
+        }
+
+        if (frame is not null)
+        {
+            warnings |= (frame.FilmBaseUniformity > TextureWarning ? NegativeWarnings.BacklightTexture : 0)
+                | (frame.CutEdges != FilmFrameEdges.None ? NegativeWarnings.FrameCut : 0)
+                | (frame.IlluminationSpan > IlluminationWarning ? NegativeWarnings.UnevenIllumination : 0);
         }
 
         if (Math.Min(range[0], Math.Min(range[1], range[2])) < LowRangeWarning)
@@ -127,7 +146,7 @@ internal static class NegativeCalibrator
             warnings |= NegativeWarnings.LowDensityRange;
         }
 
-        return new NegativeAnalysis(calibration, clippedFraction, warnings);
+        return new NegativeAnalysis(calibration, clippedFraction, warnings, frame);
     }
 
     /// <summary>The density above <paramref name="filmBase"/> of the encoded value <paramref name="value"/>.</summary>

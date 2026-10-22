@@ -39,6 +39,24 @@ public static class ImageAnalysisExtensions
             ImageAnalysisService.FindTrimBounds(image, options, cancellationToken);
 
         /// <summary>
+        /// Finds the 35 mm frame nearest the center of a photographed film strip without changing the image: the rows
+        /// of perforation (which must show the backlight) give the strip's angle and scale, and the steps from the
+        /// bright rebate and the gaps between frames into the picture give its edges. Works on a preview whose longer
+        /// side is about 1024 pixels, so it takes a few milliseconds at any size.
+        /// </summary>
+        /// <returns>The frame, or <see langword="null"/> when no row of perforation or no frame is found (for example a frame that is already cropped).</returns>
+        /// <example>
+        /// <code>
+        /// if (image.FindFilmFrame() is { } frame) image.Mutate(x => x.Rotate(frame.Angle).Crop(frame.Bounds));
+        /// </code>
+        /// </example>
+        /// <exception cref="NotSupportedException">The image has more than one frame.</exception>
+        public FilmFrame? FindFilmFrame() => ImageAnalysisService.FindFilmFrame(image, CancellationToken.None);
+
+        /// <summary>Finds the frame as <see cref="FindFilmFrame(Image)"/>; <paramref name="cancellationToken"/> stops it between rows.</summary>
+        public FilmFrame? FindFilmFrame(CancellationToken cancellationToken) => ImageAnalysisService.FindFilmFrame(image, cancellationToken);
+
+        /// <summary>
         /// Measures a photographed film negative without changing it: the film base (from
         /// <see cref="NegativeOptions.FilmBaseRegion"/>, or else the lightest pixels), the density of each channel that
         /// prints white and the midtone gammas, on the stored channel values of <see cref="NegativeOptions.Region"/>

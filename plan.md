@@ -53,7 +53,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
 | 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
 | 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
-| 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Planowana |
+| 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | W toku: etap C zaimplementowany (2026-10-22) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -709,6 +709,19 @@ Stan (2026-10-22):
 - **Wydanie (2026-10-22):** commit 1c98b3f, Validate 39807980161 success, tag `v0.7.12`, GitHub Release, workflow
   Release 39808993598 success: 4 paczki na NuGet i jako zasoby wydania. Do wydania v0.7.11 dopisana uwaga, że nie
   trafiło na NuGet.
+
+## 0.7.13 — negatywy: pełna automatyka (etap C, w toku)
+
+- `FindFilmFrame()` (`FilmFrame`: `Angle`, `Bounds` po `Rotate(Angle)`, `PerforationsVertical`, `CutEdges`
+  `FilmFrameEdges`) — szczegóły i wyniki w [plan_film.md](plan_film.md) („Stan etapu C”).
+- `DevelopNegative()` znajduje klatkę, mierzy ją z podłożem z brzegu, prostuje i kadruje jednym przepróbkowaniem
+  (= `Rotate(Angle).Crop(Bounds)`), wyrównuje podświetlenie płaszczyzną z brzegu; `NegativeOptions.Frame`, `Crop`,
+  `CorrectIllumination`; `Region`/`FilmBaseRegion` wyłączają szukanie (tryb ręczny 0.7.12).
+- `NegativeAnalysis.Frame`, `FilmBaseUniformity`; ostrzeżenia `BacklightTexture`, `FrameCut`, `UnevenIllumination`.
+- `Affine.TransformFiltered`: początek wyjścia (kadr obrotu bez reszty), wiersze równolegle, bicubic na
+  `Vector256<double>` (te same działania co skalar; 2× szybciej na jednym wątku).
+- Zmiana zachowania: `DevelopNegative()` na zdjęciu paska z perforacją zwraca wykadrowaną klatkę (0.7.12: cały
+  obraz). Bez perforacji jak dotąd.
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 

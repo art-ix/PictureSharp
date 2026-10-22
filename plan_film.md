@@ -2,7 +2,8 @@
 
 Status: **zatwierdzony** (decyzja użytkownika 2026-10-22): etapy A+B jako 0.7.11, C+D jako 0.7.12, oba przed
 0.8.0; praca zaczyna się od etapu A. Zmiana (2026-10-22): 0.7.11 bez paczek NuGet, 0.7.12 to poprawka usuwania
-kurzu (zjadało napisy: domyślnie wyłączone, test kształtu i izolacji plamki), etapy C+D przechodzą na 0.7.13. Nazwy API są robocze do czasu zatwierdzenia migawki.
+kurzu (zjadało napisy: domyślnie wyłączone, test kształtu i izolacji plamki), etapy C+D przechodzą na 0.7.13. Nazwy API są robocze do czasu zatwierdzenia migawki. Etap C zaimplementowany
+(2026-10-22), etap D (strojenie, benchmarki, wydanie) do zrobienia.
 
 ## 1. Cel
 
@@ -246,6 +247,43 @@ Decyzje przy implementacji:
 Wyniki: wyrocznia numpy 9/9 analiz (1e-5) i 12/12 obrazów identycznych; `FilmNegativeTests` 8/8; SHA-256
 `DevelopNegative` identyczne przy 8 i 1 wątku; migawka API: tylko dodatki. Na zdjęciach: 8160 kalibracja zgodna
 z prototypem co do 3 cyfr; czasy analiza 11–22 ms, develop 92–278 ms (2–5 Mpx).
+
+### Stan etapu C (2026-10-22)
+
+Zaimplementowane: `FindFilmFrame` (`FilmFrameDetector`, `FilmFrame`, `FilmFrameEdges`), kadr i prostowanie w
+`DevelopNegative`, korekcja podświetlenia (`NegativePrinter.PrintLit`), ostrzeżenia `BacklightTexture`, `FrameCut`,
+`UnevenIllumination`, `NegativeAnalysis.Frame` i `FilmBaseUniformity`; opcje `Frame`, `Crop`, `CorrectIllumination`.
+Prototyp numpy: `scratchpad/proto/*.py` sesji (nie w repo).
+
+Ustalenia z 15 zdjęć (8157–8173) i prototypu:
+- Lampa = B ≥ 0,85 · p99,5(B) i B ≥ R; otwory = jej spójne plamy wypełniające ≥ 60% prostokąta, 0,1–0,4 P², w rzędzie
+  ≥ 3 kroki 0,8–1,25 P (bez tego szum i liście skanu NEF dawały fałszywe rzędy).
+- Rzędy otworów są 5,76–6,01 P od siebie, a wysokość klatki 5,12–5,17 P na wszystkich zdjęciach (stała 5,15 P dla
+  jednego rzędu); długość klatki = 1,5 wysokości (±10%).
+- Krawędź wzdłuż kliszy jest prawdziwa, gdy przerwa za nią ma ≥ 70% jasności brzegu (prawdziwe 0,96–1,34, krawędzie
+  treści ≤ 0,5); krawędź przy brzegu zdjęcia = klatka ucięta.
+- Dystorsja szerokiego kąta wygina krawędzie: każda krawędź szukana ponownie w 8 kawałkach, kadr do najbardziej
+  wewnętrznego (bez tego czarne sierpy brzegu w rogach).
+- Przerwy międzyklatkowe są o 8–15% jaśniejsze niż brzeg przy perforacji (poświata otworów, zadruk), więc podłoże i
+  płaszczyzna podświetlenia tylko z brzegu przy perforacji; próbki odsiewane 3 MAD jasności i barwy (log B/R, G/R —
+  przyciemnione otwory po ciemnej stronie lampy nie wchodzą do maski lampy).
+- Płaszczyzna: nachylenie wzdłuż kliszy, gdy próbki obejmują ≥ pół klatki; w poprzek tylko z brzegiem po obu stronach
+  (jeden rząd dawał ekstrapolację 180%).
+- Tekstura podłoża (mediana odchylenia jasności w blokach k × k pełnej rozdzielczości): lampa 0,6–1,5, monitor
+  20,6/24,7 → próg `BacklightTexture` 6. `UnevenIllumination` przy > 25% między narożnikami klatki (15% flagowało
+  połowę próbek).
+- Bez perforacji (120, wykadrowana klatka): `null`; wariant „największy prostokąt gęstszy od podłoża” odłożony.
+
+Wyniki: klatki zgodne z oceną wzrokową na 14/14 zdjęciach z perforacją (8157 → `null`), także ARW z kadrem i
+perforacją; NEF/Hastings/tablica → `null`. Kąty −1,72…1,42°, `CutEdges` zgodne z kadrem. 12 Mpx (Release, 16 wątków):
+`FindFilmFrame` 35–60 ms, `AnalyzeNegative` z klatką 7 ms, pełne `DevelopNegative` ~190 ms; obrót bicubic
+6,0 → 3,1 s na jednym wątku po wektoryzacji (wcześniejsze czasy z `dotnet run plik.cs` były w Debug).
+Testy: `FilmFrameTests` (syntetyczny pasek: prosty, ±kąty, pionowy, ucięty z 4 stron, nierówne światło, wyjątki,
+`DevelopNegative` = `Rotate.Crop.InvertNegative` co do piksela), `AffineSimdTests`, `FilmFrameLocalTests` (14 zdjęć +
+8157), hash `develop_negative_strip` przy 1 i 8 wątkach.
+
+Ograniczenia: łuki i plamy podświetlenia (8162, 8169D, 8170) zostają (nie są płaszczyzną); kierunek sceny wybiera
+użytkownik; klisza bez widocznej lampy w otworach (np. bardzo jasne podłoże cz.-b.) nie zostanie znaleziona.
 
 ## 6. Testy i wyrocznie
 

@@ -434,6 +434,8 @@ sealed class Image : System.IDisposable
     property System.Int32 LoopCount { get; set; }
     property System.Int32 Width { get; }
 static class ImageAnalysisExtensions
+    method [Extension] static PictureSharp.Processing.FilmFrame? FindFilmFrame(Image image)
+    method [Extension] static PictureSharp.Processing.FilmFrame? FindFilmFrame(Image image, System.Threading.CancellationToken cancellationToken)
     method [Extension] static PictureSharp.Processing.ImageHistogram GetHistogram(Image image, PictureSharp.Processing.HistogramOptions? options = null)
     method [Extension] static PictureSharp.Processing.ImageHistogram GetHistogram(Image image, PictureSharp.Processing.HistogramOptions? options, System.Threading.CancellationToken cancellationToken)
     method [Extension] static PictureSharp.Processing.NegativeAnalysis AnalyzeNegative(Image image, PictureSharp.Processing.NegativeOptions? options = null)
@@ -742,6 +744,17 @@ sealed record PictureSharp.Processing.DrawImageOptions : System.IEquatable<Pictu
     property System.Boolean LinearLight { get; init; }
     property System.Single Opacity { get; init; }
     property static PictureSharp.Processing.DrawImageOptions Default { get; }
+sealed class PictureSharp.Processing.FilmFrame
+    property PictureSharp.Processing.FilmFrameEdges CutEdges { get; }
+    property System.Boolean PerforationsVertical { get; }
+    property System.Drawing.Rectangle Bounds { get; }
+    property System.Single Angle { get; }
+[Flags] enum PictureSharp.Processing.FilmFrameEdges
+    None = 0
+    Left = 1
+    Top = 2
+    Right = 4
+    Bottom = 8
 enum PictureSharp.Processing.FilmType
     ColorNegative = 0
     BlackAndWhiteNegative = 1
@@ -864,8 +877,10 @@ enum PictureSharp.Processing.MaskOutside
     Transparent = 1
 sealed class PictureSharp.Processing.NegativeAnalysis
     property PictureSharp.Processing.ChannelValues ClippedFraction { get; }
+    property PictureSharp.Processing.FilmFrame? Frame { get; }
     property PictureSharp.Processing.NegativeCalibration Calibration { get; }
     property PictureSharp.Processing.NegativeWarnings Warnings { get; }
+    property System.Single? FilmBaseUniformity { get; }
 sealed record PictureSharp.Processing.NegativeCalibration : System.IEquatable<PictureSharp.Processing.NegativeCalibration>
     ctor()
     method static PictureSharp.Processing.NegativeCalibration Combine(System.Collections.Generic.IEnumerable<PictureSharp.Processing.NegativeCalibration> calibrations)
@@ -875,9 +890,12 @@ sealed record PictureSharp.Processing.NegativeCalibration : System.IEquatable<Pi
     property required PictureSharp.Processing.ChannelValues FilmBase { get; init; }
 sealed record PictureSharp.Processing.NegativeOptions : System.IEquatable<PictureSharp.Processing.NegativeOptions>
     ctor()
+    property PictureSharp.Processing.FilmFrame? Frame { get; init; }
     property PictureSharp.Processing.FilmType FilmType { get; init; }
     property PictureSharp.Processing.NegativeCalibration? Calibration { get; init; }
     property PictureSharp.Processing.NegativePrintOptions Print { get; init; }
+    property System.Boolean CorrectIllumination { get; init; }
+    property System.Boolean Crop { get; init; }
     property System.Drawing.Rectangle? FilmBaseRegion { get; init; }
     property System.Drawing.Rectangle? Region { get; init; }
     property System.Int32? DustSize { get; init; }
@@ -896,6 +914,9 @@ sealed record PictureSharp.Processing.NegativePrintOptions : System.IEquatable<P
     ChannelClipped = 1
     FilmBaseEstimated = 2
     LowDensityRange = 4
+    BacklightTexture = 8
+    FrameCut = 16
+    UnevenIllumination = 32
 enum PictureSharp.Processing.ResamplingFilter
     Nearest = 0
     Bilinear = 1

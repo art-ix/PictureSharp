@@ -9,7 +9,10 @@ namespace PictureSharp.Processing;
 /// </summary>
 public sealed record NegativeOptions
 {
-    /// <summary>Default options: a color negative, measured over the whole image, with color-noise removal and without dust removal.</summary>
+    /// <summary>
+    /// Default options: a color negative whose frame is found, straightened and cropped, with the backlight evened
+    /// out and color noise removed, without dust removal.
+    /// </summary>
     public static NegativeOptions Default { get; } = new();
 
     /// <summary>The kind of film. Default: <see cref="FilmType.ColorNegative"/>.</summary>
@@ -21,22 +24,47 @@ public sealed record NegativeOptions
 
     /// <summary>
     /// The area that is measured, which must lie inside the image: the picture of a frame without the rebate, the
-    /// backlight or fingers. <see langword="null"/> (the default) measures the whole image. The whole image is
-    /// developed either way.
+    /// backlight or fingers. <see langword="null"/> (the default) measures the found <see cref="FilmFrame"/>, or the
+    /// whole image when there is none. Setting it (or <see cref="FilmBaseRegion"/>) turns off the search for the
+    /// frame, so the whole image is developed.
     /// </summary>
     public Rectangle? Region { get; init; }
 
     /// <summary>
     /// An area of bare film (the rebate beside the perforation or the gap between frames), which must lie inside the
-    /// image; its median color is the film base. <see langword="null"/> (the default) estimates the base from the
-    /// lightest pixels of <see cref="Region"/> and reports <see cref="NegativeWarnings.FilmBaseEstimated"/>.
+    /// image; its median color is the film base. <see langword="null"/> (the default) takes the base from the rebate
+    /// of the found <see cref="FilmFrame"/>, or else estimates it from the lightest pixels of <see cref="Region"/> and
+    /// reports <see cref="NegativeWarnings.FilmBaseEstimated"/>. Setting it turns off the search for the frame.
     /// </summary>
     public Rectangle? FilmBaseRegion { get; init; }
 
     /// <summary>
+    /// The frame to measure and develop, from <see cref="ImageAnalysisExtensions.FindFilmFrame(Image)"/> or
+    /// <see cref="NegativeAnalysis.Frame"/> of the same image, so it is not searched for again. Default:
+    /// <see langword="null"/>, which searches unless <see cref="Region"/> or <see cref="FilmBaseRegion"/> is set.
+    /// </summary>
+    public FilmFrame? Frame { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="ImageProcessingContext.DevelopNegative(NegativeOptions?)"/> straightens the strip and crops
+    /// it to the frame, as <c>Rotate(frame.Angle).Crop(frame.Bounds)</c>; otherwise the whole image is developed.
+    /// Default: <see langword="true"/>.
+    /// </summary>
+    public bool Crop { get; init; } = true;
+
+    /// <summary>
+    /// Whether <see cref="ImageProcessingContext.DevelopNegative(NegativeOptions?)"/> evens out the backlight: the
+    /// film base follows a gradient measured on the frame's rebate (along the strip, and across it when the rebate on
+    /// both sides is in the photograph), so a frame lit more brightly on one side prints evenly. Applies only to a
+    /// found frame. Default: <see langword="true"/>.
+    /// </summary>
+    public bool CorrectIllumination { get; init; } = true;
+
+    /// <summary>
     /// A calibration to use instead of measuring the image, for example one shared by a roll; then
     /// <see cref="FilmType"/>, <see cref="Region"/>, <see cref="FilmBaseRegion"/>, <see cref="HighlightPercentile"/>
-    /// and <see cref="MidtoneBalance"/> are ignored. Default: <see langword="null"/>.
+    /// and <see cref="MidtoneBalance"/> are ignored. The frame is still found, straightened, cropped and evenly lit.
+    /// Default: <see langword="null"/>.
     /// </summary>
     public NegativeCalibration? Calibration { get; init; }
 

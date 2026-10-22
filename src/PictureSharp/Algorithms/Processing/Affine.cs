@@ -1,11 +1,13 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
 
 /// <summary>Rotation by an arbitrary angle, ported from Pillow's <c>Image.rotate</c> and the affine transforms in Geometry.c.</summary>
-internal static class Affine
+internal static partial class Affine
 {
     /// <summary>
     /// The inverse (destination → source) affine matrix and output size for rotating a
@@ -113,35 +115,48 @@ internal static class Affine
         }
     }
 
-    /// <summary>Bilinear or bicubic affine transform of premultiplied pixels; pixels mapped from outside the source keep their value.</summary>
+    /// <summary>
+    /// Bilinear or bicubic affine transform of premultiplied pixels; pixels mapped from outside the source keep their
+    /// value. Output pixel (x, y) is pixel (x + <paramref name="originX"/>, y + <paramref name="originY"/>) of the full
+    /// transform, so a crop of a rotation is computed without the rest. Rows run in parallel; each pixel depends only on
+    /// its coordinates.
+    /// </summary>
     // port: Pillow src/libImaging/Geometry.c ImagingGenericTransform with affine_transform
-    public static void TransformFiltered(ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Span<Rgba32> dst, int width, int height,
-        double[] a, ResamplingFilter filter, CancellationToken cancellationToken = default)
+    public static void TransformFiltered(Rgba32[] src, int srcWidth, int srcHeight, Rgba32[] dst, int width, int height,
+        double[] a, ResamplingFilter filter, CancellationToken cancellationToken = default, int originX = 0, int originY = 0, bool vectorize = true)
     {
-        ReadOnlySpan<byte> image = MemoryMarshal.AsBytes(src);
-        Span<byte> output = MemoryMarshal.AsBytes(dst);
         bool bicubic = filter == ResamplingFilter.Bicubic;
-        for (int y = 0; y < height; y++)
+        bool simd = vectorize && Vector256.IsHardwareAccelerated;
+        Parallelism.ForBands(height, 16, (long)width * height * 16, cancellationToken, (start, end) =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            for (int x = 0; x < width; x++)
+            ReadOnlySpan<byte> image = MemoryMarshal.AsBytes(src.AsSpan());
+            Span<byte> output = MemoryMarshal.AsBytes(dst.AsSpan());
+            for (int y = start; y < end; y++)
             {
-                // port: Geometry.c affine_transform
-                double xin = x + 0.5;
-                double yin = y + 0.5;
-                double xx = (a[0] * xin) + (a[1] * yin) + a[2];
-                double yy = (a[3] * xin) + (a[4] * yin) + a[5];
-                Span<byte> pixel = output.Slice(((y * width) + x) * 4, 4);
-                if (bicubic)
+                cancellationToken.ThrowIfCancellationRequested();
+                for (int x = 0; x < width; x++)
                 {
-                    BicubicFilter32(pixel, image, srcWidth, srcHeight, xx, yy);
-                }
-                else
-                {
-                    BilinearFilter32(pixel, image, srcWidth, srcHeight, xx, yy);
+                    // port: Geometry.c affine_transform
+                    double xin = x + originX + 0.5;
+                    double yin = y + originY + 0.5;
+                    double xx = (a[0] * xin) + (a[1] * yin) + a[2];
+                    double yy = (a[3] * xin) + (a[4] * yin) + a[5];
+                    Span<byte> pixel = output.Slice(((y * width) + x) * 4, 4);
+                    if (bicubic && simd)
+                    {
+                        BicubicFilter32Simd(pixel, image, srcWidth, srcHeight, xx, yy);
+                    }
+                    else if (bicubic)
+                    {
+                        BicubicFilter32(pixel, image, srcWidth, srcHeight, xx, yy);
+                    }
+                    else
+                    {
+                        BilinearFilter32(pixel, image, srcWidth, srcHeight, xx, yy);
+                    }
                 }
             }
-        }
+        });
     }
 
     // port: Pillow src/libImaging/Geometry.c bilinear_filter32RGB (BILINEAR_HEAD, BILINEAR_BODY)

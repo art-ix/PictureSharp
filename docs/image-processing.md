@@ -276,38 +276,82 @@ A color or black-and-white negative photographed on a light box, or scanned with
 one call:
 
 ```csharp
-using var image = Image.Load("negative.jpg");
-var frame = new Rectangle(160, 1120, 2780, 1790);        // the picture, without rebate, perforation or light box
-var rebate = new Rectangle(830, 850, 140, 160);          // bare film beside the perforation
-image.Mutate(x => x.Crop(frame).DevelopNegative());      // measured on the frame, base estimated
-// Or measure the frame and the base, and develop the whole photo:
-NegativeAnalysis analysis = image.AnalyzeNegative(new NegativeOptions { Region = frame, FilmBaseRegion = rebate });
+using var image = Image.Load("strip.jpg");
+image.Mutate(x => x.DevelopNegative());                  // finds, straightens and crops the frame
+// Check the photograph first, and develop without searching again:
+NegativeAnalysis analysis = image.AnalyzeNegative();
 if (analysis.Warnings.HasFlag(NegativeWarnings.ChannelClipped)) Console.WriteLine("Use a bluish backlight.");
-image.Mutate(x => x.DevelopNegative(new NegativeOptions { Calibration = analysis.Calibration }).Crop(frame).ConvertToSrgb());
+if (analysis.Warnings.HasFlag(NegativeWarnings.BacklightTexture)) Console.WriteLine("Put a diffuser under the film.");
+image.Mutate(x => x.DevelopNegative(new NegativeOptions { Frame = analysis.Frame, Calibration = analysis.Calibration }));
+// Only the frame: straighten and cut it out of the negative.
+if (image.FindFilmFrame() is { } frame) image.Mutate(x => x.Rotate(frame.Angle).Crop(frame.Bounds));
 // One look for a roll: combine the calibrations of several frames.
 NegativeCalibration roll = NegativeCalibration.Combine(frames.Select(f => f.AnalyzeNegative().Calibration));
+// A frame without perforation: give the regions by hand (this turns the search off).
+var picture = new Rectangle(160, 1120, 2780, 1790);      // the picture, without rebate, perforation or light box
+var rebate = new Rectangle(830, 850, 140, 160);          // bare film beside the picture
+image.Mutate(x => x.DevelopNegative(new NegativeOptions { Region = picture, FilmBaseRegion = rebate }).Crop(picture));
 ```
 
-`DevelopNegative` measures the negative (unless `NegativeOptions.Calibration` is given), inverts it with
-`InvertNegative`, removes dust when `DustSize` asks for it, and for color film runs `ReduceColorNoise`
-(`ColorNoiseReduction`, default 1). It does not crop yet: crop to the frame first, or set `Region` so that the light
-box, rebate and fingers do not take part in the measurement. Only single-frame images are accepted.
+`DevelopNegative`:
+1. Finds the frame (`FindFilmFrame`, below) unless `NegativeOptions.Frame` is given or `Region` or `FilmBaseRegion` is
+   set.
+2. Measures it (unless `NegativeOptions.Calibration` is given), with the frame's rebate as the film base.
+3. Straightens the strip and crops it to the frame in one bicubic resampling, the same as
+   `Rotate(frame.Angle).Crop(frame.Bounds)` (`Crop`, default true).
+4. Inverts it with `InvertNegative`, evening out the backlight measured on the rebate (`CorrectIllumination`, default
+   true).
+5. Removes dust when `DustSize` asks for it, and for color film runs `ReduceColorNoise` (`ColorNoiseReduction`,
+   default 1).
+
+Without a frame (a frame that is already cropped, or 120 film without perforation) the whole image is measured and
+developed. The positive keeps the strip's direction; turn it upright with `Rotate(RotateMode)`. Only single-frame
+images are accepted.
 
 Dust removal is off by default (`DustSize` 0), because `RemoveDust` cannot tell a speck from isolated detail of the
 same size. Set `DustSize` close to the size of the dust; `DustSize = null` selects 0.5% of the shorter side. In 0.7.11
 that automatic size erased the slanted letters of a licence plate; since 0.7.12 `RemoveDust` keeps detail larger than
 a speck, but small letters below the dust size can still go.
 
+### Finding the frame
+
+`FindFilmFrame` looks for 35 mm film with perforation that shows the backlight. It works on a preview whose longer side
+is about 1024 pixels, so it takes a few tens of milliseconds at any size, and its result does not depend on the thread
+count:
+- **Holes**: blobs of backlight, at least 85% as blue as the brightest 0.5% and not redder than blue, that nearly fill
+  their bounding box. Holes cut by the photograph's edge count too.
+- **Rows**: the vectors to the nearest holes give the strip's direction and the perforation pitch P. Holes 0.5 P
+  apart across the strip form a row, which needs three steps of 0.8–1.25 P and holes of 0.1–0.4 P². Two rows
+  5.3–6.6 P apart are one strip; one fitted slope through both gives the angle.
+- **Frame across the strip**: the strongest step from the bright rebate into the picture, 0.25–1.4 P inside each row of
+  holes. Without the second row, the far edge 4.6–5.7 P away counts only when the rebate beyond it is bright.
+- **Frame along the strip**: steps into and out of the picture with a gap outside at least 70% as bright as the rebate,
+  paired 1.5 frame heights apart (±10%). The frame over the photograph's center wins. An edge that is not found must
+  lie past the photograph, and it is reported in `CutEdges`.
+- **Lens distortion**: each edge is looked for again in eight pieces, and the innermost clear step bounds the picture.
+- **Bounds**: 0.5% inside the edges, in the image rotated by `Angle` (expanded, as `Rotate` does), and inside the
+  photograph at cut edges.
+
+Without a row of perforation it returns `null`, and so it does for a frame that is already cropped.
+
+The rebate between the holes and the picture (holes, edge printing and strays removed by 3 MADs of luma and color)
+gives the film base and the backlight. log10 of each channel is fitted with a plane: along the strip when the samples
+span half a frame, and across it only with rebate on both sides. `CorrectIllumination` divides the film base by that
+plane at every pixel; the print of t is then tabulated at 4096 steps and interpolated. The texture of the backlight is
+the median standard deviation of the luma in small blocks of the rebate (`NegativeAnalysis.FilmBaseUniformity`): below
+2 for a diffused lamp, about 20–25 for a monitor's pixel grid.
+
 The negative is inverted in its own color space: values are decoded with the sRGB curve, and the ICC profile or color
 description stays, so a Display P3 photo becomes a Display P3 positive. Converting the negative to sRGB first would
 clip its strongly colored film base. Call `ConvertToSrgb` on the positive when sRGB is needed.
 
 The measurement (`AnalyzeNegative`):
-- It uses a regular sample of about one million pixels of `Region` (every k-th row and column), without fully
+- It uses a regular sample of about one million pixels of `Region`, or of the largest upright rectangle inside the
+  found frame (every k-th row and column), without fully
   transparent pixels or pixels with a channel at 0–2 or 253–255. Percentiles are the nearest rank of integer
   histograms, so the result does not depend on the thread count.
-- **Film base B**: the median color of `FilmBaseRegion`, or else the 99.7th percentile of each channel, which reports
-  `FilmBaseEstimated`.
+- **Film base B**: the median color of `FilmBaseRegion`, the rebate of the found frame, or else the 99.7th percentile
+  of each channel, which reports `FilmBaseEstimated`.
 - **Density** of a value with linear light L: d = log10(B / max(L, 1/1024)), the optical density above the base.
 - **Density range R**: the density at the `HighlightPercentile` (default 99.7) of each channel; it prints white.
 - **Midtone gamma γ**: each channel's median share of its range, m = d / R, moves towards the geometric mean of the
@@ -315,7 +359,9 @@ The measurement (`AnalyzeNegative`):
   contrast differs, and removes the green or cyan cast that a plain inversion leaves. 0 turns it off for a scene that
   is not neutral on average.
 - **Warnings**: `ChannelClipped` when more than 1% of the measured pixels are clipped in a channel, `FilmBaseEstimated`
-  without a film-base region, and `LowDensityRange` when a channel spans less than 0.3.
+  without a film-base region or rebate, and `LowDensityRange` when a channel spans less than 0.3. With a found
+  frame: `BacklightTexture` when `FilmBaseUniformity` is above 6, `FrameCut` when the photograph cuts the frame, and
+  `UnevenIllumination` when the backlight is more than 25% brighter at one corner of the frame than at another.
 
 The print (`InvertNegative`, `NegativePrintOptions`) is one lookup table per channel, in double precision:
 
@@ -330,7 +376,7 @@ A black-and-white calibration first replaces each pixel by its integer Rec. 709 
 1e-5 and pixels exactly.
 
 For the photograph itself:
-- Keep a strip of bare film in the picture for `FilmBaseRegion`.
+- Keep the perforation and the rebate on both sides in the picture: they give the frame, the film base and the light.
 - Use a diffuse light. On a monitor, keep the film 1–3 cm above the screen or put a diffuser between them, or the
   subpixel grid shows.
 - Choose a light bluish enough that the film base looks almost gray; then no channel clips (`ChannelClipped`).

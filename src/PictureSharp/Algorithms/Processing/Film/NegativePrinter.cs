@@ -1,4 +1,5 @@
 using PictureSharp.Algorithms.ColorManagement;
+using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -27,11 +28,85 @@ internal static class NegativePrinter
             for (int v = 0; v < 256; v++)
             {
                 double t = Math.Clamp(NegativeCalibrator.Density(filmBase, v) / range, 0, Headroom);
-                double linear = Math.Pow(10, print.Contrast * (Math.Pow(t, gamma) - 1)) * gain;
-                double s = SrgbTransfer.EncodeExact(linear);
-                s += print.Curve * s * (1 - s) * ((2 * s) - 1);
-                lut[(c * 256) + v] = (byte)(int)Math.Floor((Math.Clamp(s, 0, 1) * 255) + 0.5);
+                lut[(c * 256) + v] = (byte)(int)Math.Floor((Print(t, gamma, print, gain) * 255) + 0.5);
             }
         }
+    }
+
+    /// <summary>
+    /// Prints <paramref name="source"/> into <paramref name="destination"/> as <see cref="Lut"/> does, with the film
+    /// base of each channel scaled by <c>10^(X · x + Y · y + C)</c> at the center (x + 0.5, y + 0.5) of every pixel,
+    /// which evens out the backlight. The print of t is tabulated at 4096 steps and interpolated linearly.
+    /// </summary>
+    public static void PrintLit(Rgba32[] source, Rgba32[] destination, int width, int height, NegativeCalibration calibration,
+        NegativePrintOptions print, ChannelValues slopeX, ChannelValues slopeY, ChannelValues offset, CancellationToken cancellationToken)
+    {
+        const int Steps = 4096;
+        double gain = Math.Pow(2, print.Exposure);
+        bool gray = calibration.FilmType == FilmType.BlackAndWhiteNegative;
+        // d = log10(base) − log10(L) + shift, t = d / range: per channel the value's term and the print of t.
+        double[] density = new double[3 * 256];
+        double[] curve = new double[3 * (Steps + 2)];
+        for (int c = 0; c < 3; c++)
+        {
+            double logBase = Math.Log10(calibration.FilmBase[c]);
+            for (int v = 0; v < 256; v++)
+            {
+                density[(c * 256) + v] = logBase - Math.Log10(Math.Max(SrgbTransfer.Decode((byte)v), NegativeCalibrator.DensityFloor));
+            }
+
+            for (int i = 0; i <= Steps + 1; i++)
+            {
+                curve[(c * (Steps + 2)) + i] = Print(Math.Min(Headroom, i * Headroom / Steps), calibration.MidtoneGamma[c], print, gain);
+            }
+        }
+
+        Parallelism.ForBands(height, 16, (long)width * height * 8, cancellationToken, (start, end) =>
+        {
+            Span<double> scale = stackalloc double[3];
+            Span<double> row = stackalloc double[3];
+            for (int c = 0; c < 3; c++)
+            {
+                scale[c] = Steps / (Headroom * calibration.DensityRange[c]);
+            }
+
+            for (int y = start; y < end; y++)
+            {
+                for (int c = 0; c < 3; c++)
+                {
+                    row[c] = offset[c] + (slopeY[c] * (y + 0.5));
+                }
+
+                for (int x = 0; x < width; x++)
+                {
+                    int i = (y * width) + x;
+                    Rgba32 p = source[i];
+                    byte luma = gray ? (byte)GrayWorld.Luma(p) : (byte)0;
+                    Span<byte> output = [0, 0, 0];
+                    for (int c = 0; c < 3; c++)
+                    {
+                        int v = gray ? luma : c switch { 0 => p.R, 1 => p.G, _ => p.B };
+                        double d = density[(c * 256) + v] + row[c] + (slopeX[c] * (x + 0.5));
+                        double position = Math.Clamp(d * scale[c], 0, Steps);
+                        int at = (int)position;
+                        double f = position - at;
+                        int k = (c * (Steps + 2)) + at;
+                        double s = curve[k] + (f * (curve[k + 1] - curve[k]));
+                        output[c] = (byte)(int)Math.Floor((s * 255) + 0.5);
+                    }
+
+                    destination[i] = new Rgba32(output[0], output[1], output[2], p.A);
+                }
+            }
+        });
+    }
+
+    // The printed, encoded value (0–1) of share t: t^γ, 10^(Contrast · (t^γ − 1)) · gain, sRGB, the S curve.
+    private static double Print(double t, double gamma, NegativePrintOptions print, double gain)
+    {
+        double linear = Math.Pow(10, print.Contrast * (Math.Pow(t, gamma) - 1)) * gain;
+        double s = SrgbTransfer.EncodeExact(linear);
+        s += print.Curve * s * (1 - s) * ((2 * s) - 1);
+        return Math.Clamp(s, 0, 1);
     }
 }

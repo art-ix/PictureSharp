@@ -51,6 +51,7 @@ public class ProcessingDeterminismTests
         { "remove_dust", "7a8483a8188a9ab7ea4c7d9966251e2db202707816310dc86e94e751c78c2d0e" },
         { "reduce_color_noise", "0945188f431d803d341de02e390209e14c64d9ca01e4d92719012d63064b6eb3" },
         { "develop_negative", "cdeca05eb887e504fe162e743e5b677eb6c5b3bf5f02c2ba47fff8422d8df622" },
+        { "develop_negative_strip", "ec2e9fd9be65c44c13eb9ce935e6ce7a1fbc8306a7945d2a85450d47057771b3" },
     };
 
     // 720 × 480 pixels: enough for the parallel bands, so the hashes also pin the result against the thread count
@@ -63,6 +64,7 @@ public class ProcessingDeterminismTests
         {
             "remove_dust" => PhotoCleanupTests.Dusty(720, 480, 9),
             "develop_negative" => FilmNegativeTests.Negative(PhotoCleanupTests.Dusty(720, 480, 9), 9),
+            "develop_negative_strip" => FilmFrameTests.Strip(light: 0.3f, seed: 9, degrees: 1.2f),
             _ => ProcessingOracleTests.Noise(720, 480, 9),
         };
         using Image result = source.Clone(x => _ = name switch
@@ -79,6 +81,7 @@ public class ProcessingDeterminismTests
             "remove_dust" => x.RemoveDust(4, 0.08f),
             "reduce_color_noise" => x.ReduceColorNoise(0.9f, 6),
             "develop_negative" => x.DevelopNegative(new NegativeOptions { FilmBaseRegion = new System.Drawing.Rectangle(0, 0, 720, 8) }),
+            "develop_negative_strip" => x.DevelopNegative(new NegativeOptions { DustSize = 2 }),
             _ => x.Denoise(0.7f, 3),
         });
         await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);

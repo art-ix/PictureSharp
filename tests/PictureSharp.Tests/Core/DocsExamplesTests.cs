@@ -512,6 +512,20 @@ public sealed class DocsExamplesTests : IDisposable
             .Crop(frame)
             .ConvertToSrgb());
         NegativeCalibration roll = NegativeCalibration.Combine([analysis.Calibration, analysis.Calibration]);
+        using (Image strip = FilmFrameTests.Strip())
+        {
+            NegativeAnalysis found = strip.AnalyzeNegative();
+            await Assert.That(found.Warnings.HasFlag(NegativeWarnings.BacklightTexture)).IsFalse();
+            using Image auto = strip.Clone(x => x.DevelopNegative());
+            using Image again = strip.Clone(x => x.DevelopNegative(new NegativeOptions { Frame = found.Frame, Calibration = found.Calibration }));
+            await Assert.That(auto.Size).IsEqualTo(found.Frame!.Bounds.Size);
+            if (strip.FindFilmFrame() is { } cut)
+            {
+                using Image cutOut = strip.Clone(x => x.Rotate(cut.Angle).Crop(cut.Bounds));
+                await Assert.That(cutOut.Size).IsEqualTo(again.Size);
+            }
+        }
+
         using Image sameLook = image.Clone(x => x.DevelopNegative(new NegativeOptions
         {
             Calibration = roll,
