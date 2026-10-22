@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.9 (opublikowana 2026-10-21).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.7.10 (opublikowana 2026-10-22).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -50,7 +50,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Wydana (2026-10-20; bez ARM64) |
 | 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.9 | `JpegEncoderOptions.ColorMode` (Auto, Color, Grayscale): liczba składowych JPEG, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-21; bez ARM64) |
-| 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Zaimplementowana, niewydana |
+| 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -651,8 +651,11 @@ walidacja) i `EmbeddedPartTests` (sonda opcji części: zastąpienie i dziedzicz
 walidacja stopnia). Pasek CMYK zapisany przez libtiff 4.5.1: z `Plain` różnica do `TIFFReadRGBAImage` ≤ 1 (wzór
 libtiff a `cmyk2rgb`), wcześniej do 255. Migawka API: 5 dodatków. Dokumentacja: `loading-and-saving.md`,
 `extending-picturesharp.md`, `architecture.md`, `docs/releases/release-0.7.10.md`; `VERSION` 0.7.10,
-`PackageReleaseNotes` (biblioteka i adaptery). Zostało: wydanie na polecenie użytkownika; potem wtyczka Tiff 0.5.5
-(CMYK JPEG) z minimalnym PictureSharp 0.7.10.
+`PackageReleaseNotes` (biblioteka i adaptery). Notatki uzupełnione (7b55b43): bezparametrowy `cref` do
+`DecodeEmbeddedPart` jest teraz niejednoznaczny (CS0419), wykryte we wtyczce Tiff. Wydana 2026-10-22: Validate
+39738074767 success (managed, oracle, package-consumer, adapters-windows), tag `v0.7.10` (adnotowany), GitHub
+Release z linkami `blob/v0.7.10`, Release 39738595140 success (8× „Your package was pushed”, 4 nupkg w assetach).
+Bez ARM64 (decyzja użytkownika; brak kodu zależnego od platformy). Dalej: wtyczka Tiff 0.6.0 na 0.7.10 z NuGet.
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
