@@ -248,11 +248,17 @@ Both are made for scans and photographs of film and prints, and keep alpha.
   a segment along itself, so it stays.
 - The soft rim joins in at most `size` rounds. In each round, a neighbour (8-connected) of a speck joins when its luma
   differs from the median of its (2 · size + 1)² window in the same direction by more than half the limit.
-- Every speck pixel gets the per-channel median of that window without the speck pixels.
+- Detail that runs between the four directions, such as a stroke of a slanted letter, is found as well, so each
+  connected group of speck pixels (one direction, bright or dark) is checked. It is dust only when it spans at most
+  `size` + 2 pixels, and when no pixel around it differs from the median of its own window in the same direction by
+  more than half the largest difference of the group's core: otherwise it continues into larger detail and stays.
+- Every pixel of a speck, its rim and the 1-pixel ring around it gets the per-channel median of its window without
+  those pixels, so no outline of the soft rim stays.
 
 `RemoveDust` looks only at the luma, so it has two limits. A faint speck that stands out no more than the grain
-stays. A small catchlight can be taken for dust: keep `size` near the size of the dust, not larger. A scanner's
-infrared channel separates dust reliably.
+stays. Isolated detail no larger than `size`, such as a catchlight, the dot of an i or the hole of a small 0, is taken
+for dust: keep `size` near the size of the dust and below the size of fine lettering. A scanner's infrared channel
+separates dust reliably.
 
 `ReduceColorNoise(strength, radius)` smooths only the color, on premultiplied values (0–1):
 - The guide is the luma Y = 0.2126 R + 0.7152 G + 0.0722 B. The color differences P = B − Y and P = R − Y are each
@@ -283,10 +289,14 @@ NegativeCalibration roll = NegativeCalibration.Combine(frames.Select(f => f.Anal
 ```
 
 `DevelopNegative` measures the negative (unless `NegativeOptions.Calibration` is given), inverts it with
-`InvertNegative`, then runs `RemoveDust` (`DustSize`, by default 0.5% of the shorter side, at least 2; 0 turns it off)
-and, for color film, `ReduceColorNoise` (`ColorNoiseReduction`, default 1). It does not crop yet: crop to the frame
-first, or set `Region` so that the light box, rebate and fingers do not take part in the measurement. Only
-single-frame images are accepted.
+`InvertNegative`, removes dust when `DustSize` asks for it, and for color film runs `ReduceColorNoise`
+(`ColorNoiseReduction`, default 1). It does not crop yet: crop to the frame first, or set `Region` so that the light
+box, rebate and fingers do not take part in the measurement. Only single-frame images are accepted.
+
+Dust removal is off by default (`DustSize` 0), because `RemoveDust` cannot tell a speck from isolated detail of the
+same size. Set `DustSize` close to the size of the dust; `DustSize = null` selects 0.5% of the shorter side. In 0.7.11
+that automatic size erased the slanted letters of a licence plate; since 0.7.12 `RemoveDust` keeps detail larger than
+a speck, but small letters below the dust size can still go.
 
 The negative is inverted in its own color space: values are decoded with the sRGB curve, and the ICC profile or color
 description stays, so a Display P3 photo becomes a Display P3 positive. Converting the negative to sRGB first would

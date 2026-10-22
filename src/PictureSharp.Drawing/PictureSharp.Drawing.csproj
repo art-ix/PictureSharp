@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.Drawing</RootNamespace>
     <PackageId>PictureSharp.Drawing</PackageId>
     <Description>Copies PictureSharp images to and from System.Drawing.Bitmap (Windows).</Description>
-    <PackageReleaseNotes>0.7.11: unchanged adapter, released with PictureSharp 0.7.11 (film negatives, curves, dust and color-noise removal). Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.11/docs/releases/release-0.7.11.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.12: unchanged adapter, released with PictureSharp 0.7.12 (film negatives, curves, dust and color-noise removal). Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.12/docs/releases/release-0.7.12.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;system.drawing;bitmap;gdi+;interop</PackageTags>
   </PropertyGroup>
 

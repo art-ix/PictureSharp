@@ -30,6 +30,7 @@ public class PhotoAdjustOracleTests
                 ["photo.png"] = Image.Load(Corpus.PathOf("jpeg/q90_444.jpg")),
                 ["alpha.png"] = Image.Load(Corpus.PathOf("png/odd_rgba.png")),
                 ["dust.png"] = PhotoCleanupTests.Dusty(96, 64, 7),
+                ["lettering.png"] = PhotoCleanupTests.Lettering(),
             };
             foreach ((string file, Image image) in inputs)
             {
@@ -126,6 +127,12 @@ public class PhotoAdjustOracleTests
                     Add(input, $"chroma_{strength}_{radius}", new() { ["op"] = "reduce_color_noise", ["strength"] = strength, ["radius"] = radius },
                         x => x.ReduceColorNoise(strength, radius));
                 }
+            }
+
+            // Slanted strokes detected by the four segments and rejected as groups larger than the speck size.
+            foreach (int size in new[] { 8, 11 })
+            {
+                Add("lettering.png", $"dust_{size}_0.1", new() { ["op"] = "remove_dust", ["size"] = size, ["threshold"] = 0.1f }, x => x.RemoveDust(size, 0.1f));
             }
 
             File.WriteAllText(Path.Combine(dir, "jobs.json"), JsonSerializer.Serialize(jobs));

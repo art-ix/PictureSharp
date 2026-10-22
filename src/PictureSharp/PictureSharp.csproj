@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.7.11 develops photographed film negatives: AnalyzeNegative measures the film base, density range and midtone balance, and DevelopNegative inverts in optical density, removes dust and color noise (InvertNegative, NegativeCalibration.Combine for a roll). New manual tools: Curves (PCHIP), WhiteBalance(Rgba32 neutral), AutoWhiteBalance, RemoveDust and ReduceColorNoise. Existing API and results unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.11/docs/releases/release-0.7.11.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.12 fixes dust removal: RemoveDust keeps detail larger than a speck (in 0.7.11 it erased slanted letters of a licence plate) and replaces the ring around a speck, and DevelopNegative removes no dust by default (NegativeOptions.DustSize = 0). Includes everything of 0.7.11, which was not published to NuGet: film negatives (AnalyzeNegative, DevelopNegative, InvertNegative, NegativeCalibration), Curves, WhiteBalance(Rgba32), AutoWhiteBalance, RemoveDust and ReduceColorNoise. Existing API and results unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.12/docs/releases/release-0.7.12.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

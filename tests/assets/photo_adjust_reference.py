@@ -335,9 +335,18 @@ def remove_dust(rgba, size, threshold):
                 if not bright and not dark:
                     break
             mask[y, x] = 1 if bright else 2 if dark else 0
+    core = mask != 0
 
     def window(a, x, y):
         return a[max(0, y - size):y + size + 1, max(0, x - size):x + size + 1]
+
+    def deviation(x, y):
+        return F(int(luma[y, x]) - lower_median(window(luma, x, y)))
+
+    def neighbours(x, y):
+        for sy in range(max(0, y - 1), min(h - 1, y + 1) + 1):
+            for sx in range(max(0, x - 1), min(w - 1, x + 1) + 1):
+                yield sx, sy
 
     for _ in range(size):
         nxt = mask.copy()
@@ -350,12 +359,12 @@ def remove_dust(rgba, size, threshold):
                 specks = int(np.bitwise_or.reduce(near.ravel(), initial=0))
                 if specks == 0:
                     continue
-                deviation = F(int(luma[y, x]) - lower_median(window(luma, x, y)))
+                d = deviation(x, y)
                 half = F(0.5) * limit(x, y)
-                if specks & 1 and deviation > half:
+                if specks & 1 and d > half:
                     nxt[y, x] = 1
                     added += 1
-                elif specks & 2 and -deviation > half:
+                elif specks & 2 and -d > half:
                     nxt[y, x] = 2
                     added += 1
                 else:
@@ -364,8 +373,45 @@ def remove_dust(rgba, size, threshold):
         if added == 0:
             break
 
+    # Groups of one polarity in row-major order of their first pixel: a speck spans at most size + 2 pixels and no
+    # pixel around it deviates in its direction by more than half the largest deviation of its core. The ring around
+    # an accepted speck is replaced too.
+    kind_of = mask & 3
+    visited = np.zeros((h, w), dtype=bool)
+    ring = np.zeros((h, w), dtype=bool)
+    for y0 in range(h):
+        for x0 in range(w):
+            kind = int(kind_of[y0, x0])
+            if kind == 0 or visited[y0, x0]:
+                continue
+            visited[y0, x0] = True
+            group = [(x0, y0)]
+            k = 0
+            while k < len(group):
+                x, y = group[k]
+                k += 1
+                for sx, sy in neighbours(x, y):
+                    if kind_of[sy, sx] == kind and not visited[sy, sx]:
+                        visited[sy, sx] = True
+                        group.append((sx, sy))
+            members = set(group)
+            xs, ys = [x for x, _ in group], [y for _, y in group]
+            sign = 1 if kind == 1 else -1
+            peak = max([F(0)] + [F(sign * deviation(x, y)) for x, y in group if core[y, x]])
+            speck = max(max(xs) - min(xs), max(ys) - min(ys)) + 1 <= size + 2
+            if speck:
+                around = {n for x, y in group for n in neighbours(x, y)} - members
+                speck = all(F(sign * deviation(x, y)) <= F(0.5) * peak for x, y in around)
+            for x, y in group:
+                if not speck:
+                    kind_of[y, x] = 0
+                    continue
+                for sx, sy in neighbours(x, y):
+                    if kind_of[sy, sx] == 0:
+                        ring[sy, sx] = True
+
     out = rgba.copy()
-    speck = (mask & 3) != 0
+    speck = (kind_of != 0) | ring
     for y, x in zip(*np.nonzero(speck)):
         keep = ~window(speck, x, y)
         if not keep.any():
@@ -495,7 +541,7 @@ def develop_negative(rgba, options):
     calibration = options.get("calibration") or analyze_negative(rgba, options)["calibration"]
     out = invert_negative(rgba, calibration, options.get("print", {}))
     h, w = rgba.shape[:2]
-    dust = options.get("dust_size")
+    dust = options.get("dust_size", 0)
     if dust is None:
         dust = max(2, int(F(0.005) * F(min(w, h)) + F(0.5)))
     if dust > 0:

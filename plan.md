@@ -51,8 +51,9 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.9 | `JpegEncoderOptions.ColorMode` (Auto, Color, Grayscale): liczba składowych JPEG, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
-| 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Przygotowana (2026-10-22), bez commita |
-| 0.7.12 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Planowana |
+| 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
+| 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Przygotowana (2026-10-22) |
+| 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -674,8 +675,37 @@ Stan (2026-10-22):
 - **Testy i dokumentacja:** hashe identyczne przy 1 i 8 wątkach, migawka API z samymi dodatkami,
   `docs/image-processing.md` (Curves, Dust and color noise, Film negatives), `docs/performance.md`, AotSmoke z nowymi
   operacjami.
-- **Pakiet:** `VERSION` 0.7.11, `PackageReleaseNotes` ×4, `docs/releases/release-0.7.11.md`. Bez commita i wydania;
-  ARM64 nieuruchamiane (kod skalarny).
+- **Pakiet:** `VERSION` 0.7.11, `PackageReleaseNotes` ×4, `docs/releases/release-0.7.11.md`; ARM64 nieuruchamiane
+  (kod skalarny).
+- **Wydanie (2026-10-22):** commit b8f39d8, Validate 39789702221 success, tag `v0.7.11`, GitHub Release. Workflow
+  Release 39790368038 padł w publish na niestabilnym teście czasowym anulowania (`multiply`), więc NuGet nie dostał
+  paczek. W tym czasie wyszło, że domyślne usuwanie kurzu (11 px na zdjęciu klatki z telefonu) zjada litery tablicy
+  rejestracyjnej. Decyzja użytkownika: nie publikować 0.7.11 na NuGet, poprawka jako 0.7.12.
+
+## 0.7.12 — poprawka usuwania kurzu
+
+- Przyczyna: litery tablicy są pochylone o ok. 20°, więc żaden z czterech odcinków testu nie biegnie wzdłuż kreski i
+  kreski były brane za kurz.
+- `RemoveDust`: spójna grupa pikseli plamki (8-sąsiedztwo, jeden kierunek) jest usuwana tylko, gdy ma najwyżej
+  `size` + 2 px i żaden piksel wokół niej nie odchyla się od mediany swojego okna w tę samą stronę o więcej niż
+  połowę największego odchylenia rdzenia grupy. Wypełniany jest też pierścień 1 px wokół plamki (bez obwódki po
+  miękkim brzegu). Wyniki `RemoveDust` zmieniają się (0.7.11 nie trafiło na NuGet).
+- Pomiary (prywatne `samples/negatyw`, `samples/film_plate_negative.png`): tablica „KSP 4823” przy 11 px — jasne
+  piksele liter 3050/3051 (wcześniej 873); „RX58” na skanie Hastings przy 19 px nietknięte (wcześniej ucięte
+  końce); kurz na negatywie NEF usuwany czysto, bez pierścienia; ograniczenie: odosobnione małe litery i światła
+  liter mniejsze niż `size` (np. „s”, wnętrze „0”) nadal giną.
+- `NegativeOptions.DustSize` domyślnie 0 (było `null` = automatycznie 0.5% krótszego boku). `null` nadal wybiera
+  rozmiar automatyczny; dokumentacja i XML opisują ryzyko.
+- Testy: syntetyczna tablica (pierścienie, ¾ pierścienia i kreski 5 px, `FilmNegativeTests`) — domyślnie wynik
+  identyczny z `DustSize` 0 i ≥ 98% kresek jasnych; `PhotoCleanupTests` z napisami i kreską pochyloną o 20° —
+  przy `size` 4, 8 i 11 pyłki znikają, a kreski zostają co do piksela (stary filtr: 1361 i 325 z 1827);
+  `FilmNegativeLocalTests` na prywatnym `samples/film_plate_negative.png` (IMG_8173): jasne piksele liter 3051
+  domyślnie, przy `DustSize` 4 i automatycznym; wyrocznia numpy z obrazem `lettering.png` (także `size` 8 i 11) i
+  `develop_negative` z `DustSize` 3; nowe hashe `RemoveDust` i `DevelopNegative` identyczne przy 1 i 8 wątkach.
+- Niestabilny test anulowania (`multiply`, powód porażki publish 0.7.11): `AssertCancelsPromptly` mierzy krótszy z
+  dwóch przebiegów, bo pierwszy zawiera rozgrzewkę JIT.
+- `VERSION` 0.7.12, `PackageReleaseNotes` ×4, `docs/releases/release-0.7.12.md`, uwaga w `release-0.7.11.md`, etapy C+D
+  przesunięte na 0.7.13.
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
@@ -763,5 +793,6 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.
 - **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.
 - **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.
-- **0.7.11** — negatywy z aparatu: `AnalyzeNegative`, `DevelopNegative`, `InvertNegative` (`NegativeOptions`, `NegativeCalibration`); `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`. Istniejące API i wyniki bez zmian.
+- **0.7.12** — `RemoveDust` zostawia szczegóły większe niż plamka (pochylone litery), `DevelopNegative` domyślnie bez usuwania kurzu (`NegativeOptions.DustSize` = 0); zawiera 0.7.11, którego nie opublikowano na NuGet.
+- **0.7.11** — (tylko tag i GitHub Release) negatywy z aparatu: `AnalyzeNegative`, `DevelopNegative`, `InvertNegative` (`NegativeOptions`, `NegativeCalibration`); `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`. Istniejące API i wyniki bez zmian.
 - **0.7.10** — `JpegDecoderOptions.CmykStorage` (`AdobeInverted`, `Plain`) w `DecoderOptions.Jpeg` oraz `DecodeEmbeddedPart` z `EmbeddedPartOptions` (ustawienia JPEG i stopień równoległości części): paski CMYK JPEG w TIFF. Istniejące API i wyniki bez zmian.

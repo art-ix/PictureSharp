@@ -9,7 +9,7 @@ namespace PictureSharp.Processing;
 /// </summary>
 public sealed record NegativeOptions
 {
-    /// <summary>Default options: a color negative, measured over the whole image, with dust and color-noise removal.</summary>
+    /// <summary>Default options: a color negative, measured over the whole image, with color-noise removal and without dust removal.</summary>
     public static NegativeOptions Default { get; } = new();
 
     /// <summary>The kind of film. Default: <see cref="FilmType.ColorNegative"/>.</summary>
@@ -62,14 +62,18 @@ public sealed record NegativeOptions
 
     /// <summary>
     /// The largest dust speck (pixels across) that <see cref="ImageProcessingContext.RemoveDust(int, float)"/> removes
-    /// after inversion, from 0 (no dust removal) to 64; <see langword="null"/> (the default) uses 0.5% of the shorter
-    /// side, at least 2.
+    /// after inversion, from 0 to 64; <see langword="null"/> uses 0.5% of the shorter side, at least 2. Default: 0, no
+    /// dust removal.
     /// </summary>
+    /// <remarks>
+    /// Dust removal is off by default because it cannot tell a speck from isolated detail of the same size, such as a
+    /// catchlight or a small letter. Choose a size close to the dust and smaller than the finest lettering.
+    /// </remarks>
     public int? DustSize
     {
         get;
         init => field = value is null or (>= 0 and <= 64) ? value : throw new ArgumentOutOfRangeException(nameof(DustSize), value, "DustSize must be between 0 and 64.");
-    }
+    } = 0;
 
     /// <summary>
     /// The strength (0–1) of <see cref="ImageProcessingContext.ReduceColorNoise(float, int)"/> after inverting a color

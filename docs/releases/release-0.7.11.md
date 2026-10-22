@@ -1,5 +1,8 @@
 # PictureSharp 0.7.11
 
+> **Not published to NuGet.** Its dust removal erased slanted lettering; [0.7.12](release-0.7.12.md) keeps detail
+> larger than a speck, turns dust removal in `DevelopNegative` off by default and contains everything below.
+
 Develops photographed film negatives, and adds the tools that this needs to `Mutate` and `Clone`. No breaking API
 changes since 0.7.10; existing operations produce exactly the same pixels.
 

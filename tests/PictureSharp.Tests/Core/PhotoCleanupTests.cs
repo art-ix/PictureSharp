@@ -52,6 +52,80 @@ public class PhotoCleanupTests
         return img;
     }
 
+    /// <summary>
+    /// Bright lettering on a dark plate, 280 × 60: the rings, three-quarter rings and bars of
+    /// <see cref="FilmNegativeTests.Plate"/> and a bar slanted by 20° at x = 260 (the strokes of a slanted letter run
+    /// between the four directions of the dust test), with bright specks of 3 × 3 at (4, 4), (100, 52) and (238, 6),
+    /// 2 × 2 at (58, 54) and 1 px at (140, 3).
+    /// </summary>
+    internal static Image Lettering()
+    {
+        using Image plate = FilmNegativeTests.Plate(240, 60);
+        var img = new Image(280, 60);
+        img.GetPixelSpan().Fill(plate[0, 0]);
+        Rgba32 bright = new(235, 225, 170, 255);
+        for (int y = 0; y < 60; y++)
+        {
+            for (int x = 0; x < 280; x++)
+            {
+                if (x < 240)
+                {
+                    img[x, y] = plate[x, y];
+                }
+                else if (Math.Abs((x - 260) - ((y - 30) * Math.Tan(Math.PI / 9))) <= 2.5 && Math.Abs(y - 30) <= 22)
+                {
+                    img[x, y] = bright;
+                }
+            }
+        }
+
+        foreach ((int x0, int y0, int size) in Specks)
+        {
+            for (int y = y0; y < y0 + size; y++)
+            {
+                for (int x = x0; x < x0 + size; x++)
+                {
+                    img[x, y] = bright;
+                }
+            }
+        }
+
+        return img;
+    }
+
+    private static readonly (int X, int Y, int Size)[] Specks = [(4, 4, 3), (100, 52, 3), (238, 6, 3), (58, 54, 2), (140, 3, 1)];
+
+    [Test]
+    [Arguments(4)]
+    [Arguments(8)]
+    [Arguments(11)]
+    public async Task RemoveDust_RemovesSpecks_AndKeepsLetteringLargerThanTheSize(int size)
+    {
+        using Image img = Lettering();
+        using Image clean = img.Clone(x => x.RemoveDust(size));
+        foreach ((int x0, int y0, int speck) in Specks)
+        {
+            Rgba32 p = clean[x0 + (speck / 2), y0 + (speck / 2)];
+            await Assert.That(Luma(p) < 80).IsTrue().Because($"speck at ({x0}, {y0}): {p}");
+        }
+
+        int strokes = 0, kept = 0;
+        for (int y = 0; y < 60; y++)
+        {
+            for (int x = 0; x < 280; x++)
+            {
+                bool speck = Specks.Any(s => x >= s.X - 1 && x <= s.X + s.Size && y >= s.Y - 1 && y <= s.Y + s.Size);
+                if (!speck && Luma(img[x, y]) > 200)
+                {
+                    strokes++;
+                    kept += clean[x, y] == img[x, y] ? 1 : 0;
+                }
+            }
+        }
+
+        await Assert.That(kept).IsEqualTo(strokes).Because($"{kept} of {strokes} stroke pixels unchanged");
+    }
+
     [Test]
     public async Task NeutralSettings_AreNoOps()
     {

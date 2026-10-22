@@ -1,0 +1,67 @@
+[
+  {
+    "Operation": "CopyOnly",
+    "Nanoseconds": 2382657.1428571427,
+    "AllocatedBytes": 48001113.125
+  },
+  {
+    "Operation": "Exposure",
+    "Nanoseconds": 11977069.23076923,
+    "AllocatedBytes": 48002101.538461536
+  },
+  {
+    "Operation": "WhiteBalance",
+    "Nanoseconds": 10241920,
+    "AllocatedBytes": 48002001.6
+  },
+  {
+    "Operation": "Vibrance",
+    "Nanoseconds": 36700780,
+    "AllocatedBytes": 48005075.2
+  },
+  {
+    "Operation": "Vignette",
+    "Nanoseconds": 34640680,
+    "AllocatedBytes": 48005158.4
+  },
+  {
+    "Operation": "ShadowsHighlights",
+    "Nanoseconds": 99520900,
+    "AllocatedBytes": 48032632
+  },
+  {
+    "Operation": "Clarity",
+    "Nanoseconds": 83716350,
+    "AllocatedBytes": 48032136
+  },
+  {
+    "Operation": "Denoise",
+    "Nanoseconds": 295983300,
+    "AllocatedBytes": 48124680
+  },
+  {
+    "Operation": "Curves",
+    "Nanoseconds": 12116369.23076923,
+    "AllocatedBytes": 48001529.23076923
+  },
+  {
+    "Operation": "NeutralWhiteBalance",
+    "Nanoseconds": 10704900,
+    "AllocatedBytes": 48001505.6
+  },
+  {
+    "Operation": "AutoWhiteBalance",
+    "Nanoseconds": 54941900,
+    "AllocatedBytes": 48008368
+  },
+  {
+    "Operation": "RemoveDust",
+    "Nanoseconds": 442489500,
+    "AllocatedBytes": 48088512
+  },
+  {
+    "Operation": "ReduceColorNoise",
+    "Nanoseconds": 252724500,
+    "AllocatedBytes": 48110160
+  }
+]

@@ -1,7 +1,8 @@
 # PictureSharp — wywoływanie negatywów sfotografowanych telefonem
 
 Status: **zatwierdzony** (decyzja użytkownika 2026-10-22): etapy A+B jako 0.7.11, C+D jako 0.7.12, oba przed
-0.8.0; praca zaczyna się od etapu A. Nazwy API są robocze do czasu zatwierdzenia migawki.
+0.8.0; praca zaczyna się od etapu A. Zmiana (2026-10-22): 0.7.11 bez paczek NuGet, 0.7.12 to poprawka usuwania
+kurzu (zjadało napisy: domyślnie wyłączone, test kształtu i izolacji plamki), etapy C+D przechodzą na 0.7.13. Nazwy API są robocze do czasu zatwierdzenia migawki.
 
 ## 1. Cel
 
@@ -201,7 +202,7 @@ Zachowanie wspólne:
 | C | `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, prostowanie i kadr w `DevelopNegative` | pełna automatyka (8158, 8160–8164) |
 | D | `NegativeCalibration.Combine`, strojenie wartości domyślnych na próbkach, dokumentacja, benchmarki, wydanie | rolka z jednym wyglądem |
 
-Propozycja wydań: A+B jako 0.7.11 i C+D jako 0.7.12, przed 0.8.0. Alternatywa: całość po 0.8.0. Decyzja należy do
+Propozycja wydań: A+B jako 0.7.11 i C+D jako 0.7.12, przed 0.8.0 (po poprawce 0.7.12: C+D jako 0.7.13). Alternatywa: całość po 0.8.0. Decyzja należy do
 użytkownika.
 
 ### Stan etapu A (2026-10-22)

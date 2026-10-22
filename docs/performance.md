@@ -118,9 +118,14 @@ around specks. `ReduceColorNoise` runs eight box passes over float planes. Raw r
 [8 threads](measurements/photo-adjust-0.7.11-probe-x64.json),
 [1 thread](measurements/photo-adjust-0.7.11-probe-x64-1thread.json).
 
+In 0.7.12 `RemoveDust(6)` takes 442.5 ms on 8 threads and 986.3 ms on one (+9% and +2%): the groups of speck pixels
+are checked for size and isolation on one thread. Raw results:
+[8 threads](measurements/photo-adjust-0.7.12-probe-x64.json),
+[1 thread](measurements/photo-adjust-0.7.12-probe-x64-1thread.json).
+
 `InvertNegative` is a 3 × 256 table like `Curves`. `AnalyzeNegative` samples about one million pixels: 11–22 ms on
-the 2–5 MP test negatives. `DevelopNegative` on a 5 MP photographed negative (2780 × 1790) takes about 0.3 s, mostly
-dust and color-noise removal.
+the 2–5 MP test negatives. `DevelopNegative` on a 5 MP photographed negative (2780 × 1790) took about 0.3 s with
+the dust removal of 0.7.11, mostly dust and color-noise removal; since 0.7.12 dust removal is off by default.
 
 ## Photo adjustments (0.7.7)
 

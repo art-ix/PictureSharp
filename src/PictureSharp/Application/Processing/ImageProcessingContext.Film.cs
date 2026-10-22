@@ -8,9 +8,9 @@ public readonly ref partial struct ImageProcessingContext
     /// <summary>
     /// Develops a photographed film negative into a positive: measures it as
     /// <see cref="ImageAnalysisExtensions.AnalyzeNegative(Image, NegativeOptions?)"/> does (unless
-    /// <see cref="NegativeOptions.Calibration"/> is given), inverts it with <see cref="InvertNegative"/>, then removes dust
-    /// and color noise. The whole image is developed; crop it to the frame first, or set
-    /// <see cref="NegativeOptions.Region"/> to measure only the frame. Alpha is kept.
+    /// <see cref="NegativeOptions.Calibration"/> is given), inverts it with <see cref="InvertNegative"/>, removes dust when
+    /// <see cref="NegativeOptions.DustSize"/> asks for it, then removes color noise. The whole image is developed; crop
+    /// it to the frame first, or set <see cref="NegativeOptions.Region"/> to measure only the frame. Alpha is kept.
     /// </summary>
     /// <remarks>
     /// The channels are inverted in the image's own color space, and its ICC profile or color description stays, so

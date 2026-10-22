@@ -294,14 +294,18 @@ public class CancellationInFlightTests
     }
 
     /// <summary>
-    /// Measures the uncanceled duration, then cancels a second run at a quarter of it: the run must end with
-    /// <see cref="OperationCanceledException"/> well before it would have finished.
+    /// Measures the uncanceled duration, then cancels another run at a quarter of it: the run must end with
+    /// <see cref="OperationCanceledException"/> well before it would have finished. The shorter of two uncanceled runs
+    /// is used, because the first one includes JIT warm-up and a fast operation could finish before a quarter of it.
     /// </summary>
     private static async Task AssertCancelsPromptly(Action<CancellationToken> work)
     {
         var watch = Stopwatch.StartNew();
         work(CancellationToken.None);
         TimeSpan full = watch.Elapsed;
+        watch.Restart();
+        work(CancellationToken.None);
+        full = TimeSpan.FromTicks(Math.Min(full.Ticks, watch.Elapsed.Ticks));
 
         using var source = new CancellationTokenSource();
         var started = new ManualResetEventSlim();

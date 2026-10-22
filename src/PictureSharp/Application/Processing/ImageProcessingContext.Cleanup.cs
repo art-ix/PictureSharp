@@ -10,14 +10,19 @@ public readonly ref partial struct ImageProcessingContext
     /// than a limit is a speck. The limit is <paramref name="threshold"/> or three times the local noise (from the
     /// median absolute deviation of each 32 × 32 tile), whichever is larger, so film grain is not taken for dust. The
     /// soft rim then joins over at most <paramref name="size"/> rounds: a neighbour of a speck whose luma differs from
-    /// the median of its (2 · size + 1)² window in the same direction by more than half the limit. Specks and rims get
-    /// the per-channel median of that window without speck pixels. Specks at most <paramref name="size"/> pixels
-    /// across are removed; edges and thin lines are kept, because they always have a segment along themselves.
-    /// Alpha is kept.
+    /// the median of its (2 · size + 1)² window in the same direction by more than half the limit. A connected group
+    /// of speck pixels is removed only when it spans at most <paramref name="size"/> + 2 pixels and no pixel around it
+    /// differs from the median of its window in the same direction by more than half the largest difference of the
+    /// group's core, so larger detail that the four directions miss, such as the strokes of a slanted letter, stays.
+    /// The specks, their rims and the ring of pixels around them get the per-channel median of that window without
+    /// those pixels. Edges and thin lines are kept, because they always have a segment along themselves. Alpha is
+    /// kept.
     /// </summary>
     /// <remarks>
-    /// Only luma is examined, so a faint speck that stands out no more than the grain stays, and a small bright
-    /// highlight (a catchlight) can be taken for dust; a scanner's infrared dust channel separates them reliably.
+    /// Only luma is examined, so a faint speck that stands out no more than the grain stays, and small isolated detail
+    /// no larger than <paramref name="size"/>, such as a catchlight, the dot of an i or the hole of a small 0, is taken
+    /// for dust. Keep <paramref name="size"/> near the size of the dust; a scanner's infrared dust channel separates
+    /// dust reliably.
     /// </remarks>
     /// <param name="size">The largest speck diameter in pixels, 1 to 64.</param>
     /// <param name="threshold">The smallest difference from the surroundings, 0 to 1 of the luma range (0.1 is about 26 levels); 0 is not allowed.</param>

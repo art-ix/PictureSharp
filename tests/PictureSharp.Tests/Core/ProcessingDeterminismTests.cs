@@ -48,9 +48,9 @@ public class ProcessingDeterminismTests
         { "curves", "283a9d7eafa3eecd62c45fe45d6fcb226a563bfc19ffc815f01bfe000bc3e688" },
         { "white_balance_neutral", "1c753d8f9dd35e92cbf2d530191dad3edd7e08948abdbaa3144d2217cf3d7625" },
         { "auto_white_balance", "c8e8a9900d0e38db42a06448ac9bb1fb56411ca1b986cf0cffe71f5e0bd5c611" },
-        { "remove_dust", "b4778d8821362b0d5ed1bc6d378785158d77278f82f4a707c018774971b5e712" },
+        { "remove_dust", "7a8483a8188a9ab7ea4c7d9966251e2db202707816310dc86e94e751c78c2d0e" },
         { "reduce_color_noise", "0945188f431d803d341de02e390209e14c64d9ca01e4d92719012d63064b6eb3" },
-        { "develop_negative", "db413766e7a41afddcd31897fa48eadfd28f9dcdd891f6874ec76de29517a880" },
+        { "develop_negative", "cdeca05eb887e504fe162e743e5b677eb6c5b3bf5f02c2ba47fff8422d8df622" },
     };
 
     // 720 × 480 pixels: enough for the parallel bands, so the hashes also pin the result against the thread count

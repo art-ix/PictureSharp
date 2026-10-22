@@ -9,11 +9,13 @@ namespace PictureSharp.Algorithms.Processing;
 /// the median of each of the four segments of 2·size + 1 pixels through it (horizontal, vertical and both diagonals).
 /// A speck at most <c>size</c> pixels across is a minority on every segment, whereas an edge or a line always has a
 /// segment along itself. The threshold rises to three times the local noise (the median absolute deviation of each
-/// 32 × 32 tile), so film grain is not taken for dust. Mirrored by tests/assets/photo_adjust_reference.py.
+/// 32 × 32 tile), so film grain is not taken for dust. Detail between the four directions (a slanted stroke) is
+/// detected too, but only small, isolated groups of speck pixels are replaced. Mirrored by
+/// tests/assets/photo_adjust_reference.py.
 /// </summary>
 internal static class DustFilter
 {
-    private const byte Bright = 1, Dark = 2, Rejected = 4;
+    private const byte Bright = 1, Dark = 2, Rejected = 4, Core = 8, Visited = 16, Ring = 32, Member = 64, Checked = 128;
     private const int SpeckMask = Bright | Dark;
     private const int Tile = 32;
 
@@ -27,8 +29,9 @@ internal static class DustFilter
     private static ReadOnlySpan<int> DirectionY => [0, 1, 1, -1];
 
     /// <summary>
-    /// Copies <paramref name="source"/> to <paramref name="destination"/> with every speck, and its rim, replaced by the
-    /// per-channel median of the (2·size + 1)² window around it that excludes other speck pixels. Alpha is kept.
+    /// Copies <paramref name="source"/> to <paramref name="destination"/> with every speck, its rim and the ring around
+    /// it replaced by the per-channel median of the (2·size + 1)² window around each pixel that excludes speck and ring
+    /// pixels. Alpha is kept.
     /// The rim grows from the detected core for at most <c>size</c> rounds: a neighbour of the speck joins when it
     /// differs from the median of its window in the same direction by more than half its limit.
     /// </summary>
@@ -126,6 +129,9 @@ internal static class DustFilter
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+            KeepSpecks(mask, luma, width, height, size);
+
             Parallelism.ForBands(height, rows, length, cancellationToken, (top, bottom) =>
             {
                 Span<int> counts = stackalloc int[3 * 256];
@@ -134,7 +140,7 @@ internal static class DustFilter
                     for (int x = 0; x < width; x++)
                     {
                         int i = (y * width) + x;
-                        if ((mask[i] & SpeckMask) != 0)
+                        if ((mask[i] & (SpeckMask | Ring)) != 0)
                         {
                             Replace(source, destination, mask, width, height, x, y, size, counts);
                         }
@@ -213,7 +219,133 @@ internal static class DustFilter
             }
         }
 
-        return bright ? Bright : Dark;
+        return (byte)((bright ? Bright : Dark) | Core);
+    }
+
+    /// <summary>
+    /// Keeps only small, isolated specks, and marks the ring of pixels around each of them for replacement too, so no
+    /// outline of its soft rim stays. Speck pixels form groups (8-connected, one polarity). The four segments miss
+    /// detail that runs between their directions, such as a stroke of a slanted letter, so its pixels are detected as
+    /// well; their group is not a speck when it extends beyond <paramref name="size"/> + 2 pixels (a speck and its
+    /// rim), or when a pixel around it deviates from the median of its window in the same direction by more than half
+    /// the largest deviation of the group's core: the group continues into larger detail, such as the rest of the
+    /// letter. Such groups are kept as they are.
+    /// </summary>
+    private static void KeepSpecks(byte[] mask, byte[] luma, int width, int height, int size)
+    {
+        int length = width * height, count = 0;
+        for (int i = 0; i < length; i++)
+        {
+            count += (mask[i] & SpeckMask) != 0 ? 1 : 0;
+        }
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        Span<int> counts = stackalloc int[256];
+        int[] pixels = ArrayPool<int>.Shared.Rent(count);
+        try
+        {
+            for (int seed = 0; seed < length; seed++)
+            {
+                int kind = mask[seed] & SpeckMask;
+                if (kind == 0 || (mask[seed] & Visited) != 0)
+                {
+                    continue;
+                }
+
+                mask[seed] |= Visited | Member;
+                pixels[0] = seed;
+                int n = 1;
+                int left = width, right = -1, top = height, bottom = -1;
+                float peak = 0f;
+                for (int k = 0; k < n; k++)
+                {
+                    int i = pixels[k], x = i % width, y = i / width;
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                    top = Math.Min(top, y);
+                    bottom = Math.Max(bottom, y);
+                    if ((mask[i] & Core) != 0)
+                    {
+                        float deviation = luma[i] - WindowMedian(luma, width, height, x, y, size, counts);
+                        peak = MathF.Max(peak, kind == Bright ? deviation : -deviation);
+                    }
+
+                    for (int sy = Math.Max(0, y - 1); sy <= Math.Min(height - 1, y + 1); sy++)
+                    {
+                        for (int sx = Math.Max(0, x - 1); sx <= Math.Min(width - 1, x + 1); sx++)
+                        {
+                            int j = (sy * width) + sx;
+                            if ((mask[j] & (SpeckMask | Visited)) == kind)
+                            {
+                                mask[j] |= Visited | Member;
+                                pixels[n++] = j;
+                            }
+                        }
+                    }
+                }
+
+                bool speck = Math.Max(right - left, bottom - top) + 1 <= size + 2
+                    && IsIsolated(mask, luma, width, height, size, pixels.AsSpan(0, n), kind, 0.5f * peak, counts);
+                for (int k = 0; k < n; k++)
+                {
+                    int i = pixels[k], x = i % width, y = i / width;
+                    mask[i] = speck ? (byte)(mask[i] & ~Member) : Visited;
+                    for (int sy = Math.Max(0, y - 1); sy <= Math.Min(height - 1, y + 1); sy++)
+                    {
+                        for (int sx = Math.Max(0, x - 1); sx <= Math.Min(width - 1, x + 1); sx++)
+                        {
+                            int j = (sy * width) + sx;
+                            mask[j] = (byte)(mask[j] & ~Checked);
+                            if (speck && (mask[j] & SpeckMask) == 0)
+                            {
+                                mask[j] |= Ring;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(pixels);
+        }
+    }
+
+    /// <summary>
+    /// Whether no pixel around the group (outside it, 8-connected) deviates from the median of its window in the
+    /// group's direction by more than <paramref name="limit"/>. Examined pixels are marked <see cref="Checked"/>.
+    /// </summary>
+    private static bool IsIsolated(byte[] mask, byte[] luma, int width, int height, int size, ReadOnlySpan<int> group,
+        int kind, float limit, Span<int> counts)
+    {
+        foreach (int i in group)
+        {
+            int x = i % width, y = i / width;
+            for (int sy = Math.Max(0, y - 1); sy <= Math.Min(height - 1, y + 1); sy++)
+            {
+                for (int sx = Math.Max(0, x - 1); sx <= Math.Min(width - 1, x + 1); sx++)
+                {
+                    int j = (sy * width) + sx;
+                    if ((mask[j] & (Member | Checked)) != 0)
+                    {
+                        continue;
+                    }
+
+                    mask[j] |= Checked;
+                    float deviation = luma[j] - WindowMedian(luma, width, height, sx, sy, size, counts);
+                    if ((kind == Bright ? deviation : -deviation) > limit)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 
     private static int NeighbourSpecks(byte[] mask, int width, int height, int x, int y)
@@ -256,7 +388,7 @@ internal static class DustFilter
             for (int sx = Math.Max(0, x - size); sx <= Math.Min(width - 1, x + size); sx++)
             {
                 int i = (sy * width) + sx;
-                if ((mask[i] & SpeckMask) != 0)
+                if ((mask[i] & (SpeckMask | Ring)) != 0)
                 {
                     continue;
                 }

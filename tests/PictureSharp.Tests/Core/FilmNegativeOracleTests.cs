@@ -15,8 +15,10 @@ public class FilmNegativeOracleTests
 {
     private static readonly Lazy<bool> NumpyAvailable = new(() => ReferenceTools.Run("python3", "-I -c \"import numpy, PIL\"", out _) == 0);
 
-    private static object Options(Image negative, bool regions, FilmType type = FilmType.ColorNegative, float highlight = 99.7f, float balance = 0.6f) => new
+    private static object Options(Image negative, bool regions, FilmType type = FilmType.ColorNegative, float highlight = 99.7f,
+        float balance = 0.6f, int dust = 0) => new
     {
+        dust_size = dust,
         film_type = (int)type,
         region = regions ? Rect(FilmNegativeTests.ImageArea(negative)) : null,
         film_base_region = regions ? Rect(FilmNegativeTests.RebateArea(negative)) : null,
@@ -91,6 +93,9 @@ public class FilmNegativeOracleTests
                 string develop = $"{stem}_develop";
                 jobs.Add(new { name = develop, input, op = "develop_negative", options = Options(image, regions) });
                 images[develop] = () => image.Clone(x => x.DevelopNegative(Regions(image, regions, new NegativeOptions())));
+                string dusty = $"{stem}_develop_dust";
+                jobs.Add(new { name = dusty, input, op = "develop_negative", options = Options(image, regions, dust: 3) });
+                images[dusty] = () => image.Clone(x => x.DevelopNegative(Regions(image, regions, new NegativeOptions { DustSize = 3 })));
             }
 
             File.WriteAllText(Path.Combine(dir, "jobs.json"), JsonSerializer.Serialize(jobs));

@@ -253,4 +253,63 @@ public class FilmNegativeTests
         await Assert.That(() => NegativeCalibration.Combine([Make(0.5f, 1f, 1f), Make(0.5f, 1f, 1f) with { FilmType = FilmType.BlackAndWhiteNegative }]))
             .Throws<ArgumentException>();
     }
+
+    /// <summary>
+    /// A dark plate (luma about 40) with bright lettering-like strokes 5 pixels wide: rings of 12 pixels radius, half
+    /// rings and short bars, like the letters S, 8, 3 and P that a too large dust size erased in 0.7.11.
+    /// </summary>
+    internal static Image Plate(int width, int height)
+    {
+        var plate = new Image(width, height);
+        plate.GetPixelSpan().Fill(new Rgba32(45, 40, 38, 255));
+        var bright = new Rgba32(235, 225, 170, 255);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int cell = x / 40, cx = (cell * 40) + 20, cy = height / 2;
+                double r = Math.Sqrt(((x - cx) * (x - cx)) + ((y - cy) * (y - cy)));
+                bool stroke = (cell % 3) switch
+                {
+                    0 => Math.Abs(r - 12) <= 2.5,                                 // ring (O, 8)
+                    1 => Math.Abs(r - 12) <= 2.5 && (x < cx || y < cy),           // three-quarter ring (S, 3)
+                    _ => Math.Abs(x - cx) <= 2 && Math.Abs(y - cy) <= 15,         // bar (I, P)
+                };
+                if (stroke)
+                {
+                    plate[x, y] = bright;
+                }
+            }
+        }
+
+        return plate;
+    }
+
+    [Test]
+    public async Task Develop_ByDefault_RemovesNoDust_AndKeepsLettering()
+    {
+        using Image positive = Plate(240, 60);
+        using Image negative = Negative(positive, 8);
+        var options = new NegativeOptions { Region = ImageArea(negative), FilmBaseRegion = RebateArea(negative) };
+        using Image developed = negative.Clone(x => x.DevelopNegative(options));
+        using Image withoutDust = negative.Clone(x => x.DevelopNegative(options with { DustSize = 0 }));
+        await Assert.That(new NegativeOptions().DustSize).IsEqualTo(0);
+        await Assert.That(developed.GetPixelSpan().SequenceEqual(withoutDust.GetPixelSpan())).IsTrue();
+
+        int strokes = 0, kept = 0;
+        for (int y = 0; y < positive.Height; y++)
+        {
+            for (int x = 0; x < positive.Width; x++)
+            {
+                if (positive[x, y].R > 200)
+                {
+                    strokes++;
+                    Rgba32 p = developed[x, y + Rebate];
+                    kept += (2126 * p.R) + (7152 * p.G) + (722 * p.B) > 1_400_000 ? 1 : 0;
+                }
+            }
+        }
+
+        await Assert.That(kept * 100 >= strokes * 98).IsTrue().Because($"{kept} of {strokes} stroke pixels stay bright");
+    }
 }
