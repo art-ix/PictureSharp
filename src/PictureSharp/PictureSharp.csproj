@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.7.12 fixes dust removal: RemoveDust keeps detail larger than a speck (in 0.7.11 it erased slanted letters of a licence plate) and replaces the ring around a speck, and DevelopNegative removes no dust by default (NegativeOptions.DustSize = 0). Includes everything of 0.7.11, which was not published to NuGet: film negatives (AnalyzeNegative, DevelopNegative, InvertNegative, NegativeCalibration), Curves, WhiteBalance(Rgba32), AutoWhiteBalance, RemoveDust and ReduceColorNoise. Existing API and results unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.12/docs/releases/release-0.7.12.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.13 makes film negatives automatic: FindFilmFrame finds a 35 mm frame from its perforation, and DevelopNegative straightens and crops it, takes the film base from the rebate and evens out the backlight (NegativeOptions.Frame, Crop, CorrectIllumination; warnings BacklightTexture, FrameCut, UnevenIllumination). On a photograph with perforation DevelopNegative now returns the cropped frame. Bicubic rotation is vectorized and parallel with identical pixels. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.13/docs/releases/release-0.7.13.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

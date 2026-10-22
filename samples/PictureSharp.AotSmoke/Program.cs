@@ -20,6 +20,13 @@ using (Image developed = source.Clone(x => x.Curves([new(0, 0), new(128, 140), n
     if (developed.Size != source.Size || analysis.Calibration.DensityRange.Red <= 0)
         throw new InvalidOperationException("Film negative processing failed.");
 }
+using (Image strip = FilmStrip())
+{
+    FilmFrame? frame = strip.FindFilmFrame();
+    using Image developed = strip.Clone(x => x.DevelopNegative());
+    if (frame is null || developed.Size != frame.Bounds.Size || frame.PerforationsVertical)
+        throw new InvalidOperationException("Film frame detection failed.");
+}
 foreach (ImageFormat format in ImageFormat.All)
 {
     byte[] bytes = source.Encode(format);
@@ -245,7 +252,27 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
         throw new InvalidOperationException("Plugin embedded parts failed.");
 }
 
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, photo adjustments, film negatives, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options, embedded parts) and a frame processor.");
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, photo adjustments, film negatives and frames, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options, embedded parts) and a frame processor.");
+
+// A light box with a strip of color negative: two rows of perforation (4 px per mm), a frame and its neighbors.
+static Image FilmStrip()
+{
+    var strip = new Image(320, 220, new Rgba32(230, 240, 255, 255));
+    for (int y = 40; y < 180; y++)
+    {
+        for (int x = 0; x < 320; x++)
+        {
+            int along = ((x - 160) % 19 + 19) % 19, inFrame = ((x - 160) % 152 + 152 + 76) % 152 - 76;
+            bool hole = (along <= 5 || along >= 14) && (Math.Abs(y - 52) < 4 || Math.Abs(y - 168) < 4);
+            bool picture = Math.Abs(inFrame) < 72 && y >= 62 && y < 158;
+            strip[x, y] = hole ? strip[x, y] : picture
+                ? new Rgba32((byte)(90 + ((x * 7) % 40)), (byte)(45 + ((y * 5) % 30)), (byte)(25 + ((x + y) % 20)), 255)
+                : new Rgba32(200, 120, 70, 255);
+        }
+    }
+
+    return strip;
+}
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>

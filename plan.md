@@ -53,7 +53,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
 | 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
 | 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
-| 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | W toku: etap C zaimplementowany (2026-10-22) |
+| 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Przygotowana (2026-10-22) |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -710,7 +710,7 @@ Stan (2026-10-22):
   Release 39808993598 success: 4 paczki na NuGet i jako zasoby wydania. Do wydania v0.7.11 dopisana uwaga, że nie
   trafiło na NuGet.
 
-## 0.7.13 — negatywy: pełna automatyka (etap C, w toku)
+## 0.7.13 — negatywy: pełna automatyka (etapy C+D)
 
 - `FindFilmFrame()` (`FilmFrame`: `Angle`, `Bounds` po `Rotate(Angle)`, `PerforationsVertical`, `CutEdges`
   `FilmFrameEdges`) — szczegóły i wyniki w [plan_film.md](plan_film.md) („Stan etapu C”).
@@ -722,6 +722,10 @@ Stan (2026-10-22):
   `Vector256<double>` (te same działania co skalar; 2× szybciej na jednym wątku).
 - Zmiana zachowania: `DevelopNegative()` na zdjęciu paska z perforacją zwraca wykadrowaną klatkę (0.7.12: cały
   obraz). Bez perforacji jak dotąd.
+- Etap D: wartości domyślne potwierdzone na próbkach (warianty `MidtoneBalance` 0,4/0,8, `Contrast` 1,9,
+  `HighlightPercentile` 99,9 bez wyraźnej poprawy); `FilmNegativeBenchmarks` (`film-probe`, 11 Mpx: FindFilmFrame
+  37 ms / 180 ms, DevelopNegative 140 ms / 434 ms na 8 / 1 wątku); AotSmoke z paskiem i `FindFilmFrame`;
+  `docs/releases/release-0.7.13.md`, `PackageReleaseNotes` ×4, `VERSION` 0.7.13.
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
@@ -809,6 +813,7 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.
 - **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.
 - **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.
+- **0.7.13** — `FindFilmFrame`, `DevelopNegative()` sam znajduje, prostuje i kadruje klatkę, podłoże z brzegu, korekcja podświetlenia, ostrzeżenia `BacklightTexture`/`FrameCut`/`UnevenIllumination`; szybszy obrót bicubic.
 - **0.7.12** — `RemoveDust` zostawia szczegóły większe niż plamka (pochylone litery), `DevelopNegative` domyślnie bez usuwania kurzu (`NegativeOptions.DustSize` = 0); zawiera 0.7.11, którego nie opublikowano na NuGet.
 - **0.7.11** — (tylko tag i GitHub Release) negatywy z aparatu: `AnalyzeNegative`, `DevelopNegative`, `InvertNegative` (`NegativeOptions`, `NegativeCalibration`); `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`. Istniejące API i wyniki bez zmian.
 - **0.7.10** — `JpegDecoderOptions.CmykStorage` (`AdobeInverted`, `Plain`) w `DecoderOptions.Jpeg` oraz `DecodeEmbeddedPart` z `EmbeddedPartOptions` (ustawienia JPEG i stopień równoległości części): paski CMYK JPEG w TIFF. Istniejące API i wyniki bez zmian.

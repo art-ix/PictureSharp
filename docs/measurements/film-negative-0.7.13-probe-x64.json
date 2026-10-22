@@ -1,0 +1,22 @@
+[
+  {
+    "Operation": "FindFilmFrame",
+    "Nanoseconds": 37191240,
+    "AllocatedBytes": 28107536
+  },
+  {
+    "Operation": "AnalyzeNegative",
+    "Nanoseconds": 6277108.333333333,
+    "AllocatedBytes": 12640
+  },
+  {
+    "Operation": "DevelopKnownFrame",
+    "Nanoseconds": 100421150,
+    "AllocatedBytes": 74794288
+  },
+  {
+    "Operation": "DevelopNegative",
+    "Nanoseconds": 139947500,
+    "AllocatedBytes": 102913124
+  }
+]

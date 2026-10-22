@@ -32,6 +32,12 @@ if (args is ["graphics-probe", string graphicsOutput])
     return;
 }
 
+if (args is ["film-probe", string filmOutput])
+{
+    FilmNegativeBenchmarks.Probe(filmOutput);
+    return;
+}
+
 if (args is ["photo-probe", string photoOutput])
 {
     PhotoAdjustBenchmarks.Probe(photoOutput);

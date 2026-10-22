@@ -98,6 +98,30 @@ Regression checks against the previous release use the 80-case `matrix-probe` ma
 above +5% are rechecked alternating in separate AssemblyLoadContexts (15 samples of at least 180 ms). These are
 lightweight probes, not full BenchmarkDotNet studies.
 
+## Film frames (0.7.13)
+
+`film-probe` (`FilmNegativeBenchmarks`): a synthetic photographed strip of 4000 × 2750 pixels (light box, two rows of
+perforation, the frame and its neighbors) turned by 1.5°, median of seven samples, Intel Core i5-12500H, linux-x64,
+CPUs 0–7 or one thread on CPU 0. The pixels are identical at both (`ProcessingDeterminismTests`, strip case).
+
+| Operation | 1 thread | 8 threads | Allocated |
+| --- | ---: | ---: | ---: |
+| `FindFilmFrame()` | 180.4 ms | 37.2 ms | 26.8 MiB |
+| `AnalyzeNegative(Frame = frame)` | 10.0 ms | 6.3 ms | 0 |
+| `DevelopNegative` with a known frame and calibration | 407.7 ms | 100.4 ms | 71.3 MiB |
+| `DevelopNegative()` | 434.4 ms | 139.9 ms | 98.1 MiB |
+
+`FindFilmFrame` works on a preview of about 1024 pixels (its float planes are most of the allocation), so its time
+barely grows with the photo. Developing straightens and crops the 2.8 × 1.9 k frame in one bicubic pass, prints it
+with the backlight correction and removes color noise. On the 12 MP iPhone photographs of the private samples
+`DevelopNegative()` takes 190–260 ms on 16 threads.
+
+The bicubic filter of `Rotate` (and of this straightening) evaluates the four channels in one `Vector256<double>`, with
+the scalar operations in the same order: a 0.7° rotation of a 12 MP image takes 342 ms instead of 690 ms on one
+thread, with identical pixels (`AffineSimdTests`); its rows now also run in parallel. Raw results:
+[8 threads](measurements/film-negative-0.7.13-probe-x64.json),
+[1 thread](measurements/film-negative-0.7.13-probe-x64-1thread.json).
+
 ## Film negatives and cleanup (0.7.11)
 
 `photo-probe` as in [Photo adjustments (0.7.7)](#photo-adjustments-077): 4000 × 3000, copy-on-write `Clone`, median of

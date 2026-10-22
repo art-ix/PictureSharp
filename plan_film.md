@@ -2,8 +2,8 @@
 
 Status: **zatwierdzony** (decyzja użytkownika 2026-10-22): etapy A+B jako 0.7.11, C+D jako 0.7.12, oba przed
 0.8.0; praca zaczyna się od etapu A. Zmiana (2026-10-22): 0.7.11 bez paczek NuGet, 0.7.12 to poprawka usuwania
-kurzu (zjadało napisy: domyślnie wyłączone, test kształtu i izolacji plamki), etapy C+D przechodzą na 0.7.13. Nazwy API są robocze do czasu zatwierdzenia migawki. Etap C zaimplementowany
-(2026-10-22), etap D (strojenie, benchmarki, wydanie) do zrobienia.
+kurzu (zjadało napisy: domyślnie wyłączone, test kształtu i izolacji plamki), etapy C+D przechodzą na 0.7.13. Nazwy API są robocze do czasu zatwierdzenia migawki. Etapy C i D zaimplementowane
+(2026-10-22); wydanie 0.7.13 przygotowane.
 
 ## 1. Cel
 
@@ -284,6 +284,14 @@ Testy: `FilmFrameTests` (syntetyczny pasek: prosty, ±kąty, pionowy, ucięty z 
 
 Ograniczenia: łuki i plamy podświetlenia (8162, 8169D, 8170) zostają (nie są płaszczyzną); kierunek sceny wybiera
 użytkownik; klisza bez widocznej lampy w otworach (np. bardzo jasne podłoże cz.-b.) nie zostanie znaleziona.
+
+### Stan etapu D (2026-10-22)
+
+- `NegativeCalibration.Combine` był gotowy w etapie B.
+- Strojenie: warianty `MidtoneBalance` 0,4 i 0,8, `Contrast` 1,9 i `HighlightPercentile` 99,9 na 8158, 8160, 8165D,
+  8171, 8173 — żaden nie jest lepszy na wszystkich (0,8: lawendowe niebo, 0,4: zielonkawy odcień, 1,9: ciemne
+  wnętrza), więc wartości domyślne zostają.
+- `FilmNegativeBenchmarks` (`film-probe`), AotSmoke z paskiem, dokumentacja i notatki 0.7.13.
 
 ## 6. Testy i wyrocznie
 
