@@ -24,7 +24,8 @@ HEIC and TIFF come from plugin packages, also 100% C#:
 
 ¹ [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif): `dotnet add package PictureSharp.Heif`
 
-² [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff): `dotnet add package PictureSharp.Tiff`
+² [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff): `dotnet add package PictureSharp.Tiff`. Reads
+and writes multi-page TIFF and BigTIFF; reads also CMYK, YCbCr, CIE L\*a\*b\*, 1- to 32-bit and floating-point samples.
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
