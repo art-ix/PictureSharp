@@ -10,7 +10,9 @@ namespace PictureSharp.Tests.Extensibility;
 /// </summary>
 /// <param name="charged">Decodes the tiles with <see cref="ImageDecodeContext.DecodeEmbedded"/> instead, charging them.</param>
 /// <param name="afterTile">Called after each tile with its index, e.g. to cancel the load.</param>
-public sealed class TiledContainerFormat(bool charged = false, Action<int>? afterTile = null) : IImageFormatModule, IImageFormatDecoder
+/// <param name="partOptions">Decodes the tiles with these part settings, through the overload that takes them.</param>
+public sealed class TiledContainerFormat(bool charged = false, Action<int>? afterTile = null, EmbeddedPartOptions? partOptions = null)
+    : IImageFormatModule, IImageFormatDecoder
 {
     public static ImageFormat Format { get; } = ImageFormat.Create("TILE", "application/x-tiled-image", ".tiles");
 
@@ -44,7 +46,9 @@ public sealed class TiledContainerFormat(bool charged = false, Action<int>? afte
             offset += 4 + length;
             int x0 = i % across * header.TileWidth, y0 = i / across * header.TileHeight;
             int width = Math.Min(header.TileWidth, header.Width - x0), height = Math.Min(header.TileHeight, header.Height - y0);
-            using (Image tile = charged ? context.DecodeEmbedded(tileData) : context.DecodeEmbeddedPart(tileData, header.TileWidth, header.TileHeight))
+            using (Image tile = charged ? context.DecodeEmbedded(tileData)
+                : partOptions is null ? context.DecodeEmbeddedPart(tileData, header.TileWidth, header.TileHeight)
+                : context.DecodeEmbeddedPart(tileData, header.TileWidth, header.TileHeight, partOptions))
             {
                 if (tile.Width < width || tile.Height < height)
                 {

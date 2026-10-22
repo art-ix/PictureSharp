@@ -1,0 +1,25 @@
+{
+ "generator": "Pillow 10.2.0, libjpeg-turbo 2.1.5",
+ "files": {
+  "jpeg/cmyk.jpg": {
+   "width": 256,
+   "height": 192,
+   "sha256": "202ccab02eb146cacd99ef62f3eabd4fbd19c041b1b864e1125aba54fa7aa93d"
+  },
+  "jpeg/cmyk_progressive.jpg": {
+   "width": 256,
+   "height": 192,
+   "sha256": "0e3629fb67270554f07f936db2d8680aaa05db84fe785c3061543ad45f871317"
+  },
+  "jpeg/crafted_cmyk_no_adobe.jpg": {
+   "width": 61,
+   "height": 45,
+   "sha256": "eecb611251bcb06c4a1796ceb9d6ee323b290472d633c9515f4dd9c115a5a7b1"
+  },
+  "jpeg/crafted_ycck.jpg": {
+   "width": 61,
+   "height": 45,
+   "sha256": "37efe7e2592ce79a89c639848e56ad44e531b13329842b08780d2596f433278c"
+  }
+ }
+}

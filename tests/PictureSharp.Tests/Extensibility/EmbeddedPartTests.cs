@@ -2,6 +2,7 @@ using PictureSharp.Formats;
 using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Png;
 using PictureSharp.Tests.Infrastructure;
+using PictureSharp.Tests.Jpeg;
 
 namespace PictureSharp.Tests.Extensibility;
 
@@ -121,8 +122,69 @@ public class EmbeddedPartTests
         await Assert.That(error.Format).IsSameReferenceAs(ImageFormat.Png);
     }
 
-    private static ImageConfiguration Configure(TiledContainerFormat format) =>
-        ImageConfiguration.Default.ToBuilder().AddFormat(format).Build();
+    [Test]
+    public async Task PartOptions_ReplaceTheLoadsSettingsForThePart()
+    {
+        var probe = new OptionsProbeFormat();
+        var partOptions = new EmbeddedPartOptions { Jpeg = new JpegDecoderOptions { CmykStorage = JpegCmykStorage.Plain }, MaxDegreeOfParallelism = 1 };
+        var options = new DecoderOptions { Configuration = Configure(new TiledContainerFormat(partOptions: partOptions), probe), MaxDegreeOfParallelism = 3 };
+
+        using Image image = Image.Load(TiledContainerFormat.Create(2, 1, 1, 1, OptionsProbeFormat.Part, OptionsProbeFormat.Part), options);
+        await Assert.That(probe.Seen.Count).IsEqualTo(2);
+        foreach (DecoderOptions part in probe.Seen)
+        {
+            await Assert.That(part.Jpeg.CmykStorage).IsEqualTo(JpegCmykStorage.Plain);
+            await Assert.That(part.MaxDegreeOfParallelism).IsEqualTo(1);
+            await Assert.That((part.MaxPixels, part.MaxFrames, part.IgnoreMetadata)).IsEqualTo((1L, 1, true));
+        }
+    }
+
+    [Test]
+    public async Task PartOptions_WithoutSettings_KeepTheLoads()
+    {
+        var probe = new OptionsProbeFormat();
+        var jpeg = new JpegDecoderOptions { CmykStorage = JpegCmykStorage.Plain };
+        var options = new DecoderOptions
+        {
+            Configuration = Configure(new TiledContainerFormat(partOptions: new EmbeddedPartOptions()), probe),
+            MaxDegreeOfParallelism = 3,
+            Jpeg = jpeg,
+        };
+
+        using Image image = Image.Load(TiledContainerFormat.Create(1, 1, 1, 1, OptionsProbeFormat.Part), options);
+        await Assert.That(probe.Seen.Single().Jpeg).IsSameReferenceAs(jpeg);
+        await Assert.That(probe.Seen.Single().MaxDegreeOfParallelism).IsEqualTo(3);
+    }
+
+    [Test]
+    [MethodDataSource(typeof(JpegCmykStorageTests), nameof(JpegCmykStorageTests.FourComponentFiles))]
+    public async Task CmykJpegPart_DecodesWithThePartsStorage(string file)
+    {
+        byte[] jpeg = Corpus.Read(file);
+        using Image stored = Image.Load(jpeg);
+        var plain = new JpegDecoderOptions { CmykStorage = JpegCmykStorage.Plain };
+        byte[] data = TiledContainerFormat.Create(stored.Width, stored.Height, stored.Width, stored.Height, jpeg);
+        var options = new DecoderOptions { Configuration = Configure(new TiledContainerFormat(partOptions: new EmbeddedPartOptions { Jpeg = plain })) };
+
+        using Image image = Image.Load(data, options);
+        using Image expected = Image.Load(jpeg, new DecoderOptions { Jpeg = plain });
+        await Assert.That(image.GetPixelSpan().SequenceEqual(expected.GetPixelSpan())).IsTrue();
+        await Assert.That(image.GetPixelSpan().SequenceEqual(stored.GetPixelSpan())).IsFalse();
+    }
+
+    [Test]
+    public async Task PartOptions_RejectAnInvalidDegree()
+    {
+        await Assert.That(() => new EmbeddedPartOptions { MaxDegreeOfParallelism = 0 }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(new EmbeddedPartOptions { MaxDegreeOfParallelism = -1 }.MaxDegreeOfParallelism).IsEqualTo(-1);
+        await Assert.That(new EmbeddedPartOptions { MaxDegreeOfParallelism = null }.MaxDegreeOfParallelism).IsNull();
+    }
+
+    private static ImageConfiguration Configure(TiledContainerFormat format, OptionsProbeFormat? probe = null)
+    {
+        ImageConfigurationBuilder builder = ImageConfiguration.Default.ToBuilder().AddFormat(format);
+        return (probe is null ? builder : builder.AddFormat(probe)).Build();
+    }
 
     private static Rgba32 Color(int index) => new((byte)(40 * index), (byte)(255 - 30 * index), 100, 255);
 
@@ -130,6 +192,34 @@ public class EmbeddedPartTests
     {
         using var tile = new Image(width, height, Color(index));
         return tile.ToPng();
+    }
+
+    /// <summary>A 1 x 1 embedded format ("PROB") whose decoder records the options each part is decoded with.</summary>
+    private sealed class OptionsProbeFormat : IImageFormatModule, IImageFormatDecoder
+    {
+        public static byte[] Part { get; } = [.. "PROB"u8];
+
+        public List<DecoderOptions> Seen { get; } = [];
+
+        public ImageFormat Format { get; } = ImageFormat.Create("PROB", "application/x-options-probe", ".probe");
+
+        public int HeaderSize => 4;
+
+        public IImageFormatDecoder Decoder => this;
+
+        public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("PROB"u8);
+
+        public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) => new() { Format = Format, Width = 1, Height = 1 };
+
+        public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+        {
+            lock (Seen)
+            {
+                Seen.Add(context.Options);
+            }
+
+            return new Image(1, 1, Color(0));
+        }
     }
 
     private static Image Gradient(int width, int height)

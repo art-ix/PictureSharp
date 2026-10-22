@@ -1,5 +1,6 @@
 using PictureSharp.Formats;
 using PictureSharp.Formats.Ico;
+using PictureSharp.Formats.Jpeg;
 using PictureSharp.Formats.Png;
 using PictureSharp.Formats.WebP;
 using PictureSharp.Primitives.Numerics;
@@ -123,6 +124,9 @@ public sealed record DecoderOptions
 
     /// <summary>ICO variant selection.</summary>
     public IcoDecoderOptions Ico { get; init => field = value ?? throw new ArgumentNullException(nameof(Ico)); } = new();
+
+    /// <summary>JPEG decoding settings.</summary>
+    public JpegDecoderOptions Jpeg { get; init => field = value ?? throw new ArgumentNullException(nameof(Jpeg)); } = new();
 
     /// <summary>
     /// Decoding settings of plugin formats, at most one per type, for example the page or element a container plugin

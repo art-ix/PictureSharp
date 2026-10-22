@@ -73,6 +73,7 @@ using var image = Image.Load("upload.jpg", options);
 | `TargetReducingGap` | 2 | JPEG: how much larger than the final size a reduced decode must stay, per side (at least 1). |
 | `IgnoreMetadata` | false | Do not read ICC, EXIF and XMP blocks. |
 | `Png.StrictChecksums` | false | PNG: fail on CRC mismatches instead of ignoring them. |
+| `Jpeg.CmykStorage` | `AdobeInverted` | JPEG with four components: `Plain` reads the values as ink amounts (as TIFF stores CMYK) instead of Adobe's inverted ones. |
 | `WebP.FancyUpsampling` | true | WebP lossy: smooth chroma upsampling, as libwebp. |
 | `WebP.BypassFiltering` | false | WebP lossy: skip the deblocking filter (faster, lower quality). |
 | `ColorConversion` | `None` | `ToSrgb` converts to sRGB; see [Color management](color-management.md). |

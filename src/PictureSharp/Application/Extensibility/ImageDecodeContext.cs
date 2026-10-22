@@ -11,6 +11,8 @@ namespace PictureSharp.Formats;
 /// </summary>
 public sealed class ImageDecodeContext
 {
+    private static readonly EmbeddedPartOptions DefaultPartOptions = new();
+
     private readonly DecodeContext _context;
     private readonly ICodecResolver _codecs;
     private readonly ImageFormat _format;
@@ -129,7 +131,7 @@ public sealed class ImageDecodeContext
     /// <summary>
     /// Decodes an image embedded in a container format with the codecs of the same configuration, sharing this
     /// decode's limits. The result is full size; the caller owns it. For strips or tiles of an image already
-    /// reserved with <see cref="ReservePixels"/>, use <see cref="DecodeEmbeddedPart"/>.
+    /// reserved with <see cref="ReservePixels"/>, use <see cref="DecodeEmbeddedPart(ReadOnlyMemory{byte}, int, int)"/>.
     /// </summary>
     public Image DecodeEmbedded(ReadOnlyMemory<byte> data)
     {
@@ -156,8 +158,25 @@ public sealed class ImageDecodeContext
     /// The part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>, the embedded image is larger
     /// than the part, or it is corrupt or not recognized.
     /// </exception>
-    public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height)
+    public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height) =>
+        DecodeEmbeddedPart(data, width, height, DefaultPartOptions);
+
+    /// <summary>
+    /// Decodes one part as <see cref="DecodeEmbeddedPart(ReadOnlyMemory{byte}, int, int)"/> does, with
+    /// <paramref name="options"/> replacing the load's settings for this part only.
+    /// </summary>
+    /// <param name="data">The embedded image, e.g. a JPEG strip.</param>
+    /// <param name="width">The width of the part in the image, at least 1.</param>
+    /// <param name="height">The height of the part in the image, at least 1.</param>
+    /// <param name="options">The part's own settings, such as how a JPEG part stores CMYK.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
+    /// <exception cref="ImageFormatException">
+    /// The part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>, the embedded image is larger
+    /// than the part, or it is corrupt or not recognized.
+    /// </exception>
+    public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height, EmbeddedPartOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         ThrowIfCancellationRequested();
         if (width < 1 || height < 1 || (long)width * height > Options.MaxPixels)
         {
@@ -174,6 +193,8 @@ public sealed class ImageDecodeContext
             LoadGainMap = false,
             IgnoreMetadata = true,
             ColorConversion = ColorConversionMode.None,
+            Jpeg = options.Jpeg ?? _context.Options.Jpeg,
+            MaxDegreeOfParallelism = options.MaxDegreeOfParallelism ?? _context.Options.MaxDegreeOfParallelism,
         });
         return decoder.Decode(data, part).Image;
     }

@@ -18,6 +18,7 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     property ColorConversionMode ColorConversion { get; init; }
     property ImageConfiguration? Configuration { get; init; }
     property PictureSharp.Formats.Ico.IcoDecoderOptions Ico { get; init; }
+    property PictureSharp.Formats.Jpeg.JpegDecoderOptions Jpeg { get; init; }
     property PictureSharp.Formats.Png.PngDecoderOptions Png { get; init; }
     property PictureSharp.Formats.WebP.WebPDecoderOptions WebP { get; init; }
     property PictureSharp.Processing.ResamplingFilter TargetResampling { get; init; }
@@ -102,6 +103,10 @@ static class PictureSharp.Formats.Bmp.BmpImageExtensions
     method [Extension] static System.Threading.Tasks.Task SaveAsBmpAsync(Image image, System.String path, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method [Extension] static System.Void SaveAsBmp(Image image, System.IO.Stream stream, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null)
     method [Extension] static System.Void SaveAsBmp(Image image, System.String path, PictureSharp.Formats.Bmp.BmpEncoderOptions? options = null)
+sealed record PictureSharp.Formats.EmbeddedPartOptions : System.IEquatable<PictureSharp.Formats.EmbeddedPartOptions>
+    ctor()
+    property PictureSharp.Formats.Jpeg.JpegDecoderOptions? Jpeg { get; init; }
+    property System.Int32? MaxDegreeOfParallelism { get; init; }
 abstract record PictureSharp.Formats.FormatDecoderOptions : System.IEquatable<PictureSharp.Formats.FormatDecoderOptions>
 abstract class PictureSharp.Formats.GainMapImage
     method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
@@ -203,6 +208,7 @@ static class PictureSharp.Formats.Ico.IcoImageExtensions
 sealed class PictureSharp.Formats.ImageDecodeContext
     method Image DecodeEmbedded(System.ReadOnlyMemory<System.Byte> data)
     method Image DecodeEmbeddedPart(System.ReadOnlyMemory<System.Byte> data, System.Int32 width, System.Int32 height)
+    method Image DecodeEmbeddedPart(System.ReadOnlyMemory<System.Byte> data, System.Int32 width, System.Int32 height, PictureSharp.Formats.EmbeddedPartOptions options)
     method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map)
     method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map, HdrGainMapKinds detected)
     method System.Void DeclareGainMap(HdrGainMapKinds detected, System.String reason, System.Boolean corrupt = true)
@@ -211,10 +217,16 @@ sealed class PictureSharp.Formats.ImageDecodeContext
     method System.Void ThrowIfCancellationRequested()
     property DecoderOptions Options { get; }
     property System.Threading.CancellationToken CancellationToken { get; }
+enum PictureSharp.Formats.Jpeg.JpegCmykStorage
+    AdobeInverted = 0
+    Plain = 1
 enum PictureSharp.Formats.Jpeg.JpegColorMode
     Auto = 0
     Color = 1
     Grayscale = 2
+sealed record PictureSharp.Formats.Jpeg.JpegDecoderOptions : System.IEquatable<PictureSharp.Formats.Jpeg.JpegDecoderOptions>
+    ctor()
+    property PictureSharp.Formats.Jpeg.JpegCmykStorage CmykStorage { get; init; }
 sealed record PictureSharp.Formats.Jpeg.JpegEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PictureSharp.Formats.Jpeg.JpegEncoderOptions>
     ctor()
     property ImageFormat Format { get; }

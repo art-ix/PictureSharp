@@ -87,7 +87,10 @@ this contract:
   decodes each part with `context.DecodeEmbeddedPart(data, width, height)`. A part is not charged against the reserved
   image and is not a frame: it may decode to at most `width` x `height` pixels (itself at most `MaxPixels`), as
   stored, without EXIF orientation, gain map, color conversion or metadata. Dispose each part before decoding the next,
-  so a load holds at most the image and one part:
+  so a load holds at most the image and one part. The overload with `EmbeddedPartOptions` replaces settings for the
+  part only: `Jpeg` (for example `CmykStorage = JpegCmykStorage.Plain` for the CMYK strips of a TIFF file) and
+  `MaxDegreeOfParallelism` (for example 1 when the container decodes several parts at once); a null setting keeps the
+  load's own:
 
   ```csharp
   context.ReservePixels(width, height);
@@ -97,6 +100,9 @@ this contract:
       using Image tile = context.DecodeEmbeddedPart(data, tileWidth, tileHeight);
       // Copy the part of the tile inside the image; check that the tile covers it.
   }
+
+  var cmyk = new EmbeddedPartOptions { Jpeg = new JpegDecoderOptions { CmykStorage = JpegCmykStorage.Plain } };
+  using Image strip = context.DecodeEmbeddedPart(data, stripWidth, stripHeight, cmyk);
   ```
 - Encoder options derive from `EncoderOptions` and override `Format`; `IImageFormatEncoder<TOptions>` creates defaults
   with `new TOptions()` and rejects options of another type.
@@ -211,7 +217,7 @@ using var image = Image.Load(path, new DecoderOptions { FormatOptions = [new Tga
   the file, as `Ico.Index` does. `ContainerItemCount` still counts every item.
 - Limits, cancellation and `ReservePixels` apply to the selected item. `DecodeEmbedded` passes the same options to the
   embedded image; `DecodeEmbeddedPart` passes the limits and format options without orientation, gain map, color
-  conversion or metadata. Frame readers (`OpenFrameReaderAsync`) do not support plugin formats.
+  conversion or metadata, with the `EmbeddedPartOptions` of its overload replacing `Jpeg` and `MaxDegreeOfParallelism`. Frame readers (`OpenFrameReaderAsync`) do not support plugin formats.
 
 ### SPI compatibility
 

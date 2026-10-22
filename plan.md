@@ -50,6 +50,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.7 | Korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette`, `ShadowsHighlights`, `Clarity`, `Denoise`; addytywnie | Wydana (2026-10-20; bez ARM64) |
 | 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.9 | `JpegEncoderOptions.ColorMode` (Auto, Color, Grayscale): liczba składowych JPEG, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-21; bez ARM64) |
+| 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Zaimplementowana, niewydana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -610,6 +611,49 @@ Bramka linux-x64: build bez ostrzeżeń, pełny zestaw 7287/7294 (7 GDI+ pomini�
 `verify-package-consumer.sh` exit 0 bez ostrzeżeń. Bez przebiegów ARM64 (brak kodu zależnego od platformy). Wydana
 2026-10-21 (tag `v0.7.9`, GitHub Release, NuGet).
 
+## 0.7.10 — zwykły CMYK w osadzonych paskach JPEG
+
+Zgłoszenie (2026-10-21), wtyczka `PictureSharp.Tiff` 0.5.5 (odczyt TIFF z kompresją JPEG i photometric 5, CMYK).
+Dekoder JPEG dla czterech składowych przyjmuje zawsze odwrócony CMYK w konwencji Adobe (`JpegFile.Metadata`: brak
+markera APP14 lub transform 0 → `Cmyk`, `JpegColorConverter.CmykToRgb` traktuje zapisane K jako 255 − k) i zwraca od
+razu RGB. TIFF przechowuje ilości farby bez odwrócenia: libtiff 4.5.1 zapisuje paski CMYK JPEG bez markera Adobe, a
+libtiff i Pillow czytają je jako zwykły CMYK. Sprawdzone na pliku z libtiff (48 x 32, pasek 0): rdzeń daje różnicę do
+255 (średnio 102) względem `TIFFReadRGBAImage`; piksel bez farby wychodzi czarny zamiast białego. Z wyniku RGB nie da
+się tego odwrócić (przy K = 0 każdy kolor daje czerń), więc wtyczka sama tego nie naprawi.
+
+Zakres (nazwy robocze, do zatwierdzenia przed implementacją):
+- Sposób przekazania opcji formatu do części: przeciążenie `ImageDecodeContext.DecodeEmbeddedPart(data, width,
+  height, IReadOnlyList<FormatDecoderOptions> formatOptions)` (opcje części zastępują `FormatOptions` dekodu
+  zewnętrznego) albo rekord opcji części, który od razu przyjmie też `MaxDegreeOfParallelism` części (wtyczka Tiff
+  0.5.1 zmierzyła zagnieżdżoną równoległość pasków JPEG: bez straty czasu, ale ze zbędnym CPU).
+- Publiczne `JpegDecoderOptions : FormatDecoderOptions` z ustawieniem przechowywania CMYK, np.
+  `CmykStorage { AdobeInverted (domyślne, obecne zachowanie), Plain }`; `Plain` stosuje `cmyk2rgb` Pillow do
+  nieodwróconych wartości, YCCK jak dotąd przez `ycck_cmyk_convert`.
+- Domyślne wyniki bitowo bez zmian; migawka API z samymi dodatkami.
+
+DoD (propozycja): test pliku CMYK JPEG zapisanego przez libtiff (z `Plain` zgodny z libtiff/Pillow w granicach IDCT),
+dotychczasowe wektory CMYK/YCCK bitowo bez zmian, dokumentacja opcji; wtyczka Tiff używa opcji w 0.5.5 z nowym
+minimalnym PictureSharp.
+
+Decyzja użytkownika (2026-10-22): wersja 0.7.10 z `JpegDecoderOptions` (właściwość `DecoderOptions.Jpeg`), przeciążeniem
+`DecodeEmbeddedPart`, testami i dokumentacją; bez wydania.
+
+Stan (2026-10-22): publiczne `JpegCmykStorage { AdobeInverted, Plain }`, `JpegDecoderOptions.CmykStorage`
+(`Check.Defined`), `DecoderOptions.Jpeg` (jak `Png`, `Ico`), `EmbeddedPartOptions { Jpeg, MaxDegreeOfParallelism }`
+(null = ustawienie dekodu zewnętrznego; stopień przez `Check.Parallelism`) i
+`DecodeEmbeddedPart(data, width, height, EmbeddedPartOptions)`; dotychczasowe przeciążenie woła nowe z pustymi
+opcjami. `JpegColorConverter.CmykToRgb` przy `Plain` odwraca wartości przed tą samą arytmetyką (`Plain(c, m, y, k)`
+= `AdobeInverted(255 − c, …)`), więc domyślna ścieżka jest bitowo bez zmian. Wyrocznia
+`tests/assets/jpeg_cmyk_reference.py` → `jpeg_cmyk_reference.json`: Pillow czyta każdy 4-składowy JPEG jako `CMYK;I`,
+więc zapisane wartości to 255 − wynik Pillow, a `Plain` = `cmyk2rgb` Pillow na nich. Testy `JpegCmykStorageTests`
+(4 pliki CMYK/YCCK bitowo zgodne z wyrocznią, domyślnie = `AdobeInverted` ≠ `Plain`, 3 składowe bez zmian,
+walidacja) i `EmbeddedPartTests` (sonda opcji części: zastąpienie i dziedziczenie, pasek CMYK przez kontener,
+walidacja stopnia). Pasek CMYK zapisany przez libtiff 4.5.1: z `Plain` różnica do `TIFFReadRGBAImage` ≤ 1 (wzór
+libtiff a `cmyk2rgb`), wcześniej do 255. Migawka API: 5 dodatków. Dokumentacja: `loading-and-saving.md`,
+`extending-picturesharp.md`, `architecture.md`, `docs/releases/release-0.7.10.md`; `VERSION` 0.7.10,
+`PackageReleaseNotes` (biblioteka i adaptery). Zostało: wydanie na polecenie użytkownika; potem wtyczka Tiff 0.5.5
+(CMYK JPEG) z minimalnym PictureSharp 0.7.10.
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -696,3 +740,4 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.
 - **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.
 - **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.
+- **0.7.10** — `JpegDecoderOptions.CmykStorage` (`AdobeInverted`, `Plain`) w `DecoderOptions.Jpeg` oraz `DecodeEmbeddedPart` z `EmbeddedPartOptions` (ustawienia JPEG i stopień równoległości części): paski CMYK JPEG w TIFF. Istniejące API i wyniki bez zmian.

@@ -85,7 +85,8 @@ After `Dispose` (idempotent) state accessors throw `ObjectDisposedException`; ex
 concurrent mutation is unsupported. `HasAlpha` is a hint; `IsOpaque()` inspects pixels. Options are immutable records;
 each decode gets its own `DecodeContext` and monotonic `DecodeBudget`, shared by embedded codecs through child contexts.
 A part of an already reserved image (`ImageDecodeContext.DecodeEmbeddedPart`) gets a detached context with its own
-budget of the part size, one frame and the remaining metadata.
+budget of the part size, one frame and the remaining metadata; `EmbeddedPartOptions` may replace the part's JPEG
+settings and degree of parallelism.
 
 Frame readers and writers use the configuration's `ImageSequenceService` and internal sequential codec ports, sharing
 compositing and encoding with the batch codecs; Application owns the optional temporary file of a writer.

@@ -2,6 +2,7 @@ using PictureSharp.Application.Decoding;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Domain.Metadata;
+using PictureSharp.Formats.Jpeg;
 using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Infrastructure.Codecs.Jpeg;
@@ -61,7 +62,8 @@ internal sealed class JpegDecoder : IImageDecoder
                 }
             }
 
-            pixels = JpegColorConverter.Convert(frame, file.ColorSpace(), options.MaxDegreeOfParallelism, cancellationToken);
+            pixels = JpegColorConverter.Convert(frame, file.ColorSpace(), options.MaxDegreeOfParallelism, cancellationToken,
+                plainCmyk: options.Jpeg.CmykStorage == JpegCmykStorage.Plain);
         }
         finally
         {

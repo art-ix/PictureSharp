@@ -62,9 +62,12 @@ internal static partial class JpegColorConverter
         }
     }
 
-    /// <summary>Converts the planes to RGBA; bands of rows are independent and may run in parallel.</summary>
+    /// <summary>
+    /// Converts the planes to RGBA; bands of rows are independent and may run in parallel. <paramref name="plainCmyk"/>
+    /// reads four components as ink amounts instead of Adobe's inverted values.
+    /// </summary>
     public static Rgba32[] Convert(JpegFrame frame, JpegColorSpace colorSpace, int maxDegreeOfParallelism = 1,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool plainCmyk = false)
     {
         int width = frame.OutputWidth;
         int height = frame.OutputHeight;
@@ -74,21 +77,21 @@ internal static partial class JpegColorConverter
         if (bands > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)width * height, 1 << 17))
         {
             Parallel.For(0, bands, Parallelism.Options(maxDegreeOfParallelism, cancellationToken),
-                b => ConvertRows(frame, colorSpace, pixels, b * band, Math.Min(height, (b + 1) * band)));
+                b => ConvertRows(frame, colorSpace, plainCmyk, pixels, b * band, Math.Min(height, (b + 1) * band)));
         }
         else
         {
             for (int b = 0; b < bands; b++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ConvertRows(frame, colorSpace, pixels, b * band, Math.Min(height, (b + 1) * band));
+                ConvertRows(frame, colorSpace, plainCmyk, pixels, b * band, Math.Min(height, (b + 1) * band));
             }
         }
 
         return pixels;
     }
 
-    private static void ConvertRows(JpegFrame frame, JpegColorSpace colorSpace, Rgba32[] pixels, int firstRow, int endRow)
+    private static void ConvertRows(JpegFrame frame, JpegColorSpace colorSpace, bool plainCmyk, Rgba32[] pixels, int firstRow, int endRow)
     {
         int width = frame.OutputWidth;
         JpegComponent[] comps = frame.Components;
@@ -137,7 +140,7 @@ internal static partial class JpegColorConverter
                         break;
                     default:
                         ReadOnlySpan<byte> c3 = Row(comps[3], modes[3], y, buffer.AsSpan(3 * bufferLength, bufferLength), ref cachedRow[3])[..width];
-                        CmykToRgb(c0, c1, c2, c3, colorSpace == JpegColorSpace.Ycck, dst);
+                        CmykToRgb(c0, c1, c2, c3, colorSpace == JpegColorSpace.Ycck, plainCmyk, dst);
                         break;
                 }
             }
@@ -291,11 +294,12 @@ internal static partial class JpegColorConverter
     }
 
     /// <summary>
-    /// Four-component images use Adobe's inverted CMYK, as Pillow always assumes; YCCK is first converted to
-    /// CMYK like libjpeg's <c>ycck_cmyk_convert</c>. CMYK to RGB follows Pillow's <c>cmyk2rgb</c>.
+    /// Four-component images use Adobe's inverted CMYK, as Pillow always assumes, unless <paramref name="plain"/> says
+    /// the values are ink amounts (TIFF); YCCK is first converted to CMYK like libjpeg's <c>ycck_cmyk_convert</c>. CMYK
+    /// to RGB follows Pillow's <c>cmyk2rgb</c>.
     /// </summary>
     private static void CmykToRgb(ReadOnlySpan<byte> c0, ReadOnlySpan<byte> c1, ReadOnlySpan<byte> c2, ReadOnlySpan<byte> kRow,
-                                  bool ycck, Span<Rgba32> dst)
+                                  bool ycck, bool plain, Span<Rgba32> dst)
     {
         int[] crr = CrToR, cbb = CbToB, crg = CrToG, cbg = CbToG;
         for (int x = 0; x < dst.Length; x++)
@@ -317,8 +321,14 @@ internal static partial class JpegColorConverter
                 ye = c2[x];
             }
 
-            // Inverted storage: the stored K is 255 - k, i.e. the "nk" of Pillow's conversion.
+            // Inverted storage: the stored K is 255 - k, i.e. the "nk" of Pillow's conversion. Plain values are
+            // inverted here, so that both storages share the arithmetic below.
             int nk = kRow[x];
+            if (plain)
+            {
+                (c, m, ye, nk) = (255 - c, 255 - m, 255 - ye, 255 - nk);
+            }
+
             dst[x] = new Rgba32(
                 Clamp(nk - MulDiv255(255 - c, nk)),
                 Clamp(nk - MulDiv255(255 - m, nk)),
