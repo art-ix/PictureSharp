@@ -37,5 +37,28 @@ public static class ImageAnalysisExtensions
         /// <summary>Finds the content box as <see cref="FindTrimBounds(Image, AutoCropOptions?)"/>; <paramref name="cancellationToken"/> stops it between rows.</summary>
         public System.Drawing.Rectangle? FindTrimBounds(AutoCropOptions? options, CancellationToken cancellationToken) =>
             ImageAnalysisService.FindTrimBounds(image, options, cancellationToken);
+
+        /// <summary>
+        /// Measures a photographed film negative without changing it: the film base (from
+        /// <see cref="NegativeOptions.FilmBaseRegion"/>, or else the lightest pixels), the density of each channel that
+        /// prints white and the midtone gammas, on the stored channel values of <see cref="NegativeOptions.Region"/>
+        /// (in the image's own color space, decoded with the sRGB curve). Fully transparent pixels and pixels with a
+        /// channel at 0–2 or 253–255 are left out of the measurement.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// NegativeAnalysis analysis = image.AnalyzeNegative(new NegativeOptions { Region = frame, FilmBaseRegion = rebate });
+        /// if (analysis.Warnings.HasFlag(NegativeWarnings.ChannelClipped)) Console.WriteLine("Use a bluish backlight.");
+        /// image.Mutate(x => x.DevelopNegative(new NegativeOptions { Calibration = analysis.Calibration }));
+        /// </code>
+        /// </example>
+        /// <exception cref="NotSupportedException">The image has more than one frame.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">A region of <paramref name="options"/> is empty or not inside the image.</exception>
+        public NegativeAnalysis AnalyzeNegative(NegativeOptions? options = null) =>
+            ImageAnalysisService.AnalyzeNegative(image, options, CancellationToken.None);
+
+        /// <summary>Measures the negative as <see cref="AnalyzeNegative(Image, NegativeOptions?)"/>; <paramref name="cancellationToken"/> stops it between rows.</summary>
+        public NegativeAnalysis AnalyzeNegative(NegativeOptions? options, CancellationToken cancellationToken) =>
+            ImageAnalysisService.AnalyzeNegative(image, options, cancellationToken);
     }
 }

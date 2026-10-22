@@ -29,7 +29,9 @@ and writes multi-page TIFF and BigTIFF; reads also CMYK, YCbCr, CIE L\*a\*b\*, 1
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
-- Photo adjustments: exposure, white balance, shadows/highlights, clarity, vibrance, vignette and edge-preserving denoise
+- Photo adjustments: exposure, white balance (also from a neutral or automatic), curves, shadows/highlights, clarity,
+  vibrance, vignette, edge-preserving denoise, dust and color-noise removal
+- Developing photographed film negatives (color and black-and-white) in optical density
 - Conversion of ICC and PNG color descriptions to sRGB, linear-light resize and compositing
 - Fast JPEG thumbnails decoded at 1/2, 1/4 or 1/8 scale
 - Frame-by-frame reading and writing of GIF, APNG and WebP animations

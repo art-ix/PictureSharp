@@ -161,6 +161,20 @@ image.Mutate(x => x.Gamma(2.2f));                                               
 like ImageMagick's `-level`/`+level`, on encoded sRGB values in double precision, rounding half up. `OutputBlack` above
 `OutputWhite` inverts. `Gamma(g)` is `Levels` with only the gamma set. Every pixel is mapped and alpha is kept.
 
+### Curves
+
+```csharp
+image.Mutate(x => x.Curves([new(0, 0), new(64, 52), new(192, 206), new(255, 255)]));   // gentle S on R, G and B
+image.Mutate(x => x.Curves([new(0, 12), new(255, 255)], ColorChannels.Blue));          // lift the blue shadows only
+```
+
+`Curves` maps the selected channels through a smooth curve that passes through the points (input, output; 0–255,
+input strictly increasing, at least two). Between points it is the shape-preserving piecewise cubic (PCHIP: the
+derivatives of Fritsch and Butland with Moler's end conditions, as SciPy's `PchipInterpolator`), so it never
+overshoots: a curve through rising points rises everywhere. Before the first and after the last point the output is
+constant. The table is computed in double precision and rounded half up; for separate channel curves, call `Curves`
+once per channel.
+
 ### Automatic contrast and equalization
 
 ```csharp
@@ -184,6 +198,8 @@ image.Mutate(x => x
     .Vignette(0.3f));                   // darken the edges, −1..1
 image.Mutate(x => x.Vignette(new VignetteOptions { Amount = 0.6f, Midpoint = 0.3f, Feather = 0.8f }));
 image.Mutate(x => x.Denoise(0.5f));     // edge-preserving smoothing, 0..1, window radius 2
+image.Mutate(x => x.WhiteBalance(new Rgba32(212, 196, 170, 255)));   // this picked color becomes gray
+image.Mutate(x => x.AutoWhiteBalance(0.7f));                         // gray-world on the midtones, 0..1
 ```
 
 0 leaves the image unchanged. Alpha is kept, every frame is processed, and the results are identical on every
@@ -198,13 +214,116 @@ architecture and thread count. Luma uses Rec. 709 weights; "linear" means sRGB d
 | `ShadowsHighlights(s, h, radius)` | linear · 2^(1.5 · (s · (1 − B)² + h · B²)), B a Gaussian blur of the luma (0–1) |
 | `Clarity(a, radius)` | each channel + 255 · a · (P − B) · 4P(1 − P), P the luma (0–1), B its Gaussian blur |
 | `Denoise(strength, radius)` | guided filter (He et al., 2010) per premultiplied channel, windows (2r + 1)², ε = (0.05 · strength)² |
+| `WhiteBalance(neutral)` | linear channel · Y / N, N the neutral's linear channel and Y its luma: the neutral becomes gray of the same luminance |
+| `AutoWhiteBalance(s)` | linear channel · (Y / M)^s, scaled so that M keeps its luminance; M is the mean linear color of the measured pixels, Y its luma |
 
 `ShadowsHighlights` and `Clarity` take the blur's standard deviation in pixels; 0 (the default) uses 2% of the shorter
 side. The Gaussian is three box passes whose windows are clipped at the image edges. Like any local tone operator,
 a large amount next to a strong edge can leave a halo. `Denoise` flattens areas whose variation is small compared with
-ε and keeps edges; fully transparent pixels keep their color. These operations have no Pillow counterpart:
-`tests/assets/photo_adjust_reference.py` implements the formulas above with numpy, and the results match it within
-one level.
+ε and keeps edges; fully transparent pixels keep their color. `AutoWhiteBalance` measures only the pixels that are
+not fully transparent, have no channel at 0–2 or 253–255 (clipped) and whose integer luma
+(2126 R + 7152 G + 722 B + 5000) / 10000 lies between its 10th and 90th percentile; an animation is measured as a
+whole, so every frame gets the same gains, and an image without such pixels is kept. A scene that is really dominated
+by one color (a lawn, a sunset) is pulled towards gray as well, which `strength` below 1 tempers. These operations
+have no Pillow counterpart: `tests/assets/photo_adjust_reference.py` implements the formulas above and below with
+numpy, and the results match it within one level.
+
+### Dust and color noise
+
+```csharp
+image.Mutate(x => x
+    .RemoveDust(size: 6)                // specks up to 6 pixels across, threshold 0.1 of the luma range
+    .ReduceColorNoise());               // chroma smoothing guided by the luma, window radius 1% of the shorter side
+```
+
+Both are made for scans and photographs of film and prints, and keep alpha.
+
+`RemoveDust(size, threshold)` finds specks in the integer luma above:
+- A pixel is a speck when it is brighter (or darker) by more than a limit than the median of each of the four
+  segments of 2 · size + 1 pixels through it: horizontal, vertical and both diagonals. The median of n values is
+  the element (n − 1) / 2 after sorting, and segments and windows are clipped at the image edges.
+- The limit is the threshold · 255, or 3 · 1.4826 · the median absolute deviation of the 32 × 32 tile around the
+  pixel, whichever is larger, so grain is not taken for dust.
+- A speck at most `size` pixels across is a minority on every segment and is found. An edge or a thin line always has
+  a segment along itself, so it stays.
+- The soft rim joins in at most `size` rounds. In each round, a neighbour (8-connected) of a speck joins when its luma
+  differs from the median of its (2 · size + 1)² window in the same direction by more than half the limit.
+- Every speck pixel gets the per-channel median of that window without the speck pixels.
+
+`RemoveDust` looks only at the luma, so it has two limits. A faint speck that stands out no more than the grain
+stays. A small catchlight can be taken for dust: keep `size` near the size of the dust, not larger. A scanner's
+infrared channel separates dust reliably.
+
+`ReduceColorNoise(strength, radius)` smooths only the color, on premultiplied values (0–1):
+- The guide is the luma Y = 0.2126 R + 0.7152 G + 0.0722 B. The color differences P = B − Y and P = R − Y are each
+  filtered with a guided filter: a = cov(Y, P) / (var(Y) + 0.01²) and b = mean(P) − a · mean(Y) over windows of
+  (2r + 1)², and Q = mean(a) · Y + mean(b).
+- The result is P + strength · (Q − P). Then R = Y + Cr, B = Y + Cb and G = (Y − 0.2126 R − 0.0722 B) / 0.7152, so
+  the luma, and with it detail and grain, is kept up to rounding.
+- Color blotches in flat areas, such as the block noise of a dense negative's sky, average out. Color edges that are
+  also luma edges stay sharp; an edge between two colors of equal brightness softens.
+- Fully transparent pixels keep their color.
+
+## Film negatives
+
+A color or black-and-white negative photographed on a light box, or scanned without inversion, becomes a positive in
+one call:
+
+```csharp
+using var image = Image.Load("negative.jpg");
+var frame = new Rectangle(160, 1120, 2780, 1790);        // the picture, without rebate, perforation or light box
+var rebate = new Rectangle(830, 850, 140, 160);          // bare film beside the perforation
+image.Mutate(x => x.Crop(frame).DevelopNegative());      // measured on the frame, base estimated
+// Or measure the frame and the base, and develop the whole photo:
+NegativeAnalysis analysis = image.AnalyzeNegative(new NegativeOptions { Region = frame, FilmBaseRegion = rebate });
+if (analysis.Warnings.HasFlag(NegativeWarnings.ChannelClipped)) Console.WriteLine("Use a bluish backlight.");
+image.Mutate(x => x.DevelopNegative(new NegativeOptions { Calibration = analysis.Calibration }).Crop(frame).ConvertToSrgb());
+// One look for a roll: combine the calibrations of several frames.
+NegativeCalibration roll = NegativeCalibration.Combine(frames.Select(f => f.AnalyzeNegative().Calibration));
+```
+
+`DevelopNegative` measures the negative (unless `NegativeOptions.Calibration` is given), inverts it with
+`InvertNegative`, then runs `RemoveDust` (`DustSize`, by default 0.5% of the shorter side, at least 2; 0 turns it off)
+and, for color film, `ReduceColorNoise` (`ColorNoiseReduction`, default 1). It does not crop yet: crop to the frame
+first, or set `Region` so that the light box, rebate and fingers do not take part in the measurement. Only
+single-frame images are accepted.
+
+The negative is inverted in its own color space: values are decoded with the sRGB curve, and the ICC profile or color
+description stays, so a Display P3 photo becomes a Display P3 positive. Converting the negative to sRGB first would
+clip its strongly colored film base. Call `ConvertToSrgb` on the positive when sRGB is needed.
+
+The measurement (`AnalyzeNegative`):
+- It uses a regular sample of about one million pixels of `Region` (every k-th row and column), without fully
+  transparent pixels or pixels with a channel at 0–2 or 253–255. Percentiles are the nearest rank of integer
+  histograms, so the result does not depend on the thread count.
+- **Film base B**: the median color of `FilmBaseRegion`, or else the 99.7th percentile of each channel, which reports
+  `FilmBaseEstimated`.
+- **Density** of a value with linear light L: d = log10(B / max(L, 1/1024)), the optical density above the base.
+- **Density range R**: the density at the `HighlightPercentile` (default 99.7) of each channel; it prints white.
+- **Midtone gamma γ**: each channel's median share of its range, m = d / R, moves towards the geometric mean of the
+  three medians. γ is (ln mean / ln m)^`MidtoneBalance`, default 0.6. This balances the dye layers, whose
+  contrast differs, and removes the green or cyan cast that a plain inversion leaves. 0 turns it off for a scene that
+  is not neutral on average.
+- **Warnings**: `ChannelClipped` when more than 1% of the measured pixels are clipped in a channel, `FilmBaseEstimated`
+  without a film-base region, and `LowDensityRange` when a channel spans less than 0.3.
+
+The print (`InvertNegative`, `NegativePrintOptions`) is one lookup table per channel, in double precision:
+
+| Step | Formula |
+| --- | --- |
+| Share of the range | t = clamp(d / R, 0, 1.05)^γ |
+| Paper | linear L' = 10^(`Contrast` · (t − 1)) · 2^`Exposure`; `Contrast` 1.6 decades by default, so the base prints at 2.5% |
+| Encoding | s = sRGB(L'), then s + `Curve` · s(1 − s)(2s − 1), `Curve` 0.3 by default, rounded half up |
+
+A black-and-white calibration first replaces each pixel by its integer Rec. 709 luma, so the result is gray.
+`tests/assets/photo_adjust_reference.py` implements the measurement and the print with numpy: calibrations match to
+1e-5 and pixels exactly.
+
+For the photograph itself:
+- Keep a strip of bare film in the picture for `FilmBaseRegion`.
+- Use a diffuse light. On a monitor, keep the film 1–3 cm above the screen or put a diffuser between them, or the
+  subpixel grid shows.
+- Choose a light bluish enough that the film base looks almost gray; then no channel clips (`ChannelClipped`).
 
 ## Histogram
 

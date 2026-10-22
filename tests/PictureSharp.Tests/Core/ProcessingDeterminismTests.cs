@@ -45,6 +45,12 @@ public class ProcessingDeterminismTests
         { "shadows_highlights", "50031b065e0bbd3cf670f89fef36f7e2bdddb0faf96c70cdb72336429de77e2b" },
         { "clarity", "a532c676e5f7cf84bdca2e54a70b981c4c489d45b79ac2b3f03c5ae7e5d2e2cf" },
         { "denoise", "6ba50dde8fda0d610ac5970c2a821426c5c3ca412e569b0a5074c0b35dc5c594" },
+        { "curves", "283a9d7eafa3eecd62c45fe45d6fcb226a563bfc19ffc815f01bfe000bc3e688" },
+        { "white_balance_neutral", "1c753d8f9dd35e92cbf2d530191dad3edd7e08948abdbaa3144d2217cf3d7625" },
+        { "auto_white_balance", "c8e8a9900d0e38db42a06448ac9bb1fb56411ca1b986cf0cffe71f5e0bd5c611" },
+        { "remove_dust", "b4778d8821362b0d5ed1bc6d378785158d77278f82f4a707c018774971b5e712" },
+        { "reduce_color_noise", "0945188f431d803d341de02e390209e14c64d9ca01e4d92719012d63064b6eb3" },
+        { "develop_negative", "db413766e7a41afddcd31897fa48eadfd28f9dcdd891f6874ec76de29517a880" },
     };
 
     // 720 × 480 pixels: enough for the parallel bands, so the hashes also pin the result against the thread count
@@ -53,7 +59,12 @@ public class ProcessingDeterminismTests
     [MethodDataSource(nameof(PhotoAdjustCases))]
     public async Task PhotoAdjustment_IsIdenticalOnEveryArchitecture(string name, string expected)
     {
-        using Image source = ProcessingOracleTests.Noise(720, 480, 9);
+        using Image source = name switch
+        {
+            "remove_dust" => PhotoCleanupTests.Dusty(720, 480, 9),
+            "develop_negative" => FilmNegativeTests.Negative(PhotoCleanupTests.Dusty(720, 480, 9), 9),
+            _ => ProcessingOracleTests.Noise(720, 480, 9),
+        };
         using Image result = source.Clone(x => _ = name switch
         {
             "exposure" => x.Exposure(0.7f),
@@ -62,6 +73,12 @@ public class ProcessingDeterminismTests
             "vignette" => x.Vignette(new VignetteOptions { Amount = 0.8f, Midpoint = 0.3f, Feather = 0.7f }),
             "shadows_highlights" => x.ShadowsHighlights(0.6f, -0.6f, 5f),
             "clarity" => x.Clarity(0.7f, 5f),
+            "curves" => x.Curves([new(0, 10), new(70, 50), new(180, 210), new(250, 245)]),
+            "white_balance_neutral" => x.WhiteBalance(new Rgba32(180, 150, 110, 255)),
+            "auto_white_balance" => x.AutoWhiteBalance(0.8f),
+            "remove_dust" => x.RemoveDust(4, 0.08f),
+            "reduce_color_noise" => x.ReduceColorNoise(0.9f, 6),
+            "develop_negative" => x.DevelopNegative(new NegativeOptions { FilmBaseRegion = new System.Drawing.Rectangle(0, 0, 720, 8) }),
             _ => x.Denoise(0.7f, 3),
         });
         await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);

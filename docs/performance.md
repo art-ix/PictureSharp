@@ -71,6 +71,7 @@ Newest first:
 
 | Section | Covers |
 | --- | --- |
+| [Film negatives and cleanup (0.7.11)](#film-negatives-and-cleanup-0711) | Curves, neutral and automatic white balance, dust and color-noise removal on 12 MP; developing negatives |
 | [Photo adjustments (0.7.7)](#photo-adjustments-077) | Exposure, white balance, vibrance, vignette, shadows/highlights, clarity and denoise on 12 MP |
 | [WebP lossy and pipeline optimization (0.7.5)](#webp-lossy-and-pipeline-optimization-075) | Lossy WebP on one thread and by default against 0.7.4 and libwebp; the load → orient → sRGB → resize → WebP path |
 | [JPEG optimization (0.7.4)](#jpeg-optimization-074) | JPEG decoding and encoding on one thread and by default, against 0.7.3 and Pillow |
@@ -96,6 +97,30 @@ Newest first:
 Regression checks against the previous release use the 80-case `matrix-probe` matrix in ABBA order on CPUs 0–7; cases
 above +5% are rechecked alternating in separate AssemblyLoadContexts (15 samples of at least 180 ms). These are
 lightweight probes, not full BenchmarkDotNet studies.
+
+## Film negatives and cleanup (0.7.11)
+
+`photo-probe` as in [Photo adjustments (0.7.7)](#photo-adjustments-077): 4000 × 3000, copy-on-write `Clone`, median of
+seven samples, Intel Core i5-12500H, linux-x64, CPUs 0–7 or one thread on CPU 0. The pixels are identical at both
+(`ProcessingDeterminismTests`); every row allocates only the 45.8 MiB result.
+
+| Operation | 1 thread | 8 threads |
+| --- | ---: | ---: |
+| `Curves` (4 points) | 13.2 ms | 11.2 ms |
+| `WhiteBalance(Rgba32)` | 12.1 ms | 10.6 ms |
+| `AutoWhiteBalance()` | 61.4 ms | 60.1 ms |
+| `RemoveDust(6)` | 967.2 ms | 406.5 ms |
+| `ReduceColorNoise()`, radius 30 px | 1361.0 ms | 271.1 ms |
+
+Curves and both white balances are 3 × 256 lookup tables; `AutoWhiteBalance` counts its histograms on one thread.
+`RemoveDust` counts instead of sorting the four segments through each pixel and examines the neighbourhood only
+around specks. `ReduceColorNoise` runs eight box passes over float planes. Raw results:
+[8 threads](measurements/photo-adjust-0.7.11-probe-x64.json),
+[1 thread](measurements/photo-adjust-0.7.11-probe-x64-1thread.json).
+
+`InvertNegative` is a 3 × 256 table like `Curves`. `AnalyzeNegative` samples about one million pixels: 11–22 ms on
+the 2–5 MP test negatives. `DevelopNegative` on a 5 MP photographed negative (2780 × 1790) takes about 0.3 s, mostly
+dust and color-noise removal.
 
 ## Photo adjustments (0.7.7)
 

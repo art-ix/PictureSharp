@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -28,6 +29,7 @@ public class PhotoAdjustOracleTests
                 ["noise.png"] = ProcessingOracleTests.Noise(41, 29, 1),
                 ["photo.png"] = Image.Load(Corpus.PathOf("jpeg/q90_444.jpg")),
                 ["alpha.png"] = Image.Load(Corpus.PathOf("png/odd_rgba.png")),
+                ["dust.png"] = PhotoCleanupTests.Dusty(96, 64, 7),
             };
             foreach ((string file, Image image) in inputs)
             {
@@ -87,6 +89,42 @@ public class PhotoAdjustOracleTests
                 {
                     Add(input, $"denoise_{strength}_{radius}", new() { ["op"] = "denoise", ["strength"] = strength, ["radius"] = radius },
                         x => x.Denoise(strength, radius));
+                }
+
+                foreach ((PointF[] points, ColorChannels channels) in new (PointF[], ColorChannels)[]
+                {
+                    ([new(0, 0), new(64, 52), new(192, 206), new(255, 255)], ColorChannels.Rgb),
+                    ([new(20, 255), new(235, 0)], ColorChannels.Red | ColorChannels.Blue),
+                    ([new(0, 30), new(50, 40), new(100, 200), new(140, 90), new(200, 90), new(230, 250)], ColorChannels.Green),
+                    ([new(10.5f, 3.25f), new(128, 140.75f), new(250, 251)], ColorChannels.Rgb),
+                })
+                {
+                    float[][] json = [.. points.Select(p => new[] { p.X, p.Y })];
+                    Add(input, $"curves_{points.Length}_{(int)channels}", new() { ["op"] = "curves", ["points"] = json, ["channels"] = (int)channels },
+                        x => x.Curves(points, channels));
+                }
+
+                foreach (Rgba32 neutral in new[] { new Rgba32(200, 180, 120, 255), new Rgba32(30, 60, 90, 0), new Rgba32(1, 255, 128, 255) })
+                {
+                    Add(input, $"wbn_{neutral.R}_{neutral.G}_{neutral.B}",
+                        new() { ["op"] = "white_balance_neutral", ["neutral"] = new int[] { neutral.R, neutral.G, neutral.B } }, x => x.WhiteBalance(neutral));
+                }
+
+                foreach (float strength in new[] { 1f, 0.5f })
+                {
+                    Add(input, $"awb_{strength}", new() { ["op"] = "auto_white_balance", ["strength"] = strength }, x => x.AutoWhiteBalance(strength));
+                }
+
+                foreach ((int size, float threshold) in new[] { (1, 0.1f), (3, 0.05f), (4, 0.2f) })
+                {
+                    Add(input, $"dust_{size}_{threshold}", new() { ["op"] = "remove_dust", ["size"] = size, ["threshold"] = threshold },
+                        x => x.RemoveDust(size, threshold));
+                }
+
+                foreach ((float strength, int radius) in new[] { (1f, 0), (0.5f, 3), (1f, 1) })
+                {
+                    Add(input, $"chroma_{strength}_{radius}", new() { ["op"] = "reduce_color_noise", ["strength"] = strength, ["radius"] = radius },
+                        x => x.ReduceColorNoise(strength, radius));
                 }
             }
 

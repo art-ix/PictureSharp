@@ -244,6 +244,9 @@ public class CancellationInFlightTests
     [Arguments("shadows")]
     [Arguments("clarity")]
     [Arguments("denoise")]
+    [Arguments("dust")]
+    [Arguments("chroma")]
+    [Arguments("negative")]
     public async Task Processing_StopsPromptlyWhenCanceled(string operation)
     {
         using Image source = Noise(3072, 3072);
@@ -257,6 +260,9 @@ public class CancellationInFlightTests
             "shadows" => x.ShadowsHighlights(0.5f, -0.5f),
             "clarity" => x.Clarity(0.5f),
             "denoise" => x.Denoise(0.5f, 4),
+            "dust" => x.RemoveDust(8),
+            "chroma" => x.ReduceColorNoise(),
+            "negative" => x.DevelopNegative(),
             _ => x.Sharpen(),
         }, token).Dispose());
     }
@@ -269,6 +275,7 @@ public class CancellationInFlightTests
     [Arguments("levels")]
     [Arguments("autocontrast")]
     [Arguments("equalize")]
+    [Arguments("autowb")]
     public async Task Graphics_StopsPromptlyInsideSingleFrame(string operation)
     {
         using Image target = Noise(4096, 4096);
@@ -281,6 +288,7 @@ public class CancellationInFlightTests
             "multiply" => x.DrawImage(source, System.Drawing.Point.Empty, new DrawImageOptions { BlendMode = BlendMode.Multiply }),
             "levels" => x.Gamma(1.2f),
             "autocontrast" => x.AutoContrast(1f),
+            "autowb" => x.AutoWhiteBalance(),
             _ => x.Equalize(),
         }, token));
     }

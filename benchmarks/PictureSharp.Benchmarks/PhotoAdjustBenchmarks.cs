@@ -7,7 +7,7 @@ using static PictureSharp.Benchmarks.LosslessDecodeBenchmarks;
 
 namespace PictureSharp.Benchmarks;
 
-/// <summary>The 0.7.7 photographic adjustments on a 12 MP image, each applied to a copy-on-write clone.</summary>
+/// <summary>The photographic adjustments (0.7.7, 0.7.11) on a 12 MP image, each applied to a copy-on-write clone.</summary>
 [MemoryDiagnoser]
 public class PhotoAdjustBenchmarks
 {
@@ -23,6 +23,11 @@ public class PhotoAdjustBenchmarks
         ShadowsHighlights,
         Clarity,
         Denoise,
+        Curves,
+        NeutralWhiteBalance,
+        AutoWhiteBalance,
+        RemoveDust,
+        ReduceColorNoise,
     }
 
     [ParamsAllValues]
@@ -51,6 +56,11 @@ public class PhotoAdjustBenchmarks
             Operation.ShadowsHighlights => x.ShadowsHighlights(0.5f, -0.5f),
             Operation.Clarity => x.Clarity(0.5f),
             Operation.Denoise => x.Denoise(0.5f),
+            Operation.Curves => x.Curves([new(0, 0), new(64, 52), new(192, 206), new(255, 255)]),
+            Operation.NeutralWhiteBalance => x.WhiteBalance(new Rgba32(212, 196, 170, 255)),
+            Operation.AutoWhiteBalance => x.AutoWhiteBalance(),
+            Operation.RemoveDust => x.RemoveDust(6),
+            Operation.ReduceColorNoise => x.ReduceColorNoise(),
             _ => throw new InvalidOperationException(),
         });
         return result.Width;

@@ -40,6 +40,14 @@ internal static class ImageAnalysisService
         return new ImageHistogram(counts, pixels);
     }
 
+    public static NegativeAnalysis AnalyzeNegative(Image image, NegativeOptions? options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        options ??= NegativeOptions.Default;
+        cancellationToken.ThrowIfCancellationRequested();
+        return ImageProcessingContext.AnalyzeNegative(image, options, cancellationToken);
+    }
+
     public static Rectangle? FindTrimBounds(Image image, AutoCropOptions? options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(image);

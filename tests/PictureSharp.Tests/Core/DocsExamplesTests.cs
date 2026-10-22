@@ -476,7 +476,9 @@ public sealed class DocsExamplesTests : IDisposable
             .Levels(new LevelsOptions { InputBlack = 20, InputWhite = 230 })
             .Levels(new LevelsOptions { Gamma = 1.4f, OutputBlack = 16, OutputWhite = 235 })
             .Gamma(2.2f)
-            .Gamma(0.8f, ColorChannels.Blue));
+            .Gamma(0.8f, ColorChannels.Blue)
+            .Curves([new(0, 0), new(64, 52), new(192, 206), new(255, 255)])
+            .Curves([new(0, 12), new(255, 255)], ColorChannels.Blue));
         await Assert.That(toned.Size).IsEqualTo(image.Size);
 
         using Image corrected = image.Clone(x => x
@@ -489,6 +491,33 @@ public sealed class DocsExamplesTests : IDisposable
             .Vignette(new VignetteOptions { Amount = 0.6f, Midpoint = 0.3f, Feather = 0.8f })
             .Denoise(0.5f));
         await Assert.That(corrected.Size).IsEqualTo(image.Size);
+
+        using Image balanced = image.Clone(x => x
+            .WhiteBalance(new Rgba32(212, 196, 170, 255))
+            .AutoWhiteBalance(0.7f));
+        await Assert.That(balanced.Size).IsEqualTo(image.Size);
+
+        using Image cleaned = image.Clone(x => x
+            .RemoveDust(size: 6)
+            .ReduceColorNoise());
+        await Assert.That(cleaned.Size).IsEqualTo(image.Size);
+
+        var frame = new Rectangle(20, 30, 360, 160);
+        var rebate = new Rectangle(20, 0, 360, 20);
+        using Image positive = image.Clone(x => x.Crop(frame).DevelopNegative());
+        await Assert.That(positive.Size).IsEqualTo(frame.Size);
+        NegativeAnalysis analysis = image.AnalyzeNegative(new NegativeOptions { Region = frame, FilmBaseRegion = rebate });
+        using Image developed = image.Clone(x => x
+            .DevelopNegative(new NegativeOptions { Calibration = analysis.Calibration })
+            .Crop(frame)
+            .ConvertToSrgb());
+        NegativeCalibration roll = NegativeCalibration.Combine([analysis.Calibration, analysis.Calibration]);
+        using Image sameLook = image.Clone(x => x.DevelopNegative(new NegativeOptions
+        {
+            Calibration = roll,
+            Print = new NegativePrintOptions { Contrast = 1.8f, Exposure = 0.3f },
+        }));
+        await Assert.That(sameLook.Size).IsEqualTo(image.Size);
 
         using Image texture = Image.Load(P("logo.png"));
         using Image blended = image.Clone(x => x

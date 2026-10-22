@@ -51,6 +51,8 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.9 | `JpegEncoderOptions.ColorMode` (Auto, Color, Grayscale): liczba składowych JPEG, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
+| 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Przygotowana (2026-10-22), bez commita |
+| 0.7.12 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -657,6 +659,24 @@ libtiff a `cmyk2rgb`), wcześniej do 255. Migawka API: 5 dodatków. Dokumentacja
 Release z linkami `blob/v0.7.10`, Release 39738595140 success (8× „Your package was pushed”, 4 nupkg w assetach).
 Bez ARM64 (decyzja użytkownika; brak kodu zależnego od platformy). Dalej: wtyczka Tiff 0.6.0 na 0.7.10 z NuGet.
 
+## 0.7.11 — negatywy: metody ręczne i odwracanie bez geometrii
+
+Pełny projekt, decyzje i pomiary: [plan_film.md](plan_film.md) (etapy A i B). Decyzja użytkownika (2026-10-22): A+B
+jako 0.7.11, C+D jako 0.7.12, oba przed 0.8.0.
+
+Stan (2026-10-22):
+- **Etap A:** `Curves` (PCHIP), `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust` (mediany czterech
+  kierunków, próg max(threshold, 3σ MAD kafla)), `ReduceColorNoise` (guided filter Cb/Cr prowadzony przez Y).
+- **Etap B:** `AnalyzeNegative`, `NegativeCalibration` (+ `Combine`), `InvertNegative` (LUT w double),
+  `DevelopNegative` bez kadrowania. Odwracanie w przestrzeni źródła, bez konwersji do sRGB.
+- **Wyrocznia numpy:** 147/148 korekcji identycznych (1 w ±1); kalibracje negatywów zgodne do 1e-5, obrazy 12/12
+  identyczne.
+- **Testy i dokumentacja:** hashe identyczne przy 1 i 8 wątkach, migawka API z samymi dodatkami,
+  `docs/image-processing.md` (Curves, Dust and color noise, Film negatives), `docs/performance.md`, AotSmoke z nowymi
+  operacjami.
+- **Pakiet:** `VERSION` 0.7.11, `PackageReleaseNotes` ×4, `docs/releases/release-0.7.11.md`. Bez commita i wydania;
+  ARM64 nieuruchamiane (kod skalarny).
+
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
 Zakres:
@@ -743,4 +763,5 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.
 - **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.
 - **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.
+- **0.7.11** — negatywy z aparatu: `AnalyzeNegative`, `DevelopNegative`, `InvertNegative` (`NegativeOptions`, `NegativeCalibration`); `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`. Istniejące API i wyniki bez zmian.
 - **0.7.10** — `JpegDecoderOptions.CmykStorage` (`AdobeInverted`, `Plain`) w `DecoderOptions.Jpeg` oraz `DecodeEmbeddedPart` z `EmbeddedPartOptions` (ustawienia JPEG i stopień równoległości części): paski CMYK JPEG w TIFF. Istniejące API i wyniki bez zmian.

@@ -13,6 +13,13 @@ using (Image adjusted = source.Clone(x => x.Exposure(0.3f).WhiteBalance(0.2f).Vi
     if (adjusted.Size != source.Size || adjusted[8, 6] == source[8, 6])
         throw new InvalidOperationException("Photo adjustments failed.");
 }
+using (Image developed = source.Clone(x => x.Curves([new(0, 0), new(128, 140), new(255, 255)]).AutoWhiteBalance()
+    .RemoveDust().ReduceColorNoise().DevelopNegative()))
+{
+    NegativeAnalysis analysis = source.AnalyzeNegative();
+    if (developed.Size != source.Size || analysis.Calibration.DensityRange.Red <= 0)
+        throw new InvalidOperationException("Film negative processing failed.");
+}
 foreach (ImageFormat format in ImageFormat.All)
 {
     byte[] bytes = source.Encode(format);
@@ -238,7 +245,7 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
         throw new InvalidOperationException("Plugin embedded parts failed.");
 }
 
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options, embedded parts) and a frame processor.");
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, photo adjustments, film negatives, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options, embedded parts) and a frame processor.");
 
 /// <summary>"RAW1", width and height as bytes, then RGBA: exercises the plugin SPI under trimming and AOT.</summary>
 sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEncoder<RawEncoderOptions>

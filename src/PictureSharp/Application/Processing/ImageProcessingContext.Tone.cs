@@ -1,3 +1,4 @@
+using System.Drawing;
 using PictureSharp.Algorithms.Processing;
 
 namespace PictureSharp.Processing;
@@ -32,6 +33,52 @@ public readonly ref partial struct ImageProcessingContext
     /// <param name="channels">The channels to change.</param>
     public ImageProcessingContext Gamma(float gamma, ColorChannels channels = ColorChannels.Rgb) =>
         Levels(new LevelsOptions { Gamma = gamma, Channels = channels });
+
+    /// <summary>
+    /// Remaps the selected channels through a smooth curve that passes through <paramref name="points"/> (input X,
+    /// output Y, both 0–255), like the Curves tool of a photo editor. The curve is the shape-preserving piecewise
+    /// cubic (PCHIP, as SciPy's <c>PchipInterpolator</c>), so it does not overshoot between points; outside the first
+    /// and last point it stays constant. Alpha is kept.
+    /// </summary>
+    /// <param name="points">At least two points with finite coordinates from 0 to 255 and strictly increasing X.</param>
+    /// <param name="channels">The channels to change; call again with another channel for a separate curve.</param>
+    /// <example>
+    /// <code>image.Mutate(x => x.Curves([new(0, 0), new(64, 52), new(192, 206), new(255, 255)]));   // gentle S</code>
+    /// </example>
+    /// <exception cref="ArgumentException">Fewer than two points, or X not strictly increasing.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">A coordinate is outside 0–255, or <paramref name="channels"/> selects no color channel.</exception>
+    public ImageProcessingContext Curves(ReadOnlySpan<PointF> points, ColorChannels channels = ColorChannels.Rgb)
+    {
+        if (points.Length < 2)
+        {
+            throw new ArgumentException("A curve needs at least two points.", nameof(points));
+        }
+
+        for (int i = 0; i < points.Length; i++)
+        {
+            PointF p = points[i];
+            if (!(p.X is >= 0f and <= 255f) || !(p.Y is >= 0f and <= 255f))
+            {
+                throw new ArgumentOutOfRangeException(nameof(points), p, "Expected coordinates between 0 and 255.");
+            }
+
+            if (i > 0 && p.X <= points[i - 1].X)
+            {
+                throw new ArgumentException("The X coordinates must be strictly increasing.", nameof(points));
+            }
+        }
+
+        if (channels is ColorChannels.None || (channels & ~ColorChannels.Rgb) != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(channels), channels, "Expected a non-empty combination of Red, Green and Blue.");
+        }
+
+        Span<byte> map = stackalloc byte[256];
+        ToneCurve.Fill(map, points);
+        byte[] lut = ToneLut.CreateIdentity();
+        ToneLut.SetChannels(lut, map, channels);
+        return ApplyToneLut(lut);
+    }
 
     /// <summary>
     /// Stretches each color channel so that its darkest value becomes 0 and its lightest 255, after discarding

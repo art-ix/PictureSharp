@@ -44,6 +44,67 @@ public readonly ref partial struct ImageProcessingContext
     }
 
     /// <summary>
+    /// Balances the colors so that <paramref name="neutral"/>, a color picked from something that should be gray,
+    /// becomes gray of the same luminance: each channel is scaled in linear light by Y / C, where C is the neutral's
+    /// channel and Y its Rec. 709 luma. The alpha of <paramref name="neutral"/> is ignored; the image's alpha is kept.
+    /// </summary>
+    /// <param name="neutral">The color to make gray; red, green and blue must all be above 0.</param>
+    /// <exception cref="ArgumentOutOfRangeException">A color channel of <paramref name="neutral"/> is 0.</exception>
+    public ImageProcessingContext WhiteBalance(Rgba32 neutral)
+    {
+        if (neutral.R == 0 || neutral.G == 0 || neutral.B == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(neutral), neutral, "Every color channel of the neutral must be above 0.");
+        }
+
+        byte[] lut = new byte[ToneLut.Length];
+        PhotoAdjust.NeutralWhiteBalanceLut(lut, neutral);
+        return ApplyToneLut(lut);
+    }
+
+    /// <summary>
+    /// Removes a color cast by assuming that the midtones average to gray: the mean linear color M of the pixels that
+    /// are not fully transparent, have no channel at 0–2 or 253–255 and whose luma lies between the 10th and 90th
+    /// percentile is measured, and each channel is scaled by (Y / M)^strength, where Y is the luma of M, so that the
+    /// mean keeps its luminance. An animation is measured as a whole and every frame gets the same gains. Alpha is kept.
+    /// </summary>
+    /// <param name="strength">0 to 1: 1 makes the mean gray, smaller values correct partly, 0 keeps the image.</param>
+    /// <remarks>A scene that really is dominated by one color (grass, sunset) is shifted towards gray as well.</remarks>
+    public ImageProcessingContext AutoWhiteBalance(float strength = 1f)
+    {
+        if (!(strength is >= 0f and <= 1f))
+        {
+            throw new ArgumentOutOfRangeException(nameof(strength), strength, "Expected a number between 0 and 1.");
+        }
+
+        if (strength == 0f)
+        {
+            return this;
+        }
+
+        CancellationToken token = _state.CancellationToken;
+        Span<long> luma = stackalloc long[GrayWorld.LumaLength];
+        foreach (ImageFrame frame in Target.Frames)
+        {
+            GrayWorld.CountLuma(frame.GetPixelSpan(), luma, token);
+        }
+
+        if (GrayWorld.MidtoneRange(luma) is not { } range)
+        {
+            return this;
+        }
+
+        long[] counts = new long[GrayWorld.ChannelLength];
+        foreach (ImageFrame frame in Target.Frames)
+        {
+            GrayWorld.CountChannels(frame.GetPixelSpan(), range, counts, token);
+        }
+
+        byte[] lut = new byte[ToneLut.Length];
+        return GrayWorld.Lut(lut, counts, strength) ? ApplyToneLut(lut) : this;
+    }
+
+    /// <summary>
     /// Changes the saturation of muted colors more than of saturated ones: positive values scale the chroma around the
     /// luma by 1 + amount · (1 − s), where s is the saturation (max − min) / max; negative values scale it by
     /// 1 + amount, so −1 gives grayscale. Alpha is kept.

@@ -436,6 +436,8 @@ sealed class Image : System.IDisposable
 static class ImageAnalysisExtensions
     method [Extension] static PictureSharp.Processing.ImageHistogram GetHistogram(Image image, PictureSharp.Processing.HistogramOptions? options = null)
     method [Extension] static PictureSharp.Processing.ImageHistogram GetHistogram(Image image, PictureSharp.Processing.HistogramOptions? options, System.Threading.CancellationToken cancellationToken)
+    method [Extension] static PictureSharp.Processing.NegativeAnalysis AnalyzeNegative(Image image, PictureSharp.Processing.NegativeOptions? options = null)
+    method [Extension] static PictureSharp.Processing.NegativeAnalysis AnalyzeNegative(Image image, PictureSharp.Processing.NegativeOptions? options, System.Threading.CancellationToken cancellationToken)
     method [Extension] static System.Drawing.Rectangle? FindTrimBounds(Image image, PictureSharp.Processing.AutoCropOptions? options = null)
     method [Extension] static System.Drawing.Rectangle? FindTrimBounds(Image image, PictureSharp.Processing.AutoCropOptions? options, System.Threading.CancellationToken cancellationToken)
 sealed class ImageConfiguration
@@ -723,6 +725,11 @@ enum PictureSharp.Processing.BlendMode
     ColorDodge = 9
     ColorBurn = 10
     Exclusion = 11
+readonly struct PictureSharp.Processing.ChannelValues : System.IEquatable<PictureSharp.Processing.ChannelValues>
+    ctor(System.Single Red, System.Single Green, System.Single Blue)
+    property System.Single Blue { get; init; }
+    property System.Single Green { get; init; }
+    property System.Single Red { get; init; }
 [Flags] enum PictureSharp.Processing.ColorChannels
     None = 0
     Red = 1
@@ -735,6 +742,9 @@ sealed record PictureSharp.Processing.DrawImageOptions : System.IEquatable<Pictu
     property System.Boolean LinearLight { get; init; }
     property System.Single Opacity { get; init; }
     property static PictureSharp.Processing.DrawImageOptions Default { get; }
+enum PictureSharp.Processing.FilmType
+    ColorNegative = 0
+    BlackAndWhiteNegative = 1
 enum PictureSharp.Processing.FlipMode
     None = 0
     Horizontal = 1
@@ -777,6 +787,7 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext AutoContrast(System.Single cutoffLow, System.Single cutoffHigh, System.Boolean preserveTone = false)
     method PictureSharp.Processing.ImageProcessingContext AutoCrop(PictureSharp.Processing.AutoCropOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext AutoOrient()
+    method PictureSharp.Processing.ImageProcessingContext AutoWhiteBalance(System.Single strength = 1)
     method PictureSharp.Processing.ImageProcessingContext BackgroundColor(Rgba32 color)
     method PictureSharp.Processing.ImageProcessingContext BoxBlur(System.Single radius)
     method PictureSharp.Processing.ImageProcessingContext Brightness(System.Single amount)
@@ -786,7 +797,9 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Drawing.Rectangle rectangle)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 width, System.Int32 height, PictureSharp.Processing.AnchorPosition position = Center)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 x, System.Int32 y, System.Int32 width, System.Int32 height)
+    method PictureSharp.Processing.ImageProcessingContext Curves(System.ReadOnlySpan<System.Drawing.PointF> points, PictureSharp.Processing.ColorChannels channels = Rgb)
     method PictureSharp.Processing.ImageProcessingContext Denoise(System.Single strength, System.Int32 radius = 2)
+    method PictureSharp.Processing.ImageProcessingContext DevelopNegative(PictureSharp.Processing.NegativeOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, PictureSharp.Processing.DrawImageOptions options)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, System.Single opacity = 1)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, PictureSharp.Processing.DrawImageOptions options)
@@ -800,10 +813,13 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext GaussianBlur(System.Single sigma)
     method PictureSharp.Processing.ImageProcessingContext Grayscale()
     method PictureSharp.Processing.ImageProcessingContext Invert()
+    method PictureSharp.Processing.ImageProcessingContext InvertNegative(PictureSharp.Processing.NegativeCalibration calibration, PictureSharp.Processing.NegativePrintOptions? print = null)
     method PictureSharp.Processing.ImageProcessingContext Levels(PictureSharp.Processing.LevelsOptions options)
     method PictureSharp.Processing.ImageProcessingContext MakeTransparent(Rgba32 color)
     method PictureSharp.Processing.ImageProcessingContext Opacity(System.Single opacity)
     method PictureSharp.Processing.ImageProcessingContext Pad(System.Int32 width, System.Int32 height, Rgba32 color = default, PictureSharp.Processing.AnchorPosition position = Center)
+    method PictureSharp.Processing.ImageProcessingContext ReduceColorNoise(System.Single strength = 1, System.Int32 radius = 0)
+    method PictureSharp.Processing.ImageProcessingContext RemoveDust(System.Int32 size = 3, System.Single threshold = 0.1)
     method PictureSharp.Processing.ImageProcessingContext Resize(PictureSharp.Processing.ResizeOptions options)
     method PictureSharp.Processing.ImageProcessingContext Resize(System.Drawing.Size size)
     method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height)
@@ -821,6 +837,7 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext Vibrance(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Vignette(PictureSharp.Processing.VignetteOptions options)
     method PictureSharp.Processing.ImageProcessingContext Vignette(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext WhiteBalance(Rgba32 neutral)
     method PictureSharp.Processing.ImageProcessingContext WhiteBalance(System.Single temperature, System.Single tint = 0)
     property System.Drawing.Size Size { get; }
     property System.Int32 FrameCount { get; }
@@ -845,6 +862,40 @@ sealed record PictureSharp.Processing.MaskOptions : System.IEquatable<PictureSha
 enum PictureSharp.Processing.MaskOutside
     Keep = 0
     Transparent = 1
+sealed class PictureSharp.Processing.NegativeAnalysis
+    property PictureSharp.Processing.ChannelValues ClippedFraction { get; }
+    property PictureSharp.Processing.NegativeCalibration Calibration { get; }
+    property PictureSharp.Processing.NegativeWarnings Warnings { get; }
+sealed record PictureSharp.Processing.NegativeCalibration : System.IEquatable<PictureSharp.Processing.NegativeCalibration>
+    ctor()
+    method static PictureSharp.Processing.NegativeCalibration Combine(System.Collections.Generic.IEnumerable<PictureSharp.Processing.NegativeCalibration> calibrations)
+    property PictureSharp.Processing.ChannelValues MidtoneGamma { get; init; }
+    property PictureSharp.Processing.FilmType FilmType { get; init; }
+    property required PictureSharp.Processing.ChannelValues DensityRange { get; init; }
+    property required PictureSharp.Processing.ChannelValues FilmBase { get; init; }
+sealed record PictureSharp.Processing.NegativeOptions : System.IEquatable<PictureSharp.Processing.NegativeOptions>
+    ctor()
+    property PictureSharp.Processing.FilmType FilmType { get; init; }
+    property PictureSharp.Processing.NegativeCalibration? Calibration { get; init; }
+    property PictureSharp.Processing.NegativePrintOptions Print { get; init; }
+    property System.Drawing.Rectangle? FilmBaseRegion { get; init; }
+    property System.Drawing.Rectangle? Region { get; init; }
+    property System.Int32? DustSize { get; init; }
+    property System.Single ColorNoiseReduction { get; init; }
+    property System.Single HighlightPercentile { get; init; }
+    property System.Single MidtoneBalance { get; init; }
+    property static PictureSharp.Processing.NegativeOptions Default { get; }
+sealed record PictureSharp.Processing.NegativePrintOptions : System.IEquatable<PictureSharp.Processing.NegativePrintOptions>
+    ctor()
+    property System.Single Contrast { get; init; }
+    property System.Single Curve { get; init; }
+    property System.Single Exposure { get; init; }
+    property static PictureSharp.Processing.NegativePrintOptions Default { get; }
+[Flags] enum PictureSharp.Processing.NegativeWarnings
+    None = 0
+    ChannelClipped = 1
+    FilmBaseEstimated = 2
+    LowDensityRange = 4
 enum PictureSharp.Processing.ResamplingFilter
     Nearest = 0
     Bilinear = 1

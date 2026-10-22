@@ -38,9 +38,26 @@ internal static class PhotoAdjust
         float g = DeterministicMath.Exp2(-WhiteBalanceStops * tint);
         float b = DeterministicMath.Exp2(-WhiteBalanceStops * temperature);
         float normalize = 1f / ((LumaR * r) + (LumaG * g) + (LumaB * b));
-        GainLut(lut[..256], r * normalize);
-        GainLut(lut.Slice(256, 256), g * normalize);
-        GainLut(lut.Slice(512, 256), b * normalize);
+        ChannelGainsLut(lut, r * normalize, g * normalize, b * normalize);
+    }
+
+    /// <summary>
+    /// Fills <paramref name="lut"/> with channel gains <c>Y / C</c> in linear light, where C is a channel of
+    /// <paramref name="neutral"/> (all above 0) and Y its Rec. 709 luma: the neutral becomes gray of the same luminance.
+    /// </summary>
+    public static void NeutralWhiteBalanceLut(Span<byte> lut, Rgba32 neutral)
+    {
+        float r = SrgbTransfer.Decode(neutral.R), g = SrgbTransfer.Decode(neutral.G), b = SrgbTransfer.Decode(neutral.B);
+        float luma = (LumaR * r) + (LumaG * g) + (LumaB * b);
+        ChannelGainsLut(lut, luma / r, luma / g, luma / b);
+    }
+
+    /// <summary>Fills <paramref name="lut"/> (R, G, B × 256) with <c>Encode(Decode(v) · gain)</c> per channel.</summary>
+    public static void ChannelGainsLut(Span<byte> lut, float red, float green, float blue)
+    {
+        GainLut(lut[..256], red);
+        GainLut(lut.Slice(256, 256), green);
+        GainLut(lut.Slice(512, 256), blue);
     }
 
     private static void GainLut(Span<byte> map, float gain)
