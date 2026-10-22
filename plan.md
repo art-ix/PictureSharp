@@ -52,7 +52,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.9 | `JpegEncoderOptions.ColorMode` (Auto, Color, Grayscale): liczba składowych JPEG, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
 | 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
-| 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Przygotowana (2026-10-22) |
+| 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
 | 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Planowana |
 | 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
 
@@ -706,6 +706,9 @@ Stan (2026-10-22):
   dwóch przebiegów, bo pierwszy zawiera rozgrzewkę JIT.
 - `VERSION` 0.7.12, `PackageReleaseNotes` ×4, `docs/releases/release-0.7.12.md`, uwaga w `release-0.7.11.md`, etapy C+D
   przesunięte na 0.7.13.
+- **Wydanie (2026-10-22):** commit 1c98b3f, Validate 39807980161 success, tag `v0.7.12`, GitHub Release, workflow
+  Release 39808993598 success: 4 paczki na NuGet i jako zasoby wydania. Do wydania v0.7.11 dopisana uwaga, że nie
+  trafiło na NuGet.
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
