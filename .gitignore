@@ -22,3 +22,6 @@ tests/assets/PublicApi.received.txt
 # Packed packages
 *.nupkg
 artifacts/
+
+# Negative-film scans (local test inputs)
+samples/negatyw/

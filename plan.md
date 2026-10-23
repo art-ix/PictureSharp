@@ -1,8 +1,8 @@
-# PictureSharp: plan rozwoju do 0.8.0
+# PictureSharp: plan rozwoju (zrealizowany do 0.8.1)
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.7.10 (opublikowana 2026-10-22).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.8.1 (opublikowana 2026-10-23).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -53,7 +53,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
 | 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
 | 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
-| 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Przygotowana (2026-10-22) |
+| 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Wydana (2026-10-22; tag v0.7.13) |
 | 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Wydana (2026-10-23; zapis `tmap` potwierdzony we wtyczce HEIF 0.6.10; bez ARM64) |
 | 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Wydana (2026-10-23; NuGet 0.8.1, bez ARM64) |
 
@@ -854,10 +854,18 @@ Zależności od wydań rdzenia:
 | 0.4.0–0.5.0 | Gain map → `ToHdr`, `ReadMetadata` bez dekodu; SIMD i pomiary | 0.7.0 (SPI wtyczek); pełne `HdrInfo.Detected` od 0.7.1 |
 | dalej | Zapis gain map w HEIC, ewentualnie `thmb`; wybór elementu przez opcje dekodera per wtyczka | 0.7.6 (opcje), 0.8.0 (reszta) |
 
-## Poza planem — kandydaci po 0.8.0
+## Poza planem — kandydaci po 0.8.1
 
-Do decyzji użytkownika, bez zobowiązań: przetwarzanie HDR w float, CICP PQ/HLG, AVIF (kontener wspólny z wtyczką
-HEIF), proste formaty QOI, TGA i PNM.
+Do decyzji użytkownika, bez zobowiązań:
+- przetwarzanie HDR w float;
+- CICP PQ/HLG;
+- AVIF (kontener wspólny z wtyczką HEIF).
+
+QOI, TGA i PNM wykreślone: są we wtyczce Formats.Extra.
+
+Otwarte prośby wtyczek:
+- miejsce na metadane specyficzne dla formatu w `ImageMetadata` (hotspot XBM/CUR; Formats.Extra);
+- deklaracja, które elementy SPI wtyczek są stabilne (Tiff potrzebuje jej do 1.0).
 
 ## Wspólna bramka jakości każdego wydania
 
