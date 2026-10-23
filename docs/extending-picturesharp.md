@@ -1,141 +1,293 @@
 # Extending PictureSharp
 
-Applications extend PictureSharp with format plugins, custom frame processors and C# 14 extension blocks; plugins use
-only public API and work under trimming and Native AOT. The last section is for library contributors.
+There are three ways to extend PictureSharp from an application:
+
+- **Format plugins** add a file format: detection, decoder, encoder and metadata codec.
+- **Frame processors** add an operation to `Mutate` and `Clone`.
+- **C# 14 extension blocks** give both a short, built-in-looking API (`image.SaveAsRawa()`, `x.LeftHalf()`).
+
+Plugins use only public API and work under trimming and Native AOT. The last section is for library contributors.
 
 ## Format plugins
 
-A plugin implements `IImageFormatModule` (`PictureSharp.Formats`): the format, its signature check and a decoder and/or
-encoder. Create the format once with `ImageFormat.Create`; formats compare by identity.
+### A complete plugin
+
+The example below implements a made-up format, RAWA: the bytes `RAWA`, the width and height as 32-bit little-endian
+integers, then the RGBA pixels row by row. It is short, but it is a working plugin.
 
 ```csharp
+using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using PictureSharp;
 using PictureSharp.Formats;
 
-public sealed class TgaFormat : IImageFormatModule
+public sealed class RawaFormat : IImageFormatModule
 {
-    public static ImageFormat Format { get; } = ImageFormat.Create("TGA", "image/x-tga", ".tga", ".vda");
+    // Create the format once: formats compare by identity.
+    public static ImageFormat Format { get; } = ImageFormat.Create("RAWA", "image/x-rawa", ".rawa");
 
     ImageFormat IImageFormatModule.Format => Format;
-    public int HeaderSize => 18;                                   // 1–4096 bytes
-    public bool IsSupported(ReadOnlySpan<byte> header) => /* check the signature; header may be short */ false;
-    public IImageFormatDecoder? Decoder { get; } = new TgaDecoder();
-    public IImageFormatEncoder? Encoder { get; } = new TgaEncoder(); // null for read-only formats
+    public int HeaderSize => 4;                                      // bytes IsSupported needs, 1–4096
+    public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("RAWA"u8);
+    public IImageFormatDecoder? Decoder { get; } = new RawaDecoder();
+    public IImageFormatEncoder? Encoder { get; } = new RawaEncoder(); // omit for a read-only format
 }
 
-public sealed record TgaEncoderOptions : EncoderOptions
+public sealed record RawaEncoderOptions : EncoderOptions
 {
-    public override ImageFormat Format => TgaFormat.Format;
-    public bool Rle { get; init; } = true;
+    public override ImageFormat Format => RawaFormat.Format;
+    public bool Opaque { get; init; }                                // write A = 255
 }
 
-sealed class TgaDecoder : IImageFormatDecoder
+sealed class RawaDecoder : IImageFormatDecoder
 {
-    public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
-        new() { Format = TgaFormat.Format, Width = /* … */ 1, Height = 1 };
+    public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
+    {
+        (int width, int height) = ReadSize(data.Span);
+        return new() { Format = RawaFormat.Format, Width = width, Height = height, HasAlpha = true };
+    }
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
-        (int width, int height) = (1, 1);                         // parse the header
-        context.ReservePixels(width, height);                     // fail early, before allocating
+        (int width, int height) = ReadSize(data.Span);
+        context.ReservePixels(width, height);                        // fails on MaxPixels before allocating
+        ReadOnlySpan<Rgba32> pixels = MemoryMarshal.Cast<byte, Rgba32>(data.Span[12..]);
         var image = new Image(width, height);
-        // … fill image.GetPixelSpan(), calling context.ThrowIfCancellationRequested() between rows
+        for (int y = 0; y < height; y++)
+        {
+            context.ThrowIfCancellationRequested();
+            pixels.Slice(y * width, width).CopyTo(image.GetRowSpan(y)); // truncated file: reported as corrupt
+        }
+
         return image;
     }
+
+    static (int Width, int Height) ReadSize(ReadOnlySpan<byte> data)
+    {
+        int width = BinaryPrimitives.ReadInt32LittleEndian(data[4..]);
+        int height = BinaryPrimitives.ReadInt32LittleEndian(data[8..]);
+        return width > 0 && height > 0 ? (width, height) : throw new ImageFormatException(RawaFormat.Format, "Invalid size.");
+    }
 }
 
-sealed class TgaEncoder : IImageFormatEncoder<TgaEncoderOptions>
+sealed class RawaEncoder : IImageFormatEncoder<RawaEncoderOptions>
 {
-    public void Encode(Image image, Stream output, TgaEncoderOptions options, CancellationToken cancellationToken)
+    // The image is borrowed and the stream stays open.
+    public void Encode(Image image, Stream output, RawaEncoderOptions options, CancellationToken cancellationToken)
     {
-        // write image.GetPixelSpan(); the image is borrowed and the stream stays open
+        Span<byte> header = stackalloc byte[12];
+        "RAWA"u8.CopyTo(header);
+        BinaryPrimitives.WriteInt32LittleEndian(header[4..], image.Width);
+        BinaryPrimitives.WriteInt32LittleEndian(header[8..], image.Height);
+        output.Write(header);
+
+        var row = new Rgba32[image.Width];
+        for (int y = 0; y < image.Height; y++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            image.GetRowSpan(y).CopyTo(row);
+            if (options.Opaque)
+            {
+                foreach (ref Rgba32 pixel in row.AsSpan()) pixel.A = 255;
+            }
+
+            output.Write(MemoryMarshal.AsBytes(row.AsSpan()));
+        }
     }
 }
 ```
 
-Register the plugin once at startup, or only for the calls that need it:
+### Registering the plugin
+
+Register it once at startup; after that it works like a built-in format:
 
 ```csharp
-ImageConfiguration.Default = ImageConfiguration.Default.ToBuilder().AddFormat(new TgaFormat()).Build();
+ImageConfiguration.Default = ImageConfiguration.Default.ToBuilder().AddFormat(new RawaFormat()).Build();
 
-using var image = Image.Load("picture.tga");                      // detected from the content
-image.Save("copy.tga");                                           // encoder chosen by the extension
-image.Save("copy.tga", new TgaEncoderOptions { Rle = false });
-
-var withTga = ImageConfiguration.Default.ToBuilder().AddFormat(new TgaFormat()).Build();
-using var local = Image.Load(bytes, new DecoderOptions { Configuration = withTga });
-local.Save("local.tga", new TgaEncoderOptions { Configuration = withTga });
+using var image = Image.Load("picture.rawa");                       // recognized by its signature
+image.Save("copy.rawa");                                            // encoder chosen by the extension
+image.Save("opaque.rawa", new RawaEncoderOptions { Opaque = true });
 ```
 
-Saves without options (`Save(path)`, `Save(stream, format)`) always use the default configuration. The library enforces
-this contract:
-
-- `AddFormat` appends after existing formats, so built-in signatures are checked first; a duplicate format, name, MIME
-  type or extension throws `ArgumentException`. `ReplaceFormat` swaps the codecs of a registered format (e.g.
-  `ImageFormat.Png`) and keeps its detection position.
-- Module members are read once at registration. Codecs must be thread-safe and their output must not depend on
-  `MaxDegreeOfParallelism`.
-- `IsSupported` may receive fewer than `HeaderSize` bytes; index, argument, overflow and invalid-operation errors count
-  as "not this format".
-- `Decode` should call `ReservePixels` (and `ReserveMetadata` for decompressed ICC/EXIF/XMP) before allocating. The
-  library rechecks `MaxPixels` and `MaxFrames`, sets `SourceFormat` and applies `TargetSize` and
-  `ApplyExifOrientation`.
-- Throw `ImageFormatException` for corrupt data and `NotSupportedException` for unsupported features; index, argument,
-  overflow, invalid-operation and cast errors are reported as `ImageFormatException`.
-- A container decodes embedded images with `context.DecodeEmbedded(data)`, using the same codecs and shared limits.
-- A format whose image is stored as strips or tiles in another format (JPEG tiles in TIFF) reserves the image once and
-  decodes each part with `context.DecodeEmbeddedPart(data, width, height)`. A part is not charged against the reserved
-  image and is not a frame: it may decode to at most `width` x `height` pixels (itself at most `MaxPixels`), as
-  stored, without EXIF orientation, gain map, color conversion or metadata. Dispose each part before decoding the next,
-  so a load holds at most the image and one part. The overload with `EmbeddedPartOptions` replaces settings for the
-  part only: `Jpeg` (for example `CmykStorage = JpegCmykStorage.Plain` for the CMYK strips of a TIFF file) and
-  `MaxDegreeOfParallelism` (for example 1 when the container decodes several parts at once); a null setting keeps the
-  load's own:
-
-  ```csharp
-  context.ReservePixels(width, height);
-  var image = new Image(width, height);
-  foreach ((ReadOnlyMemory<byte> data, int x, int y) in tiles)
-  {
-      using Image tile = context.DecodeEmbeddedPart(data, tileWidth, tileHeight);
-      // Copy the part of the tile inside the image; check that the tile covers it.
-  }
-
-  var cmyk = new EmbeddedPartOptions { Jpeg = new JpegDecoderOptions { CmykStorage = JpegCmykStorage.Plain } };
-  using Image strip = context.DecodeEmbeddedPart(data, stripWidth, stripHeight, cmyk);
-  ```
-- Encoder options derive from `EncoderOptions` and override `Format`; `IImageFormatEncoder<TOptions>` creates defaults
-  with `new TOptions()` and rejects options of another type.
-
-### Shortcuts for a plugin
+To use it only in some calls, build a separate configuration and pass it in the options:
 
 ```csharp
-namespace MyCompany.PictureSharp.Tga;
+ImageConfiguration withRawa = ImageConfiguration.Default.ToBuilder().AddFormat(new RawaFormat()).Build();
 
-public static class TgaImageExtensions
+using var image = Image.Load(bytes, new DecoderOptions { Configuration = withRawa });
+image.Save("copy.rawa", new RawaEncoderOptions { Configuration = withRawa });
+```
+
+Saves without options (`Save(path)`, `Save(stream, format)`) always use `ImageConfiguration.Default`.
+
+`AddFormat` appends after the registered formats, so built-in signatures are checked first; a duplicate format, name,
+MIME type or extension throws `ArgumentException`. `ReplaceFormat` swaps the codecs of a registered format (for example
+`ImageFormat.Png`) and keeps its place in detection.
+
+### Shortcuts with extension blocks
+
+A plugin can give its users the same API the built-in formats have:
+
+```csharp
+namespace MyCompany.PictureSharp.Rawa;
+
+public static class RawaExtensions
 {
+    extension(ImageFormat)
+    {
+        public static ImageFormat Rawa => RawaFormat.Format;          // ImageFormat.Rawa
+    }
+
+    extension(ImageConfigurationBuilder builder)
+    {
+        public ImageConfigurationBuilder AddRawa() => builder.AddFormat(new RawaFormat());
+    }
+
     extension(Image image)
     {
-        public void SaveAsTga(string path, TgaEncoderOptions? options = null) => image.Save(path, options ?? new());
-        public byte[] ToTga(TgaEncoderOptions? options = null) => image.Encode(options ?? new());
+        public void SaveAsRawa(string path, RawaEncoderOptions? options = null) => image.Save(path, options ?? new());
+        public byte[] ToRawa(RawaEncoderOptions? options = null) => image.Encode(options ?? new());
     }
 }
 ```
 
-With options set, they save through `options.Configuration`, so the default configuration need not change.
+```csharp
+ImageConfiguration.Default = ImageConfiguration.Default.ToBuilder().AddRawa().Build();
+
+image.SaveAsRawa("copy.rawa");
+byte[] bytes = image.ToRawa(new() { Opaque = true });
+image.Save(stream, ImageFormat.Rawa);
+```
+
+The shortcuts save through `options.Configuration`, which defaults to `ImageConfiguration.Default`.
+
+### Rules for codecs
+
+**Module and threads**
+
+- The module's members are read once, at registration.
+- Codecs must be thread-safe, must not keep the input or context after returning, and their output must not depend on
+  `MaxDegreeOfParallelism`.
+
+**Detection**
+
+- `IsSupported` may receive fewer than `HeaderSize` bytes. Index, argument, overflow and invalid-operation errors
+  thrown there mean "not this format".
+
+**Decoding**
+
+- Call `context.ReservePixels` before allocating pixels and `context.ReserveMetadata` before copying decompressed
+  ICC, EXIF or XMP data.
+- Throw `ImageFormatException` for corrupt data and `NotSupportedException` for valid data using an unsupported
+  feature. Index, argument, overflow, invalid-operation and cast errors are reported as `ImageFormatException`, so
+  `data.Span[offset..]` on a truncated file needs no extra check.
+- The library rechecks `MaxPixels` and `MaxFrames`, sets `SourceFormat` and applies `TargetSize` and
+  `ApplyExifOrientation`; the decoder returns the image as stored.
+
+**Encoding**
+
+- Encoder options derive from `EncoderOptions` and override `Format`. `IImageFormatEncoder<TOptions>` creates the
+  defaults with `new TOptions()` and rejects options of another type with `ArgumentException`.
 
 ### Orientation and color
 
-- **Container orientation.** Apply rotations stored outside EXIF (HEIF `irot`/`imir`) to the pixels and set
-  `Metadata.Orientation` to what remains (usually `TopLeft`); `Identify` reports the displayed size.
-- **Color.** Put an ICC profile in `Metadata.IccProfile`, or map nclx/CICP primaries to `Metadata.Chromaticities` and a
+- **Orientation stored outside EXIF** (HEIF `irot`/`imir`): apply it to the pixels and set `Metadata.Orientation` to
+  what remains, usually `TopLeft`. `Identify` reports the displayed size.
+- **Color**: put an ICC profile in `Metadata.IccProfile`, or map nclx/CICP primaries to `Metadata.Chromaticities` and a
   pure power transfer to `Metadata.Gamma` (`Chromaticities` alone mean the sRGB curve). PQ and HLG cannot be expressed:
   throw `NotSupportedException` or leave them undeclared.
 
+### Containers, strips and tiles
+
+A container format decodes a whole embedded image with `context.DecodeEmbedded(data)`. It uses the same codecs, limits
+and options as the load.
+
+A format that stores one image as strips or tiles in another format (JPEG tiles in TIFF) reserves the image once and
+decodes each part with `context.DecodeEmbeddedPart`:
+
+```csharp
+context.ReservePixels(width, height);
+var image = new Image(width, height);
+foreach ((ReadOnlyMemory<byte> data, int x, int y) in tiles)
+{
+    using Image tile = context.DecodeEmbeddedPart(data, tileWidth, tileHeight);
+    // Copy the part of the tile that lies inside the image; check that the tile covers it.
+}
+```
+
+- A part is not charged against the reserved image and is not a frame. It may decode to at most `width` x `height`
+  pixels, which must itself fit `MaxPixels`.
+- It is decoded as stored: without EXIF orientation, gain map, color conversion or metadata.
+- Dispose each part before decoding the next, so a load holds at most the image and one part.
+
+`EmbeddedPartOptions` replaces the load's settings for one part; a null setting keeps the load's own:
+
+```csharp
+var cmyk = new EmbeddedPartOptions { Jpeg = new JpegDecoderOptions { CmykStorage = JpegCmykStorage.Plain } };
+using Image strip = context.DecodeEmbeddedPart(data, stripWidth, stripHeight, cmyk);
+
+// Several parts decoded at once by the container:
+var serial = new EmbeddedPartOptions { MaxDegreeOfParallelism = 1 };
+```
+
+### Decoder options
+
+A plugin that lets the caller choose what to decode (a TIFF page, a DDS mip level, a HEIF item) defines a record
+derived from `FormatDecoderOptions` (0.7.6). Callers pass it in `DecoderOptions.FormatOptions`:
+
+```csharp
+public sealed record TiffDecoderOptions : FormatDecoderOptions
+{
+    public int Page { get; init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(Page)); }
+}
+
+using var image = Image.Load(path, new DecoderOptions { FormatOptions = [new TiffDecoderOptions { Page = 2 }] });
+```
+
+The plugin reads its record with `GetFormatOptions<T>()`, and uses the same selection in `Identify`, `Decode` and the
+metadata codec:
+
+```csharp
+public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
+{
+    int page = options.GetFormatOptions<TiffDecoderOptions>()?.Page ?? 0;
+    // ...
+}
+
+public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+{
+    int page = context.Options.GetFormatOptions<TiffDecoderOptions>()?.Page ?? 0;
+    // ...
+}
+```
+
+- Without its record, a plugin decodes what it did before. Plugins ignore records of other plugins and built-in formats
+  ignore them all, so one `DecoderOptions` can carry settings for several plugins.
+- `FormatOptions` holds at most one record per type and is copied when set; null entries and duplicate types throw
+  `ArgumentException`.
+- Validate values in the record (`ArgumentOutOfRangeException`). Throw `ImageFormatException` when the selected item is
+  not in the file, as `Ico.Index` does. `ContainerItemCount` still counts every item.
+- Limits, cancellation and `ReservePixels` apply to the selected item. `DecodeEmbedded` passes the same options on;
+  `DecodeEmbeddedPart` passes the limits and format options (with `EmbeddedPartOptions` replacing `Jpeg` and
+  `MaxDegreeOfParallelism`).
+- Frame readers (`OpenFrameReaderAsync`) do not support plugin formats.
+
+### Metadata without pixels
+
+Set `IImageFormatModule.MetadataCodec` to support `Image.ReadMetadata` and `Image.EditMetadata` for the format:
+
+- `Read` returns the ICC, EXIF and XMP blocks, charged with `context.ReserveMetadata`.
+- `Rewrite` returns the file with the edited blocks. Its default implementation throws `NotSupportedException`, so a
+  read-only codec implements only `Read`.
+
+The library checks limits and cancellation, skips edits that change nothing and writes files atomically.
+
 ### HDR gain maps
 
-When `context.Options.LoadGainMap` is set, a decoder that finds a gain map attaches it, so `Image.Hdr`, `ToHdr` and
-`ToneMap` work as for JPEG.
+#### Reading
+
+When `context.Options.LoadGainMap` is set, a decoder that finds a gain map attaches it; `Image.Hdr`, `ToHdr` and
+`ToneMap` then work as for JPEG. The map is decoded lazily, by a `GainMapImage`:
 
 ```csharp
 sealed class ContainerGainMap(byte[] mapData, Size size) : GainMapImage(size)
@@ -145,7 +297,7 @@ sealed class ContainerGainMap(byte[] mapData, Size size) : GainMapImage(size)
         Image.Load(mapData, new DecoderOptions { MaxDegreeOfParallelism = maxDegreeOfParallelism });
 }
 
-// In IImageFormatDecoder.Decode, after decoding the base image:
+// In Decode, after decoding the base image:
 if (context.Options.LoadGainMap)
 {
     try
@@ -160,98 +312,58 @@ if (context.Options.LoadGainMap)
 }
 ```
 
-- When a file stores the map in several models (iPhones since iOS 18 store ISO 21496-1 and Apple metadata), call
-  `AttachGainMap(metadata, map, detected)` with every model in `detected` (including `metadata.Kind`), so
-  `Image.Hdr.Detected` matches a JPEG (0.7.1).
-- `GainMapMetadata.ParseIso` reads ISO 21496-1 payloads, `ParseApple` the Apple model. In `Identify`, report
-  `ImageInfo.Hdr = metadata.ToHdrInfo(mapSize)` (with the same `Detected`) when `LoadGainMap` is set.
+- `GainMapMetadata.ParseIso` reads an ISO 21496-1 payload, `ParseApple` the Apple model.
+- A `GainMapImage` owns its data, never uses the decode context and returns the map at its stored size.
+- In `Identify`, report `ImageInfo.Hdr = metadata.ToHdrInfo(mapSize)` when `LoadGainMap` is set.
+- When a file describes the map in several models (iPhones since iOS 18 store ISO 21496-1 and Apple metadata), pass
+  them all, `metadata.Kind` included: `AttachGainMap(metadata, map, detected)` in `Decode` and
+  `metadata.ToHdrInfo(mapSize) with { Detected = detected }` in `Identify`. `Image.Hdr.Detected` then matches a JPEG
+  (0.7.1).
+- Keep the base image's ICC profile or `Chromaticities`/`Gamma` when attaching a map, also with `IgnoreMetadata`.
 - Map pixels count toward `MaxPixels`. An oversized map, unparsable metadata or a base color other than sRGB or Display
   P3 is reported through `Image.Hdr` and never fails the load.
-- Keep the base image's ICC profile or `Chromaticities`/`Gamma` when attaching a map, also with `IgnoreMetadata`.
-- The library carries the map through `TargetSize`, orientation, color conversion and geometric edits.
-  `GainMapImage.Decode` returns the map at its stored size, owns its data and must not use the decode context.
-- Saving as JPEG writes a plugin's gain map like an edited JPEG map, with metadata from `ToIso()` (0.8.0).
+- The library carries the map through `TargetSize`, orientation, color conversion and geometric edits. Saving as JPEG
+  writes it like an edited JPEG map, with metadata from `ToIso()` (0.8.0).
 
-An encoder writes the attached map with `image.GetGainMap()` (namespace `PictureSharp.Formats`, 0.8.0):
+#### Writing (0.8.0)
+
+An encoder gets the attached map with `image.GetGainMap()` (namespace `PictureSharp.Formats`). It decodes nothing;
+`Map.Decode` returns a new image on every call:
 
 ```csharp
-// In IImageFormatEncoder.Encode; require: true throws like JpegGainMapMode.Require instead of returning null.
-if (image.GetGainMap(require: options.GainMap == MyGainMapMode.Require) is { } gainMap)
+// In Encode:
+if (image.GetGainMap() is { Metadata: var metadata, Map: var map })
 {
-    byte[] iso = gainMap.Metadata.ToIso();   // the ISO 21496-1 payload, as ParseIso reads it
-    if (gainMap.Map is ContainerGainMap own)
+    byte[] iso = metadata.ToIso();             // the ISO 21496-1 payload, as ParseIso reads it
+    byte[]? icc = metadata.ToAlternateIcc();   // null when the base primaries apply
+    if (map is ContainerGainMap own)
     {
         // Unedited and unrotated since this plugin attached it: copy the compressed map as is.
     }
     else
     {
-        using Image map = gainMap.Map.Decode(options.MaxDegreeOfParallelism, cancellationToken);
-        // Encode the map: the size and orientation of the image's pixels; a gray map has R = G = B.
+        using Image pixels = map.Decode(maxDegreeOfParallelism: -1, cancellationToken);
+        // Encode it: it has the size and orientation of the image; a gray map has R = G = B.
     }
 }
 ```
 
+- `GetGainMap()` returns null when no map can be written; `GetGainMap(require: true)` throws instead, like
+  `JpegGainMapMode.Require`.
 - Only ISO 21496-1 maps are returned; a map with Apple metadata only gives null (`NotSupportedException` when
   required).
-- `ToIso()` stores the multiplication color space only as a flag: when `Metadata.MultiplicationSpace` is not null,
-  store those primaries with the map. `Metadata.ToAlternateIcc()` writes them as the ICC profile `ParseIso` reads back
-  (the map's ICC profile in JPEG, the `colr` box of a HEIF `tmap` item); it returns null when the base primaries apply.
-- `GetGainMap` decodes nothing; `Map.Decode` returns a new image on every call.
-
-### Metadata without pixels
-
-`IImageFormatModule.MetadataCodec` enables `Image.ReadMetadata` and `Image.EditMetadata`. `Read` returns the ICC, EXIF
-and XMP blocks (charged with `context.ReserveMetadata`); `Rewrite` returns the file with edited blocks and throws
-`NotSupportedException` by default. The library checks limits and cancellation, skips unchanged edits and writes files
-atomically.
-
-### Decoder options
-
-A plugin that lets the caller choose what to decode (a TIFF page, a DDS mip level, a HEIF item) derives its settings
-from `FormatDecoderOptions`. Callers pass them in `DecoderOptions.FormatOptions`, and the plugin reads its own record
-with `GetFormatOptions<T>()` (0.7.6):
-
-```csharp
-public sealed record TgaDecoderOptions : FormatDecoderOptions
-{
-    public int Page { get; init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(Page)); }
-}
-
-// In the plugin: the same selection in Identify, Decode and the metadata codec.
-public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
-{
-    int page = options.GetFormatOptions<TgaDecoderOptions>()?.Page ?? 0;
-    // ... describe that page
-}
-
-public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
-{
-    int page = context.Options.GetFormatOptions<TgaDecoderOptions>()?.Page ?? 0;
-    // ... ReservePixels and decode that page
-}
-
-// In the application:
-using var image = Image.Load(path, new DecoderOptions { FormatOptions = [new TgaDecoderOptions { Page = 2 }] });
-```
-
-- Without its record a plugin decodes what it did before. It ignores the records of other plugins, and built-in
-  formats ignore them all, so one `DecoderOptions` can carry settings for several plugins.
-- `FormatOptions` holds at most one record per type and is copied when set; null entries and duplicate types throw
-  `ArgumentException`.
-- Check values in the record (`ArgumentOutOfRangeException`); throw `ImageFormatException` when the selection is not in
-  the file, as `Ico.Index` does. `ContainerItemCount` still counts every item.
-- Limits, cancellation and `ReservePixels` apply to the selected item. `DecodeEmbedded` passes the same options to the
-  embedded image; `DecodeEmbeddedPart` passes the limits and format options without orientation, gain map, color
-  conversion or metadata, with the `EmbeddedPartOptions` of its overload replacing `Jpeg` and `MaxDegreeOfParallelism`. Frame readers (`OpenFrameReaderAsync`) do not support plugin formats.
+- `ToIso()` stores the multiplication color space only as a flag. When `metadata.MultiplicationSpace` is not null,
+  store `ToAlternateIcc()` with the map: as the map's ICC profile in JPEG, in the `colr` box of a HEIF `tmap` item.
 
 ### SPI compatibility
 
-Plugin interfaces change only additively within a minor version (default interface members, new types or optional
-parameters). Breaking changes wait for a new minor version and come with a migration note.
+Plugin interfaces change only additively within a minor version: default interface members, new types and optional
+parameters. Breaking changes wait for a new minor version and come with a migration note.
 
 ## Custom frame processors
 
-`IFrameProcessor` (`PictureSharp.Processing`) produces a new buffer for every frame and may change the canvas size:
+`IFrameProcessor` (`PictureSharp.Processing`) produces a new pixel buffer for every frame and may change the canvas size.
+This one keeps the left half of the image:
 
 ```csharp
 using System.Drawing;
@@ -281,31 +393,44 @@ public static class MyOperations
 image.Mutate(x => x.AutoOrient().LeftHalf().Resize(800, 0));
 ```
 
-- `GetOutputSize` is asked once per operation (all frames share one canvas); both sides must be positive.
-- `Process` receives row-major straight-alpha pixels and a transparent black destination; do not keep the spans.
-- All frames are prepared before any is published, so an exception or cancellation keeps the previous frames. Within
+- `GetOutputSize` is called once per operation, since all frames share one canvas; both sides must be positive.
+- `Process` receives row-major straight-alpha pixels and a transparent black destination. Do not keep the spans.
+- All frames are prepared before any is published, so an exception or cancellation leaves the image unchanged. Within
   `Clone` the source is not copied.
-- A struct processor runs without boxing. Same-size in-place edits are simpler with `Apply(Action<ImageFrame>)`; see
-  [Image processing](image-processing.md#custom-operations).
+- A struct processor runs without boxing.
+
+For edits that keep the size, `Apply(Action<ImageFrame>)` is simpler; see
+[Image processing](image-processing.md#custom-operations).
 
 ## Contributing to the library
 
-**A built-in format.** Put its descriptor in Domain, public options in Application under the format namespace, and
-detection, identification, decoding (`DecodedImage`) and encoding in an Infrastructure module. Register it only as a
-`FormatRegistration` in `Composition/CodecRegistry.cs`; `CodecResolver` builds codecs per `ImageConfiguration`. Built-in
-codecs use the internal contracts; the plugin SPI is adapted to them in `Application/Extensibility`. Validate stored
-dimensions and frame counts before allocating, charge `DecodeContext.Budget` at the leaf decoder (embedded formats get a
-child context), charge metadata after decompression, and keep execution counters out of options and singletons. Extend
-`CodecContractTests`, the corpus and Oracle tests (malformed and truncated input, cancellation, limits, stream
-ownership), the AOT smoke consumer and the benchmark matrix. Do not turn I/O failures into corrupt-image exceptions.
+**A built-in format**
 
-**A processing operation.** Keep numeric work in Algorithms and orchestration in Application. Operations producing
-buffers return a `FrameReplacement` per frame to `ProcessingState.ReplaceFrames`, which commits the batch; in-place work
-uses writable frames for copy-on-write. Keep row/frame cancellation checks. Test pixel vectors, multi-frame canvases,
-cancellation after the first frame and `Clone` independence; add a benchmark and keep scalar/SIMD equality.
+- Put its descriptor in Domain, public options in Application under the format namespace, and detection,
+  identification, decoding (`DecodedImage`) and encoding in an Infrastructure module.
+- Register it only as a `FormatRegistration` in `Composition/CodecRegistry.cs`; `CodecResolver` builds codecs per
+  `ImageConfiguration`. Built-in codecs use the internal contracts; the plugin SPI is adapted to them in
+  `Application/Extensibility`.
+- Validate stored dimensions and frame counts before allocating. Charge `DecodeContext.Budget` at the leaf decoder
+  (embedded formats get a child context) and metadata after decompression. Keep execution counters out of options and
+  singletons. Do not turn I/O failures into corrupt-image exceptions.
+- Extend `CodecContractTests`, the corpus and Oracle tests (malformed and truncated input, cancellation, limits, stream
+  ownership), the AOT smoke consumer and the benchmark matrix.
 
-**The model or public API.** Put validation on the model operation, keep `Size`, `Rectangle` and `TimeSpan` at public
-boundaries, prefer `field` for validated properties, and use extension blocks for facade operations while invariants
-stay instance methods. Update XML docs, the API snapshot, the guides and `ConsumerCompilationTests`. Before finishing,
-run Release, Oracle and scalar-fallback tests and `bash scripts/verify-package-consumer.sh` (trimming and linux-x64
-Native AOT). CI covers x64; ARM64 needs a separate hardware run.
+**A processing operation**
+
+- Keep numeric work in Algorithms and orchestration in Application.
+- Operations producing buffers return a `FrameReplacement` per frame to `ProcessingState.ReplaceFrames`, which commits
+  the batch; in-place work uses writable frames for copy-on-write. Keep row and frame cancellation checks.
+- Test pixel vectors, multi-frame canvases, cancellation after the first frame and `Clone` independence; add a
+  benchmark and keep scalar and SIMD results equal.
+
+**The model or public API**
+
+- Put validation on the model operation and keep `Size`, `Rectangle` and `TimeSpan` at public boundaries.
+- Prefer `field` for validated properties. Use extension blocks for facade operations; invariants stay instance
+  methods.
+- Update the XML docs, the API snapshot, the guides and `ConsumerCompilationTests`.
+
+**Before finishing**, run the Release, Oracle and scalar-fallback tests and `bash scripts/verify-package-consumer.sh`
+(trimming and linux-x64 Native AOT). CI covers x64; ARM64 needs a separate hardware run.
