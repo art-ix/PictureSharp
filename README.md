@@ -15,17 +15,18 @@ libjpeg-turbo and Pillow.
 | BMP | Windows bitmaps | ✔ | | |
 | ICO | favicons, app icons | ✔ | | |
 | PCX | legacy files | ✔ | | |
-| HEIC ¹ | iPhone photos | ✔ | | read |
+| HEIC ¹ | iPhone photos | ✔ | | read, write |
 | TIFF ² | scans, print, archives | ✔ | | |
 
 Variants and options for each format are listed in
 [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md#supported-formats).
 HEIC and TIFF come from plugin packages, also 100% C#:
 
-¹ [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif): `dotnet add package PictureSharp.Heif`
+¹ [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif): `dotnet add package PictureSharp.Heif`. Own HEVC
+decoder and encoder; HDR gain maps, thumbnails, depth and Portrait blur from iPhone photos.
 
-² [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff): `dotnet add package PictureSharp.Tiff`. Reads
-and writes multi-page TIFF and BigTIFF; reads also CMYK, YCbCr, CIE L\*a\*b\*, 1- to 32-bit and floating-point samples.
+² [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff): `dotnet add package PictureSharp.Tiff`. Multi-page
+TIFF and BigTIFF; reads CMYK, YCbCr, CIE L\*a\*b\* and 1- to 32-bit or floating-point samples.
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
@@ -36,7 +37,7 @@ and writes multi-page TIFF and BigTIFF; reads also CMYK, YCbCr, CIE L\*a\*b\*, 1
 - Fast JPEG thumbnails decoded at 1/2, 1/4 or 1/8 scale
 - Frame-by-frame reading and writing of GIF, APNG and WebP animations
 - Typed EXIF and ICC/XMP metadata, editable without recompressing the image
-- HDR photos with gain maps (ISO 21496-1, Apple): reconstruction, tone mapping, editing and saving as JPEG
+- HDR photos with gain maps (ISO 21496-1, Apple): reconstruction, tone mapping, editing and saving as JPEG or HEIC
 - Limits for untrusted input and cancellation of all long-running work
 - SIMD on x64 and ARM64, bit-identical to the scalar code
 - Extensible with format plugins (including reading and writing HDR gain maps, and metadata) and custom processors
