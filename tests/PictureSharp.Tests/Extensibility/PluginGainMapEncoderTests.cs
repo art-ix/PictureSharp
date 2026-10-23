@@ -102,8 +102,9 @@ public class PluginGainMapEncoderTests
         await Assert.That(() => plain.Encode(Options(JpegGainMapMode.Require))).Throws<InvalidOperationException>();
 
         using Image apple = Image.Load(HdrGainMapTests.File("apple_makernote.jpg"), Hdr);
-        await Assert.That(GainMapContainerFormat.Read(apple.Encode(Options(JpegGainMapMode.Preserve))).ContainsKey(GainMapContainerFormat.Map)).IsFalse();
-        await Assert.That(() => apple.Encode(Options(JpegGainMapMode.Require))).Throws<NotSupportedException>();
+        // An Apple-only map is handed to the plugin converted to ISO 21496-1 (0.8.1).
+        await Assert.That(GainMapContainerFormat.Read(apple.Encode(Options(JpegGainMapMode.Preserve))).ContainsKey(GainMapContainerFormat.Map)).IsTrue();
+        await Assert.That(apple.Encode(Options(JpegGainMapMode.Require))).IsEquivalentTo(apple.Encode(Options(JpegGainMapMode.Preserve)), CollectionOrdering.Matching);
 
         using Image hdr = Image.Load(HdrGainMapTests.File("iso_mono_srgb.jpg"), Hdr);
         await Assert.That(GainMapContainerFormat.Read(hdr.Encode(Options(JpegGainMapMode.None))).ContainsKey(GainMapContainerFormat.Map)).IsFalse();

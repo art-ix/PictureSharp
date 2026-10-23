@@ -496,11 +496,6 @@ static void RequireGainMap(Image image, string input, string output)
         string reason = image.Hdr?.UnsupportedReason ?? "the file has no HDR gain map";
         throw new NotSupportedException($"Cannot keep the HDR gain map of {input}: {reason.TrimEnd('.')}.");
     }
-
-    if (image.Hdr!.Selected != HdrGainMapKinds.Iso21496)
-    {
-        throw new NotSupportedException($"Cannot keep the HDR gain map of {input}: only ISO 21496-1 gain maps can be written.");
-    }
 }
 
 // RRGGBB or RRGGBBAA, with or without a leading '#'.

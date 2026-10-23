@@ -225,7 +225,10 @@ lib/src/gainmapmetadata.cpp), writing ISO 21496-1 metadata (encodeGainmapMetadat
 and the float-to-fraction conversion of the same files), the ICC profile of a
 written gain map (lib/src/icc.cpp IccHelper::writeIccProfile) and the layout of
 JPEG files written with a gain map (lib/src/jpegr.cpp appendGainMap,
-lib/src/multipictureformat.cpp generateMpf).
+lib/src/multipictureformat.cpp generateMpf), and gain map generation from HDR
+pixels (lib/src/jpegr.cpp UltraHdr::generateGainMap; lib/src/gainmapmath.cpp
+samplePixels, srgbInvOetfLUT, computeGain, affineMapGain and the gamut
+conversion matrices).
 -------------------------------------------------------------------------------
 Copyright 2022 The Android Open Source Project
 

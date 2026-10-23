@@ -350,10 +350,22 @@ if (image.GetGainMap() is { Metadata: var metadata, Map: var map })
 
 - `GetGainMap()` returns null when no map can be written; `GetGainMap(require: true)` throws instead, like
   `JpegGainMapMode.Require`.
-- Only ISO 21496-1 maps are returned; a map with Apple metadata only gives null (`NotSupportedException` when
-  required).
+- The metadata is always ISO 21496-1: a map with Apple metadata only is converted, with recomputed map codes
+  (0.8.1).
 - `ToIso()` stores the multiplication color space only as a flag. When `metadata.MultiplicationSpace` is not null,
   store `ToAlternateIcc()` with the map: as the map's ICC profile in JPEG, in the `colr` box of a HEIF `tmap` item.
+
+#### Floating-point HDR sources (0.8.1)
+
+A plugin that reads linear HDR pixels (for example an EXR or float TIFF decoder) can hand them to the library as an
+`HdrImage` and return the SDR rendering with a generated ISO 21496-1 gain map, which then saves as Ultra HDR JPEG or
+through any encoder that writes `GetGainMap()`:
+
+```csharp
+// linear: Rgba128 pixels in linear light, 1 = SDR white, row by row.
+using var hdr = new HdrImage(width, height, linear, HdrColorSpace.LinearSrgb);
+Image image = hdr.ToGainMapImage(new GainMapOptions { ChannelCount = 1 });   // base: hdr.ToneMap()
+```
 
 ### SPI compatibility
 

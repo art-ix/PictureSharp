@@ -204,6 +204,14 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
     using Image toneMapped = hdr.ToneMap(new ToneMappingOptions { Exposure = -1 });
     if (hdr.Headroom != 4f || MathF.Abs((hdr[0, 0].G / sdrLinear[0, 0].G) - 4f) > 1e-3f || toneMapped.Size != hdrSource.Size)
         throw new InvalidOperationException("HDR reconstruction failed.");
+
+    // 0.8.1: a gain map generated from HDR pixels, written as Ultra HDR JPEG.
+    using var fromPixels = new HdrImage(hdr.Width, hdr.Height, hdr.GetPixelSpan(), hdr.ColorSpace, hdr.Headroom);
+    using Image generated = fromPixels.ToGainMapImage(new GainMapOptions { Scale = 2 });
+    using Image generatedJpeg = Image.Load(generated.ToJpeg(new JpegEncoderOptions { Quality = 95, GainMap = JpegGainMapMode.Require }), new DecoderOptions { LoadGainMap = true });
+    using HdrImage generatedHdr = generatedJpeg.ToHdr();
+    if (!generatedJpeg.HasHdr || generatedJpeg.Hdr!.GainMapSize != new System.Drawing.Size(hdr.Width / 2, hdr.Height / 2) || MathF.Abs(generatedHdr.Headroom - 4f) > 1e-3f)
+        throw new InvalidOperationException($"HDR gain map generation failed: {generatedJpeg.Hdr?.UnsupportedReason}");
 }
 
 // Plugin SPI 0.7.0: encoding through EncoderOptions.Configuration, a plugin gain map and metadata without pixels.

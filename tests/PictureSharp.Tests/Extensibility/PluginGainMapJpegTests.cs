@@ -95,13 +95,13 @@ public class PluginGainMapJpegTests
     }
 
     [Test]
-    public async Task ApplePluginMap_PreserveWritesSdr_RequireThrows()
+    public async Task ApplePluginMap_IsWrittenAsIso()
     {
         using Image image = Image.Load(Container("apple_makernote"), Plugin);
         await Assert.That(image.HasHdr).IsTrue();
-        using Image sdr = Image.Load(image.ToJpeg(Preserve), Jpeg);
-        await Assert.That(sdr.Hdr).IsNull();
-        await Assert.That(() => image.ToJpeg(Require)).Throws<NotSupportedException>();
+        using Image written = Image.Load(image.ToJpeg(Preserve), Jpeg);
+        await Assert.That(written.Hdr!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+        await Assert.That(image.ToJpeg(Require)).IsEquivalentTo(image.ToJpeg(Preserve), CollectionOrdering.Matching);
     }
 
     [Test]

@@ -101,7 +101,7 @@ internal static class JpegGainMapWriter
     private static MapSource? Prepare(Image image, JpegEncoderOptions options, CancellationToken cancellationToken)
     {
         bool require = options.GainMap == JpegGainMapMode.Require;
-        if (GainMapEncoding.Resolve(image, require, ImageFormat.Jpeg) is not { } attachment)
+        if (GainMapEncoding.Resolve(image, require, ImageFormat.Jpeg, options.MaxDegreeOfParallelism, cancellationToken) is not { } attachment)
         {
             return null;
         }

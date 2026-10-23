@@ -112,12 +112,17 @@ public class GainMapEncodingTests
     [Test]
     [Arguments("apple_makernote")]
     [Arguments("apple_xmp_headroom")]
-    public async Task AppleMap_ReturnsNull_OrThrowsNotSupported(string name)
+    public async Task AppleMap_IsConvertedToIso(string name)
     {
         using Image image = LoadJpeg(name);
         await Assert.That(image.HasHdr).IsTrue();
-        await Assert.That(image.GetGainMap()).IsNull();
-        await Assert.That(() => image.GetGainMap(require: true)).Throws<NotSupportedException>();
+        EncodableGainMap gainMap = image.GetGainMap(require: true)!;
+        await Assert.That((gainMap.Metadata.Kind, gainMap.Metadata.ChannelCount, gainMap.Map.Size)).IsEqualTo((HdrGainMapKinds.Iso21496, 1, image.Hdr!.GainMapSize));
+        await Assert.That((double)gainMap.Metadata.Headroom).IsEqualTo(image.Hdr.Headroom!.Value).Within(1e-4);
+        await Assert.That(gainMap.Metadata.ToIso().Length).IsGreaterThan(0);
+        using Image map = gainMap.Map.Decode(-1, default);
+        await Assert.That(map.GetPixelSpan().ToArray().All(p => p.R == p.G && p.G == p.B)).IsTrue();
+        await Assert.That(image.GainMap!.Parameters!.Kind).IsEqualTo(HdrGainMapKinds.Apple);   // the image keeps its own map
     }
 
     [Test]

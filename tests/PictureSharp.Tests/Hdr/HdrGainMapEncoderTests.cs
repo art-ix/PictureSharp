@@ -100,12 +100,51 @@ public class HdrGainMapEncoderTests
         }
     }
 
+    /// <summary>
+    /// An Apple-only map is written as ISO 21496-1 (0.8.1): gray map, gain bounds 0 and log2 H, gamma 1, no offsets,
+    /// codes remapped; with the source's base pixels the reconstruction stays within the "apple_map" budget of
+    /// tests/assets/hdr_reference.json at full headroom.
+    /// </summary>
     [Test]
-    public async Task AppleOnly_PreserveWritesSdr_RequireThrows()
+    [Arguments("apple_makernote")]
+    [Arguments("apple_xmp_headroom")]
+    public async Task AppleOnly_IsWrittenAsIso(string name)
     {
-        using Image image = Image.Load(File("apple_makernote.jpg"), Hdr);
-        await Assert.That(image.ToJpeg(Preserve)).IsEquivalentTo(image.ToJpeg(), CollectionOrdering.Matching);
-        Assert.ThrowsExactly<NotSupportedException>(() => image.ToJpeg(Require));
+        using Image image = Image.Load(File(name + ".jpg"), Hdr);
+        byte[] file = image.ToJpeg(Require);
+        await Assert.That(image.ToJpeg(Preserve)).IsEquivalentTo(file, CollectionOrdering.Matching);
+        using Image reloaded = Image.Load(file, Hdr);
+        await Assert.That((reloaded.Hdr!.Detected, reloaded.Hdr.Selected, reloaded.Hdr.GainMapSize)).IsEqualTo((HdrGainMapKinds.Iso21496, HdrGainMapKinds.Iso21496, image.Hdr!.GainMapSize));
+        GainMapParameters apple = image.GainMap!.Parameters!, iso = reloaded.GainMap!.Parameters!;
+        await Assert.That((iso.ChannelCount, iso.BaseHeadroom, iso.UseBaseColorSpace)).IsEqualTo((1, 0f, true));
+        await Assert.That((double)iso.AlternateHeadroom).IsEqualTo(apple.AlternateHeadroom).Within(1e-6);
+        await Assert.That((double)iso.GainMapMax[0]).IsEqualTo(apple.AlternateHeadroom).Within(1e-6);
+        await Assert.That((iso.GainMapMin[0], iso.Gamma[0], iso.BaseOffset[0], iso.AlternateOffset[0])).IsEqualTo((0f, 1f, 0f, 0f));
+
+        using HdrImage expected = image.ToHdr();
+        image.GetPixelSpan().CopyTo(reloaded.GetPixelSpan());
+        using HdrImage actual = reloaded.ToHdr();
+        float[] components = HdrSynthetic.Components(expected);
+        HdrUltraHdrOracleTests.Stats s = HdrUltraHdrOracleTests.Measure(actual.GetPixelSpan(), components, 0, 0);
+        System.Text.Json.JsonElement budget = HdrGainMapGeneratorTests.Budget;
+        await Assert.That(s.MedianRelative).IsLessThanOrEqualTo(budget.GetProperty("apple_map_median_relative").GetDouble()).Because(s.ToString());
+        await Assert.That(s.P99Relative).IsLessThanOrEqualTo(budget.GetProperty("apple_map_p99_relative").GetDouble()).Because(s.ToString());
+    }
+
+    [Test]
+    public async Task AppleOnly_EditedOrThumbnail_IsWrittenAsIso()
+    {
+        using Image edited = Image.Load(File("apple_makernote.jpg"), Hdr);
+        edited.Mutate(x => x.Rotate(RotateMode.Rotate90).Crop(2, 3, 20, 30));
+        using Image thumbnail = Image.Load(File("apple_makernote.jpg"), Hdr with { TargetSize = new(24, 16) });
+        foreach (Image image in new[] { edited, thumbnail })
+        {
+            using Image reloaded = Image.Load(image.ToJpeg(Require), Hdr);
+            await Assert.That(reloaded.Hdr!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+            await Assert.That(reloaded.Size).IsEqualTo(image.Size);
+            using HdrImage hdr = reloaded.ToHdr();
+            await Assert.That(hdr.Headroom).IsEqualTo(image.Hdr!.Headroom!.Value).Within(1e-3f);
+        }
     }
 
     [Test]

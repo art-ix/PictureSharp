@@ -1,3 +1,5 @@
+using System.Drawing;
+using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Extensibility;
 using PictureSharp.Domain.Hdr;
@@ -9,12 +11,14 @@ namespace PictureSharp.Application.Hdr;
 internal static class GainMapEncoding
 {
     /// <summary>
-    /// The attachment to write: present, reconstructable and described by ISO 21496-1 metadata. Otherwise null, or for
+    /// The attachment to write: present, reconstructable and described by ISO 21496-1 metadata; a map described by
+    /// Apple metadata only is converted to ISO (decoded, with its codes remapped). Otherwise null, or for
     /// <paramref name="require"/> an exception: none attached → <see cref="InvalidOperationException"/>, a valid map that
     /// cannot be written → <see cref="NotSupportedException"/>, a corrupt map → <see cref="ImageFormatException"/> with
     /// <paramref name="format"/>.
     /// </summary>
-    public static GainMapAttachment? Resolve(Image image, bool require, ImageFormat? format)
+    public static GainMapAttachment? Resolve(Image image, bool require, ImageFormat? format, int maxDegreeOfParallelism = -1,
+        CancellationToken cancellationToken = default)
     {
         if (image.GainMap is not { } attachment)
         {
@@ -31,14 +35,31 @@ internal static class GainMapEncoding
                 : throw new ImageFormatException(format, reason);
         }
 
-        if (attachment.Parameters!.Kind != HdrGainMapKinds.Iso21496)
+        return attachment.Parameters!.Kind == HdrGainMapKinds.Iso21496
+            ? attachment
+            : AppleToIso(attachment, image.Size, require, format, maxDegreeOfParallelism, cancellationToken);
+    }
+
+    // The Apple map in the geometry of the base pixels, converted and carried like an edited map.
+    private static GainMapAttachment? AppleToIso(GainMapAttachment attachment, Size baseSize, bool require, ImageFormat? format, int maxDegreeOfParallelism,
+        CancellationToken cancellationToken)
+    {
+        if ((attachment.EditedMap ?? GainMapEditing.Materialize(attachment, maxDegreeOfParallelism, cancellationToken)) is not { } map)
         {
-            return require
-                ? throw new NotSupportedException("Only ISO 21496-1 gain maps can be written; this map is described by Apple metadata only.")
-                : null;
+            return require ? throw new ImageFormatException(format, "The HDR gain map image is corrupt.") : null;
         }
 
-        return attachment;
+        (GainMapParameters parameters, DecodedGainMap converted) = GainMapConversion.AppleToIso(attachment.Parameters!, map, baseSize.Width, baseSize.Height);
+        return attachment with
+        {
+            Parameters = parameters,
+            Decoder = new GeneratedGainMapDecoder(converted),
+            MapData = ReadOnlyMemory<byte>.Empty,
+            EditedMap = converted,
+            StoredSize = baseSize,
+            AppliedOrientation = ExifOrientation.Unknown,
+            Info = attachment.Info with { Selected = HdrGainMapKinds.Iso21496, GainMapSize = new(converted.Width, converted.Height) },
+        };
     }
 
     /// <summary>The public view of <see cref="Resolve"/>: the metadata and a map in the geometry of the base pixels.</summary>

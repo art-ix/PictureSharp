@@ -146,7 +146,8 @@ public class HdrUltraHdrOracleTests
         ImageConfiguration.Default.ToBuilder().AddFormat(new Extensibility.GainMapContainerFormat()).Build();
 
     public static IEnumerable<(string Name, string Edit)> WrittenCases() =>
-        IsoCases().SelectMany(n => new[] { (n, "none"), (n, "rotate90_half"), (n, "plugin") });
+        IsoCases().SelectMany(n => new[] { (n, "none"), (n, "rotate90_half"), (n, "plugin") })
+            .Concat([("apple_makernote", "none"), ("apple_xmp_headroom", "none")]);   // written as ISO (0.8.1)
 
     /// <summary>
     /// Files written with JpegGainMapMode.Require, unedited, edited and from a map attached by a format plugin (encoded

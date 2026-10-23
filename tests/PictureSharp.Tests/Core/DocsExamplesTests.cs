@@ -1,4 +1,5 @@
 using System.Drawing;
+using PictureSharp.Formats;
 using PictureSharp.Formats.Bmp;
 using PictureSharp.Formats.Gif;
 using PictureSharp.Formats.Ico;
@@ -79,6 +80,31 @@ public sealed class DocsExamplesTests : IDisposable
         using Image reloaded = Image.Load(P("small-hdr.jpeg"), new DecoderOptions { LoadGainMap = true });
         await Assert.That(reloaded.Width).IsEqualTo(1600);
         await Assert.That(reloaded.HasHdr).IsTrue();
+    }
+
+    [Test]
+    public async Task Hdr_FilesFromHdrPixels()
+    {
+        using Image photo = Image.Load(P("IMG_8113.jpeg"), new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true });
+        using HdrImage hdr = photo.ToHdr();
+        using Image sdr = hdr.ToGainMapImage(new GainMapOptions { ToneMapping = new ToneMappingOptions { Exposure = -0.3f } });
+        sdr.SaveAsJpeg(P("regraded.jpeg"), new JpegEncoderOptions { Quality = 95, GainMap = JpegGainMapMode.Require });
+        using Image reloaded = Image.Load(P("regraded.jpeg"), new DecoderOptions { LoadGainMap = true });
+        await Assert.That(reloaded.HasHdr).IsTrue();
+        await Assert.That(reloaded.Hdr!.GainMapSize).IsEqualTo(hdr.Size);
+    }
+
+    [Test]
+    public async Task Extending_FloatingPointHdrSource()
+    {
+        (int width, int height) = (16, 8);
+        Rgba128[] linear = [.. Enumerable.Range(0, width * height).Select(i => new Rgba128(i / 32f, 0.5f, 0.25f))];
+        using var hdr = new HdrImage(width, height, linear, HdrColorSpace.LinearSrgb);
+        Image image = hdr.ToGainMapImage(new GainMapOptions { ChannelCount = 1 });   // base: hdr.ToneMap()
+        using (image)
+        {
+            await Assert.That(image.GetGainMap()!.Metadata.ChannelCount).IsEqualTo(1);
+        }
     }
 
     [Test]

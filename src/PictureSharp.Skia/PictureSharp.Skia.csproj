@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.Skia</RootNamespace>
     <PackageId>PictureSharp.Skia</PackageId>
     <Description>Copies PictureSharp images to and from SkiaSharp SKBitmap, SKImage and SKPixmap with an explicit alpha policy.</Description>
-    <PackageReleaseNotes>0.8.0: unchanged adapter, released with PictureSharp 0.8.0 (gain maps in plugin encoders). Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.0/docs/releases/release-0.8.0.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.1: unchanged adapter, released with PictureSharp 0.8.1 (gain maps generated from HDR pixels). Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.1/docs/releases/release-0.8.1.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;skiasharp;skia;skbitmap;interop</PackageTags>
   </PropertyGroup>
 

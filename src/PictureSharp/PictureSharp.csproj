@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.8.0 lets format plugins write HDR gain maps: image.GetGainMap() hands an encoder the attached map (EncodableGainMap: metadata and the map in the geometry of the current pixels, or the plugin's own instance when unedited), GainMapMetadata.ToIso() and ToAlternateIcc() write ISO 21496-1 metadata and the primaries profile as libultrahdr does, and JPEG with JpegGainMapMode.Preserve or Require now also writes maps attached by plugins (for example HEIC to Ultra HDR JPEG). Existing files and outputs are unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.0/docs/releases/release-0.8.0.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.1 writes HDR from HDR pixels: hdr.ToGainMapImage() computes an ISO 21496-1 gain map as libultrahdr 2.0.2 does (identical codes and metadata) over a tone-mapped or given SDR base, so an HdrImage saves as Ultra HDR JPEG (GainMapOptions: Scale, ChannelCount, Gamma, Headroom, ToneMapping); a public HdrImage constructor accepts pixels from plugins; Apple-only gain maps are now written and returned by GetGainMap() converted to ISO 21496-1. Existing files and outputs are otherwise unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.1/docs/releases/release-0.8.1.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

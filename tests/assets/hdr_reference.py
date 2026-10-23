@@ -45,6 +45,20 @@ TOLERANCE = {"absolute": 1e-5, "relative": 1e-5, "tone_map_levels": 1}
 ORACLE = {"pipeline_max_absolute": 0.025, "pipeline_median_relative": 0.006, "pipeline_p99_relative": 0.04,
           "lut_max_absolute": 0.006, "excluded": ["iso_odd_scale", "iso_alt_space"]}
 
+# Gain map generation (0.8.1, HdrGainMapGeneratorTests and HdrGainMapGeneratorOracleTests), agreed before the
+# implementation from libultrahdr's own encoder: codes against generateGainMap on identical inputs; the round trip
+# HdrImage -> JPEG (base q95 4:4:4, map q95) -> ToHdr at most 1.05x libultrahdr's encoder plus a margin; absolute caps on
+# the synthetic smooth HDR image (384x256, scale 1, RGB map) and on local iPhone photos (Category=Local, components
+# negative in the source excluded from p99). Apple -> ISO conversion: ToHdr of the converted map with the source's base
+# pixels against ToHdr of the Apple source, at full headroom.
+GENERATOR = {"synthetic_median_relative": 0.012, "synthetic_p99_relative": 0.10,
+             "synthetic_map_median_relative": 0.006, "synthetic_map_p99_relative": 0.035,
+             "oracle_identical_fraction": 0.999, "oracle_max_code_difference": 1,
+             "libultrahdr_factor": 1.05, "libultrahdr_median_margin": 0.001, "libultrahdr_p99_margin": 0.005,
+             "local_median_relative_srgb": 0.032, "local_median_relative_p3": 0.047, "local_p99_relative": 0.40,
+             "apple_map_median_relative": 0.008, "apple_map_p99_relative": 0.12,
+             "local_apple_map_median_relative": 0.005, "local_apple_map_p99_relative": 0.12}
+
 ISO_URN = b"urn:iso:std:iso:ts:21496:-1\0"
 
 
@@ -682,7 +696,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     for f in os.listdir(OUT):
         os.remove(os.path.join(OUT, f))
-    reference = {"tolerance": TOLERANCE, "oracle": ORACLE, "cases": [], "invalid": []}
+    reference = {"tolerance": TOLERANCE, "oracle": ORACLE, "generator": GENERATOR, "cases": [], "invalid": []}
     for case in CASES:
         data = build(case)
         name = case["name"]

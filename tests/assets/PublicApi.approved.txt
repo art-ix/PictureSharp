@@ -371,6 +371,8 @@ enum HdrColorSpace
     LinearDisplayP3 = 1
 static class HdrExtensions
     method [Extension] static HdrImage ToHdr(Image image, HdrOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static Image ToGainMapImage(HdrImage hdr, Image sdrBase, PictureSharp.Processing.GainMapOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
+    method [Extension] static Image ToGainMapImage(HdrImage hdr, PictureSharp.Processing.GainMapOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method [Extension] static Image ToneMap(HdrImage hdr, PictureSharp.Processing.ToneMappingOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
 [Flags] enum HdrGainMapKinds
     None = 0
@@ -378,6 +380,7 @@ static class HdrExtensions
     Apple = 2
     UltraHdrXmp = 4
 sealed class HdrImage : System.IDisposable
+    ctor(System.Int32 width, System.Int32 height, System.ReadOnlySpan<Rgba128> pixels, HdrColorSpace colorSpace, System.Single? headroom = default, ImageMetadata? metadata = null)
     method System.ReadOnlyMemory<Rgba128> GetPixelMemory()
     method System.ReadOnlySpan<Rgba128> GetPixelSpan()
     method System.ReadOnlySpan<Rgba128> GetRowSpan(System.Int32 y)
@@ -771,6 +774,15 @@ enum PictureSharp.Processing.FlipMode
     None = 0
     Horizontal = 1
     Vertical = 2
+sealed record PictureSharp.Processing.GainMapOptions : System.IEquatable<PictureSharp.Processing.GainMapOptions>
+    ctor()
+    property PictureSharp.Processing.ToneMappingOptions? ToneMapping { get; init; }
+    property System.Int32 ChannelCount { get; init; }
+    property System.Int32 MaxDegreeOfParallelism { get; init; }
+    property System.Int32 Scale { get; init; }
+    property System.Single Gamma { get; init; }
+    property System.Single? Headroom { get; init; }
+    property static PictureSharp.Processing.GainMapOptions Default { get; }
 enum PictureSharp.Processing.HistogramChannel
     Red = 0
     Green = 1

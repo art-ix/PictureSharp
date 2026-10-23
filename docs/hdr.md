@@ -2,7 +2,8 @@
 
 iPhone photos exported as JPEG (and Android Ultra HDR 1.1 photos) store an ordinary SDR JPEG, which every viewer shows,
 followed by a smaller **gain map** JPEG telling HDR displays how much brighter each area may be. PictureSharp reads the
-map, reconstructs the HDR image in linear light, keeps the map through geometric edits and writes it back to JPEG.
+map, reconstructs the HDR image in linear light, keeps the map through geometric edits and writes it back to JPEG; it
+also computes a new map from HDR pixels.
 
 | Model | Where it comes from | Metadata |
 | --- | --- | --- |
@@ -103,16 +104,22 @@ photo.Mutate(x => x.Resize(1600, 0));
 photo.SaveAsJpeg("small-hdr.jpeg", new JpegEncoderOptions { Quality = 90, GainMap = JpegGainMapMode.Preserve });
 ```
 
-| Mode | Map attached and ISO 21496-1 | No map, Apple-only map or unusable map |
+| Mode | Map attached (ISO 21496-1 or Apple) | No map or unusable map |
 | --- | --- | --- |
 | `None` (default) | SDR file, byte for byte as without the map | SDR file |
 | `Preserve` | file with the map | SDR file |
-| `Require` | file with the map | `InvalidOperationException` (no map), `NotSupportedException` (Apple-only or unsupported), `ImageFormatException` (damaged) |
+| `Require` | file with the map | `InvalidOperationException` (no map), `NotSupportedException` (unsupported), `ImageFormatException` (damaged) |
 
 The file follows libultrahdr v2.0.2 defaults: ISO 21496-1 metadata only (copied from the source byte for byte) and an
 MPF directory. No Ultra HDR XMP is generated, and a user XMP packet declaring a gain map is left out. An unedited map is
 copied without re-encoding; an edited one is encoded with `GainMapQuality` (default 95), gray maps as grayscale and RGB
-maps without chroma subsampling. Apple-only maps cannot be converted to ISO 21496-1.
+maps without chroma subsampling.
+
+A map described by Apple metadata only is converted to ISO 21496-1 (0.8.1): gain bounds 0 and log2 H for the Apple
+headroom H, gamma 1, no offsets, and the map codes recomputed so that the full-headroom rendition matches Apple's
+formula, aligned to the ISO sampling grid. On iPhone photos the reconstruction then differs from the Apple source by a
+median of 0.2–0.5% (map compression included). Below full headroom the ISO weighting (log domain) differs from Apple's
+(linear) by design. `GetGainMap()` returns the converted map too.
 
 A map attached by a format plugin (for example from HEIC) is always encoded like an edited map, with ISO 21496-1
 metadata written from its values (`GainMapMetadata.ToIso()`, the fractions libultrahdr chooses). When the gain is
@@ -131,6 +138,40 @@ Display P3); otherwise the metadata uses the base color space.
 
 The result's metadata has no ICC profile. Whether to use the SDR base (what the camera chose for SDR displays) or a
 tone-mapped rendering is up to the application.
+
+## HDR files from HDR pixels
+
+`hdr.ToGainMapImage(options)` turns an `HdrImage` back into an SDR image with an ISO 21496-1 gain map (0.8.1): the base
+is `hdr.ToneMap(options.ToneMapping)` and the map is computed as libultrahdr v2.0.2 computes it (`generateGainMap`, its
+best-quality defaults), so the codes and metadata are identical to libultrahdr's on the same inputs. The result carries
+the map like a loaded image: save it as JPEG with `Require`, call `ToHdr`, or apply geometric edits first.
+
+```csharp
+using Image photo = Image.Load("IMG_8113.jpeg", new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true });
+using HdrImage hdr = photo.ToHdr();
+using Image sdr = hdr.ToGainMapImage(new GainMapOptions { ToneMapping = new ToneMappingOptions { Exposure = -0.3f } });
+sdr.SaveAsJpeg("regraded.jpeg", new JpegEncoderOptions { Quality = 95, GainMap = JpegGainMapMode.Require });
+```
+
+`hdr.ToGainMapImage(sdrBase, options)` uses a base of your own instead (same size, one frame, sRGB or Display P3 by its
+color description); the result is a copy of it with the map. HDR pixels from elsewhere, for example a plugin decoding a
+floating-point format, become an `HdrImage` with `new HdrImage(width, height, pixels, colorSpace, headroom, metadata)`
+(the pixels are copied; `headroom` defaults to the largest component).
+
+| `GainMapOptions` | Default | Meaning |
+| --- | --- | --- |
+| `Scale` | 1 | Map size = image size / `Scale` (1–128), each map pixel averaging a square of pixels. |
+| `ChannelCount` | 3 | 3 = one gain per channel (keeps colors the base cannot show); 1 = luminance map, a third of the size. |
+| `Gamma` | 1 | ISO 21496-1 gamma of the map codes. |
+| `Headroom` | null | Linear headroom of the full HDR rendition; null = `hdr.Headroom`. |
+| `ToneMapping` | null | Settings for the tone-mapped base when none is given. |
+| `MaxDegreeOfParallelism` | -1 | Threads; the map does not depend on it. |
+
+When the HDR image is Display P3 and the base sRGB, the gain is applied in Display P3 and the map gets a Display P3 ICC
+profile, as libultrahdr writes it. Components outside the gamut of that space and gains outside [−14.3, 15.6] stops are
+clipped, and dark base pixels (below 2/255) never brighten by more than 2.3 stops. Through JPEG (base quality 95 4:4:4,
+map 95) a smooth synthetic image comes back with a median error of 0.8% and iPhone photos with 2.8% (sRGB) to 4.2%
+(Display P3), at or below libultrahdr's own encoder; most of it is the base's JPEG compression.
 
 ## Editing metadata of HDR files
 
@@ -151,7 +192,7 @@ dotnet run -c Release --project samples/PictureSharp.Cli -- resize IMG_8113.jpeg
 ```
 
 `convert` keeps the SDR base by default; `-hdr tone-map` renders with `-exposure` and `-white`, and `-hdr keep` writes a
-JPEG with the ISO 21496-1 map (not for Apple-only maps, padding or other formats).
+JPEG with the ISO 21496-1 map (Apple-only maps converted; not with padding or for other formats).
 
 ## Gain maps from format plugins
 
@@ -161,6 +202,6 @@ encoder writes the attached map with `image.GetGainMap()`. See [Extending Pictur
 
 ## Limitations
 
-No gain map generation from HDR pixels (`HdrImage` cannot be saved), no HDR processing beyond the geometric edits, and
+No HDR processing beyond the geometric edits (an `HdrImage` is saved through `ToGainMapImage`), no PQ/HLG output and
 no built-in HEIC or AVIF. PNG and WebP output is SDR. Displaying HDR needs a platform API that accepts linear or PQ/HLG
 pixels.

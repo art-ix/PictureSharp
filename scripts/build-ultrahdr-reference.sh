@@ -23,5 +23,8 @@ g++ -O2 -std=c++17 -I "$uhdr_source" -I "$uhdr_source/lib/include" "$project_roo
 # ISO 21496-1 writer harness: fractions and encodeGainmapMetadata (HdrIsoWriterOracleTests).
 g++ -O2 -std=c++17 -I "$uhdr_source" -I "$uhdr_source/lib/include" "$project_root/tests/assets/ultrahdr_iso_oracle.cpp" \
   "$uhdr_build/libuhdr.a" -ljpeg -lpthread -o "$uhdr_build/ultrahdr_iso_oracle"
+# Gain map generation harness: UltraHdr::generateGainMap on PictureSharp's inputs (HdrGainMapGeneratorOracleTests).
+g++ -O2 -std=c++17 -I "$uhdr_source" -I "$uhdr_source/lib/include" "$project_root/tests/assets/ultrahdr_generate_oracle.cpp" \
+  "$uhdr_build/libuhdr.a" -ljpeg -lpthread -o "$uhdr_build/ultrahdr_generate_oracle"
 "$uhdr_build/ultrahdr_app" 2>&1 | head -3 || true
 echo "libultrahdr oracle ready in $uhdr_build"

@@ -14,6 +14,24 @@
    "iso_alt_space"
   ]
  },
+ "generator": {
+  "synthetic_median_relative": 0.012,
+  "synthetic_p99_relative": 0.1,
+  "synthetic_map_median_relative": 0.006,
+  "synthetic_map_p99_relative": 0.035,
+  "oracle_identical_fraction": 0.999,
+  "oracle_max_code_difference": 1,
+  "libultrahdr_factor": 1.05,
+  "libultrahdr_median_margin": 0.001,
+  "libultrahdr_p99_margin": 0.005,
+  "local_median_relative_srgb": 0.032,
+  "local_median_relative_p3": 0.047,
+  "local_p99_relative": 0.4,
+  "apple_map_median_relative": 0.008,
+  "apple_map_p99_relative": 0.12,
+  "local_apple_map_median_relative": 0.005,
+  "local_apple_map_p99_relative": 0.12
+ },
  "cases": [
   {
    "name": "iso_mono_srgb",

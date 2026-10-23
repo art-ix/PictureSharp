@@ -55,7 +55,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
 | 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Przygotowana (2026-10-22) |
 | 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Wydana (2026-10-23; zapis `tmap` potwierdzony we wtyczce HEIF 0.6.10; bez ARM64) |
-| 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Planowana |
+| 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Gotowa do wydania (czeka na zgodę) |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
 opisuje sekcja [Wtyczka HEIF](#wtyczka-heif--osobne-repozytorium).
@@ -754,6 +754,23 @@ DoD 0.8.1:
 - Budżet błędu round-trip `HdrImage` → JPEG → `ToHdr` ustalony przed implementacją.
 - Wspólna bramka jakości.
 
+Decyzje użytkownika (2026-10-23, przed implementacją 0.8.1):
+- API: `hdr.ToGainMapImage(GainMapOptions?, ct)` (baza z `hdr.ToneMap(options.ToneMapping)`) i
+  `hdr.ToGainMapImage(Image sdrBase, GainMapOptions?, ct)`; zwracany `Image` niesie zwykły załącznik (jak mapa po
+  edycji), więc działają `ToHdr`, geometryczne `Mutate`, `GetGainMap` i zapis JPEG z 0.8.0. `GainMapOptions`
+  (`PictureSharp.Processing`): `Scale` 1..128, `ChannelCount` 1/3, `Gamma`, `Headroom?`, `ToneMapping`,
+  `MaxDegreeOfParallelism`. Publiczny konstruktor `HdrImage` z pikseli wywołującego (wtyczki EXR/float TIFF).
+- Domyślne jak libultrahdr (API, BEST_QUALITY): skala 1, mapa RGB, gamma 1, mapa q95.
+- Apple→ISO przy `Preserve`/`Require`: min 0, max log2 H, gamma 1, offsety 0, mono, kody przemapowane LUT;
+  `GetGainMap` zwraca ISO. `ToIso()` na samym Apple dalej rzuca.
+- Budżet: (1) mapa vs `generateGainMap` libultrahdr na tych samych wejściach: kody |Δ| ≤ 1, ≥ 99,9% identycznych,
+  payload ISO bajtowo identyczny; (2) round-trip na przypadek: mediana ≤ 1,05 × libultrahdr + 0,1 pp, p99 ≤
+  1,05 × libultrahdr + 0,5 pp; (3) progi w `hdr_reference.json`: syntetyk 384×256 s1 RGB mediana ≤ 1,2%, p99 ≤ 10%,
+  sama mapa mediana ≤ 0,6%, p99 ≤ 3,5%; lokalnie iPhone mediana ≤ 3,2% sRGB / 4,7% P3, p99 P3 ≤ 40%, p99 sRGB bez
+  składowych ujemnych w źródle; (4) Apple→ISO: budżet z pierwszego prototypu (oczekiwana mediana < 0,5%).
+- Budżet Apple→ISO zaakceptowany (2026-10-23, po prototypie): sama mapa przy pełnym headroomie, korpus mediana ≤ 0,8%,
+  p99 ≤ 12%; lokalnie (iPhone z ukrytym ISO) mediana ≤ 0,5%, p99 ≤ 12%.
+
 ### 0.8.0 etap A — gain map w enkoderach wtyczek
 
 Cel: enkoder wtyczki (najpierw HEIF: element `tmap` z ISO 21496-1) zapisuje mapę dołączoną do obrazu wyłącznie
@@ -889,6 +906,7 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.
 - **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.
 - **0.8.0** — wtyczki zapisują gain map: `image.GetGainMap()` (`EncodableGainMap`), `GainMapMetadata.ToIso()` i `MultiplicationSpace`; JPEG zapisuje mapy dołączone przez wtyczki (ICC mapy jak libultrahdr). Zapisy z JPEG bez zmian.
+- **0.8.1** — `hdr.ToGainMapImage()` (`GainMapOptions`): gain map ISO 21496-1 z `HdrImage` jak `generateGainMap` libultrahdr (kody i metadane identyczne), zapis HDR do JPEG; publiczny konstruktor `HdrImage`; mapy tylko Apple zapisywane i zwracane przez `GetGainMap()` jako ISO.
 - **0.7.13** — `FindFilmFrame`, `DevelopNegative()` sam znajduje, prostuje i kadruje klatkę, podłoże z brzegu, korekcja podświetlenia, ostrzeżenia `BacklightTexture`/`FrameCut`/`UnevenIllumination`; szybszy obrót bicubic.
 - **0.7.12** — `RemoveDust` zostawia szczegóły większe niż plamka (pochylone litery), `DevelopNegative` domyślnie bez usuwania kurzu (`NegativeOptions.DustSize` = 0); zawiera 0.7.11, którego nie opublikowano na NuGet.
 - **0.7.11** — (tylko tag i GitHub Release) negatywy z aparatu: `AnalyzeNegative`, `DevelopNegative`, `InvertNegative` (`NegativeOptions`, `NegativeCalibration`); `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`. Istniejące API i wyniki bez zmian.
