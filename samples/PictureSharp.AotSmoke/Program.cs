@@ -224,6 +224,14 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
     using HdrImage sdrLinear = hdrSource.ToHdr(new HdrOptions { TargetHeadroom = 1 });
     if (hdr.Headroom != 4f || MathF.Abs((hdr[0, 0].G / sdrLinear[0, 0].G) - 4f) > 1e-3f)
         throw new InvalidOperationException("Plugin HDR reconstruction failed.");
+    // 0.8.0: an encoder reads the attached map (the plugin's own instance) and the JPEG encoder writes it.
+    if (hdrSource.GetGainMap(require: true) is not { } gainMap || gainMap.Map.Size != new System.Drawing.Size(8, 6)
+        || GainMapMetadata.ParseIso(gainMap.Metadata.ToIso(), 1).Headroom != 4f)
+        throw new InvalidOperationException("Plugin gain map access failed.");
+    using Image hdrJpeg = Image.Load(hdrSource.Encode(new JpegEncoderOptions { GainMap = JpegGainMapMode.Require }), new DecoderOptions { LoadGainMap = true });
+    using HdrImage jpegHdr = hdrJpeg.ToHdr();
+    if (!hdrJpeg.HasHdr || jpegHdr.Headroom != 4f)
+        throw new InvalidOperationException($"Plugin gain map to JPEG failed: {hdrJpeg.Hdr?.UnsupportedReason}");
     byte[] edited = Image.EditMetadata(file, metadata => metadata.Xmp = "<x:xmpmeta>edited</x:xmpmeta>"u8.ToArray(), options);
     if (!Image.ReadMetadata(edited, options).Xmp.AsSpan().SequenceEqual("<x:xmpmeta>edited</x:xmpmeta>"u8))
         throw new InvalidOperationException("Plugin metadata codec failed.");
@@ -252,7 +260,7 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
         throw new InvalidOperationException("Plugin embedded parts failed.");
 }
 
-Console.WriteLine("PictureSharp smoke passed: all formats, processing, photo adjustments, film negatives and frames, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps, metadata, decoder options, embedded parts) and a frame processor.");
+Console.WriteLine("PictureSharp smoke passed: all formats, processing, photo adjustments, film negatives and frames, async streams, pixels, ICO, animation, sequential frames, metadata without recompression, color management, linear light, graphics operations, JPEG thumbnails, HDR gain maps, configurations, format plugins (encoder configuration, gain maps read and written, metadata, decoder options, embedded parts) and a frame processor.");
 
 // A light box with a strip of color negative: two rows of perforation (4 px per mm), a frame and its neighbors.
 static Image FilmStrip()

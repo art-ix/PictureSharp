@@ -38,6 +38,12 @@ internal sealed record GainMapParameters
     /// otherwise the primaries of the alternate rendition from the map's ICC profile.
     /// </summary>
     public HdrColorSpace? MultiplicationSpace { get; init; }
+
+    /// <summary>
+    /// The ISO <c>use_base_colour_space</c> flag. Kept apart from <see cref="MultiplicationSpace"/>, which loaders fill
+    /// with the base primaries, so the metadata can be written back unchanged.
+    /// </summary>
+    public bool UseBaseColorSpace { get; init; } = true;
 }
 
 /// <summary>Decodes the compressed map of a gain map attachment; implemented by the codec that found the map.</summary>

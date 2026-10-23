@@ -54,7 +54,8 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
 | 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
 | 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Przygotowana (2026-10-22) |
-| 0.8.0 | Poprawki SPI zgłoszone przez wtyczkę HEIF, gain map w enkoderach wtyczek, generowanie gain map i zapis HDR | Planowana |
+| 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Przygotowana (2026-10-23); czeka na potwierdzenie zapisu `tmap` we wtyczce HEIF |
+| 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
 opisuje sekcja [Wtyczka HEIF](#wtyczka-heif--osobne-repozytorium).
@@ -729,22 +730,95 @@ Stan (2026-10-22):
 
 ## 0.8.0 — poprawki SPI i dalszy HDR
 
-Zakres:
+Decyzja użytkownika (2026-10-23): etap A (gain map w enkoderach wtyczek) wychodzi osobno jako 0.8.0, bo odblokowuje
+zapis `tmap` we wtyczce HEIF, a jego API nie zależy od generowania map; etapy B i C (generowanie map, zapis HDR)
+oraz konwersja Apple→ISO wychodzą jako 0.8.1. Bez paczki preview: wtyczka potwierdza A na lokalnym feedzie.
+
+Zakres 0.8.0:
 - Poprawki SPI zgłoszone przez wtyczkę HEIF — tylko na konkretne zgłoszenie. Kandydaci z tabeli luk (`ReportStoredSize`
   dla miniatur `thmb`) czeka, aż wtyczka wykaże potrzebę (pomiar zysku `thmb`); bez zgłoszenia nie blokuje 0.8.0.
   Opcje dekodera per wtyczka przeniesione do 0.7.6. Każda zmiana jest addytywna.
 - Miejsce w `ImageMetadata` na metadane specyficzne dla formatu (np. hotspot XBM/CUR, zgłoszenie Formats.Extra
   2026-10-18) — do decyzji, czy wchodzi do 0.8.0.
 - Gain map w enkoderach wtyczek: publiczny odczyt załącznika obrazu (`GainMapMetadata` + `GainMapImage`) i
-  `GainMapMetadata.ToIso()`, z tą samą serializacją co zapis JPEG z 0.6.9.
+  `GainMapMetadata.ToIso()`, z tą samą serializacją co zapis JPEG z 0.6.9 (etap A poniżej, z własnym DoD).
+
+Zakres 0.8.1:
 - Generowanie gain map ISO z `HdrImage` i bazy SDR: port `generateGainMap` z libultrahdr 2.0.2 (Apache-2.0, notices).
 - Zapis HDR do JPEG z mapą (baza z `ToneMap` albo podana).
 - Konwersja Apple→ISO przy `Preserve`.
-- Poza 0.8.0: przetwarzanie HDR w float, CICP PQ/HLG, AVIF.
+- Poza 0.8.0 i 0.8.1: przetwarzanie HDR w float, CICP PQ/HLG, AVIF.
 
-DoD:
+DoD 0.8.1:
 - Wyrocznia libultrahdr dla wygenerowanych map i plików.
 - Budżet błędu round-trip `HdrImage` → JPEG → `ToHdr` ustalony przed implementacją.
+- Wspólna bramka jakości.
+
+### 0.8.0 etap A — gain map w enkoderach wtyczek
+
+Cel: enkoder wtyczki (najpierw HEIF: element `tmap` z ISO 21496-1) zapisuje mapę dołączoną do obrazu wyłącznie
+przez publiczne API, a wbudowany JPEG zapisuje mapy dołączone przez wtyczki (dziś `Preserve` je pomija, a `Require`
+zgłasza `NotSupportedException` w `JpegGainMapWriter.Resolve`). Całe wydanie 0.8.0; generowanie map i zapis HDR
+z `HdrImage` (etapy B, C, 0.8.1) korzystają z tej samej serializacji i odczytu załącznika. Addytywnie.
+
+Stan wyjściowy: `GainMapMetadata` (tylko `ParseIso`/`ParseApple`, `Kind`, `ChannelCount`, `Headroom`), `GainMapImage`
+(tylko wejście dekodera), wewnętrzny `GainMapAttachment` z `Parameters`, `EditedMap`, `AppliedOrientation`.
+Zapis JPEG kopiuje surowy payload ISO i ICC z JPEG źródłowego — w rdzeniu nie ma serializatora ISO.
+
+Kroki (nazwy robocze do migawki API):
+1. **Serializacja ISO (zrobione 2026-10-23):** port `uhdr_gainmap_metadata_frac::encodeGainmapMetadata` (libultrahdr 2.0.2
+   `gainmapmetadata.cpp`) i `floatToSignedFraction`/`floatToUnsignedFraction` (`gainmapmath.cpp`) do
+   `Algorithms/Hdr/GainMapMetadataWriter.cs` obok parsera. Publiczne `GainMapMetadata.ToIso()` → `byte[]` (payload bez
+   prefiksu `urn:iso:std:iso:ts:21496:-1\0`, jak w `tmap` HEIF i APP2 JPEG). Model tylko Apple →
+   `NotSupportedException` (konwersja Apple→ISO w 0.8.1). `use_base_colour_space = 0` wymaga
+   prymarnych mapy: dodać `GainMapMetadata.MultiplicationSpace` (`HdrColorSpace?`), by wtyczka zapisała `colr`, a JPEG
+   — ICC mapy (wbudowany profil P3/sRGB z `Algorithms/Color`, nie kopia z obcego pliku).
+2. **Odczyt załącznika do zapisu:** jedna format-neutralna usługa `GainMapEncoding.Resolve(image, require, ct)`
+   wydzielona z `JpegGainMapWriter.Resolve` (ten sam podział błędów: brak mapy → `InvalidOperationException`, model
+   Apple / nieobsługiwany → `NotSupportedException`, uszkodzona → `ImageFormatException`). Publicznie (decyzja
+   użytkownika 2026-10-23, wariant A) w `PictureSharp.Formats`:
+   ```csharp
+   extension(Image image)
+   {
+       public EncodableGainMap? GetGainMap(bool require = false);
+   }
+   public sealed record EncodableGainMap(GainMapMetadata Metadata, GainMapImage Map);
+   ```
+   - `require: false` → `null`, gdy mapy nie da się zapisać (semantyka `Preserve`); `true` → te same wyjątki
+     i komunikaty co JPEG `Require`.
+   - Mapa bez edycji i orientacji → `Map` to oryginalna instancja `GainMapImage` podana przez wtyczkę w
+     `AttachGainMap` (wtyczka może skopiować skompresowany strumień bez rekompresji, jak JPEG swój payload).
+     W pozostałych przypadkach adapter rdzenia (`AttachedGainMapImage`): kopia mapy po edycjach albo dekodowanie
+     i orientacja zapisanej mapy dopiero w `Decode` (z `maxDegreeOfParallelism` i anulowaniem). `GetGainMap` niczego
+     nie dekoduje, więc nie ma `CancellationToken`; `GainMapEditing.Apply` przy `Mutate` dekoduje jak dotąd (leniwość
+     tam zmieniłaby `HasHdr` po edycji uszkodzonej mapy). Zrobione 2026-10-23.
+   - `Map.Decode` zwraca nowy `Image` (zwalnia wywołujący) w orientacji i rozmiarze bazy; mono jako R=G=B,
+     liczba kanałów w `Metadata.ChannelCount`.
+   - Odrzucone: wzorzec Try (gubi podział wyjątków), właściwość rozszerzająca (kosztowna praca i wyjątki we
+     właściwości), `ImageEncodeContext` w SPI enkodera (na razie bez drugiej potrzeby).
+3. **JPEG z mapą z wtyczki (zrobione 2026-10-23):** w `JpegGainMapWriter` gałąź dla załączników bez
+   `JpegGainMapDecoder`: kodowanie pikseli (jak `EditedMap`: `GainMapQuality`, 4:4:4, szara → Grayscale) z payloadem
+   z `ToIso()`. `use_base_colour_space` = 1, gdy przestrzeń mnożenia równa się przestrzeni bazy; inaczej 0 i ICC mapy
+   z portu `IccHelper::writeIccProfile` (sRGB/P3, transfer sRGB; bajtowo jak libultrahdr). Mapy z JPEG nadal kopiują
+   oryginalny payload — 75 zapisów korpusu bajtowo jak w 0.7.13.
+4. **Wtyczka testowa (zrobione 2026-10-23):** `GainMapContainerFormat` ma enkoder z mapą przez `GetGainMap`
+   (`GainMapContainerEncoderOptions.GainMap` z trybami jak JPEG); testy `PluginGainMapEncoderTests`: JPEG HDR →
+   wtyczka i wtyczka → wtyczka z dokładnymi metadanymi i mapą ≤ 8 kodów, niezmieniona mapa wtyczki kopiowana bajtowo,
+   orientacja i edycje w geometrii bazy, tryby. Wtyczka → JPEG → libultrahdr i `ParseIso(ToIso(m))` w krokach 1 i 3.
+   Luka do decyzji: wtyczka z kontenerem opisującym prymarne przez ICC nie ma publicznego generatora profilu
+   (`IccProfileWriter` jest internal; wtyczka testowa używa go przez InternalsVisibleTo, HEIF zapisze nclx).
+5. **Dokumentacja i bramka (zrobione 2026-10-23, poza potwierdzeniem HEIF):** `docs/extending-picturesharp.md` (wzorzec zapisu mapy we wtyczce), `docs/hdr.md`,
+   migawka API, `AotSmoke` (zapis przez wtyczkę testową nie wchodzi — scenariusz JPEG z mapą z `ToIso`), notatki
+   wydania, `THIRD-PARTY-NOTICES.txt` (libultrahdr Apache-2.0 — już jest, dopisać pliki portu).
+
+DoD etapu A:
+- `ToIso()` bajtowo równe `encodeGainmapMetadata` libultrahdr 2.0.2 dla parametrów korpusu `tests/assets/corpus/hdr`
+  i syntetycznych (mono/RGB, ujemne offsety, gamma ≠ 1, oba `use_base_colour_space`); `ParseIso(ToIso(m))` równe `m`.
+- JPEG zapisany z mapy dołączonej przez wtyczkę dekoduje libultrahdr (`HdrUltraHdrOracleTests`); `ToHdr` po round-trip
+  w budżecie błędu ustalonym przed implementacją (kompresja mapy q95).
+- Zapisy JPEG z mapą z JPEG bajtowo bez zmian względem 0.7.13.
+- Wtyczka HEIF potwierdza zapis `tmap` na lokalnej paczce (`verify-package-consumer.sh`/lokalny feed) przed wydaniem;
+  brak potwierdzenia opisany w notatkach, nie blokuje DoD rdzenia.
 - Wspólna bramka jakości.
 
 ## Wtyczka HEIF — osobne repozytorium
@@ -813,6 +887,7 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.7** — korekcja fotograficzna: `Exposure`, `WhiteBalance`, `Vibrance`, `Vignette` (`VignetteOptions`), `ShadowsHighlights`, `Clarity`, `Denoise` (guided filter); wyniki identyczne na każdej architekturze i liczbie wątków. Istniejące API i wyniki bez zmian.
 - **0.7.8** — `ImageDecodeContext.DecodeEmbeddedPart`: wtyczki dekodują paski i kafle w innym formacie (JPEG w TIFF) z własnym limitem części, bez doliczania do `MaxPixels` i `MaxFrames` obok zarezerwowanego obrazu. Istniejące API i wyniki bez zmian.
 - **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.
+- **0.8.0** — wtyczki zapisują gain map: `image.GetGainMap()` (`EncodableGainMap`), `GainMapMetadata.ToIso()` i `MultiplicationSpace`; JPEG zapisuje mapy dołączone przez wtyczki (ICC mapy jak libultrahdr). Zapisy z JPEG bez zmian.
 - **0.7.13** — `FindFilmFrame`, `DevelopNegative()` sam znajduje, prostuje i kadruje klatkę, podłoże z brzegu, korekcja podświetlenia, ostrzeżenia `BacklightTexture`/`FrameCut`/`UnevenIllumination`; szybszy obrót bicubic.
 - **0.7.12** — `RemoveDust` zostawia szczegóły większe niż plamka (pochylone litery), `DevelopNegative` domyślnie bez usuwania kurzu (`NegativeOptions.DustSize` = 0); zawiera 0.7.11, którego nie opublikowano na NuGet.
 - **0.7.11** — (tylko tag i GitHub Release) negatywy z aparatu: `AnalyzeNegative`, `DevelopNegative`, `InvertNegative` (`NegativeOptions`, `NegativeCalibration`); `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`. Istniejące API i wyniki bez zmian.

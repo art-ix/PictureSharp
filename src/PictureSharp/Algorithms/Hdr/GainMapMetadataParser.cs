@@ -122,6 +122,7 @@ internal static class GainMapMetadataParser
             BaseHeadroom = baseHeadroom,
             AlternateHeadroom = alternateHeadroom,
             MultiplicationSpace = multiplicationSpace,
+            UseBaseColorSpace = useBaseColorSpace,
         };
     }
 

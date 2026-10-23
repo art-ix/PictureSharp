@@ -22,7 +22,16 @@ public sealed class GainMapMetadata
     /// <summary>The maximum headroom as a linear ratio to SDR white (4 means two stops above SDR white).</summary>
     public float Headroom => float.Exp2(Math.Max(Parameters.AlternateHeadroom, Parameters.BaseHeadroom));
 
+    /// <summary>
+    /// The primaries the gain is applied in when they differ from the base image's (ISO <c>use_base_colour_space</c> = 0,
+    /// taken from the alternate rendition's ICC profile); null when the base image's color space is used. A writer
+    /// stores these primaries with the map, for example as the map's ICC profile or a HEIF <c>colr</c> box.
+    /// </summary>
+    public HdrColorSpace? MultiplicationSpace => Parameters.UseBaseColorSpace ? null : Parameters.MultiplicationSpace;
+
     internal GainMapParameters Parameters { get; }
+
+    internal static GainMapMetadata From(GainMapParameters parameters) => new(parameters);
 
     /// <summary>
     /// Parses ISO 21496-1 gain map metadata: the binary payload that starts with the minimum and writer versions (as in
@@ -60,6 +69,16 @@ public sealed class GainMapMetadata
     /// <exception cref="NotSupportedException">The map version is not supported.</exception>
     public static GainMapMetadata ParseApple(ReadOnlySpan<byte> exif, ReadOnlySpan<byte> mapXmp) =>
         new(GainMapMetadataParser.ReadApple(exif, mapXmp, format: null));
+
+    /// <summary>
+    /// Writes the metadata as an ISO 21496-1 payload, the input format of <see cref="ParseIso"/>: the bytes of a JPEG
+    /// APP2 segment after its URN, or of a HEIF <c>tmap</c> item after its version byte. Values are stored as the
+    /// fractions libultrahdr 2.0.2 chooses, one channel when all channels are equal; the payload declares
+    /// <see cref="MultiplicationSpace"/> only as a flag, so a writer stores those primaries next to the map.
+    /// </summary>
+    /// <returns>A new array on every call.</returns>
+    /// <exception cref="NotSupportedException">The metadata is in the Apple model only (<see cref="Kind"/> is <see cref="HdrGainMapKinds.Apple"/>).</exception>
+    public byte[] ToIso() => GainMapMetadataWriter.WriteIso(Parameters);
 
     /// <summary>
     /// The description <c>Identify</c> reports for a map of <paramref name="mapSize"/> with this metadata: detected and

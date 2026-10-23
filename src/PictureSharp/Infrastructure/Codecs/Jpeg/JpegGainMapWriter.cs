@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using PictureSharp.Algorithms.ColorManagement;
+using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Hdr;
 using PictureSharp.Domain.Hdr;
@@ -8,8 +10,9 @@ namespace PictureSharp.Infrastructure.Codecs.Jpeg;
 
 /// <summary>
 /// Writes a JPEG with the attached ISO 21496-1 gain map as a second MPF image, laid out as libultrahdr v2.0.2
-/// writes it with its default build (ISO metadata, no XMP). The ISO payload and the map's ICC profile are copied from
-/// the source; an unedited map is copied without re-encoding.
+/// writes it with its default build (ISO metadata, no XMP). For a map loaded from JPEG, the ISO payload and the map's
+/// ICC profile are copied from the source and an unedited map is copied without re-encoding; a map attached by a format
+/// plugin is encoded with metadata written from its parameters.
 /// </summary>
 internal static class JpegGainMapWriter
 {
@@ -29,32 +32,15 @@ internal static class JpegGainMapWriter
         public int ScanStart;                          // offset of the first SOS
     }
 
+    /// <summary>The secondary image's parts: ISO payload, ICC segments (whole) and the map JPEG with its split.</summary>
+    private sealed record MapSource(byte[] Iso, List<byte[]> Icc, byte[] MapJpeg, Parts Map);
+
     public static void Encode(Image image, Stream output, JpegEncoderOptions options, CancellationToken cancellationToken)
     {
-        if (Resolve(image, options.GainMap, cancellationToken) is not ({ } attachment, { } source))
+        if (Prepare(image, options, cancellationToken) is not { } source)
         {
             JpegEncoder.EncodeImage(image, output, options, cancellationToken);
             return;
-        }
-
-        ReadOnlySpan<byte> mapFile = attachment.MapData.Span;
-        byte[] mapJpeg = mapFile.ToArray();
-        Parts map = source;
-        if (attachment.EditedMap is { } edited)
-        {
-            var pixels = (Rgba32[])edited.Pixels.Clone();
-            using var mapImage = new Image([new ImageFrame(edited.Width, edited.Height, pixels)]);
-            var mapStream = new MemoryStream();
-            var mapOptions = new JpegEncoderOptions
-            {
-                Quality = options.GainMapQuality,
-                Subsampling = JpegSubsampling.Ratio444,
-                Metadata = MetadataKinds.None,
-                MaxDegreeOfParallelism = options.MaxDegreeOfParallelism,
-            };
-            JpegEncoder.EncodeImage(mapImage, mapStream, mapOptions with { ColorMode = source.Components == 3 ? JpegColorMode.Color : JpegColorMode.Auto }, cancellationToken);
-            mapJpeg = mapStream.ToArray();
-            map = Split(mapJpeg) ?? throw new InvalidOperationException("The encoded gain map has no scan.");
         }
 
         // A user XMP packet that declares a gain map (Ultra HDR XMP or a GContainer directory) describes the source's
@@ -74,14 +60,14 @@ internal static class JpegGainMapWriter
         // Secondary image: SOI, ISO metadata, the map's ICC profile, then the map without its APPn segments.
         var secondary = new MemoryStream();
         secondary.Write([0xFF, 0xD8]);
-        WriteSegment(secondary, 0xE2, IsoPrefix, source.IsoPayload!);
+        WriteSegment(secondary, 0xE2, IsoPrefix, source.Iso);
         foreach (byte[] icc in source.Icc)
         {
             secondary.Write(icc);
         }
 
-        map.Tables.WriteTo(secondary);
-        secondary.Write(mapJpeg.AsSpan(map.ScanStart));
+        source.Map.Tables.WriteTo(secondary);
+        secondary.Write(source.MapJpeg.AsSpan(source.Map.ScanStart));
 
         // port: libultrahdr lib/src/jpegr.cpp JpegR::appendGainMap (UHDR_WRITE_ISO, no XMP)
         var head = new MemoryStream();
@@ -109,46 +95,28 @@ internal static class JpegGainMapWriter
     }
 
     /// <summary>
-    /// The attachment to write and the segments of its source map, or null when the file is written without a map.
-    /// Throws for <see cref="JpegGainMapMode.Require"/> when no map can be written.
+    /// The secondary image to write, or null when the file is written without a map. Throws for
+    /// <see cref="JpegGainMapMode.Require"/> when no map can be written.
     /// </summary>
-    private static (GainMapAttachment? Attachment, Parts? Source) Resolve(Image image, JpegGainMapMode mode, CancellationToken cancellationToken)
+    private static MapSource? Prepare(Image image, JpegEncoderOptions options, CancellationToken cancellationToken)
     {
-        bool require = mode == JpegGainMapMode.Require;
-        if (image.GainMap is not { } attachment)
+        bool require = options.GainMap == JpegGainMapMode.Require;
+        if (GainMapEncoding.Resolve(image, require, ImageFormat.Jpeg) is not { } attachment)
         {
-            return require
-                ? throw new InvalidOperationException("The image has no HDR gain map to write: load it with DecoderOptions.LoadGainMap = true and keep it through geometric operations only.")
-                : default;
+            return null;
         }
 
-        if (!attachment.CanDecode)
-        {
-            string reason = attachment.Info.UnsupportedReason ?? "The HDR gain map cannot be written.";
-            return !require ? default
-                : attachment.Failure == GainMapFailure.Unsupported ? throw new NotSupportedException(reason)
-                : throw new ImageFormatException(ImageFormat.Jpeg, reason);
-        }
+        return attachment.Decoder is JpegGainMapDecoder
+            ? FromJpeg(image, attachment, options, require, cancellationToken)
+            : FromPlugin(attachment, options, require, cancellationToken);
+    }
 
-        if (attachment.Parameters!.Kind != HdrGainMapKinds.Iso21496)
-        {
-            return require
-                ? throw new NotSupportedException("Only ISO 21496-1 gain maps can be written; this map is described by Apple metadata only.")
-                : default;
-        }
-
-        if (attachment.Decoder is not JpegGainMapDecoder)
-        {
-            // Maps attached by format plugins carry no JPEG payload to copy; writing them needs the ISO serialization
-            // planned for 0.8.0.
-            return require
-                ? throw new NotSupportedException("Only gain maps loaded from JPEG files can be written to JPEG.")
-                : default;
-        }
-
+    // A map loaded from JPEG: its ISO payload and ICC profile are copied; an unedited map is copied without re-encoding.
+    private static MapSource? FromJpeg(Image image, GainMapAttachment attachment, JpegEncoderOptions options, bool require, CancellationToken cancellationToken)
+    {
         if (Split(attachment.MapData.Span) is not { IsoPayload: not null } source)
         {
-            return require ? throw new ImageFormatException(ImageFormat.Jpeg, "The HDR gain map image is corrupt.") : default;
+            return require ? throw new ImageFormatException(ImageFormat.Jpeg, "The HDR gain map image is corrupt.") : null;
         }
 
         // A map oriented while loading is written in the orientation of the base pixels.
@@ -158,11 +126,75 @@ internal static class JpegGainMapWriter
             attachment = GainMapEditing.Apply(attachment, image.Size, GainMapEdit.RotateFlip(0, false), cancellationToken);
             if (!attachment.CanDecode)
             {
-                return require ? throw new ImageFormatException(ImageFormat.Jpeg, "The HDR gain map image is corrupt.") : default;
+                return require ? throw new ImageFormatException(ImageFormat.Jpeg, "The HDR gain map image is corrupt.") : null;
             }
         }
 
-        return (attachment, source);
+        if (attachment.EditedMap is not { } edited)
+        {
+            return new(source.IsoPayload, source.Icc, attachment.MapData.ToArray(), source);
+        }
+
+        byte[] mapJpeg = EncodeMap(edited, source.Components == 3, options, cancellationToken);
+        return new(source.IsoPayload, source.Icc, mapJpeg, Split(mapJpeg) ?? throw new InvalidOperationException("The encoded gain map has no scan."));
+    }
+
+    // A map attached by a format plugin: the map is encoded and the ISO payload written from its metadata. The gain is
+    // applied in the base's primaries when they match the multiplication space; otherwise the map carries an ICC
+    // profile of that space, as libultrahdr writes it.
+    private static MapSource? FromPlugin(GainMapAttachment attachment, JpegEncoderOptions options, bool require, CancellationToken cancellationToken)
+    {
+        if ((attachment.EditedMap ?? GainMapEditing.Materialize(attachment, options.MaxDegreeOfParallelism, cancellationToken)) is not { } map)
+        {
+            return require ? throw new ImageFormatException(ImageFormat.Jpeg, "The HDR gain map image is corrupt.") : null;
+        }
+
+        GainMapParameters parameters = attachment.Parameters!;
+        HdrColorSpace space = parameters.MultiplicationSpace ?? attachment.BaseSpace;
+        bool useBase = space == attachment.BaseSpace;
+        byte[] iso = GainMapMetadataWriter.WriteIso(parameters with { UseBaseColorSpace = useBase });
+        List<byte[]> icc = [];
+        if (!useBase)
+        {
+            var segment = new MemoryStream();
+            WriteSegment(segment, 0xE2, [.. IccPrefix, 1, 1], IccProfileWriter.WriteSrgbTransfer(space));
+            icc.Add(segment.ToArray());
+        }
+
+        bool color = parameters.ChannelCount == 3 || !IsGray(map.Pixels);
+        byte[] mapJpeg = EncodeMap(map, color, options, cancellationToken);
+        return new(iso, icc, mapJpeg, Split(mapJpeg) ?? throw new InvalidOperationException("The encoded gain map has no scan."));
+    }
+
+    private static bool IsGray(ReadOnlySpan<Rgba32> pixels)
+    {
+        foreach (Rgba32 p in pixels)
+        {
+            if (p.R != p.G || p.G != p.B)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // The map as libultrahdr compresses it: GainMapQuality, 4:4:4, a gray map with one component.
+    private static byte[] EncodeMap(DecodedGainMap map, bool color, JpegEncoderOptions options, CancellationToken cancellationToken)
+    {
+        var pixels = (Rgba32[])map.Pixels.Clone();
+        using var mapImage = new Image([new ImageFrame(map.Width, map.Height, pixels)]);
+        var mapStream = new MemoryStream();
+        var mapOptions = new JpegEncoderOptions
+        {
+            Quality = options.GainMapQuality,
+            Subsampling = JpegSubsampling.Ratio444,
+            Metadata = MetadataKinds.None,
+            MaxDegreeOfParallelism = options.MaxDegreeOfParallelism,
+            ColorMode = color ? JpegColorMode.Color : JpegColorMode.Auto,
+        };
+        JpegEncoder.EncodeImage(mapImage, mapStream, mapOptions, cancellationToken);
+        return mapStream.ToArray();
     }
 
     private static bool DeclaresGainMap(ReadOnlySpan<byte> xmp) =>

@@ -19,10 +19,10 @@ public class HdrGainMapEncoderTests
     public static IEnumerable<string> IsoCases() => HdrGainMapTests.Manifest.GetProperty("cases").EnumerateArray()
         .Where(c => c.GetProperty("model").GetString() == "iso").Select(c => c.GetProperty("name").GetString()!);
 
-    private static DecodedGainMap DecodeMap(GainMapAttachment attachment) =>
+    internal static DecodedGainMap DecodeMap(GainMapAttachment attachment) =>
         attachment.EditedMap ?? attachment.Decoder!.Decode(attachment.MapData, 1, 1, CancellationToken.None);
 
-    private static (int Worst, int Count) Difference(DecodedGainMap a, DecodedGainMap b)
+    internal static (int Worst, int Count) Difference(DecodedGainMap a, DecodedGainMap b)
     {
         int worst = 0;
         for (int i = 0; i < a.Pixels.Length; i++)

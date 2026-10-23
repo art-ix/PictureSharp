@@ -14,7 +14,7 @@ public static class ReferenceTools
     // An explicit directory wins; a local reference build takes precedence over system tools.
     private static string Resolve(string tool)
     {
-        if (tool is "ultrahdr_app" or "ultrahdr_oracle")
+        if (tool is "ultrahdr_app" or "ultrahdr_oracle" or "ultrahdr_iso_oracle")
         {
             string? uhdr = Environment.GetEnvironmentVariable("PICTURESHARP_ULTRAHDR_TOOLS");
             string uhdrDir = !string.IsNullOrWhiteSpace(uhdr) ? uhdr
@@ -37,6 +37,9 @@ public static class ReferenceTools
 
     /// <summary>Whether libultrahdr v2.0.2's ultrahdr_app and the ultrahdr_oracle harness (scripts/build-ultrahdr-reference.sh) are available.</summary>
     public static bool HasUltraHdr => UltraHdrAvailable.Value;
+
+    /// <summary>Whether the ultrahdr_iso_oracle harness (ISO 21496-1 writer, scripts/build-ultrahdr-reference.sh) is available.</summary>
+    public static bool HasUltraHdrIsoOracle => File.Exists(Resolve("ultrahdr_iso_oracle"));
 
     private static readonly Lazy<bool> GifToolsAvailable = new(() =>
         Run("gif2webp", "-version", out string output) == 0 && output.Split('\n')[0].Trim().EndsWith(WebPVersion, StringComparison.Ordinal) && Run("anim_dump", "-version", out _) == 0);

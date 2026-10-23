@@ -114,6 +114,11 @@ MPF directory. No Ultra HDR XMP is generated, and a user XMP packet declaring a 
 copied without re-encoding; an edited one is encoded with `GainMapQuality` (default 95), gray maps as grayscale and RGB
 maps without chroma subsampling. Apple-only maps cannot be converted to ISO 21496-1.
 
+A map attached by a format plugin (for example from HEIC) is always encoded like an edited map, with ISO 21496-1
+metadata written from its values (`GainMapMetadata.ToIso()`, the fractions libultrahdr chooses). When the gain is
+applied in primaries other than the base image's, the map gets the ICC profile libultrahdr writes for them (sRGB or
+Display P3); otherwise the metadata uses the base color space.
+
 ## Tone mapping
 
 `hdr.ToneMap(options)` returns an 8-bit sRGB `Image` with a deterministic operator (it does not imitate the Photos app):
@@ -151,8 +156,8 @@ JPEG with the ISO 21496-1 map (not for Apple-only maps, padding or other formats
 ## Gain maps from format plugins
 
 A plugin can attach its container's map (for example HEIC) with `ImageDecodeContext.AttachGainMap`; loading, `ToHdr`,
-`ToneMap` and geometric edits then work as for JPEG, but the map is not written back (`Require` throws, `Preserve`
-writes SDR). See [Extending PictureSharp](extending-picturesharp.md#hdr-gain-maps).
+`ToneMap`, geometric edits and saving as JPEG with the map then work as for JPEG (saving since 0.8.0). A plugin's
+encoder writes the attached map with `image.GetGainMap()`. See [Extending PictureSharp](extending-picturesharp.md#hdr-gain-maps).
 
 ## Limitations
 

@@ -221,9 +221,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 libultrahdr (https://github.com/google/libultrahdr), version 2.0.2
 Used for: HDR gain map reconstruction (ISO 21496-1 metadata layout, gain map
 sampling and gain application; lib/src/gainmapmath.cpp and
-lib/src/gainmapmetadata.cpp) and the layout of JPEG files written with a gain
-map (lib/src/jpegr.cpp appendGainMap, lib/src/multipictureformat.cpp
-generateMpf).
+lib/src/gainmapmetadata.cpp), writing ISO 21496-1 metadata (encodeGainmapMetadata
+and the float-to-fraction conversion of the same files), the ICC profile of a
+written gain map (lib/src/icc.cpp IccHelper::writeIccProfile) and the layout of
+JPEG files written with a gain map (lib/src/jpegr.cpp appendGainMap,
+lib/src/multipictureformat.cpp generateMpf).
 -------------------------------------------------------------------------------
 Copyright 2022 The Android Open Source Project
 

@@ -39,7 +39,7 @@ and writes multi-page TIFF and BigTIFF; reads also CMYK, YCbCr, CIE L\*a\*b\*, 1
 - HDR photos with gain maps (ISO 21496-1, Apple): reconstruction, tone mapping, editing and saving as JPEG
 - Limits for untrusted input and cancellation of all long-running work
 - SIMD on x64 and ARM64, bit-identical to the scalar code
-- Extensible with format plugins (including HDR gain maps and metadata) and custom processors
+- Extensible with format plugins (including reading and writing HDR gain maps, and metadata) and custom processors
 - Optional adapter packages for System.Drawing, SkiaSharp and ASP.NET Core
 
 ## Quick start

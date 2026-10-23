@@ -37,7 +37,8 @@ WebP ports and encoder comparisons use **libwebp 1.6.0**. The script needs Git, 
 
 HDR reconstruction is compared with **libultrahdr v2.0.2** (commit `e5f5a022fe96fc4dc2ee35c19f733a50df807abe`). The
 script builds `ultrahdr_app` and `ultrahdr_oracle` (`tests/assets/ultrahdr_oracle.cpp`), which runs libultrahdr's gain
-map functions on PictureSharp's decoded pixels. It needs CMake, Ninja, a C++17 compiler and libjpeg headers;
+map functions on PictureSharp's decoded pixels, and `ultrahdr_iso_oracle` (`tests/assets/ultrahdr_iso_oracle.cpp`),
+which writes ISO 21496-1 metadata for comparison with `GainMapMetadata.ToIso()`. It needs CMake, Ninja, a C++17 compiler and libjpeg headers;
 `PICTURESHARP_ULTRAHDR_TOOLS` selects another directory. The HDR corpus is regenerated with
 `python3 -I tests/assets/hdr_reference.py`.
 

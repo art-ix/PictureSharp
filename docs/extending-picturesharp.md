@@ -170,8 +170,32 @@ if (context.Options.LoadGainMap)
 - Keep the base image's ICC profile or `Chromaticities`/`Gamma` when attaching a map, also with `IgnoreMetadata`.
 - The library carries the map through `TargetSize`, orientation, color conversion and geometric edits.
   `GainMapImage.Decode` returns the map at its stored size, owns its data and must not use the decode context.
-- Saving a plugin's gain map into JPEG is not supported yet: `Preserve` writes SDR and `Require` throws
-  `NotSupportedException`.
+- Saving as JPEG writes a plugin's gain map like an edited JPEG map, with metadata from `ToIso()` (0.8.0).
+
+An encoder writes the attached map with `image.GetGainMap()` (namespace `PictureSharp.Formats`, 0.8.0):
+
+```csharp
+// In IImageFormatEncoder.Encode; require: true throws like JpegGainMapMode.Require instead of returning null.
+if (image.GetGainMap(require: options.GainMap == MyGainMapMode.Require) is { } gainMap)
+{
+    byte[] iso = gainMap.Metadata.ToIso();   // the ISO 21496-1 payload, as ParseIso reads it
+    if (gainMap.Map is ContainerGainMap own)
+    {
+        // Unedited and unrotated since this plugin attached it: copy the compressed map as is.
+    }
+    else
+    {
+        using Image map = gainMap.Map.Decode(options.MaxDegreeOfParallelism, cancellationToken);
+        // Encode the map: the size and orientation of the image's pixels; a gray map has R = G = B.
+    }
+}
+```
+
+- Only ISO 21496-1 maps are returned; a map with Apple metadata only gives null (`NotSupportedException` when
+  required).
+- `ToIso()` stores the multiplication color space only as a flag: when `Metadata.MultiplicationSpace` is not null,
+  store those primaries with the map (an ICC profile or a `colr` box).
+- `GetGainMap` decodes nothing; `Map.Decode` returns a new image on every call.
 
 ### Metadata without pixels
 

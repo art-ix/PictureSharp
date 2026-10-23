@@ -142,11 +142,15 @@ public class HdrUltraHdrOracleTests
         }
     }
 
+    private static readonly ImageConfiguration WithContainer =
+        ImageConfiguration.Default.ToBuilder().AddFormat(new Extensibility.GainMapContainerFormat()).Build();
+
     public static IEnumerable<(string Name, string Edit)> WrittenCases() =>
-        IsoCases().SelectMany(n => new[] { (n, "none"), (n, "rotate90_half") });
+        IsoCases().SelectMany(n => new[] { (n, "none"), (n, "rotate90_half"), (n, "plugin") });
 
     /// <summary>
-    /// Files written with JpegGainMapMode.Require, unedited and edited, decode in ultrahdr_app within the full-pipeline
+    /// Files written with JpegGainMapMode.Require, unedited, edited and from a map attached by a format plugin (encoded
+    /// with metadata from ToIso, 0.8.0), decode in ultrahdr_app within the full-pipeline
     /// budget against PictureSharp's ToHdr of the same written file. The base is written 4:4:4 like the corpus: with
     /// 4:2:0, libultrahdr's chroma upsampling of the noisy synthetic bases alone exceeds the budget.
     /// </summary>
@@ -156,7 +160,9 @@ public class HdrUltraHdrOracleTests
     {
         Skip.Unless(ReferenceTools.HasUltraHdr, "libultrahdr v2.0.2 tools are not built (scripts/build-ultrahdr-reference.sh).");
         var options = new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true };
-        using Image image = Image.Load(HdrGainMapTests.File(name + ".jpg"), options);
+        using Image image = edit == "plugin"
+            ? Image.Load(Extensibility.PluginGainMapJpegTests.Container(name), options with { Configuration = WithContainer })
+            : Image.Load(HdrGainMapTests.File(name + ".jpg"), options);
         if (edit == "rotate90_half")
         {
             image.Mutate(x => x.Rotate(RotateMode.Rotate90).Resize(image.Height / 2, image.Width / 2));

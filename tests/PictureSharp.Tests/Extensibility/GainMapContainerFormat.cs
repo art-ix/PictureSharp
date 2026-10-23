@@ -1,13 +1,26 @@
 using System.Buffers.Binary;
 using System.Drawing;
 using System.Text;
+using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Formats;
+using PictureSharp.Formats.Jpeg;
 
 namespace PictureSharp.Tests.Extensibility;
 
+/// <summary>Options of the gain map container's encoder: whether the attached map is written, as for JPEG.</summary>
+public sealed record GainMapContainerEncoderOptions : EncoderOptions
+{
+    public override ImageFormat Format => GainMapContainerFormat.Format;
+
+    public JpegGainMapMode GainMap { get; init; } = JpegGainMapMode.Preserve;
+
+    public int MaxDegreeOfParallelism { get; init; } = -1;
+}
+
 /// <summary>
 /// A test container exercising the 0.7.0 plugin SPI: a base image, a gain map image with ISO 21496-1 or Apple metadata,
-/// and an XMP block read and rewritten without pixels. Layout: "GMAP", then sections of a tag byte, a big-endian
+/// and an XMP block read and rewritten without pixels. Its encoder writes the attached map through
+/// <c>GetGainMap</c> (0.8.0). Layout: "GMAP", then sections of a tag byte, a big-endian
 /// length and the data.
 /// </summary>
 public sealed class GainMapContainerFormat(bool editableMetadata = true) : IImageFormatModule
@@ -23,6 +36,8 @@ public sealed class GainMapContainerFormat(bool editableMetadata = true) : IImag
     public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("GMAP"u8);
 
     public IImageFormatDecoder? Decoder { get; } = new GainMapDecoder();
+
+    public IImageFormatEncoder? Encoder { get; } = new GainMapEncoder();
 
     public IImageFormatMetadataCodec? MetadataCodec { get; } = editableMetadata ? new EditableMetadataCodec() : new ReadOnlyMetadataCodec();
 
@@ -206,8 +221,51 @@ public sealed class GainMapContainerFormat(bool editableMetadata = true) : IImag
 
     private sealed class JpegMap(byte[] data, Size size) : GainMapImage(size)
     {
+        public byte[] Data => data;
+
         public override Image Decode(int maxDegreeOfParallelism, CancellationToken cancellationToken) =>
             Image.Load(data, new DecoderOptions { IgnoreMetadata = true, MaxDegreeOfParallelism = maxDegreeOfParallelism }, cancellationToken);
+    }
+
+    /// <summary>Writes the base as JPEG and the attached ISO 21496-1 map as the plugin SPI hands it over.</summary>
+    private sealed class GainMapEncoder : IImageFormatEncoder<GainMapContainerEncoderOptions>
+    {
+        public void Encode(Image image, Stream output, GainMapContainerEncoderOptions options, CancellationToken cancellationToken)
+        {
+            List<(byte, byte[])> sections = [(Base, image.ToJpeg(new JpegEncoderOptions { Quality = 95 }))];
+            if (options.GainMap != JpegGainMapMode.None && image.GetGainMap(options.GainMap == JpegGainMapMode.Require) is { } gainMap)
+            {
+                byte[] map;
+                if (gainMap.Map is JpegMap own)
+                {
+                    // Unedited since this plugin attached it: the compressed map is copied as is.
+                    map = own.Data;
+                }
+                else
+                {
+                    using Image pixels = gainMap.Map.Decode(options.MaxDegreeOfParallelism, cancellationToken);
+                    bool gray = gainMap.Metadata.ChannelCount == 1 && pixels.GetPixelSpan().ToArray().All(p => p.R == p.G && p.G == p.B);
+                    map = pixels.ToJpeg(new JpegEncoderOptions
+                    {
+                        Quality = 95,
+                        Subsampling = JpegSubsampling.Ratio444,
+                        Metadata = MetadataKinds.None,
+                        ColorMode = gray ? JpegColorMode.Grayscale : JpegColorMode.Color,
+                    });
+                }
+
+                sections.Add((Map, map));
+                sections.Add((Iso, gainMap.Metadata.ToIso()));
+                sections.Add((Channels, [Components(map)]));
+                if (gainMap.Metadata.MultiplicationSpace is { } space)
+                {
+                    // The primaries the ISO payload only flags; a real container would store an ICC profile or nclx.
+                    sections.Add((MapIcc, IccProfileWriter.WriteSrgbTransfer(space)));
+                }
+            }
+
+            output.Write(Write(sections));
+        }
     }
 
     private class ReadOnlyMetadataCodec : IImageFormatMetadataCodec

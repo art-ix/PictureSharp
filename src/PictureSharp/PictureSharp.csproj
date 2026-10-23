@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.7.13 makes film negatives automatic: FindFilmFrame finds a 35 mm frame from its perforation, and DevelopNegative straightens and crops it, takes the film base from the rebate and evens out the backlight (NegativeOptions.Frame, Crop, CorrectIllumination; warnings BacklightTexture, FrameCut, UnevenIllumination). On a photograph with perforation DevelopNegative now returns the cropped frame. Bicubic rotation is vectorized and parallel with identical pixels. Notes: https://github.com/art-ix/PictureSharp/blob/v0.7.13/docs/releases/release-0.7.13.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.0 lets format plugins write HDR gain maps: image.GetGainMap() hands an encoder the attached map (EncodableGainMap: metadata and the map in the geometry of the current pixels, or the plugin's own instance when unedited), GainMapMetadata.ToIso() writes ISO 21496-1 metadata as libultrahdr does, and JPEG with JpegGainMapMode.Preserve or Require now also writes maps attached by plugins (for example HEIC to Ultra HDR JPEG). Existing files and outputs are unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.0/docs/releases/release-0.8.0.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>

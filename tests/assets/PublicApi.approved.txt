@@ -107,14 +107,22 @@ sealed record PictureSharp.Formats.EmbeddedPartOptions : System.IEquatable<Pictu
     ctor()
     property PictureSharp.Formats.Jpeg.JpegDecoderOptions? Jpeg { get; init; }
     property System.Int32? MaxDegreeOfParallelism { get; init; }
+sealed record PictureSharp.Formats.EncodableGainMap : System.IEquatable<PictureSharp.Formats.EncodableGainMap>
+    ctor(PictureSharp.Formats.GainMapMetadata Metadata, PictureSharp.Formats.GainMapImage Map)
+    property PictureSharp.Formats.GainMapImage Map { get; init; }
+    property PictureSharp.Formats.GainMapMetadata Metadata { get; init; }
 abstract record PictureSharp.Formats.FormatDecoderOptions : System.IEquatable<PictureSharp.Formats.FormatDecoderOptions>
+static class PictureSharp.Formats.GainMapExtensions
+    method [Extension] static PictureSharp.Formats.EncodableGainMap? GetGainMap(Image image, System.Boolean require = false)
 abstract class PictureSharp.Formats.GainMapImage
     method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
     property System.Drawing.Size Size { get; }
 sealed class PictureSharp.Formats.GainMapMetadata
     method HdrInfo ToHdrInfo(System.Drawing.Size mapSize)
+    method System.Byte[] ToIso()
     method static PictureSharp.Formats.GainMapMetadata ParseApple(System.ReadOnlySpan<System.Byte> exif, System.ReadOnlySpan<System.Byte> mapXmp)
     method static PictureSharp.Formats.GainMapMetadata ParseIso(System.ReadOnlySpan<System.Byte> metadata, System.Int32 mapChannels, System.ReadOnlySpan<System.Byte> alternateIcc = default)
+    property HdrColorSpace? MultiplicationSpace { get; }
     property HdrGainMapKinds Kind { get; }
     property System.Int32 ChannelCount { get; }
     property System.Single Headroom { get; }

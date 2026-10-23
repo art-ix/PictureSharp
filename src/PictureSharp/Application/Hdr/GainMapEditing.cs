@@ -38,7 +38,7 @@ internal static class GainMapEditing
 
         if (attachment.EditedMap is not { } decodedMap)
         {
-            if (Materialize(attachment, cancellationToken) is not { } decoded)
+            if (Materialize(attachment, -1, cancellationToken) is not { } decoded)
             {
                 return GainMapAttachment.Failed(attachment.Info, GainMapFailure.Corrupt, "The HDR gain map image is corrupt.");
             }
@@ -60,13 +60,16 @@ internal static class GainMapEditing
         };
     }
 
-    /// <summary>The full-resolution map in the orientation of the loaded base pixels, or null when it is corrupt.</summary>
-    private static DecodedGainMap? Materialize(GainMapAttachment attachment, CancellationToken cancellationToken)
+    /// <summary>
+    /// The stored map at full resolution, decoded into new pixels and oriented as the loaded base pixels, or null when it
+    /// is corrupt.
+    /// </summary>
+    internal static DecodedGainMap? Materialize(GainMapAttachment attachment, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         DecodedGainMap map;
         try
         {
-            map = attachment.Decoder!.Decode(attachment.MapData, 1, -1, cancellationToken);
+            map = attachment.Decoder!.Decode(attachment.MapData, 1, maxDegreeOfParallelism, cancellationToken);
         }
         catch (Exception ex) when (ex is ImageFormatException || CodecErrors.IsCorruptDataException(ex))
         {

@@ -239,13 +239,13 @@ public class PluginSpiTests
     }
 
     [Test]
-    public async Task SavingAPluginMapToJpeg_IsNotSupportedYet()
+    public async Task SavingAPluginMapToJpeg_WritesTheMap()
     {
+        // Details in PluginGainMapJpegTests; before 0.8.0, Preserve wrote SDR and Require threw NotSupportedException.
         using Image image = Image.Load(Container("iso_mono_srgb"), Hdr());
-        await Assert.That(() => image.Encode(new JpegEncoderOptions { GainMap = JpegGainMapMode.Require })).Throws<NotSupportedException>();
-        byte[] sdr = image.Encode(new JpegEncoderOptions { GainMap = JpegGainMapMode.Preserve });
-        using Image reloaded = Image.Load(sdr, new DecoderOptions { LoadGainMap = true });
-        await Assert.That(reloaded.Hdr).IsNull();
+        byte[] hdr = image.Encode(new JpegEncoderOptions { GainMap = JpegGainMapMode.Preserve });
+        using Image reloaded = Image.Load(hdr, new DecoderOptions { LoadGainMap = true });
+        await Assert.That(reloaded.HasHdr).IsTrue();
     }
 
     // ------------------------------------------------------------ metadata without pixels

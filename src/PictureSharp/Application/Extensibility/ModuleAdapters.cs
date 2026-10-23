@@ -105,6 +105,9 @@ internal sealed class ModuleGainMapDecoder(ImageFormat format, GainMapImage map)
 {
     public bool CanScale => false;
 
+    /// <summary>The map as the plugin attached it.</summary>
+    public GainMapImage Map => map;
+
     public DecodedGainMap Decode(ReadOnlyMemory<byte> data, int scale, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         Image? decoded;
