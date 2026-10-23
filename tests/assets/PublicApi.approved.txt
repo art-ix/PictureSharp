@@ -120,6 +120,7 @@ abstract class PictureSharp.Formats.GainMapImage
 sealed class PictureSharp.Formats.GainMapMetadata
     method HdrInfo ToHdrInfo(System.Drawing.Size mapSize)
     method System.Byte[] ToIso()
+    method System.Byte[]? ToAlternateIcc()
     method static PictureSharp.Formats.GainMapMetadata ParseApple(System.ReadOnlySpan<System.Byte> exif, System.ReadOnlySpan<System.Byte> mapXmp)
     method static PictureSharp.Formats.GainMapMetadata ParseIso(System.ReadOnlySpan<System.Byte> metadata, System.Int32 mapChannels, System.ReadOnlySpan<System.Byte> alternateIcc = default)
     property HdrColorSpace? MultiplicationSpace { get; }

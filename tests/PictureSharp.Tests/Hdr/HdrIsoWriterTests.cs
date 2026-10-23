@@ -85,6 +85,17 @@ public class HdrIsoWriterTests
     }
 
     [Test]
+    [MethodDataSource(nameof(IsoCases))]
+    public async Task ToAlternateIcc_ParsesBackToTheSameSpace(string name)
+    {
+        GainMapMetadata metadata = Parse(name, out _, out _);
+        byte[]? icc = metadata.ToAlternateIcc();
+        await Assert.That(icc is null).IsEqualTo(metadata.MultiplicationSpace is null).Because(name);
+        GainMapMetadata again = GainMapMetadata.ParseIso(metadata.ToIso(), 3, icc);
+        await Assert.That(again.MultiplicationSpace).IsEqualTo(metadata.MultiplicationSpace).Because(name);
+    }
+
+    [Test]
     public async Task ToIso_WritesOneChannel_WhenAllChannelsAreEqual()
     {
         var parameters = new GainMapParameters

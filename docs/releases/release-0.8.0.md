@@ -24,7 +24,8 @@ breaking API changes since 0.7.13; files written from JPEG sources are byte for 
   segment or a HEIF `tmap` item. Values are stored as the fractions libultrahdr 2.0.2 chooses (a port of
   `encodeGainmapMetadata` and its continued fractions), one channel when all channels are equal.
   **`GainMapMetadata.MultiplicationSpace`** gives the primaries the gain is applied in when they are not the base
-  image's; the payload only flags them, so a writer stores them with the map (an ICC profile or a `colr` box).
+  image's; the payload only flags them, so a writer stores them with the map. **`GainMapMetadata.ToAlternateIcc()`**
+  writes them as the ICC profile `ParseIso` reads back (null when the base primaries apply).
 - **JPEG with a plugin's map:** `JpegGainMapMode.Preserve` and `Require` write a map attached by a format plugin like
   an edited map (`GainMapQuality`, gray maps as grayscale, RGB maps 4:4:4) with metadata from `ToIso()`. Before, they
   wrote SDR or threw `NotSupportedException`. When the gain is applied in primaries other than the base image's, the

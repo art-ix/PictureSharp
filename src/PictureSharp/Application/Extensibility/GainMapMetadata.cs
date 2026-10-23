@@ -1,4 +1,5 @@
 using System.Drawing;
+using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Domain.Hdr;
 
@@ -79,6 +80,15 @@ public sealed class GainMapMetadata
     /// <returns>A new array on every call.</returns>
     /// <exception cref="NotSupportedException">The metadata is in the Apple model only (<see cref="Kind"/> is <see cref="HdrGainMapKinds.Apple"/>).</exception>
     public byte[] ToIso() => GainMapMetadataWriter.WriteIso(Parameters);
+
+    /// <summary>
+    /// Writes an ICC profile that declares <see cref="MultiplicationSpace"/>, the <c>alternateIcc</c> input of
+    /// <see cref="ParseIso"/>: the ICC v4.3 profile libultrahdr 2.0.2 stores with a gain map, sRGB or Display P3
+    /// primaries with the sRGB transfer curve (gain map samples are not linearized by it). Store it as the map's ICC
+    /// profile in JPEG or in the <c>colr</c> box of a HEIF <c>tmap</c> item.
+    /// </summary>
+    /// <returns>A new array on every call; null when <see cref="MultiplicationSpace"/> is null.</returns>
+    public byte[]? ToAlternateIcc() => MultiplicationSpace is { } space ? IccProfileWriter.WriteSrgbTransfer(space) : null;
 
     /// <summary>
     /// The description <c>Identify</c> reports for a map of <paramref name="mapSize"/> with this metadata: detected and

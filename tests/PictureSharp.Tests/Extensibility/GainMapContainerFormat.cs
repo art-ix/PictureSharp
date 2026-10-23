@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Drawing;
 using System.Text;
-using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Formats;
 using PictureSharp.Formats.Jpeg;
 
@@ -257,10 +256,10 @@ public sealed class GainMapContainerFormat(bool editableMetadata = true) : IImag
                 sections.Add((Map, map));
                 sections.Add((Iso, gainMap.Metadata.ToIso()));
                 sections.Add((Channels, [Components(map)]));
-                if (gainMap.Metadata.MultiplicationSpace is { } space)
+                if (gainMap.Metadata.ToAlternateIcc() is { } icc)
                 {
-                    // The primaries the ISO payload only flags; a real container would store an ICC profile or nclx.
-                    sections.Add((MapIcc, IccProfileWriter.WriteSrgbTransfer(space)));
+                    // The primaries the ISO payload only flags.
+                    sections.Add((MapIcc, icc));
                 }
             }
 

@@ -54,7 +54,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
 | 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
 | 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Przygotowana (2026-10-22) |
-| 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Przygotowana (2026-10-23); czeka na potwierdzenie zapisu `tmap` we wtyczce HEIF |
+| 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Przygotowana (2026-10-23); zapis `tmap` potwierdzony we wtyczce HEIF 0.6.10 (lokalny feed); `ToAlternateIcc` dodane |
 | 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Planowana |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -805,8 +805,9 @@ Kroki (nazwy robocze do migawki API):
    (`GainMapContainerEncoderOptions.GainMap` z trybami jak JPEG); testy `PluginGainMapEncoderTests`: JPEG HDR →
    wtyczka i wtyczka → wtyczka z dokładnymi metadanymi i mapą ≤ 8 kodów, niezmieniona mapa wtyczki kopiowana bajtowo,
    orientacja i edycje w geometrii bazy, tryby. Wtyczka → JPEG → libultrahdr i `ParseIso(ToIso(m))` w krokach 1 i 3.
-   Luka do decyzji: wtyczka z kontenerem opisującym prymarne przez ICC nie ma publicznego generatora profilu
-   (`IccProfileWriter` jest internal; wtyczka testowa używa go przez InternalsVisibleTo, HEIF zapisze nclx).
+   Luka zamknięta 2026-10-23 (potrzeba wtyczki HEIF: jej czytnik bierze prymarne `tmap` z ICC, a `ParseIso` przyjmuje
+   tylko ICC): `GainMapMetadata.ToAlternateIcc()` zwraca profil libultrahdr dla `MultiplicationSpace` (null przy
+   przestrzeni bazy), wejście `alternateIcc` dla `ParseIso`; wtyczka testowa używa już publicznej metody.
 5. **Dokumentacja i bramka (zrobione 2026-10-23, poza potwierdzeniem HEIF):** `docs/extending-picturesharp.md` (wzorzec zapisu mapy we wtyczce), `docs/hdr.md`,
    migawka API, `AotSmoke` (zapis przez wtyczkę testową nie wchodzi — scenariusz JPEG z mapą z `ToIso`), notatki
    wydania, `THIRD-PARTY-NOTICES.txt` (libultrahdr Apache-2.0 — już jest, dopisać pliki portu).

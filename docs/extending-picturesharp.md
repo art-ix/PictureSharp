@@ -194,7 +194,8 @@ if (image.GetGainMap(require: options.GainMap == MyGainMapMode.Require) is { } g
 - Only ISO 21496-1 maps are returned; a map with Apple metadata only gives null (`NotSupportedException` when
   required).
 - `ToIso()` stores the multiplication color space only as a flag: when `Metadata.MultiplicationSpace` is not null,
-  store those primaries with the map (an ICC profile or a `colr` box).
+  store those primaries with the map. `Metadata.ToAlternateIcc()` writes them as the ICC profile `ParseIso` reads back
+  (the map's ICC profile in JPEG, the `colr` box of a HEIF `tmap` item); it returns null when the base primaries apply.
 - `GetGainMap` decodes nothing; `Map.Decode` returns a new image on every call.
 
 ### Metadata without pixels
