@@ -2,7 +2,7 @@
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.8.2 (przygotowana 2026-10-25).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.8.2 (opublikowana 2026-10-25).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
@@ -56,7 +56,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Wydana (2026-10-22; tag v0.7.13) |
 | 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Wydana (2026-10-23; zapis `tmap` potwierdzony we wtyczce HEIF 0.6.10; bez ARM64) |
 | 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Wydana (2026-10-23; NuGet 0.8.1, bez ARM64) |
-| 0.8.2 | Prośby wtyczek: limit zagnieżdżenia dekodowania, metadane specyficzne dla formatu (`FormatMetadata`), deklaracja stabilnego SPI; addytywnie | Przygotowana (2026-10-25; bez lokalnego Oracle i ARM64, CI wydania) |
+| 0.8.2 | Prośby wtyczek: limit zagnieżdżenia dekodowania, metadane specyficzne dla formatu (`FormatMetadata`), deklaracja stabilnego SPI; addytywnie | Wydana (2026-10-25; tag v0.8.2, NuGet 0.8.2, bez ARM64) |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
 opisuje sekcja [Wtyczka HEIF](#wtyczka-heif--osobne-repozytorium).
