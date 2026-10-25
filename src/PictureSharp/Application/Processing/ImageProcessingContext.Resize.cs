@@ -137,6 +137,7 @@ public readonly ref partial struct ImageProcessingContext
 
             return new FrameReplacement(canvasWidth, canvasHeight, pixels);
         }, gainMapEdit);
+        image.Metadata.PixelsMoved();
         if (pad && options.PadColor.A != 255)
         {
             image.HasAlpha = true;

@@ -24,6 +24,7 @@
 | Guide | What it covers |
 | --- | --- |
 | [Extending PictureSharp](extending-picturesharp.md) | Format plugins, frame processors, shortcuts; adding built-in formats and operations |
+| [Stable plugin SPI](plugin-spi.md) | What plugins can rely on until 2.0 and the minimum PictureSharp version |
 | [Architecture](architecture.md) | Layers, model boundaries, data flow and compiled dependency checks |
 | [Development](development.md) | Building, tests and oracles, corpus, API snapshot, releasing, Native AOT |
 | [Performance](performance.md) | Benchmark commands and measurements |

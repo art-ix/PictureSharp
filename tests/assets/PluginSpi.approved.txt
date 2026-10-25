@@ -1,0 +1,272 @@
+sealed record DecoderOptions : System.IEquatable<DecoderOptions>
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: ctor()
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: method T? GetFormatOptions<T>()
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property ColorConversionMode ColorConversion { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property ImageConfiguration? Configuration { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property PictureSharp.Formats.Ico.IcoDecoderOptions Ico { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property PictureSharp.Formats.Jpeg.JpegDecoderOptions Jpeg { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property PictureSharp.Formats.Png.PngDecoderOptions Png { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property PictureSharp.Formats.WebP.WebPDecoderOptions WebP { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property PictureSharp.Processing.ResamplingFilter TargetResampling { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean ApplyExifOrientation { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean FirstFrameOnly { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean IgnoreMetadata { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean LoadGainMap { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.FormatDecoderOptions> FormatOptions { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Double TargetReducingGap { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Drawing.Size? TargetSize { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Int32 MaxDegreeOfParallelism { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Int32 MaxFrames { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Int64 MaxInputBytes { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Int64 MaxMetadataBytes { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Int64 MaxPixels { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property static DecoderOptions Default { get; }
+abstract record EncoderOptions : System.IEquatable<EncoderOptions>
+abstract record EncoderOptions : System.IEquatable<EncoderOptions> :: property ImageConfiguration? Configuration { get; init; }
+abstract record EncoderOptions : System.IEquatable<EncoderOptions> :: property ImageFormat Format { get; }
+abstract record EncoderOptions : System.IEquatable<EncoderOptions> :: property MetadataKinds Metadata { get; init; }
+sealed record PictureSharp.Formats.EmbeddedPartOptions : System.IEquatable<PictureSharp.Formats.EmbeddedPartOptions>
+sealed record PictureSharp.Formats.EmbeddedPartOptions : System.IEquatable<PictureSharp.Formats.EmbeddedPartOptions> :: ctor()
+sealed record PictureSharp.Formats.EmbeddedPartOptions : System.IEquatable<PictureSharp.Formats.EmbeddedPartOptions> :: property PictureSharp.Formats.Jpeg.JpegDecoderOptions? Jpeg { get; init; }
+sealed record PictureSharp.Formats.EmbeddedPartOptions : System.IEquatable<PictureSharp.Formats.EmbeddedPartOptions> :: property System.Int32? MaxDegreeOfParallelism { get; init; }
+sealed record PictureSharp.Formats.EncodableGainMap : System.IEquatable<PictureSharp.Formats.EncodableGainMap>
+sealed record PictureSharp.Formats.EncodableGainMap : System.IEquatable<PictureSharp.Formats.EncodableGainMap> :: ctor(PictureSharp.Formats.GainMapMetadata Metadata, PictureSharp.Formats.GainMapImage Map)
+sealed record PictureSharp.Formats.EncodableGainMap : System.IEquatable<PictureSharp.Formats.EncodableGainMap> :: property PictureSharp.Formats.GainMapImage Map { get; init; }
+sealed record PictureSharp.Formats.EncodableGainMap : System.IEquatable<PictureSharp.Formats.EncodableGainMap> :: property PictureSharp.Formats.GainMapMetadata Metadata { get; init; }
+abstract record PictureSharp.Formats.FormatDecoderOptions : System.IEquatable<PictureSharp.Formats.FormatDecoderOptions>
+abstract record PictureSharp.Formats.FormatMetadata : System.IEquatable<PictureSharp.Formats.FormatMetadata>
+static class PictureSharp.Formats.GainMapExtensions
+static class PictureSharp.Formats.GainMapExtensions :: method [Extension] static PictureSharp.Formats.EncodableGainMap? GetGainMap(Image image, System.Boolean require = false)
+abstract class PictureSharp.Formats.GainMapImage
+abstract class PictureSharp.Formats.GainMapImage :: method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
+abstract class PictureSharp.Formats.GainMapImage :: property System.Drawing.Size Size { get; }
+sealed class PictureSharp.Formats.GainMapMetadata
+sealed class PictureSharp.Formats.GainMapMetadata :: method HdrInfo ToHdrInfo(System.Drawing.Size mapSize)
+sealed class PictureSharp.Formats.GainMapMetadata :: method System.Byte[] ToIso()
+sealed class PictureSharp.Formats.GainMapMetadata :: method System.Byte[]? ToAlternateIcc()
+sealed class PictureSharp.Formats.GainMapMetadata :: method static PictureSharp.Formats.GainMapMetadata ParseApple(System.ReadOnlySpan<System.Byte> exif, System.ReadOnlySpan<System.Byte> mapXmp)
+sealed class PictureSharp.Formats.GainMapMetadata :: method static PictureSharp.Formats.GainMapMetadata ParseIso(System.ReadOnlySpan<System.Byte> metadata, System.Int32 mapChannels, System.ReadOnlySpan<System.Byte> alternateIcc = default)
+sealed class PictureSharp.Formats.GainMapMetadata :: property HdrColorSpace? MultiplicationSpace { get; }
+sealed class PictureSharp.Formats.GainMapMetadata :: property HdrGainMapKinds Kind { get; }
+sealed class PictureSharp.Formats.GainMapMetadata :: property System.Int32 ChannelCount { get; }
+sealed class PictureSharp.Formats.GainMapMetadata :: property System.Single Headroom { get; }
+interface PictureSharp.Formats.IImageFormatDecoder
+interface PictureSharp.Formats.IImageFormatDecoder :: method Image Decode(System.ReadOnlyMemory<System.Byte> data, PictureSharp.Formats.ImageDecodeContext context)
+interface PictureSharp.Formats.IImageFormatDecoder :: method ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions options)
+interface PictureSharp.Formats.IImageFormatEncoder
+interface PictureSharp.Formats.IImageFormatEncoder :: method EncoderOptions CreateDefaultOptions()
+interface PictureSharp.Formats.IImageFormatEncoder :: method System.Void Encode(Image image, System.IO.Stream output, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
+interface PictureSharp.Formats.IImageFormatEncoder<TOptions> : PictureSharp.Formats.IImageFormatEncoder
+interface PictureSharp.Formats.IImageFormatEncoder<TOptions> : PictureSharp.Formats.IImageFormatEncoder :: method System.Void Encode(Image image, System.IO.Stream output, TOptions options, System.Threading.CancellationToken cancellationToken)
+interface PictureSharp.Formats.IImageFormatMetadataCodec
+interface PictureSharp.Formats.IImageFormatMetadataCodec :: method ImageMetadata Read(System.ReadOnlyMemory<System.Byte> data, PictureSharp.Formats.ImageDecodeContext context)
+interface PictureSharp.Formats.IImageFormatMetadataCodec :: method default System.Byte[] Rewrite(System.ReadOnlyMemory<System.Byte> data, ImageMetadata original, ImageMetadata metadata, PictureSharp.Formats.ImageDecodeContext context)
+interface PictureSharp.Formats.IImageFormatModule
+interface PictureSharp.Formats.IImageFormatModule :: method System.Boolean IsSupported(System.ReadOnlySpan<System.Byte> header)
+interface PictureSharp.Formats.IImageFormatModule :: property ImageFormat Format { get; }
+interface PictureSharp.Formats.IImageFormatModule :: property System.Int32 HeaderSize { get; }
+interface PictureSharp.Formats.IImageFormatModule :: property default PictureSharp.Formats.IImageFormatDecoder? Decoder { get; }
+interface PictureSharp.Formats.IImageFormatModule :: property default PictureSharp.Formats.IImageFormatEncoder? Encoder { get; }
+interface PictureSharp.Formats.IImageFormatModule :: property default PictureSharp.Formats.IImageFormatMetadataCodec? MetadataCodec { get; }
+sealed class PictureSharp.Formats.ImageDecodeContext
+sealed class PictureSharp.Formats.ImageDecodeContext :: method Image DecodeEmbedded(System.ReadOnlyMemory<System.Byte> data)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method Image DecodeEmbeddedPart(System.ReadOnlyMemory<System.Byte> data, System.Int32 width, System.Int32 height)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method Image DecodeEmbeddedPart(System.ReadOnlyMemory<System.Byte> data, System.Int32 width, System.Int32 height, PictureSharp.Formats.EmbeddedPartOptions options)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map, HdrGainMapKinds detected)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void DeclareGainMap(HdrGainMapKinds detected, System.String reason, System.Boolean corrupt = true)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ReserveMetadata(System.Int64 bytes)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ReservePixels(System.Int32 width, System.Int32 height, System.Int32 frames = 1)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ThrowIfCancellationRequested()
+sealed class PictureSharp.Formats.ImageDecodeContext :: property DecoderOptions Options { get; }
+sealed class PictureSharp.Formats.ImageDecodeContext :: property System.Threading.CancellationToken CancellationToken { get; }
+enum HdrColorSpace
+enum HdrColorSpace :: LinearSrgb = 0
+enum HdrColorSpace :: LinearDisplayP3 = 1
+[Flags] enum HdrGainMapKinds
+[Flags] enum HdrGainMapKinds :: None = 0
+[Flags] enum HdrGainMapKinds :: Iso21496 = 1
+[Flags] enum HdrGainMapKinds :: Apple = 2
+[Flags] enum HdrGainMapKinds :: UltraHdrXmp = 4
+sealed record HdrInfo : System.IEquatable<HdrInfo>
+sealed record HdrInfo : System.IEquatable<HdrInfo> :: ctor()
+sealed record HdrInfo : System.IEquatable<HdrInfo> :: property HdrGainMapKinds Detected { get; init; }
+sealed record HdrInfo : System.IEquatable<HdrInfo> :: property HdrGainMapKinds Selected { get; init; }
+sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.Boolean CanDecode { get; init; }
+sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.Drawing.Size GainMapSize { get; init; }
+sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.Single? Headroom { get; init; }
+sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.String? UnsupportedReason { get; init; }
+sealed class Image : System.IDisposable
+sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height)
+sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, Rgba32 background)
+sealed class Image : System.IDisposable :: method Image Clone()
+sealed class Image : System.IDisposable :: method System.Boolean IsOpaque()
+sealed class Image : System.IDisposable :: method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
+sealed class Image : System.IDisposable :: method System.Memory<Rgba32> GetPixelMemory()
+sealed class Image : System.IDisposable :: method System.Span<Rgba32> GetPixelSpan()
+sealed class Image : System.IDisposable :: method System.Span<Rgba32> GetRowSpan(System.Int32 y)
+sealed class Image : System.IDisposable :: method System.Span<System.Byte> GetPixelByteSpan()
+sealed class Image : System.IDisposable :: method System.String ToString()
+sealed class Image : System.IDisposable :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
+sealed class Image : System.IDisposable :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
+sealed class Image : System.IDisposable :: method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
+sealed class Image : System.IDisposable :: method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
+sealed class Image : System.IDisposable :: method System.Void Dispose()
+sealed class Image : System.IDisposable :: method [OverloadPriority(1)] static Image CreateAnimation(System.TimeSpan frameDuration, params System.ReadOnlySpan<Image> frames)
+sealed class Image : System.IDisposable :: method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
+sealed class Image : System.IDisposable :: method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
+sealed class Image : System.IDisposable :: method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
+sealed class Image : System.IDisposable :: property HdrInfo? Hdr { get; }
+sealed class Image : System.IDisposable :: property ImageFormat? SourceFormat { get; }
+sealed class Image : System.IDisposable :: property ImageFrameCollection Frames { get; }
+sealed class Image : System.IDisposable :: property ImageMetadata Metadata { get; }
+sealed class Image : System.IDisposable :: property Rgba32 AnimationBackgroundColor { get; set; }
+sealed class Image : System.IDisposable :: property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
+sealed class Image : System.IDisposable :: property System.Boolean HasAlpha { get; }
+sealed class Image : System.IDisposable :: property System.Boolean HasHdr { get; }
+sealed class Image : System.IDisposable :: property System.Boolean IsAnimated { get; }
+sealed class Image : System.IDisposable :: property System.Drawing.Rectangle Bounds { get; }
+sealed class Image : System.IDisposable :: property System.Drawing.Size Size { get; }
+sealed class Image : System.IDisposable :: property System.Int32 FrameCount { get; }
+sealed class Image : System.IDisposable :: property System.Int32 Height { get; }
+sealed class Image : System.IDisposable :: property System.Int32 LoopCount { get; set; }
+sealed class Image : System.IDisposable :: property System.Int32 Width { get; }
+sealed class ImageConfigurationBuilder
+sealed class ImageConfigurationBuilder :: method ImageConfiguration Build()
+sealed class ImageConfigurationBuilder :: method ImageConfigurationBuilder AddFormat(PictureSharp.Formats.IImageFormatModule module)
+sealed class ImageConfigurationBuilder :: method ImageConfigurationBuilder KeepOnly(params System.ReadOnlySpan<ImageFormat> formats)
+sealed class ImageConfigurationBuilder :: method ImageConfigurationBuilder RemoveFormat(ImageFormat format)
+sealed class ImageConfigurationBuilder :: method ImageConfigurationBuilder ReplaceFormat(PictureSharp.Formats.IImageFormatModule module)
+sealed class ImageConfigurationBuilder :: property System.Collections.Generic.IReadOnlyList<ImageFormat> Formats { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat>
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: method System.Boolean Equals(ImageFormat? other)
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: method System.Boolean Equals(System.Object? obj)
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: method System.Int32 GetHashCode()
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: method System.String ToString()
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: method static ImageFormat Create(System.String name, System.String mimeType, params System.ReadOnlySpan<System.String> fileExtensions)
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property System.Collections.Generic.IReadOnlyList<System.String> FileExtensions { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property System.String MimeType { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property System.String Name { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property static ImageFormat Bmp { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property static ImageFormat Gif { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property static ImageFormat Ico { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property static ImageFormat Jpeg { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property static ImageFormat Pcx { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property static ImageFormat Png { get; }
+sealed class ImageFormat : System.IEquatable<ImageFormat> :: property static ImageFormat WebP { get; }
+class ImageFormatException : System.FormatException, System.Runtime.Serialization.ISerializable
+class ImageFormatException : System.FormatException, System.Runtime.Serialization.ISerializable :: ctor(ImageFormat? format, System.String message, System.Exception? innerException = null)
+class ImageFormatException : System.FormatException, System.Runtime.Serialization.ISerializable :: ctor(System.String message)
+class ImageFormatException : System.FormatException, System.Runtime.Serialization.ISerializable :: ctor(System.String message, System.Exception? innerException)
+class ImageFormatException : System.FormatException, System.Runtime.Serialization.ISerializable :: property ImageFormat? Format { get; }
+sealed class ImageFrame
+sealed class ImageFrame :: ctor(System.Int32 width, System.Int32 height)
+sealed class ImageFrame :: method ImageFrame Clone()
+sealed class ImageFrame :: method System.Boolean IsOpaque()
+sealed class ImageFrame :: method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
+sealed class ImageFrame :: method System.Memory<Rgba32> GetPixelMemory()
+sealed class ImageFrame :: method System.Span<Rgba32> GetPixelSpan()
+sealed class ImageFrame :: method System.Span<Rgba32> GetRowSpan(System.Int32 y)
+sealed class ImageFrame :: method System.Span<System.Byte> GetPixelByteSpan()
+sealed class ImageFrame :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
+sealed class ImageFrame :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
+sealed class ImageFrame :: method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
+sealed class ImageFrame :: method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
+sealed class ImageFrame :: property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
+sealed class ImageFrame :: property System.Drawing.Rectangle Bounds { get; }
+sealed class ImageFrame :: property System.Drawing.Size Size { get; }
+sealed class ImageFrame :: property System.Int32 Height { get; }
+sealed class ImageFrame :: property System.Int32 Width { get; }
+sealed class ImageFrame :: property System.TimeSpan Duration { get; set; }
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method Image CloneFrame(System.Int32 index)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method Image ExportFrame(System.Int32 index)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method ImageFrame Add(Image image, System.TimeSpan duration)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method ImageFrame AddClone(ImageFrame frame)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method System.Collections.Generic.IEnumerator<ImageFrame> GetEnumerator()
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method System.Int32 IndexOf(ImageFrame frame)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method System.Void Add(ImageFrame frame)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method System.Void Insert(System.Int32 index, ImageFrame frame)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method System.Void Move(System.Int32 fromIndex, System.Int32 toIndex)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: method System.Void RemoveAt(System.Int32 index)
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: property ImageFrame RootFrame { get; }
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: property ImageFrame this[System.Int32 index] { get; }
+sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<ImageFrame>, System.Collections.Generic.IReadOnlyCollection<ImageFrame>, System.Collections.Generic.IReadOnlyList<ImageFrame>, System.Collections.IEnumerable :: property System.Int32 Count { get; }
+sealed record ImageInfo : System.IEquatable<ImageInfo>
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: ctor()
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property ExifOrientation Orientation { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property HdrInfo? Hdr { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property PictureSharp.Formats.WebP.WebPCompression WebPCompression { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Boolean HasAlpha { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Boolean IsAnimated { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Int32 BitsPerChannel { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Int32 FrameCount { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Int32? ContainerItemCount { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Single HorizontalResolution { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Single VerticalResolution { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required ImageFormat Format { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required System.Int32 Height { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required System.Int32 Width { get; init; }
+sealed class ImageMetadata
+sealed class ImageMetadata :: ctor()
+sealed class ImageMetadata :: method ImageMetadata Clone()
+sealed class ImageMetadata :: method System.Boolean RemoveFormatMetadata<T>()
+sealed class ImageMetadata :: method System.Boolean TrySetOrientation(ExifOrientation orientation)
+sealed class ImageMetadata :: method System.Int32 CopyBlockTo(MetadataKinds kind, System.Span<System.Byte> destination)
+sealed class ImageMetadata :: method System.Int32 GetBlockLength(MetadataKinds kind)
+sealed class ImageMetadata :: method System.Void Clear()
+sealed class ImageMetadata :: method System.Void ClearColorDescription()
+sealed class ImageMetadata :: method System.Void RemoveBlocks(MetadataKinds kinds)
+sealed class ImageMetadata :: method System.Void SetBlock(MetadataKinds kind, System.ReadOnlySpan<System.Byte> data)
+sealed class ImageMetadata :: method System.Void SetFormatMetadata(PictureSharp.Formats.FormatMetadata value)
+sealed class ImageMetadata :: method T? GetFormatMetadata<T>()
+sealed class ImageMetadata :: property CieChromaticities? Chromaticities { get; set; }
+sealed class ImageMetadata :: property ExifOrientation Orientation { get; set; }
+sealed class ImageMetadata :: property ExifProfile ExifProfile { get; }
+sealed class ImageMetadata :: property RenderingIntent? SrgbRenderingIntent { get; set; }
+sealed class ImageMetadata :: property System.Boolean HasColorDescription { get; }
+sealed class ImageMetadata :: property System.Boolean IsEmpty { get; }
+sealed class ImageMetadata :: property System.Byte[]? Exif { get; set; }
+sealed class ImageMetadata :: property System.Byte[]? IccProfile { get; set; }
+sealed class ImageMetadata :: property System.Byte[]? Xmp { get; set; }
+sealed class ImageMetadata :: property System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.FormatMetadata> FormatMetadata { get; }
+sealed class ImageMetadata :: property System.Single HorizontalResolution { get; set; }
+sealed class ImageMetadata :: property System.Single VerticalResolution { get; set; }
+sealed class ImageMetadata :: property System.Single? Gamma { get; set; }
+[Flags] enum MetadataKinds
+[Flags] enum MetadataKinds :: None = 0
+[Flags] enum MetadataKinds :: Icc = 1
+[Flags] enum MetadataKinds :: Exif = 2
+[Flags] enum MetadataKinds :: Xmp = 4
+[Flags] enum MetadataKinds :: All = 7
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32>
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: ctor(System.Byte r, System.Byte g, System.Byte b, System.Byte a = 255)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: field System.Byte A
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: field System.Byte B
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: field System.Byte G
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: field System.Byte R
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.Boolean Equals(Rgba32 other)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.Boolean Equals(System.Object? obj)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.Drawing.Color ToColor()
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.Int32 GetHashCode()
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.String ToHex()
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.String ToString()
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.UInt32 ToArgb()
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method System.Void Deconstruct(out System.Byte r, out System.Byte g, out System.Byte b, out System.Byte a)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static Rgba32 FromArgb(System.UInt32 argb)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static Rgba32 FromColor(System.Drawing.Color color)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static Rgba32 Parse(System.ReadOnlySpan<System.Char> s, System.IFormatProvider? provider = null)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static Rgba32 Parse(System.String s)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static Rgba32 Parse(System.String s, System.IFormatProvider? provider)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static Rgba32 op_Implicit(System.Drawing.Color color)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static System.Boolean TryParse(System.ReadOnlySpan<System.Char> s, System.IFormatProvider? provider, out Rgba32 result)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static System.Boolean TryParse(System.ReadOnlySpan<System.Char> s, out Rgba32 result)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static System.Boolean TryParse(System.String? s, System.IFormatProvider? provider, out Rgba32 result)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static System.Boolean TryParse(System.String? s, out Rgba32 result)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static System.Boolean op_Equality(Rgba32 left, Rgba32 right)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static System.Boolean op_Inequality(Rgba32 left, Rgba32 right)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: method static System.Drawing.Color op_Implicit(Rgba32 pixel)
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: property System.UInt32 PackedValue { get; set; }
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: property static Rgba32 Black { get; }
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: property static Rgba32 Transparent { get; }
+struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: property static Rgba32 White { get; }

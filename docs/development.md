@@ -109,6 +109,14 @@ dotnet test -c Release --treenode-filter "/*/*/*/*[(Category!=Slow)&(Category!=O
 mv tests/assets/PublicApi.received.txt tests/assets/PublicApi.approved.txt
 ```
 
+`PluginSpiSnapshotTests` does the same for the [stable plugin SPI](plugin-spi.md) with
+`tests/assets/PluginSpi.approved.txt`, one line per member. It reports a removed or changed line, or a new interface
+member without a default implementation, as a breaking change; such a change waits for 2.0. Approve an addition with:
+
+```bash
+mv tests/assets/PluginSpi.received.txt tests/assets/PluginSpi.approved.txt
+```
+
 ## Releasing
 
 Set `VERSION`, add `docs/releases/release-<VERSION>.md`, commit and push a `v<VERSION>` tag. A GitHub Release for the

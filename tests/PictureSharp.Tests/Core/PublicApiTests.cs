@@ -39,32 +39,47 @@ public class PublicApiTests
         var lines = new List<string>();
         foreach (Type type in assembly.GetExportedTypes().Where(t => !IsCompilerGenerated(t)).OrderBy(t => t.FullName, StringComparer.Ordinal))
         {
-            lines.Add($"{Kind(type)} {Name(type)}{Bases(type)}");
-            var members = new List<string>();
-            const BindingFlags Flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-            foreach (MemberInfo member in type.GetMembers(Flags))
-            {
-                string? line = member switch
-                {
-                    _ when IsCompilerGenerated(member) => null,
-                    FieldInfo f when type.IsEnum => f.IsLiteral ? $"{f.Name} = {Convert.ToInt64(f.GetRawConstantValue())}" : null,
-                    FieldInfo f => $"field {Required(f)}{Static(f.IsStatic)}{Name(f.FieldType)}{Q(Nullability.Create(f))} {f.Name}",
-                    PropertyInfo p => $"property {Required(p)}{Static((p.GetMethod ?? p.SetMethod)!.IsStatic)}{Name(p.PropertyType)}{Q(Nullability.Create(p))} {PropertyName(p)} {{ {Accessors(p)}}}",
-                    ConstructorInfo c when !type.IsValueType || c.GetParameters().Length > 0 => $"ctor({Parameters(c)})",
-                    MethodInfo m when !m.IsSpecialName || m.Name.StartsWith("op_", StringComparison.Ordinal) =>
-                        $"method {MethodAttributes(m)}{Static(m.IsStatic)}{Name(m.ReturnType)}{Q(Nullability.Create(m.ReturnParameter))} {m.Name}{Generic(m)}({Parameters(m)})",
-                    _ => null,
-                };
-                if (line is not null)
-                {
-                    members.Add("    " + line);
-                }
-            }
-
-            lines.AddRange(type.IsEnum ? members : members.Order(StringComparer.Ordinal));
+            lines.Add(Header(type));
+            lines.AddRange(Members(type).Select(m => "    " + m));
         }
 
         return string.Join('\n', lines) + "\n";
+    }
+
+    /// <summary>The declaration line of <paramref name="type"/>: kind, name and base types.</summary>
+    internal static string Header(Type type) => $"{Kind(type)} {Name(type)}{Bases(type)}";
+
+    /// <summary>
+    /// The public members of <paramref name="type"/>, one line each. With <paramref name="markDefaults"/>, interface
+    /// members with a default implementation start with "default ", so a new abstract member stands out.
+    /// </summary>
+    internal static List<string> Members(Type type, bool markDefaults = false)
+    {
+        var members = new List<string>();
+        const BindingFlags Flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        foreach (MemberInfo member in type.GetMembers(Flags))
+        {
+            string? line = member switch
+            {
+                _ when IsCompilerGenerated(member) => null,
+                FieldInfo f when type.IsEnum => f.IsLiteral ? $"{f.Name} = {Convert.ToInt64(f.GetRawConstantValue())}" : null,
+                FieldInfo f => $"field {Required(f)}{Static(f.IsStatic)}{Name(f.FieldType)}{Q(Nullability.Create(f))} {f.Name}",
+                PropertyInfo p => $"property {Default(p.GetMethod ?? p.SetMethod)}{Required(p)}{Static((p.GetMethod ?? p.SetMethod)!.IsStatic)}{Name(p.PropertyType)}{Q(Nullability.Create(p))} {PropertyName(p)} {{ {Accessors(p)}}}",
+                ConstructorInfo c when !type.IsValueType || c.GetParameters().Length > 0 => $"ctor({Parameters(c)})",
+                MethodInfo m when !m.IsSpecialName || m.Name.StartsWith("op_", StringComparison.Ordinal) =>
+                    $"method {Default(m)}{MethodAttributes(m)}{Static(m.IsStatic)}{Name(m.ReturnType)}{Q(Nullability.Create(m.ReturnParameter))} {m.Name}{Generic(m)}({Parameters(m)})",
+                _ => null,
+            };
+            if (line is not null)
+            {
+                members.Add(line);
+            }
+        }
+
+        return type.IsEnum ? members : [.. members.Order(StringComparer.Ordinal)];
+
+        string Default(MethodInfo? accessor) =>
+            markDefaults && type.IsInterface && accessor is { IsAbstract: false, IsStatic: false } ? "default " : "";
     }
 
     private static string Required(MemberInfo member) => member.IsDefined(typeof(RequiredMemberAttribute)) ? "required " : "";

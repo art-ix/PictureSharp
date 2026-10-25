@@ -42,7 +42,7 @@ internal sealed class IcoVariantCodec(IcoDecoder decoder, IcoEncoder encoder) : 
         {
             foreach (IcoDirectory.Entry entry in directory.Entries)
             {
-                Image image = decoder.DecodeEntry(entry, context.Child()).Image;
+                Image image = decoder.DecodeEntry(entry, context.Child(ImageFormat.Ico)).Image;
                 images[loaded++] = image;
             }
 

@@ -78,6 +78,7 @@ The public API may still change between 0.x releases.
   [ICO icons](https://github.com/art-ix/PictureSharp/blob/main/docs/ico.md)
 - [Adapters: System.Drawing, SkiaSharp, ASP.NET Core](https://github.com/art-ix/PictureSharp/blob/main/docs/adapters.md)
 - [Extending PictureSharp](https://github.com/art-ix/PictureSharp/blob/main/docs/extending-picturesharp.md) ·
+  [Stable plugin SPI](https://github.com/art-ix/PictureSharp/blob/main/docs/plugin-spi.md) ·
   [Architecture](https://github.com/art-ix/PictureSharp/blob/main/docs/architecture.md) ·
   [Performance](https://github.com/art-ix/PictureSharp/blob/main/docs/performance.md)
 - [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md) ·

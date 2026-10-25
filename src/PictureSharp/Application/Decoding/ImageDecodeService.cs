@@ -102,5 +102,6 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
 
         cancellationToken.ThrowIfCancellationRequested();
         image.CommitFrames(replacements);
+        image.Metadata.PixelsMoved();
     }
 }

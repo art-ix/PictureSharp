@@ -220,6 +220,11 @@ foreach ((ReadOnlyMemory<byte> data, int x, int y) in tiles)
 - It is decoded as stored: without EXIF orientation, gain map, color conversion or metadata.
 - Dispose each part before decoding the next, so a load holds at most the image and one part.
 
+Embedded images are found by their signature, so a corrupt file may point at itself or at another copy of its
+container. Images nest at most 8 levels below the loaded file (each `DecodeEmbedded` or `DecodeEmbeddedPart` is one
+level); a deeper one throws `ImageFormatException` naming the format that asked for it, so a plugin need not guard
+against recursion itself.
+
 `EmbeddedPartOptions` replaces the load's settings for one part; a null setting keeps the load's own:
 
 ```csharp
@@ -281,6 +286,30 @@ Set `IImageFormatModule.MetadataCodec` to support `Image.ReadMetadata` and `Imag
   read-only codec implements only `Read`.
 
 The library checks limits and cancellation, skips edits that change nothing and writes files atomically.
+
+### Format metadata
+
+Data that only your format understands (a hotspot, an author field, extension blocks) goes in an immutable record
+derived from `FormatMetadata`. Set it in the decoder unless `IgnoreMetadata` is set, and read it in the encoder, with
+an explicit encoder option taking precedence:
+
+```csharp
+public sealed record XbmMetadata(Point? Hotspot) : FormatMetadata;
+
+// Decode:
+if (!context.Options.IgnoreMetadata && hotspot is { } point)
+    image.Metadata.SetFormatMetadata(new XbmMetadata(point));
+
+// Encode:
+Point? hotspot = options.Hotspot ?? image.Metadata.GetFormatMetadata<XbmMetadata>()?.Hotspot;
+```
+
+- One entry per record type; setting another replaces it. Charge the raw bytes you read with
+  `context.ReserveMetadata`; the records themselves are not counted.
+- Operations that move pixels (resize, crop, rotate, flip, pad, `TargetSize`) remove every record, because the library
+  cannot adjust them. Do not rely on a record surviving an edit.
+- A `MetadataCodec` may return records from `Read` and write them in `Rewrite`, like the ICC, EXIF and XMP blocks.
+- Whether `EncoderOptions.Metadata` (ICC, EXIF, XMP flags) also controls your record is your format's decision; document it.
 
 ### HDR gain maps
 
@@ -369,8 +398,9 @@ Image image = hdr.ToGainMapImage(new GainMapOptions { ChannelCount = 1 });   // 
 
 ### SPI compatibility
 
-Plugin interfaces change only additively within a minor version: default interface members, new types and optional
-parameters. Breaking changes wait for a new minor version and come with a migration note.
+From 0.8.2 the plugin SPI and the model plugins fill are stable until 2.0: they only grow, interfaces get new members
+only with a default implementation, and new parameters come as overloads. [Stable plugin SPI](plugin-spi.md) lists the
+types and the rules, and how to choose the minimum PictureSharp version of a plugin.
 
 ## Custom frame processors
 

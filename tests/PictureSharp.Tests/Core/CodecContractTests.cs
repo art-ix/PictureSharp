@@ -44,16 +44,32 @@ public class CodecContractTests
     }
 
     [Test]
+    public async Task NestedContexts_CountTheirDepth_UpToTheLimit()
+    {
+        var context = new DecodeContext(DecoderOptions.Default);
+        await Assert.That(context.Depth).IsEqualTo(0);
+        for (int i = 1; i <= DecodeContext.MaxNestingDepth; i++)
+        {
+            context = i % 2 == 0 ? context.Child(ImageFormat.Png) : context.Detached(ImageFormat.Png, DecoderOptions.Default);
+            await Assert.That(context.Depth).IsEqualTo(i);
+        }
+
+        ImageFormatException error = Assert.ThrowsExactly<ImageFormatException>(() => context.Child(ImageFormat.Bmp));
+        await Assert.That(error.Format).IsSameReferenceAs(ImageFormat.Bmp);
+        Assert.ThrowsExactly<ImageFormatException>(() => context.Detached(ImageFormat.Bmp, DecoderOptions.Default));
+    }
+
+    [Test]
     public async Task Budgets_AggregateNestedOperations_AndAvoidOverflow()
     {
         var root = new DecodeContext(new DecoderOptions { MaxPixels = 10, MaxFrames = 2, MaxInputBytes = 8, MaxMetadataBytes = 5 });
         root.Budget.ReserveImage(ImageFormat.Png, 2, 2);
-        DecodeContext child = root.Child();
+        DecodeContext child = root.Child(ImageFormat.Png);
         await Assert.That(child.Budget).IsSameReferenceAs(root.Budget);
         child.Budget.ReserveImage(ImageFormat.Png, 2, 2);
         Assert.ThrowsExactly<ImageFormatException>(() => root.Budget.ReserveImage(ImageFormat.Png, 1, 1));
         root.Budget.ReserveMetadata(ImageFormat.Png, 3);
-        await Assert.That(root.Child().Options.MaxMetadataBytes).IsEqualTo(2);
+        await Assert.That(root.Child(ImageFormat.Png).Options.MaxMetadataBytes).IsEqualTo(2);
         Assert.ThrowsExactly<ImageFormatException>(() => child.Budget.ReserveMetadata(ImageFormat.Png, 3));
         root.Budget.ReserveInput(7);
         Assert.ThrowsExactly<ImageFormatException>(() => child.Budget.ReserveInput(long.MaxValue));

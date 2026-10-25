@@ -1,4 +1,5 @@
 using PictureSharp.Domain.Metadata;
+using PictureSharp.Formats;
 
 namespace PictureSharp;
 
@@ -8,6 +9,7 @@ public sealed class ImageMetadata
     private byte[]? _exif;
     private byte[]? _icc;
     private byte[]? _xmp;
+    private FormatMetadata[] _formats = [];
 
     /// <summary>The live typed EXIF view; an absent block behaves as an empty profile.</summary>
     public ExifProfile ExifProfile => field ??= new(this);
@@ -100,16 +102,62 @@ public sealed class ImageMetadata
         }
     }
 
-    /// <summary>Whether no ICC, EXIF or XMP block is present.</summary>
-    public bool IsEmpty => _icc is null && _exif is null && _xmp is null;
+    /// <summary>Whether no ICC, EXIF or XMP block and no <see cref="FormatMetadata"/> is present.</summary>
+    public bool IsEmpty => _icc is null && _exif is null && _xmp is null && _formats.Length == 0;
 
-    /// <summary>Removes the ICC, EXIF and XMP blocks; the resolution and color description are kept.</summary>
+    /// <summary>Removes the ICC, EXIF and XMP blocks and all <see cref="FormatMetadata"/>; the resolution and color description are kept.</summary>
     public void Clear()
     {
         _icc = null;
         _exif = null;
         _xmp = null;
+        _formats = [];
     }
+
+    /// <summary>
+    /// Metadata of plugin formats, at most one per type, in the order it was set. Removed by operations that move pixels;
+    /// see <see cref="Formats.FormatMetadata"/>. Default: empty.
+    /// </summary>
+    public IReadOnlyList<FormatMetadata> FormatMetadata => _formats.Length == 0 ? [] : Array.AsReadOnly(_formats);
+
+    /// <summary>The format metadata of type <typeparamref name="T"/>, or null when there is none.</summary>
+    public T? GetFormatMetadata<T>() where T : FormatMetadata
+    {
+        foreach (FormatMetadata entry in _formats)
+        {
+            if (entry is T match)
+                return match;
+        }
+
+        return null;
+    }
+
+    /// <summary>Adds format metadata, replacing the entry of the same type.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is null.</exception>
+    public void SetFormatMetadata(FormatMetadata value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        int index = Array.FindIndex(_formats, entry => entry.GetType() == value.GetType());
+        // Copy on write, so a list returned earlier does not change.
+        FormatMetadata[] copy = index < 0 ? [.. _formats, value] : (FormatMetadata[])_formats.Clone();
+        if (index >= 0)
+            copy[index] = value;
+        _formats = copy;
+    }
+
+    /// <summary>Removes the format metadata of type <typeparamref name="T"/>; returns false when there was none.</summary>
+    public bool RemoveFormatMetadata<T>() where T : FormatMetadata
+    {
+        int index = Array.FindIndex(_formats, static entry => entry is T);
+        if (index < 0)
+            return false;
+
+        _formats = [.. _formats.AsSpan(0, index), .. _formats.AsSpan(index + 1)];
+        return true;
+    }
+
+    /// <summary>Removes all format metadata, after an operation that moved the pixels it may describe.</summary>
+    internal void PixelsMoved() => _formats = [];
 
     /// <summary>Returns a deep copy.</summary>
     public ImageMetadata Clone() => new()
@@ -122,6 +170,8 @@ public sealed class ImageMetadata
         _icc = (byte[]?)_icc?.Clone(),
         _exif = (byte[]?)_exif?.Clone(),
         _xmp = (byte[]?)_xmp?.Clone(),
+        // The entries are immutable records and the array is replaced on every change, so it can be shared.
+        _formats = _formats,
     };
 
     // Internal ownership transfer avoids copying freshly decoded blocks or allocating on encoding.

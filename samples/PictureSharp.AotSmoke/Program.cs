@@ -245,6 +245,16 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
         throw new InvalidOperationException("Plugin metadata codec failed.");
 }
 
+// 0.8.2: format metadata survives color operations and is removed by geometric ones.
+{
+    using var tagged = new Image(4, 4, new Rgba32(10, 20, 30, 255));
+    tagged.Metadata.SetFormatMetadata(new SmokeMetadata(7));
+    tagged.Mutate(x => x.Invert());
+    if (tagged.Metadata.GetFormatMetadata<SmokeMetadata>()?.Value != 7) throw new InvalidOperationException("Format metadata was lost.");
+    tagged.Mutate(x => x.Resize(2, 2));
+    if (tagged.Metadata.FormatMetadata.Count != 0) throw new InvalidOperationException("Format metadata survived a resize.");
+}
+
 // Plugin decoder options 0.7.6: a plugin reads its own FormatOptions record in Identify and Decode.
 {
     ImageConfiguration paged = builtIn.ToBuilder().AddFormat(new PagedRawFormat()).Build();
@@ -468,3 +478,5 @@ readonly struct LeftHalf : IFrameProcessor
             source.Slice(y * sourceSize.Width, destinationSize.Width).CopyTo(destination[(y * destinationSize.Width)..]);
     }
 }
+
+sealed record SmokeMetadata(int Value) : FormatMetadata;

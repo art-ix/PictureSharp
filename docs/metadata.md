@@ -25,7 +25,8 @@ meta.Clear();                             // drop ICC, EXIF and XMP (the resolut
 | `Xmp` | Raw XMP packet (UTF-8 XML). |
 | `Gamma`, `Chromaticities`, `SrgbRenderingIntent` | PNG color description (`gAMA`, `cHRM`, `sRGB`), also used by plugins without ICC. |
 | `Orientation` | The EXIF orientation tag (`ExifOrientation`); `Unknown` without EXIF. |
-| `IsEmpty`, `Clear()`, `Clone()` | Whether ICC/EXIF/XMP are absent; remove them; deep copy. |
+| `FormatMetadata` | Metadata only a plugin format understands, such as a cursor hotspot ([Format metadata](#format-metadata)). |
+| `IsEmpty`, `Clear()`, `Clone()` | Whether ICC/EXIF/XMP and format metadata are absent; remove them; deep copy. |
 
 ## EXIF orientation
 
@@ -81,6 +82,28 @@ metadata.RemoveBlocks(MetadataKinds.Xmp | MetadataKinds.Icc);
 
 `Orientation` accepts 1–8, creates a missing tag and rejects malformed existing EXIF without changing it.
 `TrySetOrientation` updates only a supported existing tag and returns false otherwise.
+
+## Format metadata
+
+Some formats store data that only they understand, such as the hotspot of an XBM image or a cursor. A plugin keeps it
+in `ImageMetadata` as a record of its own type, at most one per type, so a load followed by a save in the same format
+keeps it. Other formats ignore it: converting an XBM image to PNG drops the hotspot.
+
+```csharp
+// XbmMetadata is defined by the plugin; see its documentation for the records it provides.
+if (image.Metadata.GetFormatMetadata<XbmMetadata>() is { Hotspot: { } hotspot })
+    Console.WriteLine($"Hotspot at {hotspot.X}, {hotspot.Y}");
+
+image.Metadata.SetFormatMetadata(new XbmMetadata(new Point(0, 0)));   // replaces the entry of that type
+image.Metadata.RemoveFormatMetadata<XbmMetadata>();
+```
+
+- The library cannot move such data with the pixels, so operations that move pixels remove all of it: resize, crop,
+  pad, rotate, flip, `AutoOrient` when it rotates, `AutoCrop`, a custom processor with another output size and
+  `DecoderOptions.TargetSize`. Color and pixel operations keep it. Set it again after such an operation if it still
+  applies.
+- `DecoderOptions.IgnoreMetadata` skips it, and `Clear()` removes it; `RemoveBlocks` does not, as it is not a block.
+- The records are immutable, so `Clone()` shares them and a list read from `FormatMetadata` does not change later.
 
 ## Typed EXIF
 

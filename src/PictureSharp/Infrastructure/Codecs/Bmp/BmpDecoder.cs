@@ -47,7 +47,7 @@ internal sealed partial class BmpDecoder(ICodecResolver codecs) : IImageDecoder
         DecodedImage result;
         if (h.Compression == BmpCompression.Embedded)
         {
-            result = DecodeEmbedded(data, h, context.Child());
+            result = DecodeEmbedded(data, h, context.Child(ImageFormat.Bmp));
             image = result.Image;
         }
         else

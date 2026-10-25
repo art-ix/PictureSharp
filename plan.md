@@ -1,13 +1,13 @@
-# PictureSharp: plan rozwoju (zrealizowany do 0.8.1)
+# PictureSharp: plan rozwoju (zrealizowany do 0.8.2)
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.8.1 (opublikowana 2026-10-23).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.8.2 (przygotowana 2026-10-25).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
-Dalej: poprawki SPI
-zgłoszone przez wtyczkę HEIF i generowanie gain map (0.8.0). Wtyczka HEIC `PictureSharp.Heif`
+Dalej: 0.8.2 z prośbami wtyczek (limit zagnieżdżenia
+dekodowania, metadane specyficzne dla formatu, deklaracja stabilnego SPI). Wtyczka HEIC `PictureSharp.Heif`
 (własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
 Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
 są poza planem.
@@ -51,11 +51,12 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.8 | Dekodowanie części obrazu (SPI): `DecodeEmbeddedPart` dla pasków i kafli w innym formacie bez podwójnego rozliczania `MaxPixels`/`MaxFrames`; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.9 | `JpegEncoderOptions.ColorMode` (Auto, Color, Grayscale): liczba składowych JPEG, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-21; bez ARM64) |
 | 0.7.10 | `JpegDecoderOptions.CmykStorage` (zwykły CMYK w JPEG) i `DecodeEmbeddedPart` z `EmbeddedPartOptions`, zgłoszenie wtyczki Tiff; addytywnie | Wydana (2026-10-22; bez ARM64) |
-| 0.7.11 | Negatywy, etapy A+B ([plan_film.md](plan_film.md)): `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
+| 0.7.11 | Negatywy, etapy A+B: `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`, `InvertNegative`, `DevelopNegative` bez geometrii; addytywnie | Tag i GitHub Release (2026-10-22), bez paczek NuGet (decyzja użytkownika); zastąpiona przez 0.7.12 |
 | 0.7.12 | Poprawka 0.7.11: `RemoveDust` zostawia większe szczegóły (test kształtu i izolacji plamki), `DevelopNegative` domyślnie bez usuwania kurzu (`DustSize` = 0); zawiera całe 0.7.11 | Wydana (2026-10-22; bez ARM64) |
 | 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Wydana (2026-10-22; tag v0.7.13) |
 | 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Wydana (2026-10-23; zapis `tmap` potwierdzony we wtyczce HEIF 0.6.10; bez ARM64) |
 | 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Wydana (2026-10-23; NuGet 0.8.1, bez ARM64) |
+| 0.8.2 | Prośby wtyczek: limit zagnieżdżenia dekodowania, metadane specyficzne dla formatu (`FormatMetadata`), deklaracja stabilnego SPI; addytywnie | Przygotowana (2026-10-25; bez lokalnego Oracle i ARM64, CI wydania) |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
 opisuje sekcja [Wtyczka HEIF](#wtyczka-heif--osobne-repozytorium).
@@ -663,7 +664,7 @@ Bez ARM64 (decyzja użytkownika; brak kodu zależnego od platformy). Dalej: wtyc
 
 ## 0.7.11 — negatywy: metody ręczne i odwracanie bez geometrii
 
-Pełny projekt, decyzje i pomiary: [plan_film.md](plan_film.md) (etapy A i B). Decyzja użytkownika (2026-10-22): A+B
+Etapy A i B. Decyzja użytkownika (2026-10-22): A+B
 jako 0.7.11, C+D jako 0.7.12, oba przed 0.8.0.
 
 Stan (2026-10-22):
@@ -714,7 +715,7 @@ Stan (2026-10-22):
 ## 0.7.13 — negatywy: pełna automatyka (etapy C+D)
 
 - `FindFilmFrame()` (`FilmFrame`: `Angle`, `Bounds` po `Rotate(Angle)`, `PerforationsVertical`, `CutEdges`
-  `FilmFrameEdges`) — szczegóły i wyniki w [plan_film.md](plan_film.md) („Stan etapu C”).
+  `FilmFrameEdges`).
 - `DevelopNegative()` znajduje klatkę, mierzy ją z podłożem z brzegu, prostuje i kadruje jednym przepróbkowaniem
   (= `Rotate(Angle).Crop(Bounds)`), wyrównuje podświetlenie płaszczyzną z brzegu; `NegativeOptions.Frame`, `Crop`,
   `CorrectIllumination`; `Region`/`FilmBaseRegion` wyłączają szukanie (tryb ręczny 0.7.12).
@@ -839,6 +840,151 @@ DoD etapu A:
   brak potwierdzenia opisany w notatkach, nie blokuje DoD rdzenia.
 - Wspólna bramka jakości.
 
+## 0.8.2 — prośby wtyczek: zagnieżdżanie, metadane formatu, stabilne SPI
+
+Polecenie użytkownika (2026-10-25): trzy otwarte prośby wtyczek w jednym wydaniu, addytywnie. Decyzje użytkownika
+(2026-10-25): limit zagnieżdżenia jako stała wewnętrzna 8; metadane formatu w wariancie A, usuwane przez operacje
+geometryczne; bez grupy `[Experimental]` w SPI. Kolejność: najpierw
+poprawka bezpieczeństwa (1), potem nowe API (2), na końcu deklaracja (3), żeby objęła też API z kroku 2.
+
+### 1. Limit zagnieżdżenia dekodowania
+
+Problem (Tiff 0.7.2, fuzzing): `DecodeEmbedded` i `DecodeEmbeddedPart` wybierają kodek po sygnaturze danych, więc
+osadzony obraz może być plikiem tego samego kontenera, także samym plikiem zewnętrznym (pasek z offsetem 0). Dekodowanie
+wraca do tej samej wtyczki bez końca; `StackOverflowException` kończy proces i nie da się go złapać. Budżet nie
+pomaga: `DecodeEmbeddedPart` dostaje `DecodeContext.Detached` z nowym budżetem, a `DecodeEmbedded` rezerwuje piksele
+dopiero po parsowaniu nagłówka.
+
+Projekt:
+- `DecodeContext` dostaje `Depth` (0 dla ładowania z zewnątrz). `Child` i `Detached` przenoszą `Depth + 1` i przy
+  przekroczeniu limitu rzucają `ImageFormatException` z formatem wywołującego („Embedded images are nested more than
+  N levels.”). Licznik w kontekście, nie w wątku (`AsyncLocal`/`ThreadStatic`), bo wtyczki dekodują kafle równolegle.
+- Limit obejmuje wszystkie zagnieżdżenia: wtyczki (`ImageDecodeContext.DecodeEmbedded`/`DecodeEmbeddedPart`) i
+  wbudowane (ICO → PNG/BMP, BMP z JPEG/PNG przez `context.Child()`). Wbudowane formaty mają dziś głębokość ≤ 2.
+- Limit: stała wewnętrzna 8 albo publiczna `DecoderOptions.MaxNestingDepth` (domyślnie 8, zakres 1–64). **Do decyzji
+  użytkownika; rekomendacja: stała wewnętrzna.** Żaden znany format nie potrzebuje więcej niż 3 poziomów, a opcja to
+  kolejny element do zamrożenia w 1.0. Opcję można dodać później, gdyby ktoś jej potrzebował.
+- Bez zmian dla poprawnych plików: wyniki i komunikaty jak w 0.8.1.
+
+DoD:
+- Wtyczka testowa, która dekoduje własne dane przez `DecodeEmbedded`, oraz druga przez `DecodeEmbeddedPart`: obie
+  kończą się `ImageFormatException` (bez przepełnienia stosu), także z `MaxDegreeOfParallelism` > 1.
+- Łańcuch dokładnie na granicy limitu dekoduje się poprawnie; o jeden poziom więcej — `ImageFormatException`.
+- Plik z fuzzingu Tiff (minimalizowany, z repozytorium Tiff, po zgodzie użytkownika na skopiowanie) jako test
+  regresji z wtyczką testową, która naśladuje paski WebP; we wtyczce Tiff test przechodzi na lokalnej paczce także bez
+  jej własnego sprawdzania sygnatur.
+- `docs/extending-picturesharp.md` i `docs/limits-and-cancellation.md`: limit i komunikat.
+
+Stan (2026-10-25): zrobione poza plikiem z fuzzingu Tiff. `DecodeContext.Depth` z `MaxNestingDepth` = 8, `Child` i
+`Detached` przyjmują format wywołującego i rzucają `ImageFormatException` („Embedded images are nested more than 8
+levels deep.”). Testy `NestingTests` (wtyczka dekodująca samą siebie przez `DecodeEmbedded`, `DecodeEmbeddedPart` i z
+innego wątku; łańcuch kontenerów na granicy i o poziom dalej) i `CodecContractTests`. Pełny zestaw Release 7635/7642
+(7 GDI+ pominiętych), build bez ostrzeżeń. Pliku z fuzzingu Tiff nie kopiujemy (decyzja użytkownika 2026-10-25: testy z wtyczką wystarczą).
+
+### 2. Metadane specyficzne dla formatu
+
+Potrzeba (Formats.Extra): hotspot XBM (`_x_hot`/`_y_hot`) przeczytany przy odczycie ginie, bo `ImageMetadata` ma tylko
+ICC, EXIF, XMP, rozdzielczość i opis koloru. Dziś zapis hotspotu jest możliwy tylko przez
+`XbmEncoderOptions.Hotspot`, więc XBM → XBM go nie zachowuje. To samo dotyczy przyszłych CUR/ANI (hotspot), XPM
+(rozszerzenia), PSD (dane warstw) czy TGA (pole autora).
+
+Warianty:
+- **A (rekomendowany): typowane rekordy wtyczek**, tak jak `FormatDecoderOptions` z 0.7.6:
+  ```csharp
+  public abstract record FormatMetadata;   // wtyczka: public sealed record XbmMetadata(Point? Hotspot) : FormatMetadata;
+  // ImageMetadata:
+  public T? GetFormatMetadata<T>() where T : FormatMetadata;
+  public void SetFormatMetadata<T>(T? value) where T : FormatMetadata;   // null usuwa
+  public IReadOnlyList<FormatMetadata> FormatMetadata { get; }
+  ```
+  Jeden wpis na typ; rekordy są niezmienne, więc `Clone` kopiuje referencje. Bez refleksji (trim/AOT).
+- **B: surowe bloki z kluczem** (`SetFormatBlock(string key, ReadOnlySpan<byte>)`): prostsze w rdzeniu, ale każda
+  wtyczka serializuje sama, a użytkownik nie ma typowanego API.
+- **C: `Point? Hotspot` w rdzeniu:** rozwiązuje tylko hotspot; reszta próśb wróci.
+
+Zachowanie (wariant A):
+- `IgnoreMetadata` pomija rekordy (wtyczka sprawdza opcję, jak przy XMP); `Clear()` i `IsEmpty` obejmują rekordy;
+  `RemoveBlocks` nie (to nie bloki). Rekordy nie liczą się do `MaxMetadataBytes` (wtyczka liczy surowe dane, z których
+  je zbudowała, przez `ReserveMetadata`).
+- Operacje geometryczne (resize, crop, rotate, flip, `AutoOrient`, pad) usuwają wszystkie rekordy, bo rdzeń nie wie, jak
+  przeliczyć np. hotspot; operacje koloru i pikseli je zachowują. **Do decyzji użytkownika; alternatywa:** zachować
+  rekordy bez zmian i opisać to w dokumentacji (ryzyko: hotspot poza obrazem po crop). Przeliczanie przez wtyczkę
+  (wirtualna metoda rekordu dla przekształceń) odrzucone na teraz: duży kontrakt do zamrożenia dla jednej potrzeby.
+- Zapis: rdzeń niczego nie robi; enkoder wtyczki czyta własny rekord, a jawna opcja enkodera ma pierwszeństwo.
+  Formaty wbudowane ignorują cudze rekordy. Konwersja XBM → PNG gubi hotspot, PNG → XBM go nie ma.
+- `Image.Identify`/`ImageInfo`: bez zmian (rekordy tylko po `Load`/`ReadMetadata`); `IImageFormatMetadataCodec` może
+  je zwracać w `ImageMetadata` jak dotąd XMP.
+
+DoD:
+- Testy właściwości: get/set/usuwanie, jeden wpis na typ, `Clone` niezależny, `Clear`/`IsEmpty`, `IgnoreMetadata`,
+  usuwanie przy operacjach geometrycznych (lub zachowanie — według decyzji), migawka API z samymi dodatkami.
+- Wtyczka testowa z własnym rekordem: odczyt → zapis zachowuje go, `Mutate` z resize usuwa.
+- `docs/metadata.md` i `docs/extending-picturesharp.md` (wzorzec rekordu); prośba Formats.Extra zamknięta po
+  potwierdzeniu XBM → XBM z hotspotem na lokalnej paczce (zmiana we wtyczce, w jej repozytorium).
+
+Stan (2026-10-25): zrobione, z potwierdzeniem we wtyczce Formats.Extra (XBM → XBM z hotspotem na lokalnej paczce
+0.8.2, wtyczka 1188/1188; zmiany wtyczki niezacommitowane w jej repozytorium). API (migawka, same dodatki):
+`PictureSharp.Formats.FormatMetadata` (abstrakcyjny rekord), `ImageMetadata.FormatMetadata` (lista tylko do odczytu),
+`GetFormatMetadata<T>()`, `SetFormatMetadata(FormatMetadata)` (zastępuje wpis tego samego typu, null →
+`ArgumentNullException`), `RemoveFormatMetadata<T>()` (bool). Odstępstwo od szkicu: zamiast `SetFormatMetadata<T>(T?)`
+z null jako usuwaniem osobne `RemoveFormatMetadata<T>()`, bo wywołanie z null wymagałoby jawnego typu. Tablica jest
+kopiowana przy zmianie, więc `Clone` ją współdzieli, a wcześniej odczytana lista się nie zmienia. Rekordy usuwają: crop,
+pad, resize, rotate/flip (także 180° i odbicie w miejscu), `Rotate(degrees)`, `AutoOrient` przy obrocie, `AutoCrop`,
+prostowanie w `DevelopNegative`, `ApplyProcessor` z innym rozmiarem wyjścia i `TargetSize` przy dekodowaniu; po
+anulowaniu zostają. Testy `FormatMetadataTests` (16, z wtyczką testową CURS z hotspotem i opcją enkodera), dokumentacja
+w `docs/metadata.md` i `docs/extending-picturesharp.md`. Pełny zestaw Release 7651/7658 (7 GDI+ pominiętych), build bez
+ostrzeżeń.
+
+### 3. Deklaracja stabilnego SPI
+
+Potrzeba (Tiff, przed 1.0; dotyczy też Heif i Formats.Extra): wtyczki muszą wiedzieć, na których elementach rdzenia mogą
+oprzeć własne 1.0 i jaki minimalny PictureSharp przyjąć.
+
+Zakres deklaracji (stan po krokach 1–2):
+- Stabilne: `IImageFormatModule`, `IImageFormatDecoder`, `IImageFormatEncoder<TOptions>`, `IImageFormatMetadataCodec`,
+  `ImageFormat.Create`, `ImageConfigurationBuilder.AddFormat`, `ImageDecodeContext` (całość), `FormatDecoderOptions`,
+  `EmbeddedPartOptions`, `EncoderOptions`, `ImageInfo`, `ImageMetadata` (z `FormatMetadata`), gain map
+  (`GainMapMetadata`, `GainMapImage`, `EncodableGainMap`, `GetGainMap`, `ToIso`, `ToAlternateIcc`, `ParseIso`) i
+  kontrakt wyjątków (`ImageFormatException`, `NotSupportedException`, `OperationCanceledException`, normalizacja przez
+  adapter).
+- Obietnica od 0.8.2: elementy stabilne zmieniają się tylko addytywnie do 2.0. Do interfejsów implementowanych przez
+  wtyczki nie dochodzą nowe abstrakcyjne członki (tylko nowe interfejsy albo metody domyślne); zachowanie istniejących
+  członków (np. co rdzeń robi po `Decode`: `TargetSize`, orientacja, kolor, limity) zmienia się tylko jako poprawka
+  błędu opisana w notatkach wydania.
+- Elementy jeszcze niegotowe oznaczone `[Experimental("PSSPI…")]` (ostrzeżenie kompilatora u wtyczki). **Do decyzji
+  użytkownika, czy coś trafia do tej grupy;** rekomendacja: nic — każde z powyższych ma już użytkownika wśród wtyczek.
+- Rdzeń sam przed 1.0 może jeszcze zmieniać API niebędące SPI; deklaracja dotyczy tylko listy powyżej.
+
+DoD:
+- `docs/plugin-spi.md` (lista, obietnica, polityka minimalnej wersji: wtyczka podaje najniższy rdzeń, którego API
+  używa), odnośnik z README i `docs/extending-picturesharp.md`.
+- Osobna migawka `tests/assets/PluginSpi.approved.txt` (wycinek publicznego API z listy) i test, który wymaga, żeby
+  każda zmiana była dodatkiem; zmiana usuwająca lub zmieniająca członka wymaga świadomej edycji pliku.
+- Wtyczki Tiff, Heif i Formats.Extra budują się na lokalnej paczce 0.8.2 bez zmian (`verify-package-consumer.sh`).
+- Wspólna bramka jakości; notatki `docs/releases/release-0.8.2.md`.
+
+Stan (2026-10-25): deklaracja i test zrobione; wtyczki na lokalnej paczce, notatki i bramka wydania otwarte.
+`docs/plugin-spi.md` (lista, obietnica, reszta API, minimalna wersja), odnośniki z README, `docs/README.md`,
+`docs/extending-picturesharp.md` (zastąpiona sekcja „SPI compatibility”, która dopuszczała parametry opcjonalne — te
+łamią skompilowane wtyczki) i `docs/development.md`. Uzupełnienie listy z planu: model, który wtyczki tworzą i wypełniają
+(`Image`, `ImageFrame`, `ImageFrameCollection`, `Rgba32`), `DecoderOptions`, `MetadataKinds`, `HdrInfo`,
+`HdrGainMapKinds`, `HdrColorSpace` — bez nich kontrakty nie mają stabilnych sygnatur; typy występujące tylko w
+sygnaturach (np. `JpegDecoderOptions`, `ResamplingFilter`) zostają, dopóki używa ich stabilny członek. Migawka
+`tests/assets/PluginSpi.approved.txt` (272 linie, członki kwalifikowane typem, `default` przy członkach interfejsów z
+implementacją domyślną) i `PluginSpiSnapshotTests`: usunięta lub zmieniona linia albo nowy abstrakcyjny członek
+istniejącego interfejsu → „Breaking change”, dodatek → do zatwierdzenia; oba przypadki sprawdzone ręcznie na
+zmienionej migawce. `PublicApiTests` udostępnia `Header`/`Members` (główna migawka bez zmian). Pełny zestaw Release
+7652/7659 (7 GDI+ pominiętych), build bez ostrzeżeń. Rozszerzoną listę zaakceptował użytkownik (2026-10-25).
+Wtyczki na lokalnej paczce 0.8.2 bez zmian w kodzie (`-p:PictureSharpVersion=0.8.2`, 2026-10-25): Tiff build bez
+ostrzeżeń, 3878/3878 jak na 0.7.10; Heif build bez ostrzeżeń, 761/790 (11 pominiętych, 18 błędów) wobec 762/790 na 0.8.0.
+Błędy Heif: 17 środowiskowych w obu wersjach (narzędzia `reference/tools/bin`: heif-info/heif-enc „undefined symbol”
+w libheif, dec265 bez `libde265.so`) i `HeifGainMapWriteTests.Modes_FollowTheJpegEncoder`, który pada już na wydanym
+0.8.1 (zamierzona zmiana 0.8.1: mapa samego Apple zapisywana jako ISO przez `GetGainMap`; test Heif oczekuje dawnego
+`null`). Do poprawy w repozytorium Heif, nie w rdzeniu.
+
+Poza zakresem 0.8.2: przetwarzanie HDR w float, CICP PQ/HLG, AVIF (kandydaci poniżej); przejście wtyczek na hotspot i
+na zniesienie własnych zabezpieczeń (w ich repozytoriach).
+
 ## Wtyczka HEIF — osobne repozytorium
 
 Wtyczka `PictureSharp.Heif` (HEIC: kontener HEIF, własny port HEVC intra w C#) powstaje w osobnym repozytorium
@@ -863,9 +1009,7 @@ Do decyzji użytkownika, bez zobowiązań:
 
 QOI, TGA i PNM wykreślone: są we wtyczce Formats.Extra.
 
-Otwarte prośby wtyczek:
-- miejsce na metadane specyficzne dla formatu w `ImageMetadata` (hotspot XBM/CUR; Formats.Extra);
-- deklaracja, które elementy SPI wtyczek są stabilne (Tiff potrzebuje jej do 1.0).
+Otwarte prośby wtyczek (metadane formatu, stabilne SPI, limit zagnieżdżenia) zaplanowane w 0.8.2.
 
 ## Wspólna bramka jakości każdego wydania
 
@@ -915,6 +1059,7 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - **0.7.9** — `JpegEncoderOptions.ColorMode` (`Auto`, `Color`, `Grayscale`): liczba składowych JPEG niezależnie od pikseli (paski JPEG w TIFF). Istniejące API i wyniki bez zmian.
 - **0.8.0** — wtyczki zapisują gain map: `image.GetGainMap()` (`EncodableGainMap`), `GainMapMetadata.ToIso()` i `MultiplicationSpace`; JPEG zapisuje mapy dołączone przez wtyczki (ICC mapy jak libultrahdr). Zapisy z JPEG bez zmian.
 - **0.8.1** — `hdr.ToGainMapImage()` (`GainMapOptions`): gain map ISO 21496-1 z `HdrImage` jak `generateGainMap` libultrahdr (kody i metadane identyczne), zapis HDR do JPEG; publiczny konstruktor `HdrImage`; mapy tylko Apple zapisywane i zwracane przez `GetGainMap()` jako ISO.
+- **0.8.2** — limit zagnieżdżenia obrazów osadzonych (8 poziomów, `ImageFormatException` zamiast przepełnienia stosu); `FormatMetadata` w `ImageMetadata` (usuwane przez operacje przesuwające piksele); deklaracja stabilnego SPI wtyczek do 2.0 (`docs/plugin-spi.md`, `PluginSpi.approved.txt`).
 - **0.7.13** — `FindFilmFrame`, `DevelopNegative()` sam znajduje, prostuje i kadruje klatkę, podłoże z brzegu, korekcja podświetlenia, ostrzeżenia `BacklightTexture`/`FrameCut`/`UnevenIllumination`; szybszy obrót bicubic.
 - **0.7.12** — `RemoveDust` zostawia szczegóły większe niż plamka (pochylone litery), `DevelopNegative` domyślnie bez usuwania kurzu (`NegativeOptions.DustSize` = 0); zawiera 0.7.11, którego nie opublikowano na NuGet.
 - **0.7.11** — (tylko tag i GitHub Release) negatywy z aparatu: `AnalyzeNegative`, `DevelopNegative`, `InvertNegative` (`NegativeOptions`, `NegativeCalibration`); `Curves`, `WhiteBalance(Rgba32)`, `AutoWhiteBalance`, `RemoveDust`, `ReduceColorNoise`. Istniejące API i wyniki bez zmian.

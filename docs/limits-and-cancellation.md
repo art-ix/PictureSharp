@@ -44,6 +44,8 @@ given. An HDR gain map over `MaxPixels` is reported in `Image.Hdr` instead of fa
 - **Parts.** A plugin that stores its image as strips or tiles in another format (JPEG tiles in TIFF) reserves the image
   and decodes each part with its own allowance of the part size, which must fit in `MaxPixels`; parts are not frames.
   With one part alive at a time, such a load holds at most twice `MaxPixels` of pixels.
+- **Nesting.** Embedded images (PNG or BMP in ICO, JPEG or PNG in BMP, images decoded by plugins) nest at most 8
+  levels below the loaded file; a deeper one throws `ImageFormatException`. The depth is fixed and not an option.
 
 The limits are not a cap on process memory: codecs need working buffers (a progressive JPEG keeps about 2 bytes per
 sample of coefficients) and encoder output is unbounded. Use a process or container memory limit for a hard cap.

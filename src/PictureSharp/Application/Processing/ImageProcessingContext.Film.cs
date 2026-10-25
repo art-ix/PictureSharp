@@ -160,6 +160,7 @@ public readonly ref partial struct ImageProcessingContext
                 Premultiplied.ToStraight(output);
                 return new FrameReplacement(bounds.Width, bounds.Height, output);
             });
+            Target.Metadata.PixelsMoved();
         }
 
         if (lighting is not { } l)

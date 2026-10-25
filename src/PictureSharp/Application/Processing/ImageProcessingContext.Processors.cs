@@ -29,6 +29,11 @@ public readonly ref partial struct ImageProcessingContext
             data.processor.Process(frame.Pixels, data.source, pixels, data.output, token);
             return new FrameReplacement(data.output.Width, data.output.Height, pixels);
         });
+        if (output != source)
+        {
+            Target.Metadata.PixelsMoved();
+        }
+
         return this;
     }
 }

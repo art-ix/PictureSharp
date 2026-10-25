@@ -41,7 +41,7 @@ internal sealed class IcoDecoder(IImageDecoder png) : IImageDecoder
         DecodedImage result;
         if (info.Encoding == IcoEncoding.Png)
         {
-            result = png.Decode(entry.Data, context.Child(options with { FirstFrameOnly = true }));
+            result = png.Decode(entry.Data, context.Child(ImageFormat.Ico, options with { FirstFrameOnly = true }));
         }
         else
         {

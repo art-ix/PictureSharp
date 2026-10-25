@@ -16,6 +16,7 @@ public readonly ref partial struct ImageProcessingContext
         Image.CheckRectangle(rectangle, Target.Width, Target.Height, nameof(rectangle));
         _state.ReplaceFrames(rectangle, static (frame, rect, token) =>
             new FrameReplacement(rect.Width, rect.Height, Geometry.Crop(frame, rect)), GainMapEdit.Crop(rectangle));
+        Target.Metadata.PixelsMoved();
         return this;
     }
 
@@ -86,6 +87,7 @@ public readonly ref partial struct ImageProcessingContext
             Geometry.Place(frame.Pixels, state.srcWidth, state.srcHeight, canvas, state.width, state.height, state.offset.X, state.offset.Y);
             return new FrameReplacement(state.width, state.height, canvas);
         });
+        image.Metadata.PixelsMoved();
         if (color.A != 255 && (width > srcWidth || height > srcHeight || offset.X > 0 || offset.Y > 0))
         {
             image.HasAlpha = true;
@@ -117,6 +119,7 @@ public readonly ref partial struct ImageProcessingContext
             Target.GainMap = gainMap;   // set after every frame is flipped; a cancellation in between removes it
         }
 
+        Target.Metadata.PixelsMoved();
         return this;
     }
 
@@ -191,6 +194,7 @@ public readonly ref partial struct ImageProcessingContext
 
             return new FrameReplacement(width, height, output);
         });
+        image.Metadata.PixelsMoved();
         image.HasAlpha |= background.A != 255;
         return this;
     }

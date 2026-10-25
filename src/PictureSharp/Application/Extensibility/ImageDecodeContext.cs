@@ -133,12 +133,16 @@ public sealed class ImageDecodeContext
     /// decode's limits. The result is full size; the caller owns it. For strips or tiles of an image already
     /// reserved with <see cref="ReservePixels"/>, use <see cref="DecodeEmbeddedPart(ReadOnlyMemory{byte}, int, int)"/>.
     /// </summary>
+    /// <exception cref="ImageFormatException">
+    /// The embedded image is corrupt, not recognized or over the limits, or images are nested more than 8 levels below
+    /// the loaded file (e.g. a container that embeds itself).
+    /// </exception>
     public Image DecodeEmbedded(ReadOnlyMemory<byte> data)
     {
         ThrowIfCancellationRequested();
         IImageDecoder decoder = _codecs.GetDecoderFor(data.Span);
         // A reduced JPEG decode would lose its stored size here; the outer load applies TargetSize instead.
-        DecodeContext child = _context.Child(_context.Options with { TargetSize = null });
+        DecodeContext child = _context.Child(_format, _context.Options with { TargetSize = null });
         return decoder.Decode(data, child).Image;
     }
 
@@ -156,7 +160,7 @@ public sealed class ImageDecodeContext
     /// <param name="height">The height of the part in the image, at least 1.</param>
     /// <exception cref="ImageFormatException">
     /// The part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>, the embedded image is larger
-    /// than the part, or it is corrupt or not recognized.
+    /// than the part, it is corrupt or not recognized, or images are nested more than 8 levels below the loaded file.
     /// </exception>
     public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height) =>
         DecodeEmbeddedPart(data, width, height, DefaultPartOptions);
@@ -172,7 +176,7 @@ public sealed class ImageDecodeContext
     /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
     /// <exception cref="ImageFormatException">
     /// The part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>, the embedded image is larger
-    /// than the part, or it is corrupt or not recognized.
+    /// than the part, it is corrupt or not recognized, or images are nested more than 8 levels below the loaded file.
     /// </exception>
     public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height, EmbeddedPartOptions options)
     {
@@ -184,7 +188,7 @@ public sealed class ImageDecodeContext
         }
 
         IImageDecoder decoder = _codecs.GetDecoderFor(data.Span);
-        DecodeContext part = _context.Detached(_context.Options with
+        DecodeContext part = _context.Detached(_format, _context.Options with
         {
             MaxPixels = (long)width * height,
             MaxFrames = 1,

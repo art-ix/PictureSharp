@@ -112,6 +112,7 @@ sealed record PictureSharp.Formats.EncodableGainMap : System.IEquatable<PictureS
     property PictureSharp.Formats.GainMapImage Map { get; init; }
     property PictureSharp.Formats.GainMapMetadata Metadata { get; init; }
 abstract record PictureSharp.Formats.FormatDecoderOptions : System.IEquatable<PictureSharp.Formats.FormatDecoderOptions>
+abstract record PictureSharp.Formats.FormatMetadata : System.IEquatable<PictureSharp.Formats.FormatMetadata>
 static class PictureSharp.Formats.GainMapExtensions
     method [Extension] static PictureSharp.Formats.EncodableGainMap? GetGainMap(Image image, System.Boolean require = false)
 abstract class PictureSharp.Formats.GainMapImage
@@ -663,6 +664,7 @@ sealed record ImageInfo : System.IEquatable<ImageInfo>
 sealed class ImageMetadata
     ctor()
     method ImageMetadata Clone()
+    method System.Boolean RemoveFormatMetadata<T>()
     method System.Boolean TrySetOrientation(ExifOrientation orientation)
     method System.Int32 CopyBlockTo(MetadataKinds kind, System.Span<System.Byte> destination)
     method System.Int32 GetBlockLength(MetadataKinds kind)
@@ -670,6 +672,8 @@ sealed class ImageMetadata
     method System.Void ClearColorDescription()
     method System.Void RemoveBlocks(MetadataKinds kinds)
     method System.Void SetBlock(MetadataKinds kind, System.ReadOnlySpan<System.Byte> data)
+    method System.Void SetFormatMetadata(PictureSharp.Formats.FormatMetadata value)
+    method T? GetFormatMetadata<T>()
     property CieChromaticities? Chromaticities { get; set; }
     property ExifOrientation Orientation { get; set; }
     property ExifProfile ExifProfile { get; }
@@ -679,6 +683,7 @@ sealed class ImageMetadata
     property System.Byte[]? Exif { get; set; }
     property System.Byte[]? IccProfile { get; set; }
     property System.Byte[]? Xmp { get; set; }
+    property System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.FormatMetadata> FormatMetadata { get; }
     property System.Single HorizontalResolution { get; set; }
     property System.Single VerticalResolution { get; set; }
     property System.Single? Gamma { get; set; }
