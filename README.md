@@ -1,4 +1,4 @@
-![PictureSharp — Pure managed image processing library for .NET](https://raw.githubusercontent.com/art-ix/PictureSharp/main/docs/assets/picturesharp-social-preview.png)
+![PictureSharp — Pure managed image processing library for .NET](https://raw.githubusercontent.com/art-ix/PictureSharp/main/docs/assets/picturesharp-social-preview-small.png)
 
 # PictureSharp
 
