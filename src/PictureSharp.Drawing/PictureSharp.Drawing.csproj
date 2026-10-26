@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.Drawing</RootNamespace>
     <PackageId>PictureSharp.Drawing</PackageId>
     <Description>Copies PictureSharp images to and from System.Drawing.Bitmap (Windows).</Description>
-    <PackageReleaseNotes>0.8.2: unchanged adapter, released with PictureSharp 0.8.2 (nesting limit, format metadata, stable plugin SPI). Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.2/docs/releases/release-0.8.2.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.3 adds the PictureSharp icon to NuGet packages and a project banner to the README. No API or image-processing changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.3/docs/releases/release-0.8.3.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;system.drawing;bitmap;gdi+;interop</PackageTags>
   </PropertyGroup>
 

@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PackageId>PictureSharp</PackageId>
     <Description>A pure managed image processing library for .NET. No native dependencies.</Description>
-    <PackageReleaseNotes>0.8.2 answers plugin requests: embedded images nest at most 8 levels (a self-embedding container fails with ImageFormatException instead of a stack overflow); plugins keep format-specific metadata in ImageMetadata (FormatMetadata records, removed by operations that move pixels); the plugin SPI and the model plugins fill are declared stable until 2.0 (docs/plugin-spi.md). No breaking changes; outputs unchanged. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.2/docs/releases/release-0.8.2.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.3 adds the PictureSharp icon to NuGet packages and a project banner to the README. No API or image-processing changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.3/docs/releases/release-0.8.3.md</PackageReleaseNotes>
     <PackageTags>webp;image;png;jpeg;bmp;gif;pcx;ico;codec;encoder;decoder;resize;thumbnail</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>
