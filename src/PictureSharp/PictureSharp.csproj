@@ -14,6 +14,7 @@
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>
     <!-- README links are absolute so they also work on nuget.org. -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>picturesharp-icon.png</PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,6 +26,7 @@
     <None Include="../../LICENSE" Pack="true" PackagePath="" />
     <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" />
     <None Include="../../README.md" Pack="true" PackagePath="" />
+    <None Include="../../docs/assets/picturesharp-icon.png" Pack="true" PackagePath="" />
     <None Update="build/PictureSharp.targets" Pack="true" PackagePath="build/PictureSharp.targets" />
   </ItemGroup>
 

@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/art-ix/PictureSharp/main/docs/assets/picturesharp-icon.png" alt="PictureSharp icon" width="96" height="96">
+
 # PictureSharp
 
 **A pure managed image processing library for .NET. No native dependencies.**

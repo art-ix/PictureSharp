@@ -1,0 +1,9 @@
+Generated with the built-in image_gen tool on 2026-10-26.
+
+Use case: logo-brand
+Asset type: square project icon for PictureSharp, an image processing library written in C# for .NET.
+Primary request: Design one polished, distinctive icon combining a photographic image frame and a sharp geometric detail. Integrate a simple angular landscape into a compact image frame; let the geometry subtly suggest the letter P. A cohesive single symbol, not multiple separate badges.
+Style/medium: precise flat vector-like brand mark, restrained contemporary developer-tool identity, bold silhouette, clean edges, minimal geometric forms, tasteful cohesive colors and strong contrast.
+Composition/framing: centered single icon in a square canvas, generous but not excessive clear margin, fills approximately 80 percent of the canvas; instantly readable at 32 pixels.
+Scene/backdrop: genuinely transparent background outside the symbol.
+Constraints: no words, no typography, no watermark, no mockup, no presentation board, no extra variants, no tiny details, no drop shadows, no 3D rendering. Make the frame and angular landscape form an original unified symbol.

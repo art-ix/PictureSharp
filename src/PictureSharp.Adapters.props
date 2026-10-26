@@ -8,6 +8,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/art-ix/PictureSharp</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>picturesharp-icon.png</PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,5 +20,6 @@
     <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)../docs/assets/picturesharp-icon.png" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>
