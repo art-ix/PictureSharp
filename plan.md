@@ -1,12 +1,12 @@
-# PictureSharp: plan rozwoju (zrealizowany do 0.8.3)
+# PictureSharp: plan rozwoju (zrealizowany do 0.8.4)
 
 ## Stan i cel
 
-**Bieżąca wersja: 0.8.3 (2026-10-26).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
+**Bieżąca wersja: 0.8.4 (2026-10-26).** PictureSharp to biblioteka obrazów dla .NET 10+ w C# 14, bez zależności i
 kodu natywnego: WebP, PNG/APNG, JPEG, GIF, BMP, PCX i ICO, animacje (także sekwencyjnie), metadane, zarządzanie
 kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, SkiaSharp, ASP.NET Core) i odczyt HDR z JPEG z gain map.
 
-0.8.3 dodaje ikonę paczek NuGet oraz banner w README. Bez zmian API i przetwarzania obrazów. Wtyczka HEIC `PictureSharp.Heif`
+0.8.4 zmniejsza paczki NuGet: ikona 128×128 zamiast oryginału 1254×1254 z 0.8.3. Bez zmian API i przetwarzania obrazów. Wtyczka HEIC `PictureSharp.Heif`
 (własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
 Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
 są poza planem.
@@ -55,7 +55,8 @@ pracy: `progres.md` (bez commitowania).
 | 0.7.13 | Negatywy, etapy C+D: `FindFilmFrame`, korekcja podświetlenia, ostrzeżenia, rolka, strojenie, dokumentacja | Wydana (2026-10-22; tag v0.7.13) |
 | 0.8.0 | Gain map w enkoderach wtyczek (etap A): `GetGainMap`, `GainMapMetadata.ToIso()`, JPEG z mapą z wtyczki; poprawki SPI zgłoszone przez wtyczkę HEIF | Wydana (2026-10-23; zapis `tmap` potwierdzony we wtyczce HEIF 0.6.10; bez ARM64) |
 | 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Wydana (2026-10-23; NuGet 0.8.1, bez ARM64) |
-| 0.8.3 | Ikona projektu w paczkach NuGet i banner w README; bez zmian kodu biblioteki | Wydanie 2026-10-26 |
+| 0.8.3 | Ikona projektu w paczkach NuGet i banner w README; bez zmian kodu biblioteki | Wydana (2026-10-26; tag v0.8.3, NuGet 0.8.3) |
+| 0.8.4 | Ikona paczek 128×128 (12 KB) zamiast 1254×1254; paczki adapterów z ~490 KB do ~30 KB | Wydanie 2026-10-26 |
 | 0.8.2 | Prośby wtyczek: limit zagnieżdżenia dekodowania, metadane specyficzne dla formatu (`FormatMetadata`), deklaracja stabilnego SPI; addytywnie | Wydana (2026-10-25; tag v0.8.2, NuGet 0.8.2, bez ARM64) |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -1070,3 +1071,9 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - Ikona PictureSharp osadzona w paczce głównej oraz trzech paczkach adapterów przez `PackageIcon`.
 - Banner w README, w składni Markdown, oraz osobny plik do Social preview GitHuba.
 - Bez zmian API i algorytmów; notatki: `docs/releases/release-0.8.3.md`.
+
+## 0.8.4 — mniejsza ikona paczek
+
+- Paczki zawierają `docs/assets/picturesharp-icon-128.png` (128×128, 12 KB); oryginał 1254×1254 zostaje w `docs/assets` dla README.
+- PictureSharp z 1,09 MB do 0,63 MB, adaptery z ~0,49 MB do 26–35 KB.
+- Bez zmian API i algorytmów; notatki: `docs/releases/release-0.8.4.md`.

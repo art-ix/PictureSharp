@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.Skia</RootNamespace>
     <PackageId>PictureSharp.Skia</PackageId>
     <Description>Copies PictureSharp images to and from SkiaSharp SKBitmap, SKImage and SKPixmap with an explicit alpha policy.</Description>
-    <PackageReleaseNotes>0.8.3 adds the PictureSharp icon to NuGet packages and a project banner to the README. No API or image-processing changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.3/docs/releases/release-0.8.3.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.4 ships a 128×128 package icon instead of the full-size image, cutting package sizes (PictureSharp 1.09 MB to 0.63 MB, adapters about 0.49 MB to 0.03 MB). No API or image-processing changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.4/docs/releases/release-0.8.4.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;skiasharp;skia;skbitmap;interop</PackageTags>
   </PropertyGroup>
 
