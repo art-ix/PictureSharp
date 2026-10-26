@@ -185,7 +185,8 @@ public class EndToEndTests
         byte[] input = Corpus.Read("webp/anim/alpha_mixed.webp");
         ImageInfo info = Image.Identify(input);
         long pixels = (long)info.Width * info.Height;
-        var tight = new DecoderOptions { MaxDegreeOfParallelism = 1, MaxInputBytes = input.Length, MaxMetadataBytes = 0, MaxFrames = info.FrameCount, MaxPixels = pixels * info.FrameCount * 2 };
+        int frameCount = info.FrameCount!.Value;
+        var tight = new DecoderOptions { MaxDegreeOfParallelism = 1, MaxInputBytes = input.Length, MaxMetadataBytes = 0, MaxFrames = frameCount, MaxPixels = pixels * frameCount * 2 };
 
         using Image constrained = Image.Load(input, tight), unconstrained = Image.Load(input);
         constrained.Mutate(x => x.Resize(info.Width / 2, info.Height / 2));
@@ -196,7 +197,7 @@ public class EndToEndTests
             await Assert.That(constrained.Frames[i].GetPixelSpan().SequenceEqual(unconstrained.Frames[i].GetPixelSpan())).IsTrue();
         }
 
-        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(input, tight with { MaxFrames = info.FrameCount - 1 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(input, tight with { MaxFrames = frameCount - 1 }));
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(input, tight with { MaxInputBytes = input.Length - 1 }));
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(input, tight with { MaxPixels = pixels - 1 }));
         // MaxFrames counts the stored frames, also when only the first one is decoded.
@@ -232,10 +233,10 @@ public class EndToEndTests
         using Image toneMapped = hdr.ToneMap(new ToneMappingOptions { Exposure = -0.5f });
         await Assert.That(toneMapped.HasHdr).IsFalse();
         byte[] saved = toneMapped.ToJpeg();
-        await Assert.That(Image.Identify(saved, hdrOptions).Hdr).IsNull();
+        await Assert.That(Image.Identify(saved, hdrOptions).GainMap).IsNull();
 
         // The default save of the HDR source is SDR as well: the map is written only on request.
-        await Assert.That(Image.Identify(hdrSource.ToJpeg(), hdrOptions).Hdr).IsNull();
+        await Assert.That(Image.Identify(hdrSource.ToJpeg(), hdrOptions).GainMap).IsNull();
         using Image kept = Image.Load(hdrSource.ToJpeg(new JpegEncoderOptions { GainMap = JpegGainMapMode.Require }), hdrOptions);
         await Assert.That(kept.HasHdr).IsTrue();
     }

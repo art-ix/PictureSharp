@@ -32,8 +32,8 @@ public class PluginGainMapEncoderTests
     {
         using Image reloaded = Image.Load(written, Hdr);
         await Assert.That(reloaded.SourceFormat).IsEqualTo(GainMapContainerFormat.Format);
-        await Assert.That(reloaded.HasHdr).IsTrue().Because(reloaded.Hdr?.UnsupportedReason ?? name);
-        GainMapParameters expected = source.GainMap!.Parameters!, actual = reloaded.GainMap!.Parameters!;
+        await Assert.That(reloaded.HasHdr).IsTrue().Because(reloaded.GainMap?.UnsupportedReason ?? name);
+        GainMapParameters expected = source.AttachedGainMap!.Parameters!, actual = reloaded.AttachedGainMap!.Parameters!;
         await Assert.That(actual.GainMapMax).IsEquivalentTo(expected.GainMapMax, CollectionOrdering.Matching).Because(name);
         await Assert.That(actual.GainMapMin).IsEquivalentTo(expected.GainMapMin, CollectionOrdering.Matching).Because(name);
         await Assert.That(actual.Gamma).IsEquivalentTo(expected.Gamma, CollectionOrdering.Matching).Because(name);

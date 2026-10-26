@@ -97,7 +97,7 @@ public class RobustnessTests
     {
         byte[] data = Corpus.Read(file);
         ImageInfo info = Image.Identify(data);
-        long all = (long)info.Width * info.Height * info.FrameCount;
+        long all = (long)info.Width * info.Height * info.FrameCount!.Value;
 
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, new DecoderOptions { MaxPixels = all - 1 }).Dispose());
         using (Image image = Image.Load(data, new DecoderOptions { MaxPixels = all }))

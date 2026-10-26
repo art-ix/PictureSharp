@@ -51,7 +51,7 @@ public sealed class ImageDecodeContext
     /// <summary>
     /// Attaches the HDR gain map of the image being decoded, so <c>ToHdr</c> and <c>ToneMap</c> can reconstruct HDR from
     /// it. Does nothing unless <see cref="DecoderOptions.LoadGainMap"/> is set. The map's pixels are charged against
-    /// <see cref="DecoderOptions.MaxPixels"/>; a map over the limit is reported through <see cref="Image.Hdr"/> instead of
+    /// <see cref="DecoderOptions.MaxPixels"/>; a map over the limit is reported through <see cref="Image.GainMap"/> instead of
     /// failing the load. The library then applies <see cref="DecoderOptions.TargetSize"/>,
     /// <see cref="DecoderOptions.ApplyExifOrientation"/> and <see cref="DecoderOptions.ColorConversion"/> to the map as for
     /// JPEG files.
@@ -70,8 +70,8 @@ public sealed class ImageDecodeContext
 
     /// <summary>
     /// Attaches the HDR gain map like <see cref="AttachGainMap(GainMapMetadata, GainMapImage)"/> and reports every gain
-    /// map model the file declares for it in <see cref="HdrInfo.Detected"/>, e.g. ISO 21496-1 and Apple metadata
-    /// describing the same map. <see cref="HdrInfo.Selected"/> stays <see cref="GainMapMetadata.Kind"/>.
+    /// map model the file declares for it in <see cref="GainMapInfo.Detected"/>, e.g. ISO 21496-1 and Apple metadata
+    /// describing the same map. <see cref="GainMapInfo.Selected"/> stays <see cref="GainMapMetadata.Kind"/>.
     /// </summary>
     /// <param name="metadata">The parsed metadata of the selected model.</param>
     /// <param name="map">The gain map image.</param>
@@ -94,7 +94,7 @@ public sealed class ImageDecodeContext
             return;
         }
 
-        HdrInfo info = metadata.ToHdrInfo(map.Size) with { Detected = detected };
+        GainMapInfo info = metadata.ToGainMapInfo(map.Size) with { Detected = detected };
         if (!_context.Budget.TryReservePixels(map.Size.Width, map.Size.Height))
         {
             GainMap = GainMapAttachment.Failed(info, GainMapFailure.Corrupt,
@@ -112,7 +112,7 @@ public sealed class ImageDecodeContext
 
     /// <summary>
     /// Reports an HDR gain map the file declares but that cannot be used, e.g. because its metadata failed to parse.
-    /// The load still succeeds; <see cref="Image.Hdr"/> describes the problem and <c>ToHdr</c> throws
+    /// The load still succeeds; <see cref="Image.GainMap"/> describes the problem and <c>ToHdr</c> throws
     /// <see cref="ImageFormatException"/> (corrupt) or <see cref="NotSupportedException"/>. Does nothing unless
     /// <see cref="DecoderOptions.LoadGainMap"/> is set.
     /// </summary>
@@ -124,7 +124,7 @@ public sealed class ImageDecodeContext
         ArgumentNullException.ThrowIfNull(reason);
         if (Options.LoadGainMap)
         {
-            GainMap = GainMapAttachment.Failed(new HdrInfo { Detected = detected }, corrupt ? GainMapFailure.Corrupt : GainMapFailure.Unsupported, reason);
+            GainMap = GainMapAttachment.Failed(new GainMapInfo { Detected = detected }, corrupt ? GainMapFailure.Corrupt : GainMapFailure.Unsupported, reason);
         }
     }
 

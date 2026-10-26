@@ -196,7 +196,7 @@ public sealed class CursorFormat : IImageFormatModule, IImageFormatDecoder, IIma
     public IImageFormatEncoder Encoder => this;
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
-        new() { Format = Format, Width = data.Span[4], Height = data.Span[5], HasAlpha = true };
+        new() { Format = Format, Width = data.Span[4], Height = data.Span[5], Color = TestColor.Rgba8, Compression = ImageCompression.Lossless };
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {

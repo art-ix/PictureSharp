@@ -41,8 +41,8 @@ public class HdrGainMapEncoderTests
         byte[] hdr = image.ToJpeg(Preserve);
         using Image reloaded = Image.Load(hdr, Hdr);
         await Assert.That(reloaded.HasHdr).IsTrue();
-        await Assert.That(reloaded.Hdr!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496);   // no Apple or XMP declaration
-        GainMapParameters a = image.GainMap!.Parameters!, b = reloaded.GainMap!.Parameters!;
+        await Assert.That(reloaded.GainMap!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496);   // no Apple or XMP declaration
+        GainMapParameters a = image.AttachedGainMap!.Parameters!, b = reloaded.AttachedGainMap!.Parameters!;
         await Assert.That((b.Kind, b.ChannelCount, b.BaseHeadroom, b.AlternateHeadroom, b.MultiplicationSpace))
             .IsEqualTo((a.Kind, a.ChannelCount, a.BaseHeadroom, a.AlternateHeadroom, a.MultiplicationSpace));
         foreach ((float[] x, float[] y) in new[] { (a.GainMapMin, b.GainMapMin), (a.GainMapMax, b.GainMapMax), (a.Gamma, b.Gamma), (a.BaseOffset, b.BaseOffset), (a.AlternateOffset, b.AlternateOffset) })
@@ -53,8 +53,8 @@ public class HdrGainMapEncoderTests
         // The base is the SDR encoding of the same pixels; the map is decoded identically (or oriented as the base).
         using Image sdr = Image.Load(image.ToJpeg());
         await Assert.That(reloaded.GetPixelSpan().ToArray()).IsEquivalentTo(sdr.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
-        DecodedGainMap source = DecodeMap(image.GainMap!), written = DecodeMap(reloaded.GainMap!);
-        if (image.GainMap!.AppliedOrientation is ExifOrientation.Unknown or ExifOrientation.TopLeft)
+        DecodedGainMap source = DecodeMap(image.AttachedGainMap!), written = DecodeMap(reloaded.AttachedGainMap!);
+        if (image.AttachedGainMap!.AppliedOrientation is ExifOrientation.Unknown or ExifOrientation.TopLeft)
         {
             await Assert.That(written.Pixels).IsEquivalentTo(source.Pixels, CollectionOrdering.Matching);
         }
@@ -69,7 +69,7 @@ public class HdrGainMapEncoderTests
     {
         using Image image = Image.Load(File("iso_rgb_p3.jpg"), Hdr);
         using Image thumbnail = Image.Load(File("iso_rgb_p3.jpg"), Hdr with { TargetSize = new(20, 15) });
-        byte[] source = image.GainMap!.MapData.ToArray();
+        byte[] source = image.AttachedGainMap!.MapData.ToArray();
         int scan = source.AsSpan().IndexOf([(byte)0xFF, (byte)0xDA]);
         byte[] entropy = source[scan..];
         foreach (Image i in new[] { image, thumbnail })
@@ -77,7 +77,7 @@ public class HdrGainMapEncoderTests
             byte[] file = i.ToJpeg(Preserve);
             await Assert.That(file.AsSpan().EndsWith(entropy)).IsTrue();
             using Image reloaded = Image.Load(file, Hdr);
-            await Assert.That(reloaded.Hdr!.GainMapSize).IsEqualTo(image.Hdr!.GainMapSize);
+            await Assert.That(reloaded.GainMap!.GainMapSize).IsEqualTo(image.GainMap!.GainMapSize);
         }
     }
 
@@ -88,12 +88,12 @@ public class HdrGainMapEncoderTests
         {
             using Image image = Image.Load(File(name + ".jpg"), Hdr);
             image.Mutate(x => x.Crop(3, 2, image.Width - 7, image.Height - 5).Rotate(RotateMode.Rotate90).Resize(17, 25));
-            DecodedGainMap edited = image.GainMap!.EditedMap!.Value;
+            DecodedGainMap edited = image.AttachedGainMap!.EditedMap!.Value;
             using Image reloaded = Image.Load(image.ToJpeg(Preserve), Hdr);
             await Assert.That(reloaded.HasHdr).IsTrue().Because(name);
-            await Assert.That(reloaded.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(edited.Width, edited.Height)).Because(name);
-            await Assert.That(reloaded.Hdr.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
-            (int worst, _) = Difference(DecodeMap(reloaded.GainMap!), edited);
+            await Assert.That(reloaded.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(edited.Width, edited.Height)).Because(name);
+            await Assert.That(reloaded.GainMap.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+            (int worst, _) = Difference(DecodeMap(reloaded.AttachedGainMap!), edited);
             await Assert.That(worst).IsLessThanOrEqualTo(8).Because($"{name}: JPEG quality 95");
             using HdrImage before = image.ToHdr(), after = reloaded.ToHdr();
             await Assert.That(after.Size).IsEqualTo(before.Size);
@@ -114,8 +114,8 @@ public class HdrGainMapEncoderTests
         byte[] file = image.ToJpeg(Require);
         await Assert.That(image.ToJpeg(Preserve)).IsEquivalentTo(file, CollectionOrdering.Matching);
         using Image reloaded = Image.Load(file, Hdr);
-        await Assert.That((reloaded.Hdr!.Detected, reloaded.Hdr.Selected, reloaded.Hdr.GainMapSize)).IsEqualTo((HdrGainMapKinds.Iso21496, HdrGainMapKinds.Iso21496, image.Hdr!.GainMapSize));
-        GainMapParameters apple = image.GainMap!.Parameters!, iso = reloaded.GainMap!.Parameters!;
+        await Assert.That((reloaded.GainMap!.Detected, reloaded.GainMap.Selected, reloaded.GainMap.GainMapSize)).IsEqualTo((HdrGainMapKinds.Iso21496, HdrGainMapKinds.Iso21496, image.GainMap!.GainMapSize));
+        GainMapParameters apple = image.AttachedGainMap!.Parameters!, iso = reloaded.AttachedGainMap!.Parameters!;
         await Assert.That((iso.ChannelCount, iso.BaseHeadroom, iso.UseBaseColorSpace)).IsEqualTo((1, 0f, true));
         await Assert.That((double)iso.AlternateHeadroom).IsEqualTo(apple.AlternateHeadroom).Within(1e-6);
         await Assert.That((double)iso.GainMapMax[0]).IsEqualTo(apple.AlternateHeadroom).Within(1e-6);
@@ -140,10 +140,10 @@ public class HdrGainMapEncoderTests
         foreach (Image image in new[] { edited, thumbnail })
         {
             using Image reloaded = Image.Load(image.ToJpeg(Require), Hdr);
-            await Assert.That(reloaded.Hdr!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+            await Assert.That(reloaded.GainMap!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
             await Assert.That(reloaded.Size).IsEqualTo(image.Size);
             using HdrImage hdr = reloaded.ToHdr();
-            await Assert.That(hdr.Headroom).IsEqualTo(image.Hdr!.Headroom!.Value).Within(1e-3f);
+            await Assert.That(hdr.Headroom).IsEqualTo(image.GainMap!.Headroom!.Value).Within(1e-3f);
         }
     }
 
@@ -182,7 +182,7 @@ public class HdrGainMapEncoderTests
         using (Image reloaded = Image.Load(image.ToJpeg(Preserve), Hdr))
         {
             await Assert.That(reloaded.Metadata.Xmp).IsNull();
-            await Assert.That(reloaded.Hdr!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496);
+            await Assert.That(reloaded.GainMap!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496);
         }
 
         image.Metadata.Xmp = other;
@@ -202,7 +202,7 @@ public class HdrGainMapEncoderTests
         await Assert.That(reloaded.Metadata.Orientation).IsEqualTo(ExifOrientation.RightTop);
         await Assert.That(reloaded.Metadata.IccData).IsEquivalentTo(image.Metadata.IccData!, CollectionOrdering.Matching);
         await Assert.That(reloaded.HasHdr).IsTrue();
-        await Assert.That(reloaded.Hdr!.GainMapSize).IsEqualTo(image.Hdr!.GainMapSize);
+        await Assert.That(reloaded.GainMap!.GainMapSize).IsEqualTo(image.GainMap!.GainMapSize);
     }
 
     [Test]

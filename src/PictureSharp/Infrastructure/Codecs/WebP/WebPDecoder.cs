@@ -37,10 +37,18 @@ internal sealed partial class WebPDecoder : IImageDecoder, ISequentialImageDecod
             Format = ImageFormat.WebP,
             Width = c.CanvasWidth,
             Height = c.CanvasHeight,
-            HasAlpha = c.HasAlpha,
+            Color = new ImageColorInfo
+            {
+                Model = ImageColorModel.Rgb,
+                ChannelCount = c.HasAlpha ? 4 : 3,
+                BitsPerSample = 8,
+                SampleFormat = ImageSampleFormat.UnsignedInteger,
+                AlphaMode = c.HasAlpha ? ImageAlphaMode.Straight : ImageAlphaMode.None,
+                HasIccProfile = !c.Icc.IsEmpty,
+            },
+            Compression = GetCompression(c),
             FrameCount = c.Frames.Count,
             IsAnimated = c.IsAnimated,
-            WebPCompression = GetCompression(c),
             Orientation = orientation,
         };
     }
@@ -88,7 +96,7 @@ internal sealed partial class WebPDecoder : IImageDecoder, ISequentialImageDecod
         return image;
     }
 
-    private static WebPCompression GetCompression(WebPContainer c)
+    private static ImageCompression GetCompression(WebPContainer c)
     {
         bool lossless = false;
         bool lossy = false;
@@ -98,7 +106,7 @@ internal sealed partial class WebPDecoder : IImageDecoder, ISequentialImageDecod
             lossy |= !f.IsLossless;
         }
 
-        return lossless && lossy ? WebPCompression.Mixed : lossless ? WebPCompression.Lossless : WebPCompression.Lossy;
+        return lossless && lossy ? ImageCompression.Mixed : lossless ? ImageCompression.Lossless : ImageCompression.Lossy;
     }
 
     private static void ReadMetadata(ReadOnlySpan<byte> data, WebPContainer c, ImageMetadata metadata)

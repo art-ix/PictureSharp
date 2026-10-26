@@ -49,11 +49,11 @@ public class PluginGainMapJpegTests
     {
         using Image image = Image.Load(Container(name), Plugin);
         using Image reloaded = Image.Load(image.ToJpeg(Require), Jpeg);
-        await Assert.That(reloaded.HasHdr).IsTrue().Because(reloaded.Hdr?.UnsupportedReason ?? name);
-        await Assert.That(reloaded.Hdr!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
-        await AssertSameParameters(reloaded.GainMap!.Parameters!, image.GainMap!.Parameters!, name);
+        await Assert.That(reloaded.HasHdr).IsTrue().Because(reloaded.GainMap?.UnsupportedReason ?? name);
+        await Assert.That(reloaded.GainMap!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+        await AssertSameParameters(reloaded.AttachedGainMap!.Parameters!, image.AttachedGainMap!.Parameters!, name);
 
-        DecodedGainMap expected = MapOf(image), actual = HdrGainMapEncoderTests.DecodeMap(reloaded.GainMap);
+        DecodedGainMap expected = MapOf(image), actual = HdrGainMapEncoderTests.DecodeMap(reloaded.AttachedGainMap);
         await Assert.That((actual.Width, actual.Height)).IsEqualTo((expected.Width, expected.Height)).Because(name);
         (int worst, _) = HdrGainMapEncoderTests.Difference(actual, expected);
         await Assert.That(worst).IsLessThanOrEqualTo(8).Because($"{name}: JPEG quality 95");
@@ -77,7 +77,7 @@ public class PluginGainMapJpegTests
     {
         using Image image = Image.Load(Container(name), Plugin);
         Dictionary<byte, ReadOnlyMemory<byte>> sections = GainMapContainerFormat.Read(GainMapContainerFormat.FromJpeg(image.ToJpeg(Require)));
-        bool differs = image.GainMap!.Parameters!.MultiplicationSpace != image.GainMap.BaseSpace;
+        bool differs = image.AttachedGainMap!.Parameters!.MultiplicationSpace != image.AttachedGainMap.BaseSpace;
         await Assert.That(sections.ContainsKey(GainMapContainerFormat.MapIcc)).IsEqualTo(differs).Because(name);
         await Assert.That((sections[GainMapContainerFormat.Iso].Span[4] & 0x40) != 0).IsEqualTo(!differs).Because(name);
     }
@@ -87,10 +87,10 @@ public class PluginGainMapJpegTests
     {
         using Image image = Image.Load(Container("iso_rgb_p3"), Plugin);
         image.Mutate(x => x.Crop(3, 2, image.Width - 7, image.Height - 5).Rotate(RotateMode.Rotate90).Resize(17, 25));
-        DecodedGainMap edited = image.GainMap!.EditedMap!.Value;
+        DecodedGainMap edited = image.AttachedGainMap!.EditedMap!.Value;
         using Image reloaded = Image.Load(image.ToJpeg(Preserve), Jpeg);
-        await Assert.That(reloaded.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(edited.Width, edited.Height));
-        (int worst, _) = HdrGainMapEncoderTests.Difference(HdrGainMapEncoderTests.DecodeMap(reloaded.GainMap!), edited);
+        await Assert.That(reloaded.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(edited.Width, edited.Height));
+        (int worst, _) = HdrGainMapEncoderTests.Difference(HdrGainMapEncoderTests.DecodeMap(reloaded.AttachedGainMap!), edited);
         await Assert.That(worst).IsLessThanOrEqualTo(8);
     }
 
@@ -100,7 +100,7 @@ public class PluginGainMapJpegTests
         using Image image = Image.Load(Container("apple_makernote"), Plugin);
         await Assert.That(image.HasHdr).IsTrue();
         using Image written = Image.Load(image.ToJpeg(Preserve), Jpeg);
-        await Assert.That(written.Hdr!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+        await Assert.That(written.GainMap!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
         await Assert.That(image.ToJpeg(Require)).IsEquivalentTo(image.ToJpeg(Preserve), CollectionOrdering.Matching);
     }
 

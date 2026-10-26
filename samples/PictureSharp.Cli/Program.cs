@@ -32,10 +32,15 @@ try
             foreach (string file in args.Skip(1))
             {
                 ImageInfo info = Image.Identify(file, new DecoderOptions { LoadGainMap = true });
-                Console.WriteLine($"{file}: {info.Format.Name} {info.Width}x{info.Height}, alpha: {info.HasAlpha}, " +
-                                  $"frames: {info.FrameCount}{(info.WebPCompression != WebPCompression.None ? ", " + info.WebPCompression : "")}, " +
-                                  $"orientation: {info.Orientation}");
-                if (info.Hdr is { } hdr)
+                ImageColorInfo color = info.Color;
+                Console.WriteLine($"{file}: {info.Format.Name} {info.Width}x{info.Height}, frames: {info.FrameCount?.ToString() ?? "unknown"}, " +
+                                  $"{info.Compression}, orientation: {info.Orientation}");
+                Console.WriteLine($"  color: {color.Model}, {color.ChannelCount} channels, {color.BitsPerSample}-bit {color.SampleFormat}, " +
+                                  $"alpha: {color.AlphaMode}, ICC: {(color.HasIccProfile ? "yes" : "no")}" +
+                                  (color.Cicp is { } cicp
+                                      ? $", CICP {cicp.ColorPrimaries}/{cicp.TransferCharacteristics}/{cicp.MatrixCoefficients}/{(cicp.FullRange ? "full" : "limited")}{(cicp.IsHdrTransfer ? " (HDR)" : "")}"
+                                      : ""));
+                if (info.GainMap is { } hdr)
                 {
                     Console.WriteLine(hdr.CanDecode
                         ? string.Create(CultureInfo.InvariantCulture, $"  HDR gain map: {hdr.Selected} (detected: {hdr.Detected}), map {hdr.GainMapSize.Width}x{hdr.GainMapSize.Height}, headroom {hdr.Headroom:0.###} ({Math.Log2(hdr.Headroom ?? 1):0.##} EV)")
@@ -165,7 +170,7 @@ try
                 {
                     if (!image.HasHdr)
                     {
-                        string reason = image.Hdr?.UnsupportedReason ?? "the file has no HDR gain map";
+                        string reason = image.GainMap?.UnsupportedReason ?? "the file has no HDR gain map";
                         image.Dispose();
                         throw new NotSupportedException($"Cannot tone-map {args[1]}: {reason.TrimEnd('.')}.");
                     }
@@ -257,7 +262,7 @@ try
                 Save(image, args[2], quality, 4, lossless: false, keep);
                 Console.WriteLine($"{args[1]} -> {args[2]}: {sourceSize.Width}x{sourceSize.Height} -> {image.Width}x{image.Height} " +
                                   $"({mode}, {filter}), frames: {image.FrameCount}, resize {resizeMs} ms, {new FileInfo(args[2]).Length} bytes" +
-                                  (keep ? $", HDR gain map {image.Hdr!.GainMapSize.Width}x{image.Hdr.GainMapSize.Height}" : ""));
+                                  (keep ? $", HDR gain map {image.GainMap!.GainMapSize.Width}x{image.GainMap.GainMapSize.Height}" : ""));
                 return 0;
             }
 
@@ -493,7 +498,7 @@ static void RequireGainMap(Image image, string input, string output)
 
     if (!image.HasHdr)
     {
-        string reason = image.Hdr?.UnsupportedReason ?? "the file has no HDR gain map";
+        string reason = image.GainMap?.UnsupportedReason ?? "the file has no HDR gain map";
         throw new NotSupportedException($"Cannot keep the HDR gain map of {input}: {reason.TrimEnd('.')}.");
     }
 }

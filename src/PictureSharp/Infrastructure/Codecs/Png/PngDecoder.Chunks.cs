@@ -45,6 +45,10 @@ internal sealed partial class PngDecoder
         public float? DpiX;
         public float? DpiY;
         public readonly PngColorDescription ColorDescription = new();
+        public bool HasIccp;
+        public CicpColorDescription? Cicp;
+        public bool HasSrgb;
+        private bool _seenCicp, _seenSrgb;
         public bool StrictChecksums;
         public PngAnimation? Animation;
         public readonly List<(int Offset, int Length)> Idat = [];
@@ -103,6 +107,11 @@ internal sealed partial class PngDecoder
                     png.ReadHeader(body);
                     seenIhdr = true;
                     continue;
+                }
+
+                if (!seenIdat)
+                {
+                    png.ReadColorSignals(type, body);
                 }
 
                 if (type.SequenceEqual("IDAT"u8))
@@ -285,6 +294,28 @@ internal sealed partial class PngDecoder
             }
 
             Interlaced = body[12] == 1;
+        }
+
+        /// <summary>
+        /// Records what <c>Identify</c> reports about the colour description, before the first IDAT and regardless of
+        /// <c>IgnoreMetadata</c>: nothing is copied or decompressed. Like libpng, the first cICP and sRGB win even if invalid.
+        /// </summary>
+        internal void ReadColorSignals(ReadOnlySpan<byte> type, ReadOnlySpan<byte> body)
+        {
+            if (type.SequenceEqual("iCCP"u8))
+            {
+                HasIccp = true;
+            }
+            else if (type.SequenceEqual("cICP"u8) && !_seenCicp)
+            {
+                _seenCicp = true;
+                Cicp = PngColorChunks.ReadCicp(body);
+            }
+            else if (type.SequenceEqual("sRGB"u8) && !_seenSrgb)
+            {
+                _seenSrgb = true;
+                HasSrgb = PngColorChunks.ReadSrgb(body) is not null;
+            }
         }
 
         internal byte[]? ReadIccp(ReadOnlySpan<byte> body, DecoderOptions options)

@@ -42,7 +42,7 @@ public class BmpDecoderTests
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
         await Assert.That(info.Format).IsEqualTo(ImageFormat.Bmp);
         await Assert.That((info.Width, info.Height)).IsEqualTo((r.Width, r.Height));
-        await Assert.That(info.HasAlpha).IsEqualTo(r.HasAlpha);
+        await Assert.That(info.Color.HasAlpha).IsEqualTo(r.HasAlpha);
         await Assert.That(info.FrameCount).IsEqualTo(1);
     }
 
@@ -306,7 +306,7 @@ public class BmpDecoderTests
         await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Bmp);
         await Assert.That(image.HasAlpha).IsTrue();
         await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
-        await Assert.That(Image.Identify(bmp).HasAlpha).IsTrue();
+        await Assert.That(Image.Identify(bmp).Color.HasAlpha).IsTrue();
     }
 
     [Test]

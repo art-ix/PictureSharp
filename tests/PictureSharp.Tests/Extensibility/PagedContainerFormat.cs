@@ -39,7 +39,7 @@ public sealed class PagedContainerFormat : IImageFormatModule, IImageFormatDecod
     {
         Page[] pages = Read(data);
         Page page = Select(pages, options);
-        return new ImageInfo { Format = Format, Width = page.Width, Height = page.Height, HasAlpha = true, ContainerItemCount = pages.Length };
+        return new ImageInfo { Format = Format, Width = page.Width, Height = page.Height, Color = TestColor.Rgba8, Compression = ImageCompression.Lossless, ContainerItemCount = pages.Length };
     }
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)

@@ -20,7 +20,7 @@ internal static class GainMapEncoding
     public static GainMapAttachment? Resolve(Image image, bool require, ImageFormat? format, int maxDegreeOfParallelism = -1,
         CancellationToken cancellationToken = default)
     {
-        if (image.GainMap is not { } attachment)
+        if (image.AttachedGainMap is not { } attachment)
         {
             return require
                 ? throw new InvalidOperationException("The image has no HDR gain map to write: load it with DecoderOptions.LoadGainMap = true and keep it through geometric operations only.")

@@ -24,9 +24,9 @@ public class HdrSamplesTests
     public async Task IphoneJpeg_ReconstructsHdr(string path)
     {
         ImageInfo info = Image.Identify(path, new DecoderOptions { LoadGainMap = true });
-        await Assert.That(info.Hdr!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496 | HdrGainMapKinds.Apple);
-        await Assert.That(info.Hdr.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
-        await Assert.That(info.Hdr.GainMapSize).IsEqualTo(new System.Drawing.Size(info.Width / 2, info.Height / 2));
+        await Assert.That(info.GainMap!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496 | HdrGainMapKinds.Apple);
+        await Assert.That(info.GainMap.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+        await Assert.That(info.GainMap.GainMapSize).IsEqualTo(new System.Drawing.Size(info.Width / 2, info.Height / 2));
 
         using Image image = Image.Load(path, new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true, TargetSize = new(512, 512) });
         using HdrImage hdr = image.ToHdr();
@@ -53,8 +53,8 @@ public class HdrSamplesTests
             data[at] = (byte)'x';
         }
 
-        HdrInfo iso = Image.Identify(path, new DecoderOptions { LoadGainMap = true }).Hdr!;
-        HdrInfo apple = Image.Identify(data, new DecoderOptions { LoadGainMap = true }).Hdr!;
+        GainMapInfo iso = Image.Identify(path, new DecoderOptions { LoadGainMap = true }).GainMap!;
+        GainMapInfo apple = Image.Identify(data, new DecoderOptions { LoadGainMap = true }).GainMap!;
         await Assert.That(apple.Selected).IsEqualTo(HdrGainMapKinds.Apple);
         await Assert.That((double)apple.Headroom!.Value).IsEqualTo(iso.Headroom!.Value).Within(2e-3);
 
@@ -103,10 +103,10 @@ public class HdrSamplesTests
         }
 
         using Image apple = Image.Load(data, new DecoderOptions { LoadGainMap = true });
-        await Assert.That(apple.Hdr!.Selected).IsEqualTo(HdrGainMapKinds.Apple);
+        await Assert.That(apple.GainMap!.Selected).IsEqualTo(HdrGainMapKinds.Apple);
         using HdrImage expected = apple.ToHdr();
         using Image reloaded = Image.Load(apple.ToJpeg(new JpegEncoderOptions { Quality = 95, GainMap = JpegGainMapMode.Preserve }), new DecoderOptions { LoadGainMap = true });
-        await Assert.That(reloaded.Hdr!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+        await Assert.That(reloaded.GainMap!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
         apple.GetPixelSpan().CopyTo(reloaded.GetPixelSpan());
         using HdrImage actual = reloaded.ToHdr();
         (double median, double p99) = Errors(actual.GetPixelSpan(), expected.GetPixelSpan());

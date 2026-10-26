@@ -136,7 +136,7 @@ public class HdrGainMapGeneratorOracleTests
         System.Text.Json.JsonElement budget = HdrGainMapGeneratorTests.Budget;
         await Assert.That(worst).IsLessThanOrEqualTo(budget.GetProperty("oracle_max_code_difference").GetInt32());
         await Assert.That(identical / (double)codes.Length).IsGreaterThanOrEqualTo(budget.GetProperty("oracle_identical_fraction").GetDouble());
-        await Assert.That(image.GainMap!.Parameters!.UseBaseColorSpace).IsEqualTo(useBase);
+        await Assert.That(image.AttachedGainMap!.Parameters!.UseBaseColorSpace).IsEqualTo(useBase);
         await Assert.That(gainMap.Metadata.ToIso()).IsEquivalentTo(iso, CollectionOrdering.Matching);
     }
 

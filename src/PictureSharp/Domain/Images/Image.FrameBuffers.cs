@@ -20,7 +20,7 @@ public sealed partial class Image
             if (replacement.Width != replacements[0].Width || replacement.Height != replacements[0].Height)
                 throw new ArgumentException("All frames must share a canvas.", nameof(replacements));
         }
-        GainMap = gainMap;
+        AttachedGainMap = gainMap;
         for (int i = 0; i < replacements.Length; i++) _frames[i].Publish(replacements[i]);
     }
 
@@ -30,7 +30,7 @@ public sealed partial class Image
         ImageFrame frame = Frames[index];
         var replacement = new FrameReplacement(frame.Width, frame.Height, pixels);
         replacement.Validate();
-        GainMap = null;
+        AttachedGainMap = null;
         frame.Publish(replacement);
     }
 }

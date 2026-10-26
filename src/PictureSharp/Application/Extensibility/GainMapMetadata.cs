@@ -92,10 +92,10 @@ public sealed class GainMapMetadata
 
     /// <summary>
     /// The description <c>Identify</c> reports for a map of <paramref name="mapSize"/> with this metadata: detected and
-    /// selected model <see cref="Kind"/>, the headroom and <see cref="HdrInfo.CanDecode"/> set. Use <c>with</c> to add
+    /// selected model <see cref="Kind"/>, the headroom and <see cref="GainMapInfo.CanDecode"/> set. Use <c>with</c> to add
     /// further detected models.
     /// </summary>
-    public HdrInfo ToHdrInfo(Size mapSize) => new()
+    public GainMapInfo ToGainMapInfo(Size mapSize) => new()
     {
         Detected = Kind,
         Selected = Kind,

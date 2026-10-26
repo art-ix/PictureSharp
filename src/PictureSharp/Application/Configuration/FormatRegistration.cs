@@ -27,6 +27,7 @@ internal sealed record FormatRegistration(
     public static FormatRegistration FromModule(IImageFormatModule module)
     {
         ArgumentNullException.ThrowIfNull(module);
+        PluginVersionCheck.Check(module);
         ImageFormat format = module.Format ?? throw new ArgumentException("The module has no format.", nameof(module));
         int headerSize = module.HeaderSize;
         if (headerSize is < 1 or > MaxModuleHeaderSize)

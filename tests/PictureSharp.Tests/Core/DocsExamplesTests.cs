@@ -61,14 +61,14 @@ public sealed class DocsExamplesTests : IDisposable
         }
 
         image.Save(P("base.jpg"));
-        await Assert.That(Image.Load(P("base.jpg"), options).Hdr).IsNull();
+        await Assert.That(Image.Load(P("base.jpg"), options).GainMap).IsNull();
 
-        HdrInfo? info = Image.Identify(P("IMG_8113.jpeg"), new DecoderOptions { LoadGainMap = true }).Hdr;
+        GainMapInfo? info = Image.Identify(P("IMG_8113.jpeg"), new DecoderOptions { LoadGainMap = true }).GainMap;
         await Assert.That(info is { CanDecode: true }).IsTrue();
         await Assert.That(info!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
 
         Image.EditMetadata(P("IMG_8113.jpeg"), P("share.jpeg"), m => m.RemoveBlocks(MetadataKinds.Exif | MetadataKinds.Xmp));
-        await Assert.That(Image.Identify(P("share.jpeg"), new DecoderOptions { LoadGainMap = true }).Hdr).IsEqualTo(info);
+        await Assert.That(Image.Identify(P("share.jpeg"), new DecoderOptions { LoadGainMap = true }).GainMap).IsEqualTo(info);
     }
 
     [Test]
@@ -91,7 +91,7 @@ public sealed class DocsExamplesTests : IDisposable
         sdr.SaveAsJpeg(P("regraded.jpeg"), new JpegEncoderOptions { Quality = 95, GainMap = JpegGainMapMode.Require });
         using Image reloaded = Image.Load(P("regraded.jpeg"), new DecoderOptions { LoadGainMap = true });
         await Assert.That(reloaded.HasHdr).IsTrue();
-        await Assert.That(reloaded.Hdr!.GainMapSize).IsEqualTo(hdr.Size);
+        await Assert.That(reloaded.GainMap!.GainMapSize).IsEqualTo(hdr.Size);
     }
 
     [Test]
@@ -707,7 +707,7 @@ public sealed class DocsExamplesTests : IDisposable
         image.SaveAsWebP(P("image.webp"), new() { Lossless = true, Exact = true });
         byte[] data = File.ReadAllBytes(P("image.webp"));
         ImageInfo info = Image.Identify(data);
-        await Assert.That(info.WebPCompression).IsEqualTo(WebPCompression.Lossless);
+        await Assert.That(info.Compression).IsEqualTo(ImageCompression.Lossless);
         using Image decoded = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
         (int width, int height) = (decoded.Width, decoded.Height);
         byte[] rgba = decoded.ToPixelData();

@@ -16,7 +16,7 @@ detected but not decoded; other containers can supply maps through a [plugin](#g
 ## Loading
 
 HDR is opt-in: `DecoderOptions.LoadGainMap` attaches the compressed map without decoding it. The base pixels are the
-same as without the option, and a damaged or unsupported map never fails the load; `image.Hdr` describes it. Without the
+same as without the option, and a damaged or unsupported map never fails the load; `image.GainMap` describes it. Without the
 option nothing about HDR is parsed.
 
 ```csharp
@@ -38,10 +38,10 @@ if (image.HasHdr)
 image.Save("base.jpg");                                     // the SDR base image, without HDR
 ```
 
-`Image.Identify` with the same option fills `ImageInfo.Hdr` from the headers only:
+`Image.Identify` with the same option fills `ImageInfo.GainMap` from the headers only:
 
 ```csharp
-HdrInfo? hdr = Image.Identify("IMG_8113.jpeg", new DecoderOptions { LoadGainMap = true }).Hdr;
+GainMapInfo? hdr = Image.Identify("IMG_8113.jpeg", new DecoderOptions { LoadGainMap = true }).GainMap;
 if (hdr is { CanDecode: true })
 {
     Console.WriteLine($"{hdr.Selected}, map {hdr.GainMapSize}, up to {hdr.Headroom}x SDR white");
@@ -52,7 +52,7 @@ else if (hdr is not null)
 }
 ```
 
-`HdrInfo` reports every detected model (`Detected`), the one used (`Selected`), the map size, the maximum headroom as a
+`GainMapInfo` reports every detected model (`Detected`), the one used (`Selected`), the map size, the maximum headroom as a
 linear ratio (4 means two stops above SDR white) and whether the headers allow `ToHdr` (`CanDecode`).
 
 ## Reconstruction
@@ -78,7 +78,7 @@ count. With SIMD, a 12 MP photo takes about 35–55 ms for `ToHdr` and 50 ms for
 
 ### What keeps or removes the map
 
-Geometric operations edit the map together with the base; everything else removes it (`image.Hdr` becomes null):
+Geometric operations edit the map together with the base; everything else removes it (`image.GainMap` becomes null):
 
 | Operation | Gain map |
 | --- | --- |

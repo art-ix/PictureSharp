@@ -16,7 +16,7 @@ public class HdrIsoWriterTests
         HdrGainMapTests.ValidCases().Where(name =>
         {
             using Image image = Image.Load(HdrGainMapTests.File(name + ".jpg"), new DecoderOptions { LoadGainMap = true });
-            return image.GainMap?.Parameters?.Kind == HdrGainMapKinds.Iso21496;
+            return image.AttachedGainMap?.Parameters?.Kind == HdrGainMapKinds.Iso21496;
         });
 
     /// <summary>The ISO payload and the (single-segment) ICC profile of a gain map JPEG's APP2 segments.</summary>
@@ -39,7 +39,7 @@ public class HdrIsoWriterTests
     private static GainMapMetadata Parse(string name, out byte[] iso, out byte[] icc)
     {
         using Image image = Image.Load(HdrGainMapTests.File(name + ".jpg"), new DecoderOptions { LoadGainMap = true });
-        (iso, icc) = Segments(image.GainMap!.MapData.Span);
+        (iso, icc) = Segments(image.AttachedGainMap!.MapData.Span);
         return GainMapMetadata.ParseIso(iso, 3, icc);
     }
 
@@ -71,9 +71,9 @@ public class HdrIsoWriterTests
     public async Task ToIso_KeepsTheColorSpaceFlag_OfAnAttachedMap(string name)
     {
         using Image image = Image.Load(HdrGainMapTests.File(name + ".jpg"), new DecoderOptions { LoadGainMap = true });
-        (byte[] iso, _) = Segments(image.GainMap!.MapData.Span);
+        (byte[] iso, _) = Segments(image.AttachedGainMap!.MapData.Span);
         // Loading fills MultiplicationSpace with the base primaries; the written flag must still be the file's.
-        byte[] written = GainMapMetadataWriter.WriteIso(image.GainMap.Parameters!);
+        byte[] written = GainMapMetadataWriter.WriteIso(image.AttachedGainMap.Parameters!);
         await Assert.That(written[4] & 0x40).IsEqualTo(iso[4] & 0x40);
     }
 

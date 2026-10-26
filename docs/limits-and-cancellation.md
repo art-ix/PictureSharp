@@ -32,7 +32,7 @@ image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
 
 An exceeded limit throws `ImageFormatException` naming the option. Limits apply to every call taking `DecoderOptions`
 (`Load`, `Identify`, `ReadMetadata`, `EditMetadata`, `OpenFrameReaderAsync`, `IcoFile`), with defaults when none are
-given. An HDR gain map over `MaxPixels` is reported in `Image.Hdr` instead of failing the load.
+given. An HDR gain map over `MaxPixels` is reported in `Image.GainMap` instead of failing the load.
 
 - **Input** is read into memory before decoding and reading stops one byte past `MaxInputBytes`. A seekable stream's
   declared length only sizes the first buffer (a larger one is rejected up front); non-seekable streams grow up to the

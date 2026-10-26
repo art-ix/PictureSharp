@@ -30,7 +30,16 @@ internal sealed class GifDecoder : IImageDecoder, ISequentialImageDecoder
             Format = ImageFormat.Gif,
             Width = gif.Width,
             Height = gif.Height,
-            HasAlpha = gif.HasTransparency,
+            Color = new ImageColorInfo
+            {
+                Model = ImageColorModel.Palette,
+                ChannelCount = 1,
+                BitsPerSample = gif.IndexBits,
+                SampleFormat = ImageSampleFormat.UnsignedInteger,
+                AlphaMode = gif.HasTransparency ? ImageAlphaMode.Straight : ImageAlphaMode.None,
+                HasIccProfile = gif.HasIccExtension,
+            },
+            Compression = ImageCompression.Lossless,
             FrameCount = gif.Frames.Count,
             IsAnimated = gif.Frames.Count > 1,
         };

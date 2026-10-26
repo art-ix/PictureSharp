@@ -107,7 +107,7 @@ public class AnimationEncoderTests
         WebPContainer container = WebPContainer.Parse(encoded);
         await Assert.That(container.Frames).Contains(f => f.IsLossless);
         await Assert.That(container.Frames).Contains(f => !f.IsLossless);
-        await Assert.That(Image.Identify(encoded.AsSpan()).WebPCompression).IsEqualTo(WebPCompression.Mixed);
+        await Assert.That(Image.Identify(encoded.AsSpan()).Compression).IsEqualTo(ImageCompression.Mixed);
     }
 
     [Test]

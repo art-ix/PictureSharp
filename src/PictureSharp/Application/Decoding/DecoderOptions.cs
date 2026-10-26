@@ -99,9 +99,9 @@ public sealed record DecoderOptions
 
     /// <summary>
     /// Detects HDR gain maps (ISO 21496-1 and Apple HDR Gain Map in JPEG) while loading and identifying. A load then
-    /// attaches the compressed map to the image (<see cref="Image.Hdr"/>, <see cref="Image.HasHdr"/>) for
+    /// attaches the compressed map to the image (<see cref="Image.GainMap"/>, <see cref="Image.HasHdr"/>) for
     /// <c>ToHdr</c>, without decoding it, and reserves its pixels in <see cref="MaxPixels"/>; <c>Identify</c> fills
-    /// <see cref="ImageInfo.Hdr"/>. The base pixels are the same either way, and corrupt or unsupported HDR data never
+    /// <see cref="ImageInfo.GainMap"/>. The base pixels are the same either way, and corrupt or unsupported HDR data never
     /// fails the load. The data needed for HDR (profile, MakerNote, gain map metadata) is read even with
     /// <see cref="IgnoreMetadata"/>. Default: false, which skips all HDR parsing.
     /// </summary>

@@ -27,10 +27,17 @@ internal sealed class BmpHeader
     public long DataOffset;
     public int IccOffset = -1;
     public int IccLength;
+    public bool IsSrgb;
 
     public bool HasAlpha => Alpha.Mask != 0;
 
     public bool IsPaletted => BitCount <= 8 && Compression != BmpCompression.Embedded;
+
+    /// <summary>The stored sample depth: the index depth for palettes, else the widest mask (8 without masks).</summary>
+    public int BitsPerSample =>
+        IsPaletted ? BitCount
+        : (Red.Mask | Green.Mask | Blue.Mask | Alpha.Mask) == 0 ? 8
+        : Math.Max(Math.Max(Red.Bits, Green.Bits), Math.Max(Blue.Bits, Alpha.Bits));
 
     private static ImageFormatException Error(string message) => new(ImageFormat.Bmp, message);
 
@@ -116,6 +123,8 @@ internal sealed class BmpHeader
                 h.Alpha = new BmpChannel(alphaMask ? BinaryPrimitives.ReadUInt32LittleEndian(b[52..]) : 0);
             }
 
+            // bV4CSType: LCS_WINDOWS_COLOR_SPACE means "system default" and is not reported as sRGB.
+            h.IsSrgb = headerSize >= BmpConstants.V4HeaderSize && BinaryPrimitives.ReadUInt32LittleEndian(b[56..]) == BmpConstants.ColorSpaceSrgb;
             if (headerSize >= BmpConstants.V5HeaderSize && BinaryPrimitives.ReadUInt32LittleEndian(b[56..]) == BmpConstants.ProfileEmbedded)
             {
                 long iccOffset = BmpConstants.FileHeaderSize + (long)BinaryPrimitives.ReadUInt32LittleEndian(b[112..]);

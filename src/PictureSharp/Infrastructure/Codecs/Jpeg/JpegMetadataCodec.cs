@@ -55,7 +55,7 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
     {
         var segments = Parse(data.Span, context.CancellationToken);
         int mpfIndex = MpfIndex(data.Span, segments);
-        HdrInfo? hdr = GainMapContainer(data.Span, segments, context);
+        GainMapInfo? hdr = GainMapContainer(data.Span, segments, context);
         if (hdr is not null)
         {
             if (!(metadata.IccData ?? []).AsSpan().SequenceEqual(original.IccData ?? []))
@@ -107,7 +107,7 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
         {
             int oldTiff = segments[mpfIndex].Body + MpfPrefix.Length;
             JpegMpf.Relocate(result, (int)newMpf + 4 + MpfPrefix.Length, oldTiff, (int)oldPrimaryEnd, (int)newPrimaryEnd);
-            HdrInfo? rewritten = JpegGainMapReader.Read(result, context.Options, budget: null, copyMap: false)?.Info;
+            GainMapInfo? rewritten = JpegGainMapReader.Read(result, context.Options, budget: null, copyMap: false)?.Info;
             if (rewritten != hdr)
                 throw new InvalidOperationException("The edit would remove or change metadata the HDR gain map needs (such as the Apple MakerNote headroom).");
         }
@@ -125,10 +125,10 @@ internal sealed class JpegMetadataCodec : IImageMetadataCodec
     /// The gain map of a file with an MPF directory, or null without MPF. Only HDR gain map containers are supported:
     /// their secondary image is the map, whose MPF offset a rewrite can fix; other MPO files are rejected.
     /// </summary>
-    private static HdrInfo? GainMapContainer(ReadOnlySpan<byte> data, List<Segment> segments, DecodeContext context)
+    private static GainMapInfo? GainMapContainer(ReadOnlySpan<byte> data, List<Segment> segments, DecodeContext context)
     {
         if (MpfIndex(data, segments) < 0) return null;
-        HdrInfo? hdr = JpegGainMapReader.Read(data, context.Options, budget: null, copyMap: false)?.Info;
+        GainMapInfo? hdr = JpegGainMapReader.Read(data, context.Options, budget: null, copyMap: false)?.Info;
         return hdr is { CanDecode: true } ? hdr
             : throw new NotSupportedException("JPEG MPF/MPO offsets can be preserved only for files with a valid HDR gain map.");
     }

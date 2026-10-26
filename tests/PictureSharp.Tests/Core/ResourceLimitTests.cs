@@ -166,7 +166,7 @@ public class ResourceLimitTests
     public async Task MaxFrames_Boundary(string file)
     {
         byte[] data = Corpus.Read(file);
-        int frames = Image.Identify(data).FrameCount;
+        int frames = Image.Identify(data).FrameCount!.Value;
         var exact = new DecoderOptions { MaxFrames = frames };
         var below = new DecoderOptions { MaxFrames = frames - 1 };
 

@@ -18,16 +18,29 @@ internal sealed class JpegDecoder : IImageDecoder
     {
         JpegFile file = JpegFile.Read(data.Span, options, headerOnly: true);
         JpegFrame frame = file.Frame!;
-        (float dpiX, float dpiY) = file.Resolution();
         return new ImageInfo
         {
             Format = ImageFormat.Jpeg,
             Width = frame.Width,
             Height = frame.Height,
+            Color = new ImageColorInfo
+            {
+                Model = file.ColorSpace() switch
+                {
+                    JpegColorSpace.Gray => ImageColorModel.Gray,
+                    JpegColorSpace.Cmyk or JpegColorSpace.Ycck => ImageColorModel.Cmyk,
+                    _ => ImageColorModel.Rgb,
+                },
+                ChannelCount = frame.Components.Length,
+                BitsPerSample = 8,   // other precisions throw in Read
+                SampleFormat = ImageSampleFormat.UnsignedInteger,
+                AlphaMode = ImageAlphaMode.None,
+                HasIccProfile = file.HasIccChunks,
+            },
+            Compression = ImageCompression.Lossy,   // lossless SOF3 throws in Read
             Orientation = file.Exif is null ? ExifOrientation.Unknown : ExifReader.GetOrientation(file.Exif),
-            HorizontalResolution = dpiX,
-            VerticalResolution = dpiY,
-            Hdr = options.LoadGainMap ? JpegGainMapReader.Read(data.Span, options, budget: null, copyMap: false)?.Info : null,
+            Resolution = file.DeclaredResolution(),
+            GainMap = options.LoadGainMap ? JpegGainMapReader.Read(data.Span, options, budget: null, copyMap: false)?.Info : null,
         };
     }
 

@@ -51,7 +51,7 @@ public class HdrUltraHdrOracleTests
     /// <summary>Runs the harness on the image's own decoded base pixels and gain map; returns (exact, LUT) RGB floats.</summary>
     private static (float[] Exact, float[] Lut) Oracle(Image image, string name)
     {
-        GainMapAttachment attachment = image.GainMap!;
+        GainMapAttachment attachment = image.AttachedGainMap!;
         GainMapParameters p = attachment.Parameters!;
         DecodedGainMap map = attachment.Decoder!.Decode(attachment.MapData, 1, 1, default);
         string input = Path.Combine(Path.GetTempPath(), $"uhdr-{name}-{Guid.NewGuid():N}.bin"), output = input + ".f32";
@@ -182,7 +182,7 @@ public class HdrUltraHdrOracleTests
             await Assert.That(reference.Length).IsEqualTo(hdr.Width * hdr.Height * 4);
             // As in the 0.6.5 budget, libultrahdr resizes maps whose aspect ratio differs from the base by more than 1%
             // (rounded map sizes after edits of small images); those only have to decode.
-            System.Drawing.Size map = written.Hdr!.GainMapSize;
+            System.Drawing.Size map = written.GainMap!.GainMapSize;
             double baseAspect = (double)written.Width / written.Height, mapAspect = (double)map.Width / map.Height;
             if (Math.Abs(baseAspect - mapAspect) / baseAspect > 0.01)
             {

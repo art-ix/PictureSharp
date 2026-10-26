@@ -23,7 +23,24 @@ public class ConsumerCompilationTests
                 public int HeaderSize => 2;
                 public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("RO"u8);
                 public IImageFormatDecoder Decoder => this;
-                public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) => new() { Format = Kind, Width = 1, Height = 1 };
+                public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) => new()
+                {
+                    Format = Kind,
+                    Width = 1,
+                    Height = 1,
+                    Color = new()
+                    {
+                        Model = ImageColorModel.Gray,
+                        ChannelCount = 1,
+                        BitsPerSample = 16,
+                        SampleFormat = ImageSampleFormat.UnsignedInteger,
+                        AlphaMode = ImageAlphaMode.None,
+                        HasIccProfile = false,
+                        Cicp = new CicpColorDescription(9, 16, 0, fullRange: true),
+                    },
+                    Compression = ImageCompression.Lossless,
+                    Resolution = new ImageResolution(300, 300),
+                };
                 public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
                 {
                     context.ReservePixels(1, 1);
@@ -113,6 +130,31 @@ public class ConsumerCompilationTests
         await Assert.That(Parameter(model, tree, "x.AutoContrast(1f, 2f)", 1)).IsEqualTo("float");
         await Assert.That(Parameter(model, tree, "x.ApplyMask(b, new PictureSharp.Processing.MaskOptions { Invert = true })", 1))
             .IsEqualTo("PictureSharp.Processing.MaskOptions?");
+    }
+
+    [Test]
+    public async Task PluginIdentify_WithoutColorOrCompression_DoesNotCompile()
+    {
+        const string source = """
+            using PictureSharp;
+            public static class Plugin
+            {
+                public static ImageInfo NoColor() => new() { Format = ImageFormat.Png, Width = 1, Height = 1, Compression = ImageCompression.Lossless };
+                public static ImageInfo NoCompression(ImageColorInfo color) => new() { Format = ImageFormat.Png, Width = 1, Height = 1, Color = color };
+                public static ImageColorInfo NoAlphaMode() => new()
+                {
+                    Model = ImageColorModel.Rgb, ChannelCount = 3, BitsPerSample = 8, SampleFormat = ImageSampleFormat.UnsignedInteger, HasIccProfile = false,
+                };
+            }
+            """;
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
+        CSharpCompilation compilation = CSharpCompilation.Create("RequiredMembers", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        string[] missing = [.. compilation.GetDiagnostics().Where(d => d.Id == "CS9035").Select(d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))];
+        await Assert.That(missing.Length).IsEqualTo(3);
+        await Assert.That(missing.Any(m => m.Contains("ImageInfo.Color"))).IsTrue();
+        await Assert.That(missing.Any(m => m.Contains("ImageInfo.Compression"))).IsTrue();
+        await Assert.That(missing.Any(m => m.Contains("ImageColorInfo.AlphaMode"))).IsTrue();
     }
 
     [Test]

@@ -209,7 +209,7 @@ public class EmbeddedPartTests
 
         public bool IsSupported(ReadOnlySpan<byte> header) => header.StartsWith("PROB"u8);
 
-        public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) => new() { Format = Format, Width = 1, Height = 1 };
+        public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) => new() { Format = Format, Width = 1, Height = 1, Color = TestColor.Rgb8, Compression = ImageCompression.Lossless };
 
         public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
         {

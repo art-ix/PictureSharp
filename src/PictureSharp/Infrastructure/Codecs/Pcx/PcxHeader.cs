@@ -24,8 +24,11 @@ internal readonly record struct PcxHeader(
         (Mode is 0x0101 or 0x0201 or 0x0301 or 0x0401 or 0x0102 or 0x0104 or 0x0108 or 0x0308 or 0x0408)
         && (BitsPerPixel == 8 || Mode == 0x0101 || HasHeaderPalette);
 
+    public ImageResolution? DeclaredResolution =>
+        HorizontalDpi > 0 && VerticalDpi > 0 ? new ImageResolution(HorizontalDpi, VerticalDpi) : null;
+
     public (float X, float Y) Resolution =>
-        HorizontalDpi > 0 && VerticalDpi > 0 ? (HorizontalDpi, VerticalDpi) : (96f, 96f);
+        DeclaredResolution is { } r ? (r.Horizontal, r.Vertical) : (96f, 96f);
 
     public static PcxHeader Parse(ReadOnlySpan<byte> file)
     {

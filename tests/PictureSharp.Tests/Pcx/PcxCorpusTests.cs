@@ -44,13 +44,12 @@ public class PcxCorpusTests
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
         await Assert.That(info.Format).IsEqualTo(ImageFormat.Pcx);
         await Assert.That((info.Width, info.Height)).IsEqualTo((reference.Width, reference.Height));
-        await Assert.That(info.HasAlpha).IsEqualTo(reference.HasAlpha);
+        await Assert.That(info.Color.HasAlpha).IsEqualTo(reference.HasAlpha);
         await Assert.That(info.FrameCount).IsEqualTo(reference.Frames.Count);
         await Assert.That(info.IsAnimated).IsEqualTo(reference.Animated);
         if (reference.Dpi is { } dpi)
         {
-            await Assert.That(info.HorizontalResolution).IsEqualTo(dpi[0]);
-            await Assert.That(info.VerticalResolution).IsEqualTo(dpi[1]);
+            await Assert.That(info.Resolution).IsEqualTo(new ImageResolution(dpi[0], dpi[1]));
         }
     }
 }

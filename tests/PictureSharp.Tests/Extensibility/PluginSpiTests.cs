@@ -74,8 +74,8 @@ public class PluginSpiTests
         var options = new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true };
         using Image jpeg = Image.Load(HdrGainMapTests.File(name + ".jpg"), options);
         using Image plugin = Image.Load(Container(name), Hdr(options));
-        await Assert.That(plugin.HasHdr).IsTrue().Because(plugin.Hdr?.UnsupportedReason ?? "");
-        await Assert.That(plugin.Hdr).IsEqualTo(jpeg.Hdr);
+        await Assert.That(plugin.HasHdr).IsTrue().Because(plugin.GainMap?.UnsupportedReason ?? "");
+        await Assert.That(plugin.GainMap).IsEqualTo(jpeg.GainMap);
         await Assert.That(plugin.GetPixelSpan().ToArray()).IsEquivalentTo(jpeg.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
 
         using HdrImage expected = jpeg.ToHdr();
@@ -89,8 +89,8 @@ public class PluginSpiTests
     public async Task AttachGainMap_ReportsEveryDetectedModel()
     {
         using Image image = Image.Load(Container("iso_and_apple"), Hdr());
-        await Assert.That(image.Hdr!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496 | HdrGainMapKinds.Apple);
-        await Assert.That(image.Hdr.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
+        await Assert.That(image.GainMap!.Detected).IsEqualTo(HdrGainMapKinds.Iso21496 | HdrGainMapKinds.Apple);
+        await Assert.That(image.GainMap.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
     }
 
     [Test]
@@ -119,7 +119,7 @@ public class PluginSpiTests
         byte[] ppm = source.Encode(new PpmEncoderOptions { Configuration = configuration });
         using Image image = Image.Load(ppm, new DecoderOptions { Configuration = configuration, LoadGainMap = true });
         await Assert.That(thrown).IsTypeOf<ArgumentException>();
-        await Assert.That(image.Hdr).IsNull();
+        await Assert.That(image.GainMap).IsNull();
     }
 
     private sealed class AttachProbe(IImageFormatDecoder inner, Action<ImageDecodeContext> probe) : IImageFormatDecoder
@@ -172,7 +172,7 @@ public class PluginSpiTests
     public async Task Identify_AndLoadWithoutLoadGainMap_ReportNoMap()
     {
         using Image image = Image.Load(Container("iso_mono_srgb"), new DecoderOptions { Configuration = WithContainer });
-        await Assert.That(image.Hdr).IsNull();
+        await Assert.That(image.GainMap).IsNull();
         ImageInfo info = Image.Identify(Container("iso_mono_srgb"), new DecoderOptions { Configuration = WithContainer });
         await Assert.That((info.Format, info.ContainerItemCount)).IsEqualTo((GainMapContainerFormat.Format, (int?)2));
     }
@@ -187,9 +187,9 @@ public class PluginSpiTests
     public async Task UnusableMaps_AreReportedWithoutFailingTheLoad(string name, Type exception)
     {
         using Image image = Image.Load(Container(name), Hdr());
-        await Assert.That(image.Hdr).IsNotNull();
-        await Assert.That((image.Hdr!.CanDecode, image.HasHdr)).IsEqualTo((false, false));
-        await Assert.That(image.Hdr.UnsupportedReason).IsNotNull();
+        await Assert.That(image.GainMap).IsNotNull();
+        await Assert.That((image.GainMap!.CanDecode, image.HasHdr)).IsEqualTo((false, false));
+        await Assert.That(image.GainMap.UnsupportedReason).IsNotNull();
         Exception? thrown = null;
         try
         {
@@ -210,7 +210,7 @@ public class PluginSpiTests
         ImageInfo info = Image.Identify(data, new DecoderOptions { Configuration = WithContainer });
         using Image image = Image.Load(data, Hdr(new DecoderOptions { MaxPixels = ((long)info.Width * info.Height) + 1 }));
         await Assert.That(image.HasHdr).IsFalse();
-        await Assert.That(image.Hdr!.UnsupportedReason!).Contains("MaxPixels");
+        await Assert.That(image.GainMap!.UnsupportedReason!).Contains("MaxPixels");
     }
 
     [Test]

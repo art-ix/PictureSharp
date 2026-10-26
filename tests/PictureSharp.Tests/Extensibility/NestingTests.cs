@@ -73,7 +73,7 @@ public class NestingTests
         public IImageFormatDecoder Decoder => this;
 
         public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
-            new() { Format = Format, Width = 1, Height = 1, HasAlpha = true };
+            new() { Format = Format, Width = 1, Height = 1, Color = TestColor.Rgba8, Compression = ImageCompression.Lossless };
 
         public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context) => mode switch
         {

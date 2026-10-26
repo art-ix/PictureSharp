@@ -40,6 +40,10 @@ internal static class PngColorChunks
     public static RenderingIntent? ReadSrgb(ReadOnlySpan<byte> body) =>
         body.Length == 1 && body[0] <= 3 ? (RenderingIntent)body[0] : null;
 
+    /// <summary>A cICP body, or null unless it has 4 bytes, the RGB matrix (PNG allows no other) and a 0/1 range flag.</summary>
+    public static CicpColorDescription? ReadCicp(ReadOnlySpan<byte> body) =>
+        body.Length == 4 && body[2] == 0 && body[3] <= 1 ? new CicpColorDescription(body[0], body[1], 0, body[3] == 1) : null;
+
     public static byte[] Gamma(float gamma)
     {
         // ImageMetadata.Gamma keeps the value within the gAMA range.

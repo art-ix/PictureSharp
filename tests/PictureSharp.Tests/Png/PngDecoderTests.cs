@@ -42,8 +42,8 @@ public class PngDecoderTests
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
         await Assert.That(info.Format).IsEqualTo(ImageFormat.Png);
         await Assert.That((info.Width, info.Height)).IsEqualTo((r.Width, r.Height));
-        await Assert.That(info.HasAlpha).IsEqualTo(r.HasAlpha);
-        await Assert.That(info.BitsPerChannel).IsEqualTo(r.BitDepth);
+        await Assert.That(info.Color.HasAlpha).IsEqualTo(r.HasAlpha);
+        await Assert.That(info.Color.BitsPerSample).IsEqualTo(r.BitDepth);
         await Assert.That(info.FrameCount).IsEqualTo(r.Frames.Count);
         await Assert.That(info.IsAnimated).IsEqualTo(r.Animated);
         await Assert.That((int)info.Orientation).IsEqualTo(r.Orientation);

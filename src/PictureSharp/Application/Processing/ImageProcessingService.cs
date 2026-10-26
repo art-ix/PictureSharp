@@ -56,7 +56,7 @@ internal static class ImageProcessingService
         }
 
         Image clone = image.CopyPropertiesTo(new Image(frames));
-        clone.GainMap = image.GainMap;   // immutable, shared; geometric edits replace it, other operations remove it
+        clone.AttachedGainMap = image.AttachedGainMap;   // immutable, shared; geometric edits replace it, other operations remove it
         var state = new ProcessingState(clone, shared: true, cancellationToken);
         try
         {

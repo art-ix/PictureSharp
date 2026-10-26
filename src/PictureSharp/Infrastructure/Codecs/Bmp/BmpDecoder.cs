@@ -16,21 +16,36 @@ internal sealed partial class BmpDecoder(ICodecResolver codecs) : IImageDecoder
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
         BmpHeader h = BmpHeader.Parse(data.Span);
-        bool hasAlpha = h.HasAlpha;
+        ImageColorInfo color;
+        ImageCompression compression = ImageCompression.Lossless;   // RLE too
         if (h.Compression == BmpCompression.Embedded)
         {
-            hasAlpha = EmbeddedDecoder(data.Span, h).Identify(EmbeddedData(data, h), options).HasAlpha;
+            ImageInfo embedded = EmbeddedDecoder(data.Span, h).Identify(EmbeddedData(data, h), options);
+            color = embedded.Color with { HasIccProfile = embedded.Color.HasIccProfile || h.IccOffset >= 0 };
+            compression = embedded.Compression;
+        }
+        else
+        {
+            color = new ImageColorInfo
+            {
+                Model = h.IsPaletted ? ImageColorModel.Palette : ImageColorModel.Rgb,
+                ChannelCount = h.IsPaletted ? 1 : h.HasAlpha ? 4 : 3,
+                BitsPerSample = h.BitsPerSample,
+                SampleFormat = ImageSampleFormat.UnsignedInteger,
+                AlphaMode = h.HasAlpha ? ImageAlphaMode.Straight : ImageAlphaMode.None,
+                HasIccProfile = h.IccOffset >= 0,
+                Cicp = h.IsSrgb ? CicpColorDescription.Srgb : null,
+            };
         }
 
-        (float dpiX, float dpiY) = Resolution(h);
         return new ImageInfo
         {
             Format = ImageFormat.Bmp,
             Width = h.Width,
             Height = h.Height,
-            HasAlpha = hasAlpha,
-            HorizontalResolution = dpiX,
-            VerticalResolution = dpiY,
+            Color = color,
+            Compression = compression,
+            Resolution = DeclaredResolution(h),
         };
     }
 
@@ -89,10 +104,11 @@ internal sealed partial class BmpDecoder(ICodecResolver codecs) : IImageDecoder
         return result;
     }
 
+    private static ImageResolution? DeclaredResolution(BmpHeader h) =>
+        h.XPelsPerMeter > 0 && h.YPelsPerMeter > 0 ? ImageResolution.FromDeclared(h.XPelsPerMeter * 0.0254, h.YPelsPerMeter * 0.0254) : null;
+
     private static (float X, float Y) Resolution(BmpHeader h) =>
-        h.XPelsPerMeter > 0 && h.YPelsPerMeter > 0
-            ? ((float)(h.XPelsPerMeter * 0.0254), (float)(h.YPelsPerMeter * 0.0254))
-            : (96f, 96f);
+        DeclaredResolution(h) is { } r ? (r.Horizontal, r.Vertical) : (96f, 96f);
 
     // ------------------------------------------------------------------ embedded PNG/JPEG
 

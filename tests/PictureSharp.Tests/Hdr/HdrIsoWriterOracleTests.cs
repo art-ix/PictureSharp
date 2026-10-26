@@ -111,7 +111,7 @@ public class HdrIsoWriterOracleTests
         foreach (string name in HdrIsoWriterTests.IsoCases())
         {
             using Image image = Image.Load(HdrGainMapTests.File(name + ".jpg"), new DecoderOptions { LoadGainMap = true });
-            (byte[] iso, byte[] icc) = HdrIsoWriterTests.Segments(image.GainMap!.MapData.Span);
+            (byte[] iso, byte[] icc) = HdrIsoWriterTests.Segments(image.AttachedGainMap!.MapData.Span);
             list.Add(GainMapMetadata.ParseIso(iso, 3, icc).Parameters);
         }
 

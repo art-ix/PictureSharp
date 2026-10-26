@@ -60,6 +60,24 @@ internal sealed class IcoDecoder(IImageDecoder png) : IImageDecoder
         options.ValidateDimensions(ImageFormat.Ico, info.Width, info.Height);
         return entry.Info.Encoding == IcoEncoding.Png
             ? png.Identify(entry.Data, options) with { Format = ImageFormat.Ico, FrameCount = 1, IsAnimated = false }
-            : new() { Format = ImageFormat.Ico, Width = info.Width, Height = info.Height, HasAlpha = true };
+            : new()
+            {
+                Format = ImageFormat.Ico,
+                Width = info.Width,
+                Height = info.Height,
+                Color = DibColor(info.BitsPerPixel),
+                Compression = ImageCompression.Lossless,
+            };
     }
+
+    /// <summary>A DIB entry: its pixels plus the AND mask, which counts as an alpha channel (also beside BGRA).</summary>
+    private static ImageColorInfo DibColor(int bits) => new()
+    {
+        Model = bits <= 8 ? ImageColorModel.Palette : ImageColorModel.Rgb,
+        ChannelCount = bits <= 8 ? 2 : 4,
+        BitsPerSample = bits switch { <= 8 => bits, 16 => 5, _ => 8 },
+        SampleFormat = ImageSampleFormat.UnsignedInteger,
+        AlphaMode = ImageAlphaMode.Straight,
+        HasIccProfile = false,
+    };
 }

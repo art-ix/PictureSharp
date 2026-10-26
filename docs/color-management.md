@@ -4,6 +4,11 @@ PictureSharp stores 8-bit `Rgba32` pixels and converts colors only when asked: a
 description is kept and written back. On request, images are converted to sRGB, and resizing and compositing can work
 in linear light.
 
+`Image.Identify` tells what a file declares before loading it: `info.Color.HasIccProfile` and `info.Color.Cicp`
+(H.273 code points from PNG cICP or sRGB, BMP sRGB or HEIF nclx; `IsHdrTransfer` for PQ and HLG). `Load` keeps ICC
+profiles and PNG gamma and chromaticities, but does not apply CICP; see
+[Loading and saving](loading-and-saving.md#inspecting-without-decoding).
+
 ## Converting to sRGB
 
 ```csharp

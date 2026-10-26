@@ -116,7 +116,7 @@ public readonly ref partial struct ImageProcessingContext
         {
             GainMapAttachment? gainMap = _state.EditGainMap(GainMapEdit.RotateFlip(turns, flipX));
             foreach (ImageFrame frame in _state.WritableFrames) Geometry.RotateFlip(frame, turns, flipX);
-            Target.GainMap = gainMap;   // set after every frame is flipped; a cancellation in between removes it
+            Target.AttachedGainMap = gainMap;   // set after every frame is flipped; a cancellation in between removes it
         }
 
         Target.Metadata.PixelsMoved();

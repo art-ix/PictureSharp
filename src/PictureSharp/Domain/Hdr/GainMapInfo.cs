@@ -3,10 +3,10 @@ using System.Drawing;
 namespace PictureSharp;
 
 /// <summary>
-/// The HDR gain map declared by an image file, as reported by <c>Image.Identify</c> and <see cref="Image.Hdr"/> when
+/// The HDR gain map declared by an image file, as reported by <see cref="ImageInfo.GainMap"/> and <see cref="Image.GainMap"/> when
 /// <c>DecoderOptions.LoadGainMap</c> is set. Describes the headers only; the map pixels are decoded by <c>ToHdr</c>.
 /// </summary>
-public sealed record HdrInfo
+public sealed record GainMapInfo
 {
     /// <summary>Every gain map model the file declares.</summary>
     public HdrGainMapKinds Detected { get; init; }

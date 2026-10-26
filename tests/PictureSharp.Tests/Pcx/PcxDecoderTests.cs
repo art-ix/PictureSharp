@@ -200,7 +200,7 @@ public class PcxDecoderTests
         await Assert.That(image.HasAlpha).IsTrue();
         await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo([new Rgba32(1, 3, 5, 7), new Rgba32(2, 4, 6, 8)], CollectionOrdering.Matching);
         ImageInfo info = Image.Identify(pcx);
-        await Assert.That(info.HasAlpha).IsTrue();
+        await Assert.That(info.Color.HasAlpha).IsTrue();
         await Assert.That(info.Format).IsEqualTo(ImageFormat.Pcx);
     }
 
@@ -293,8 +293,8 @@ public class PcxDecoderTests
     {
         byte[] pcx = new PcxBuilder { Width = 6, Height = 4, Bits = 8, Planes = 3, HorizontalDpi = 300, VerticalDpi = 300 }.Build();
         ImageInfo info = Image.Identify(pcx);
-        await Assert.That((info.Width, info.Height, info.HasAlpha)).IsEqualTo((6, 4, false));
-        await Assert.That((info.HorizontalResolution, info.VerticalResolution)).IsEqualTo((300f, 300f));
+        await Assert.That((info.Width, info.Height, info.Color.HasAlpha)).IsEqualTo((6, 4, false));
+        await Assert.That(info.Resolution).IsEqualTo(new ImageResolution(300f, 300f));
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(pcx));
     }
 

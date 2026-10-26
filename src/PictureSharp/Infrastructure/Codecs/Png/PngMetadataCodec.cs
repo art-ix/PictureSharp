@@ -54,9 +54,9 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
             IgnoreMetadata = true,
             Png = context.Options.Png with { StrictChecksums = false },
         });
-        context.Budget.ReserveImage(ImageFormat.Png, info.Width, info.Height, Math.Max(1, info.FrameCount));
-        metadata.HorizontalResolution = info.HorizontalResolution;
-        metadata.VerticalResolution = info.VerticalResolution;
+        context.Budget.ReserveImage(ImageFormat.Png, info.Width, info.Height, info.FrameCount ?? 1);
+        metadata.HorizontalResolution = info.Resolution?.Horizontal ?? 96f;
+        metadata.VerticalResolution = info.Resolution?.Vertical ?? 96f;
         return metadata;
     }
 

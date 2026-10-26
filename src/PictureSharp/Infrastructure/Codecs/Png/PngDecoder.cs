@@ -28,13 +28,33 @@ internal sealed partial class PngDecoder : IImageDecoder
             Format = ImageFormat.Png,
             Width = png.Width,
             Height = png.Height,
-            HasAlpha = png.HasAlpha,
+            Color = new ImageColorInfo
+            {
+                Model = png.Color switch
+                {
+                    PngColor.Gray or PngColor.GrayAlpha => ImageColorModel.Gray,
+                    PngColor.Palette => ImageColorModel.Palette,
+                    _ => ImageColorModel.Rgb,
+                },
+                ChannelCount = png.Color switch
+                {
+                    PngColor.Gray or PngColor.Palette => 1,
+                    PngColor.GrayAlpha => 2,
+                    PngColor.Rgb => 3,
+                    _ => 4,
+                },
+                BitsPerSample = png.BitDepth,
+                SampleFormat = ImageSampleFormat.UnsignedInteger,
+                AlphaMode = png.HasAlpha ? ImageAlphaMode.Straight : ImageAlphaMode.None,
+                HasIccProfile = png.HasIccp,
+                // cICP wins over iCCP and sRGB (PNG 3rd edition); iCCP wins over sRGB.
+                Cicp = png.Cicp ?? (png.HasSrgb && !png.HasIccp ? CicpColorDescription.Srgb : null),
+            },
+            Compression = ImageCompression.Lossless,
             FrameCount = png.Animation is { } a ? a.Frames.Count : 1,
             IsAnimated = png.Animation is { Frames.Count: > 1 },
-            BitsPerChannel = png.BitDepth,
             Orientation = png.Exif is null ? ExifOrientation.Unknown : ExifReader.GetOrientation(png.Exif),
-            HorizontalResolution = png.DpiX ?? 96f,
-            VerticalResolution = png.DpiY ?? 96f,
+            Resolution = png.DpiX is { } x && png.DpiY is { } y ? ImageResolution.FromDeclared(x, y) : null,
         };
     }
 

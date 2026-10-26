@@ -1,3 +1,11 @@
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription>
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription> :: ctor(System.Int32 colorPrimaries, System.Int32 transferCharacteristics, System.Int32 matrixCoefficients, System.Boolean fullRange)
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription> :: property System.Boolean FullRange { get; }
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription> :: property System.Boolean IsHdrTransfer { get; }
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription> :: property System.Int32 ColorPrimaries { get; }
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription> :: property System.Int32 MatrixCoefficients { get; }
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription> :: property System.Int32 TransferCharacteristics { get; }
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription> :: property static CicpColorDescription Srgb { get; }
 sealed record DecoderOptions : System.IEquatable<DecoderOptions>
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: ctor()
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: method T? GetFormatOptions<T>()
@@ -41,7 +49,7 @@ abstract class PictureSharp.Formats.GainMapImage
 abstract class PictureSharp.Formats.GainMapImage :: method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
 abstract class PictureSharp.Formats.GainMapImage :: property System.Drawing.Size Size { get; }
 sealed class PictureSharp.Formats.GainMapMetadata
-sealed class PictureSharp.Formats.GainMapMetadata :: method HdrInfo ToHdrInfo(System.Drawing.Size mapSize)
+sealed class PictureSharp.Formats.GainMapMetadata :: method GainMapInfo ToGainMapInfo(System.Drawing.Size mapSize)
 sealed class PictureSharp.Formats.GainMapMetadata :: method System.Byte[] ToIso()
 sealed class PictureSharp.Formats.GainMapMetadata :: method System.Byte[]? ToAlternateIcc()
 sealed class PictureSharp.Formats.GainMapMetadata :: method static PictureSharp.Formats.GainMapMetadata ParseApple(System.ReadOnlySpan<System.Byte> exif, System.ReadOnlySpan<System.Byte> mapXmp)
@@ -80,6 +88,14 @@ sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void Reser
 sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ThrowIfCancellationRequested()
 sealed class PictureSharp.Formats.ImageDecodeContext :: property DecoderOptions Options { get; }
 sealed class PictureSharp.Formats.ImageDecodeContext :: property System.Threading.CancellationToken CancellationToken { get; }
+sealed record GainMapInfo : System.IEquatable<GainMapInfo>
+sealed record GainMapInfo : System.IEquatable<GainMapInfo> :: ctor()
+sealed record GainMapInfo : System.IEquatable<GainMapInfo> :: property HdrGainMapKinds Detected { get; init; }
+sealed record GainMapInfo : System.IEquatable<GainMapInfo> :: property HdrGainMapKinds Selected { get; init; }
+sealed record GainMapInfo : System.IEquatable<GainMapInfo> :: property System.Boolean CanDecode { get; init; }
+sealed record GainMapInfo : System.IEquatable<GainMapInfo> :: property System.Drawing.Size GainMapSize { get; init; }
+sealed record GainMapInfo : System.IEquatable<GainMapInfo> :: property System.Single? Headroom { get; init; }
+sealed record GainMapInfo : System.IEquatable<GainMapInfo> :: property System.String? UnsupportedReason { get; init; }
 enum HdrColorSpace
 enum HdrColorSpace :: LinearSrgb = 0
 enum HdrColorSpace :: LinearDisplayP3 = 1
@@ -88,14 +104,6 @@ enum HdrColorSpace :: LinearDisplayP3 = 1
 [Flags] enum HdrGainMapKinds :: Iso21496 = 1
 [Flags] enum HdrGainMapKinds :: Apple = 2
 [Flags] enum HdrGainMapKinds :: UltraHdrXmp = 4
-sealed record HdrInfo : System.IEquatable<HdrInfo>
-sealed record HdrInfo : System.IEquatable<HdrInfo> :: ctor()
-sealed record HdrInfo : System.IEquatable<HdrInfo> :: property HdrGainMapKinds Detected { get; init; }
-sealed record HdrInfo : System.IEquatable<HdrInfo> :: property HdrGainMapKinds Selected { get; init; }
-sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.Boolean CanDecode { get; init; }
-sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.Drawing.Size GainMapSize { get; init; }
-sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.Single? Headroom { get; init; }
-sealed record HdrInfo : System.IEquatable<HdrInfo> :: property System.String? UnsupportedReason { get; init; }
 sealed class Image : System.IDisposable
 sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height)
 sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, Rgba32 background)
@@ -116,7 +124,7 @@ sealed class Image : System.IDisposable :: method [OverloadPriority(1)] static I
 sealed class Image : System.IDisposable :: method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
 sealed class Image : System.IDisposable :: method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
 sealed class Image : System.IDisposable :: method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
-sealed class Image : System.IDisposable :: property HdrInfo? Hdr { get; }
+sealed class Image : System.IDisposable :: property GainMapInfo? GainMap { get; }
 sealed class Image : System.IDisposable :: property ImageFormat? SourceFormat { get; }
 sealed class Image : System.IDisposable :: property ImageFrameCollection Frames { get; }
 sealed class Image : System.IDisposable :: property ImageMetadata Metadata { get; }
@@ -131,6 +139,32 @@ sealed class Image : System.IDisposable :: property System.Int32 FrameCount { ge
 sealed class Image : System.IDisposable :: property System.Int32 Height { get; }
 sealed class Image : System.IDisposable :: property System.Int32 LoopCount { get; set; }
 sealed class Image : System.IDisposable :: property System.Int32 Width { get; }
+enum ImageAlphaMode
+enum ImageAlphaMode :: None = 0
+enum ImageAlphaMode :: Straight = 1
+enum ImageAlphaMode :: Premultiplied = 2
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo>
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: ctor()
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property CicpColorDescription? Cicp { get; init; }
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property System.Boolean HasAlpha { get; }
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property required ImageAlphaMode AlphaMode { get; init; }
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property required ImageColorModel Model { get; init; }
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property required ImageSampleFormat SampleFormat { get; init; }
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property required System.Boolean HasIccProfile { get; init; }
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property required System.Int32 BitsPerSample { get; init; }
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo> :: property required System.Int32 ChannelCount { get; init; }
+enum ImageColorModel
+enum ImageColorModel :: Other = 0
+enum ImageColorModel :: Gray = 1
+enum ImageColorModel :: Rgb = 2
+enum ImageColorModel :: Palette = 3
+enum ImageColorModel :: Cmyk = 4
+enum ImageColorModel :: Lab = 5
+enum ImageCompression
+enum ImageCompression :: Unknown = 0
+enum ImageCompression :: Lossless = 1
+enum ImageCompression :: Lossy = 2
+enum ImageCompression :: Mixed = 3
 sealed class ImageConfigurationBuilder
 sealed class ImageConfigurationBuilder :: method ImageConfiguration Build()
 sealed class ImageConfigurationBuilder :: method ImageConfigurationBuilder AddFormat(PictureSharp.Formats.IImageFormatModule module)
@@ -195,15 +229,13 @@ sealed class ImageFrameCollection : System.Collections.Generic.IEnumerable<Image
 sealed record ImageInfo : System.IEquatable<ImageInfo>
 sealed record ImageInfo : System.IEquatable<ImageInfo> :: ctor()
 sealed record ImageInfo : System.IEquatable<ImageInfo> :: property ExifOrientation Orientation { get; init; }
-sealed record ImageInfo : System.IEquatable<ImageInfo> :: property HdrInfo? Hdr { get; init; }
-sealed record ImageInfo : System.IEquatable<ImageInfo> :: property PictureSharp.Formats.WebP.WebPCompression WebPCompression { get; init; }
-sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Boolean HasAlpha { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property GainMapInfo? GainMap { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property ImageResolution? Resolution { get; init; }
 sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Boolean IsAnimated { get; init; }
-sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Int32 BitsPerChannel { get; init; }
-sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Int32 FrameCount { get; init; }
 sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Int32? ContainerItemCount { get; init; }
-sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Single HorizontalResolution { get; init; }
-sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Single VerticalResolution { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property System.Int32? FrameCount { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required ImageColorInfo Color { get; init; }
+sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required ImageCompression Compression { get; init; }
 sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required ImageFormat Format { get; init; }
 sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required System.Int32 Height { get; init; }
 sealed record ImageInfo : System.IEquatable<ImageInfo> :: property required System.Int32 Width { get; init; }
@@ -233,6 +265,15 @@ sealed class ImageMetadata :: property System.Collections.Generic.IReadOnlyList<
 sealed class ImageMetadata :: property System.Single HorizontalResolution { get; set; }
 sealed class ImageMetadata :: property System.Single VerticalResolution { get; set; }
 sealed class ImageMetadata :: property System.Single? Gamma { get; set; }
+readonly struct ImageResolution : System.IEquatable<ImageResolution>
+readonly struct ImageResolution : System.IEquatable<ImageResolution> :: ctor(System.Single horizontal, System.Single vertical)
+readonly struct ImageResolution : System.IEquatable<ImageResolution> :: property System.Single Horizontal { get; }
+readonly struct ImageResolution : System.IEquatable<ImageResolution> :: property System.Single Vertical { get; }
+enum ImageSampleFormat
+enum ImageSampleFormat :: UnsignedInteger = 0
+enum ImageSampleFormat :: SignedInteger = 1
+enum ImageSampleFormat :: Float = 2
+enum ImageSampleFormat :: Other = 3
 [Flags] enum MetadataKinds
 [Flags] enum MetadataKinds :: None = 0
 [Flags] enum MetadataKinds :: Icc = 1

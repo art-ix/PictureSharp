@@ -16,7 +16,7 @@
                    Durations are the raw GCE delays; the loop count is gif2webp's number of plays.
 
 Each entry stores dimensions, flags and the SHA-256 of tightly packed RGBA pixels per frame.
-Run with:  python3 -I tests/assets/make_reference.py
+Run with:  python3 -I tests/assets/make_reference.py [identify]   (identify: only identify_reference.json)
 """
 import hashlib
 import json
@@ -343,7 +343,7 @@ def main():
         for name in sorted(files):
             path = os.path.join(dirpath, name)
             rel = os.path.relpath(path, CORPUS)
-            if rel.startswith("src" + os.sep):
+            if rel.startswith(("src" + os.sep, "identify" + os.sep)):
                 continue
             if name.endswith(".webp"):
                 refs[rel] = ref_webp(path, rel)
@@ -377,8 +377,20 @@ def main():
         json.dump(dict(sorted(refs.items())), f, indent=1)
     import runpy
     runpy.run_path(os.path.join(ROOT, "ico_corpus.py"))["references"]()
+    identify_references()
     print(f"reference.json: {len(refs)} entries")
 
 
+def identify_references():
+    """identify_reference.json: the expectations of corpus/identify/, cross-checked with Pillow."""
+    import runpy
+    corpus = runpy.run_path(os.path.join(ROOT, "generate_corpus.py"))
+    runpy.run_path(os.path.join(ROOT, "identify_corpus.py"))["references"](corpus)
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if sys.argv[1:] == ["identify"]:
+        identify_references()
+    else:
+        main()

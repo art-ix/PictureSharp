@@ -66,7 +66,7 @@ internal readonly record struct DecodedGainMap(Rgba32[] Pixels, int Width, int H
 /// </summary>
 internal sealed record GainMapAttachment
 {
-    public required HdrInfo Info { get; init; }
+    public required GainMapInfo Info { get; init; }
 
     public GainMapFailure Failure { get; init; }
 
@@ -103,7 +103,7 @@ internal sealed record GainMapAttachment
     public bool CanDecode => Failure == GainMapFailure.None && Parameters is not null && Decoder is not null;
 
     /// <summary>An attachment that only reports why the declared gain map cannot be used.</summary>
-    public static GainMapAttachment Failed(HdrInfo info, GainMapFailure failure, string reason) => new()
+    public static GainMapAttachment Failed(GainMapInfo info, GainMapFailure failure, string reason) => new()
     {
         Info = info with { Selected = HdrGainMapKinds.None, CanDecode = false, UnsupportedReason = reason },
         Failure = failure,

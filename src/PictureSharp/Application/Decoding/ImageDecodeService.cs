@@ -51,7 +51,7 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
 
             if (result.GainMap is { } gainMap)
             {
-                image.GainMap = gainMap.CanDecode
+                image.AttachedGainMap = gainMap.CanDecode
                     ? gainMap with
                     {
                         StoredSize = result.StoredSize,

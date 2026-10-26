@@ -197,8 +197,8 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
     int primaryLength = baseJpeg.Length + Mpf(0, 0).Length;
     byte[] file = [.. baseJpeg.AsSpan(0, 2), .. Mpf((uint)primaryLength, (uint)(primaryLength - 10)), .. baseJpeg.AsSpan(2), .. map];
     using Image hdrSource = Image.Load(file, new DecoderOptions { LoadGainMap = true });
-    if (!hdrSource.HasHdr || Image.Identify(file, new DecoderOptions { LoadGainMap = true }).Hdr?.Selected != HdrGainMapKinds.Iso21496)
-        throw new InvalidOperationException($"HDR detection failed: {hdrSource.Hdr?.UnsupportedReason}");
+    if (!hdrSource.HasHdr || Image.Identify(file, new DecoderOptions { LoadGainMap = true }).GainMap?.Selected != HdrGainMapKinds.Iso21496)
+        throw new InvalidOperationException($"HDR detection failed: {hdrSource.GainMap?.UnsupportedReason}");
     using HdrImage hdr = hdrSource.ToHdr();
     using HdrImage sdrLinear = hdrSource.ToHdr(new HdrOptions { TargetHeadroom = 1 });
     using Image toneMapped = hdr.ToneMap(new ToneMappingOptions { Exposure = -1 });
@@ -210,8 +210,8 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
     using Image generated = fromPixels.ToGainMapImage(new GainMapOptions { Scale = 2 });
     using Image generatedJpeg = Image.Load(generated.ToJpeg(new JpegEncoderOptions { Quality = 95, GainMap = JpegGainMapMode.Require }), new DecoderOptions { LoadGainMap = true });
     using HdrImage generatedHdr = generatedJpeg.ToHdr();
-    if (!generatedJpeg.HasHdr || generatedJpeg.Hdr!.GainMapSize != new System.Drawing.Size(hdr.Width / 2, hdr.Height / 2) || MathF.Abs(generatedHdr.Headroom - 4f) > 1e-3f)
-        throw new InvalidOperationException($"HDR gain map generation failed: {generatedJpeg.Hdr?.UnsupportedReason}");
+    if (!generatedJpeg.HasHdr || generatedJpeg.GainMap!.GainMapSize != new System.Drawing.Size(hdr.Width / 2, hdr.Height / 2) || MathF.Abs(generatedHdr.Headroom - 4f) > 1e-3f)
+        throw new InvalidOperationException($"HDR gain map generation failed: {generatedJpeg.GainMap?.UnsupportedReason}");
 }
 
 // Plugin SPI 0.7.0: encoding through EncoderOptions.Configuration, a plugin gain map and metadata without pixels.
@@ -226,8 +226,8 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
     byte[] file = HdrRawFormat.Write(source, mapImage, iso, "<x:xmpmeta>raw2</x:xmpmeta>"u8.ToArray());
     var options = new DecoderOptions { Configuration = plugins, LoadGainMap = true };
     using Image hdrSource = Image.Load(file, options);
-    if (!hdrSource.HasHdr || Image.Identify(file, options).Hdr?.Headroom != 4f)
-        throw new InvalidOperationException($"Plugin gain map failed: {hdrSource.Hdr?.UnsupportedReason}");
+    if (!hdrSource.HasHdr || Image.Identify(file, options).GainMap?.Headroom != 4f)
+        throw new InvalidOperationException($"Plugin gain map failed: {hdrSource.GainMap?.UnsupportedReason}");
     using HdrImage hdr = hdrSource.ToHdr();
     using HdrImage sdrLinear = hdrSource.ToHdr(new HdrOptions { TargetHeadroom = 1 });
     if (hdr.Headroom != 4f || MathF.Abs((hdr[0, 0].G / sdrLinear[0, 0].G) - 4f) > 1e-3f)
@@ -239,7 +239,7 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
     using Image hdrJpeg = Image.Load(hdrSource.Encode(new JpegEncoderOptions { GainMap = JpegGainMapMode.Require }), new DecoderOptions { LoadGainMap = true });
     using HdrImage jpegHdr = hdrJpeg.ToHdr();
     if (!hdrJpeg.HasHdr || jpegHdr.Headroom != 4f)
-        throw new InvalidOperationException($"Plugin gain map to JPEG failed: {hdrJpeg.Hdr?.UnsupportedReason}");
+        throw new InvalidOperationException($"Plugin gain map to JPEG failed: {hdrJpeg.GainMap?.UnsupportedReason}");
     byte[] edited = Image.EditMetadata(file, metadata => metadata.Xmp = "<x:xmpmeta>edited</x:xmpmeta>"u8.ToArray(), options);
     if (!Image.ReadMetadata(edited, options).Xmp.AsSpan().SequenceEqual("<x:xmpmeta>edited</x:xmpmeta>"u8))
         throw new InvalidOperationException("Plugin metadata codec failed.");
@@ -310,7 +310,7 @@ sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEn
     public IImageFormatDecoder Decoder => this;
     public IImageFormatEncoder Encoder => this;
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
-        new() { Format = Kind, Width = data.Span[4], Height = data.Span[5] };
+        new() { Format = Kind, Width = data.Span[4], Height = data.Span[5], Color = RawColor.Rgba8, Compression = ImageCompression.Lossless };
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         int width = data.Span[4], height = data.Span[5];
@@ -351,10 +351,10 @@ sealed class HdrRawFormat : IImageFormatModule, IImageFormatDecoder, IImageForma
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
         ReadOnlySpan<byte> span = data.Span;
-        var info = new ImageInfo { Format = Kind, Width = span[4], Height = span[5] };
+        var info = new ImageInfo { Format = Kind, Width = span[4], Height = span[5], Color = RawColor.Rgba8, Compression = ImageCompression.Lossless };
         if (!options.LoadGainMap) return info;
         (_, _, int iso, _) = Layout(span);
-        return info with { Hdr = GainMapMetadata.ParseIso(span.Slice(iso, span[8]), 1).ToHdrInfo(new(span[6], span[7])) };
+        return info with { GainMap = GainMapMetadata.ParseIso(span.Slice(iso, span[8]), 1).ToGainMapInfo(new(span[6], span[7])) };
     }
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
@@ -413,7 +413,7 @@ sealed class PagedRawFormat : IImageFormatModule, IImageFormatDecoder
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
         (_, int width, int height, int count) = Select(data.Span, options);
-        return new() { Format = Kind, Width = width, Height = height, ContainerItemCount = count };
+        return new() { Format = Kind, Width = width, Height = height, Color = RawColor.Rgba8, Compression = ImageCompression.Lossless, ContainerItemCount = count };
     }
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
@@ -437,7 +437,7 @@ sealed class StripedRawFormat : IImageFormatModule, IImageFormatDecoder
         [.. "RAW4"u8, (byte)width, (byte)stripHeight, (byte)strips.Length, .. strips.SelectMany(s => (byte[])[(byte)(s.Length >> 8), (byte)s.Length, .. s])];
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
-        new() { Format = Kind, Width = data.Span[4], Height = data.Span[5] * data.Span[6] };
+        new() { Format = Kind, Width = data.Span[4], Height = data.Span[5] * data.Span[6], Color = RawColor.Rgba8, Compression = ImageCompression.Lossless };
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
@@ -480,3 +480,17 @@ readonly struct LeftHalf : IFrameProcessor
 }
 
 sealed record SmokeMetadata(int Value) : FormatMetadata;
+
+/// <summary>The colour description the RAW test formats report: 8-bit RGBA.</summary>
+static class RawColor
+{
+    public static ImageColorInfo Rgba8 { get; } = new()
+    {
+        Model = ImageColorModel.Rgb,
+        ChannelCount = 4,
+        BitsPerSample = 8,
+        SampleFormat = ImageSampleFormat.UnsignedInteger,
+        AlphaMode = ImageAlphaMode.Straight,
+        HasIccProfile = false,
+    };
+}

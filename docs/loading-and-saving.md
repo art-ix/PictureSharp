@@ -116,14 +116,29 @@ using PictureSharp;
 using PictureSharp.Formats.Png;
 
 ImageInfo info = Image.Identify("photo.webp");                 // also Stream, ReadOnlyMemory<byte>, ReadOnlySpan<byte>; IdentifyAsync
-Console.WriteLine($"{info.Format.Name} {info.Width}x{info.Height}, alpha: {info.HasAlpha}, frames: {info.FrameCount}");
+Console.WriteLine($"{info.Format.Name} {info.Width}x{info.Height}, {info.Color.Model}, alpha: {info.Color.HasAlpha}");
 
 ImageFormat? format = Image.DetectFormat("unknown.bin");       // reads only the header; also Stream and ReadOnlySpan<byte>
 if (format == ImageFormat.Png) { /* ... */ }
 ```
 
 `Identify(ReadOnlyMemory<byte>)` (and `byte[]`) does not copy the input; the span overload does. `ImageInfo` also
-reports `IsAnimated`, `BitsPerChannel`, `Orientation`, the resolution and, for WebP, `WebPCompression`.
+reports `FrameCount` (null when only decoding could tell), `IsAnimated`, `Compression` (lossless, lossy, mixed
+or unknown), `Orientation`, the declared `Resolution` (null when the file has none) and the gain map (`GainMap`).
+
+`info.Color` describes the stored samples as the format defines them after its own colour transform, so a YCbCr JPEG is
+`Rgb` and a YCCK JPEG `Cmyk`:
+
+| Member | Meaning |
+| --- | --- |
+| `Model` | `Gray`, `Rgb`, `Palette`, `Cmyk`, `Lab` or `Other` |
+| `ChannelCount` | Samples per pixel, alpha and extra channels included; a palette index counts as one |
+| `BitsPerSample`, `SampleFormat` | Depth of one sample (the index depth for palettes) and its type (unsigned, signed, float) |
+| `AlphaMode`, `HasAlpha` | `None`, `Straight` (also binary transparency) or `Premultiplied` |
+| `HasIccProfile` | Whether an ICC profile is embedded; it is not read or validated |
+| `Cicp` | H.273 code points from PNG cICP or sRGB, BMP sRGB or HEIF nclx; `IsHdrTransfer` for PQ and HLG |
+
+These members are filled with `IgnoreMetadata` too, and copy no metadata.
 `DetectFormat(Stream)` rewinds seekable streams.
 
 `ImageFormat` has `Name`, `MimeType`, `FileExtensions`, `CanDecode` and `CanEncode`. Look formats up with

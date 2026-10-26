@@ -42,7 +42,7 @@ public class GifDecoderTests
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
         await Assert.That(info.Format).IsEqualTo(ImageFormat.Gif);
         await Assert.That((info.Width, info.Height)).IsEqualTo((r.Width, r.Height));
-        await Assert.That(info.HasAlpha).IsEqualTo(r.HasAlpha);
+        await Assert.That(info.Color.HasAlpha).IsEqualTo(r.HasAlpha);
         await Assert.That(info.FrameCount).IsEqualTo(r.Frames.Count);
         await Assert.That(info.IsAnimated).IsEqualTo(r.Animated);
     }

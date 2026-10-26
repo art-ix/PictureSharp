@@ -38,7 +38,7 @@ public class LosslessDecodeBenchmarks
     {
         _data = System.IO.File.ReadAllBytes(File.Path);
         ImageInfo info = Image.Identify(_data);
-        if (info.Format != ImageFormat.WebP || info.IsAnimated || info.WebPCompression != WebPCompression.Lossless)
+        if (info.Format != ImageFormat.WebP || info.IsAnimated || info.Compression != ImageCompression.Lossless)
         {
             throw new ArgumentException("The decode benchmark requires a static lossless WebP.", nameof(File));
         }

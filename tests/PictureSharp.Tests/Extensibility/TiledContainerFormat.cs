@@ -27,7 +27,7 @@ public sealed class TiledContainerFormat(bool charged = false, Action<int>? afte
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
         Header header = Read(data.Span);
-        return new ImageInfo { Format = Format, Width = header.Width, Height = header.Height, HasAlpha = true };
+        return new ImageInfo { Format = Format, Width = header.Width, Height = header.Height, Color = TestColor.Rgba8, Compression = ImageCompression.Lossless };
     }
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)

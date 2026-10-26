@@ -1,3 +1,11 @@
+sealed record CicpColorDescription : System.IEquatable<CicpColorDescription>
+    ctor(System.Int32 colorPrimaries, System.Int32 transferCharacteristics, System.Int32 matrixCoefficients, System.Boolean fullRange)
+    property System.Boolean FullRange { get; }
+    property System.Boolean IsHdrTransfer { get; }
+    property System.Int32 ColorPrimaries { get; }
+    property System.Int32 MatrixCoefficients { get; }
+    property System.Int32 TransferCharacteristics { get; }
+    property static CicpColorDescription Srgb { get; }
 readonly struct CieChromaticities : System.IEquatable<CieChromaticities>
     ctor(System.Single whiteX, System.Single whiteY, System.Single redX, System.Single redY, System.Single greenX, System.Single greenY, System.Single blueX, System.Single blueY)
     property System.Single BlueX { get; }
@@ -119,7 +127,7 @@ abstract class PictureSharp.Formats.GainMapImage
     method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
     property System.Drawing.Size Size { get; }
 sealed class PictureSharp.Formats.GainMapMetadata
-    method HdrInfo ToHdrInfo(System.Drawing.Size mapSize)
+    method GainMapInfo ToGainMapInfo(System.Drawing.Size mapSize)
     method System.Byte[] ToIso()
     method System.Byte[]? ToAlternateIcc()
     method static PictureSharp.Formats.GainMapMetadata ParseApple(System.ReadOnlySpan<System.Byte> exif, System.ReadOnlySpan<System.Byte> mapXmp)
@@ -311,11 +319,6 @@ enum PictureSharp.Formats.WebP.WebPAlphaFilter
     None = 0
     Fast = 1
     Best = 2
-enum PictureSharp.Formats.WebP.WebPCompression
-    None = 0
-    Lossy = 1
-    Lossless = 2
-    Mixed = 3
 static class PictureSharp.Formats.WebP.WebPConverter
     method static System.Void Convert(System.String inputPath, System.String outputPath, PictureSharp.Formats.WebP.WebPEncoderOptions? options = null)
 sealed record PictureSharp.Formats.WebP.WebPDecoderOptions : System.IEquatable<PictureSharp.Formats.WebP.WebPDecoderOptions>
@@ -362,6 +365,14 @@ enum PictureSharp.Formats.WebP.WebPPreset
     Drawing = 3
     Icon = 4
     Text = 5
+sealed record GainMapInfo : System.IEquatable<GainMapInfo>
+    ctor()
+    property HdrGainMapKinds Detected { get; init; }
+    property HdrGainMapKinds Selected { get; init; }
+    property System.Boolean CanDecode { get; init; }
+    property System.Drawing.Size GainMapSize { get; init; }
+    property System.Single? Headroom { get; init; }
+    property System.String? UnsupportedReason { get; init; }
 readonly struct GpsLocation : System.IEquatable<GpsLocation>
     ctor(System.Double latitude, System.Double longitude, System.Double? altitude = default)
     property System.Double Latitude { get; }
@@ -397,14 +408,6 @@ sealed class HdrImage : System.IDisposable
     property System.Int32 Height { get; }
     property System.Int32 Width { get; }
     property System.Single Headroom { get; }
-sealed record HdrInfo : System.IEquatable<HdrInfo>
-    ctor()
-    property HdrGainMapKinds Detected { get; init; }
-    property HdrGainMapKinds Selected { get; init; }
-    property System.Boolean CanDecode { get; init; }
-    property System.Drawing.Size GainMapSize { get; init; }
-    property System.Single? Headroom { get; init; }
-    property System.String? UnsupportedReason { get; init; }
 sealed record HdrOptions : System.IEquatable<HdrOptions>
     ctor()
     property HdrColorSpace? ColorSpace { get; init; }
@@ -431,7 +434,7 @@ sealed class Image : System.IDisposable
     method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
     method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
     method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
-    property HdrInfo? Hdr { get; }
+    property GainMapInfo? GainMap { get; }
     property ImageFormat? SourceFormat { get; }
     property ImageFrameCollection Frames { get; }
     property ImageMetadata Metadata { get; }
@@ -446,6 +449,10 @@ sealed class Image : System.IDisposable
     property System.Int32 Height { get; }
     property System.Int32 LoopCount { get; set; }
     property System.Int32 Width { get; }
+enum ImageAlphaMode
+    None = 0
+    Straight = 1
+    Premultiplied = 2
 static class ImageAnalysisExtensions
     method [Extension] static PictureSharp.Processing.FilmFrame? FindFilmFrame(Image image)
     method [Extension] static PictureSharp.Processing.FilmFrame? FindFilmFrame(Image image, System.Threading.CancellationToken cancellationToken)
@@ -455,6 +462,28 @@ static class ImageAnalysisExtensions
     method [Extension] static PictureSharp.Processing.NegativeAnalysis AnalyzeNegative(Image image, PictureSharp.Processing.NegativeOptions? options, System.Threading.CancellationToken cancellationToken)
     method [Extension] static System.Drawing.Rectangle? FindTrimBounds(Image image, PictureSharp.Processing.AutoCropOptions? options = null)
     method [Extension] static System.Drawing.Rectangle? FindTrimBounds(Image image, PictureSharp.Processing.AutoCropOptions? options, System.Threading.CancellationToken cancellationToken)
+sealed record ImageColorInfo : System.IEquatable<ImageColorInfo>
+    ctor()
+    property CicpColorDescription? Cicp { get; init; }
+    property System.Boolean HasAlpha { get; }
+    property required ImageAlphaMode AlphaMode { get; init; }
+    property required ImageColorModel Model { get; init; }
+    property required ImageSampleFormat SampleFormat { get; init; }
+    property required System.Boolean HasIccProfile { get; init; }
+    property required System.Int32 BitsPerSample { get; init; }
+    property required System.Int32 ChannelCount { get; init; }
+enum ImageColorModel
+    Other = 0
+    Gray = 1
+    Rgb = 2
+    Palette = 3
+    Cmyk = 4
+    Lab = 5
+enum ImageCompression
+    Unknown = 0
+    Lossless = 1
+    Lossy = 2
+    Mixed = 3
 sealed class ImageConfiguration
     method ImageConfigurationBuilder ToBuilder()
     method ImageFormat? FromExtension(System.String extensionOrPath)
@@ -649,15 +678,13 @@ static class ImageIOExtensions
 sealed record ImageInfo : System.IEquatable<ImageInfo>
     ctor()
     property ExifOrientation Orientation { get; init; }
-    property HdrInfo? Hdr { get; init; }
-    property PictureSharp.Formats.WebP.WebPCompression WebPCompression { get; init; }
-    property System.Boolean HasAlpha { get; init; }
+    property GainMapInfo? GainMap { get; init; }
+    property ImageResolution? Resolution { get; init; }
     property System.Boolean IsAnimated { get; init; }
-    property System.Int32 BitsPerChannel { get; init; }
-    property System.Int32 FrameCount { get; init; }
     property System.Int32? ContainerItemCount { get; init; }
-    property System.Single HorizontalResolution { get; init; }
-    property System.Single VerticalResolution { get; init; }
+    property System.Int32? FrameCount { get; init; }
+    property required ImageColorInfo Color { get; init; }
+    property required ImageCompression Compression { get; init; }
     property required ImageFormat Format { get; init; }
     property required System.Int32 Height { get; init; }
     property required System.Int32 Width { get; init; }
@@ -692,6 +719,15 @@ static class ImageProcessingExtensions
     method [Extension] static Image Clone(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
     method [Extension] static System.Void Mutate(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation)
     method [Extension] static System.Void Mutate(Image image, System.Action<PictureSharp.Processing.ImageProcessingContext> operation, System.Threading.CancellationToken cancellationToken)
+readonly struct ImageResolution : System.IEquatable<ImageResolution>
+    ctor(System.Single horizontal, System.Single vertical)
+    property System.Single Horizontal { get; }
+    property System.Single Vertical { get; }
+enum ImageSampleFormat
+    UnsignedInteger = 0
+    SignedInteger = 1
+    Float = 2
+    Other = 3
 [Flags] enum MetadataKinds
     None = 0
     Icc = 1

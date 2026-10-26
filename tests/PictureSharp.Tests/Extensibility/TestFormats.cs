@@ -35,7 +35,7 @@ public sealed class PpmFormat(bool reservePixels = true) : IImageFormatModule
         public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
         {
             (int width, int height, _) = ReadHeader(data.Span);
-            return new ImageInfo { Format = Format, Width = width, Height = height, ContainerItemCount = 1 };
+            return new ImageInfo { Format = Format, Width = width, Height = height, Color = TestColor.Rgb8, Compression = ImageCompression.Lossless, ContainerItemCount = 1 };
         }
 
         public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
@@ -133,7 +133,7 @@ public sealed class WrapFormat : IImageFormatModule, IImageFormatDecoder
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
         using Image image = Image.Load(data[4..], options);
-        return new ImageInfo { Format = Format, Width = image.Width, Height = image.Height };
+        return new ImageInfo { Format = Format, Width = image.Width, Height = image.Height, Color = TestColor.Rgb8, Compression = ImageCompression.Lossless };
     }
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context) => context.DecodeEmbedded(data[4..]);
@@ -174,7 +174,7 @@ public sealed class StubFormat(ImageFormat format, int headerSize = 4, bool deco
     public IImageFormatEncoder? Encoder => encoder;
 
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
-        new() { Format = format, Width = 1, Height = 1 };
+        new() { Format = format, Width = 1, Height = 1, Color = TestColor.Rgb8, Compression = ImageCompression.Lossless };
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context) => new(1, 1, new Rgba32(255, 0, 0));
 }

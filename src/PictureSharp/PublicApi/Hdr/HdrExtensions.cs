@@ -21,7 +21,7 @@ public static class HdrExtensions
         /// }
         /// </code>
         /// </example>
-        /// <exception cref="InvalidOperationException">No gain map is attached (see <see cref="Image.Hdr"/>).</exception>
+        /// <exception cref="InvalidOperationException">No gain map is attached (see <see cref="Image.GainMap"/>).</exception>
         /// <exception cref="NotSupportedException">The gain map variant is valid but not supported.</exception>
         /// <exception cref="ImageFormatException">The gain map or its metadata is corrupt.</exception>
         public HdrImage ToHdr(HdrOptions? options = null, CancellationToken cancellationToken = default) =>

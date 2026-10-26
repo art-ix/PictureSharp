@@ -12,7 +12,7 @@ public sealed partial class Image
         }
 
         Image clone = CopyPropertiesTo(new Image(frames));
-        clone.GainMap = GainMap;   // immutable, shared
+        clone.AttachedGainMap = AttachedGainMap;   // immutable, shared
         return clone;
     }
 }

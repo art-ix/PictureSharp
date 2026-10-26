@@ -44,7 +44,22 @@ sealed class RawaDecoder : IImageFormatDecoder
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options)
     {
         (int width, int height) = ReadSize(data.Span);
-        return new() { Format = RawaFormat.Format, Width = width, Height = height, HasAlpha = true };
+        return new()
+        {
+            Format = RawaFormat.Format,
+            Width = width,
+            Height = height,
+            Color = new ImageColorInfo                               // required: what the header states
+            {
+                Model = ImageColorModel.Rgb,
+                ChannelCount = 4,
+                BitsPerSample = 8,
+                SampleFormat = ImageSampleFormat.UnsignedInteger,
+                AlphaMode = ImageAlphaMode.Straight,
+                HasIccProfile = false,
+            },
+            Compression = ImageCompression.Lossless,
+        };
     }
 
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
@@ -184,6 +199,16 @@ The shortcuts save through `options.Configuration`, which defaults to `ImageConf
 - The library rechecks `MaxPixels` and `MaxFrames`, sets `SourceFormat` and applies `TargetSize` and
   `ApplyExifOrientation`; the decoder returns the image as stored.
 
+**Identifying**
+
+- `Identify` reads headers only. `Color` and `Compression` are required: report what the file states or the format
+  defines, never a guess from pixels, and use `ImageColorModel.Other`, `ImageSampleFormat.Other` or
+  `ImageCompression.Unknown` for what the header cannot tell.
+- Fill `Color` regardless of `IgnoreMetadata`, and check for an ICC profile without copying it, so `Identify` reserves
+  no metadata for it. `Cicp` takes HEIF nclx or an equivalent enumerated description; leave it null when H.273 cannot
+  express it exactly.
+- Report `FrameCount = null` only when the count needs decoding, and `Resolution = null` when the file declares none.
+
 **Encoding**
 
 - Encoder options derive from `EncoderOptions` and override `Format`. `IImageFormatEncoder<TOptions>` creates the
@@ -315,7 +340,7 @@ Point? hotspot = options.Hotspot ?? image.Metadata.GetFormatMetadata<XbmMetadata
 
 #### Reading
 
-When `context.Options.LoadGainMap` is set, a decoder that finds a gain map attaches it; `Image.Hdr`, `ToHdr` and
+When `context.Options.LoadGainMap` is set, a decoder that finds a gain map attaches it; `Image.GainMap`, `ToHdr` and
 `ToneMap` then work as for JPEG. The map is decoded lazily, by a `GainMapImage`:
 
 ```csharp
@@ -343,14 +368,14 @@ if (context.Options.LoadGainMap)
 
 - `GainMapMetadata.ParseIso` reads an ISO 21496-1 payload, `ParseApple` the Apple model.
 - A `GainMapImage` owns its data, never uses the decode context and returns the map at its stored size.
-- In `Identify`, report `ImageInfo.Hdr = metadata.ToHdrInfo(mapSize)` when `LoadGainMap` is set.
+- In `Identify`, report `ImageInfo.GainMap = metadata.ToGainMapInfo(mapSize)` when `LoadGainMap` is set.
 - When a file describes the map in several models (iPhones since iOS 18 store ISO 21496-1 and Apple metadata), pass
   them all, `metadata.Kind` included: `AttachGainMap(metadata, map, detected)` in `Decode` and
-  `metadata.ToHdrInfo(mapSize) with { Detected = detected }` in `Identify`. `Image.Hdr.Detected` then matches a JPEG
+  `metadata.ToGainMapInfo(mapSize) with { Detected = detected }` in `Identify`. `Image.GainMap.Detected` then matches a JPEG
   (0.7.1).
 - Keep the base image's ICC profile or `Chromaticities`/`Gamma` when attaching a map, also with `IgnoreMetadata`.
 - Map pixels count toward `MaxPixels`. An oversized map, unparsable metadata or a base color other than sRGB or Display
-  P3 is reported through `Image.Hdr` and never fails the load.
+  P3 is reported through `Image.GainMap` and never fails the load.
 - The library carries the map through `TargetSize`, orientation, color conversion and geometric edits. Saving as JPEG
   writes it like an edited JPEG map, with metadata from `ToIso()` (0.8.0).
 
@@ -398,8 +423,9 @@ Image image = hdr.ToGainMapImage(new GainMapOptions { ChannelCount = 1 });   // 
 
 ### SPI compatibility
 
-From 0.8.2 the plugin SPI and the model plugins fill are stable until 2.0: they only grow, interfaces get new members
-only with a default implementation, and new parameters come as overloads. [Stable plugin SPI](plugin-spi.md) lists the
+The plugin SPI and the model plugins fill only grow: interfaces get new members only with a default implementation,
+and new parameters come as overloads. 0.8.5 broke it once for the new `ImageInfo`; plugins built against an older
+version are rejected at registration. [Stable plugin SPI](plugin-spi.md) lists the
 types and the rules, and how to choose the minimum PictureSharp version of a plugin.
 
 ## Custom frame processors

@@ -38,7 +38,7 @@ internal static class GainMapGeneration
 
         try
         {
-            result.GainMap = Generate(result, baseSpace, linearization, hdr, options, cancellationToken);
+            result.AttachedGainMap = Generate(result, baseSpace, linearization, hdr, options, cancellationToken);
             return result;
         }
         catch
@@ -74,7 +74,7 @@ internal static class GainMapGeneration
         };
         return new GainMapAttachment
         {
-            Info = new HdrInfo
+            Info = new GainMapInfo
             {
                 Detected = HdrGainMapKinds.Iso21496,
                 Selected = HdrGainMapKinds.Iso21496,

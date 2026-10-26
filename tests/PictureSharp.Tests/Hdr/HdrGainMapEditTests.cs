@@ -91,16 +91,16 @@ public class HdrGainMapEditTests
             {
                 await Assert.That(image.Size).IsEqualTo(new System.Drawing.Size(edit.GetProperty("width").GetInt32(), edit.GetProperty("height").GetInt32())).Because(path);
                 await Assert.That(image.HasHdr).IsTrue().Because(path);
-                if (image.GainMap!.EditedMap is null)
+                if (image.AttachedGainMap!.EditedMap is null)
                 {
                     // No edit ran (orientation applied while loading): the compressed map still describes the base.
                     await Assert.That(edit.GetProperty("ops").GetArrayLength()).IsEqualTo(0).Because(path);
-                    await Assert.That(image.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(source.GetProperty("map_width").GetInt32(), source.GetProperty("map_height").GetInt32()));
+                    await Assert.That(image.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(source.GetProperty("map_width").GetInt32(), source.GetProperty("map_height").GetInt32()));
                     continue;
                 }
 
-                await Assert.That(image.Hdr!.GainMapSize).IsEqualTo(mapSize).Because(path);
-                DecodedGainMap map = image.GainMap!.EditedMap!.Value;
+                await Assert.That(image.GainMap!.GainMapSize).IsEqualTo(mapSize).Because(path);
+                DecodedGainMap map = image.AttachedGainMap!.EditedMap!.Value;
                 int worst = 0, at = -1;
                 for (int i = 0; i < map.Pixels.Length; i++)
                 {
@@ -195,7 +195,7 @@ public class HdrGainMapEditTests
         {
             using Image image = Image.Load(Hdr("iso_mono_srgb.jpg"), Applied);
             image.Mutate(op);
-            await Assert.That(image.Hdr).IsNull();
+            await Assert.That(image.GainMap).IsNull();
             Assert.ThrowsExactly<InvalidOperationException>(() => image.ToHdr());
         }
     }
@@ -205,10 +205,10 @@ public class HdrGainMapEditTests
     {
         using Image image = Image.Load(Hdr("iso_mono_srgb.jpg"), Applied);
         image.Mutate(x => x.Resize(image.Width, image.Height).Thumbnail(1000, 1000).AutoOrient().Rotate(0f));
-        await Assert.That(image.GainMap!.EditedMap).IsNull();
+        await Assert.That(image.AttachedGainMap!.EditedMap).IsNull();
         image.Mutate(x => x.Rotate(90f).Rotate(-90f).Rotate(180f).Flip(FlipMode.Vertical).Flip(FlipMode.Horizontal));
         await Assert.That(image.HasHdr).IsTrue();
-        await Assert.That(image.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(24, 16));
+        await Assert.That(image.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(24, 16));
 
         // Back to the stored geometry: the edited map is the decoded map, so ToHdr agrees with the source.
         using Image source = Image.Load(Hdr("iso_mono_srgb.jpg"), Applied);
@@ -222,9 +222,9 @@ public class HdrGainMapEditTests
         using Image image = Image.Load(Hdr("iso_rgb_p3.jpg"), Applied);
         using Image thumbnail = image.Clone(x => x.Resize(20, 15));
         await Assert.That(thumbnail.HasHdr).IsTrue();
-        await Assert.That(thumbnail.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(10, 8));
-        await Assert.That(image.GainMap!.EditedMap).IsNull();
-        await Assert.That(image.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(20, 15));
+        await Assert.That(thumbnail.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(10, 8));
+        await Assert.That(image.AttachedGainMap!.EditedMap).IsNull();
+        await Assert.That(image.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(20, 15));
         using Image copy = thumbnail.Clone();
         await Assert.That(ReferenceEquals(copy.GainMap, thumbnail.GainMap)).IsTrue();
     }
@@ -233,9 +233,9 @@ public class HdrGainMapEditTests
     public async Task UnsupportedOrCorruptAttachments_StayDescribed()
     {
         using Image image = Image.Load(Hdr("iso_min_version1.jpg"), Applied);
-        HdrInfo info = image.Hdr!;
+        GainMapInfo info = image.GainMap!;
         image.Mutate(x => x.Crop(0, 0, 10, 10).Rotate(RotateMode.Rotate90));
-        await Assert.That(image.Hdr).IsEqualTo(info);
+        await Assert.That(image.GainMap).IsEqualTo(info);
         Assert.ThrowsExactly<NotSupportedException>(() => image.ToHdr());
     }
 
@@ -250,7 +250,7 @@ public class HdrGainMapEditTests
         await Assert.That(image.HasHdr).IsTrue();
         image.Mutate(x => x.Flip(FlipMode.Horizontal));
         await Assert.That(image.Width).IsEqualTo(48);
-        await Assert.That(image.Hdr).IsNotNull();
+        await Assert.That(image.GainMap).IsNotNull();
         await Assert.That(image.HasHdr).IsFalse();
         Assert.ThrowsExactly<ImageFormatException>(() => image.ToHdr());
     }
@@ -259,7 +259,7 @@ public class HdrGainMapEditTests
     public async Task Cancellation_KeepsTheEarlierEdits()
     {
         using Image image = Image.Load(Hdr("iso_rgb_p3.jpg"), Applied);
-        GainMapAttachment before = image.GainMap!;
+        GainMapAttachment before = image.AttachedGainMap!;
         using var cts = new CancellationTokenSource();
         Assert.Throws<OperationCanceledException>(() => image.Mutate(x =>
         {
@@ -269,7 +269,7 @@ public class HdrGainMapEditTests
         }, cts.Token));
         await Assert.That(image.Size).IsEqualTo(new System.Drawing.Size(30, 20));
         await Assert.That(image.HasHdr).IsTrue();
-        await Assert.That(image.Hdr!.GainMapSize).IsEqualTo(new System.Drawing.Size(15, 10));
+        await Assert.That(image.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(15, 10));
         await Assert.That(ReferenceEquals(image.GainMap, before)).IsFalse();
     }
 
@@ -277,7 +277,7 @@ public class HdrGainMapEditTests
     public async Task OversizedEditedMap_IsDroppedWithoutAllocating()
     {
         using Image image = Image.Load(Hdr("iso_mono_srgb.jpg"), Applied);
-        GainMapAttachment edited = PictureSharp.Application.Hdr.GainMapEditing.Apply(image.GainMap!, image.Size,
+        GainMapAttachment edited = PictureSharp.Application.Hdr.GainMapEditing.Apply(image.AttachedGainMap!, image.Size,
             PictureSharp.Application.Hdr.GainMapEdit.Region(0, 0, image.Width, image.Height, 200_000, 200_000, ResamplingFilter.Lanczos3), CancellationToken.None);
         await Assert.That(edited.CanDecode).IsFalse();
         await Assert.That(edited.Failure).IsEqualTo(GainMapFailure.Unsupported);
@@ -290,8 +290,8 @@ public class HdrGainMapEditTests
         using Image image = Image.Load(Hdr("iso_rgb_p3.jpg"), Applied);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        Assert.Throws<OperationCanceledException>(() => PictureSharp.Application.Hdr.GainMapEditing.Apply(image.GainMap!, image.Size,
+        Assert.Throws<OperationCanceledException>(() => PictureSharp.Application.Hdr.GainMapEditing.Apply(image.AttachedGainMap!, image.Size,
             PictureSharp.Application.Hdr.GainMapEdit.Region(0, 0, 20, 15, 10, 8, ResamplingFilter.Lanczos3), cts.Token));
-        await Assert.That(image.GainMap!.EditedMap).IsNull();
+        await Assert.That(image.AttachedGainMap!.EditedMap).IsNull();
     }
 }

@@ -30,7 +30,7 @@ internal sealed class ProcessingState(Image image, bool shared, CancellationToke
     {
         get
         {
-            Image.GainMap = null;
+            Image.AttachedGainMap = null;
             EnsureWritable();
             return new(Image.Frames, CancellationToken);
         }
@@ -59,7 +59,7 @@ internal sealed class ProcessingState(Image image, bool shared, CancellationToke
     /// before the frames change, so a failure or cancellation leaves the image as it was.
     /// </summary>
     public GainMapAttachment? EditGainMap(GainMapEdit edit) =>
-        Image.GainMap is { } attachment ? GainMapEditing.Apply(attachment, Image.Size, edit, CancellationToken) : null;
+        Image.AttachedGainMap is { } attachment ? GainMapEditing.Apply(attachment, Image.Size, edit, CancellationToken) : null;
 
     /// <summary>
     /// Commits every output together, preserving canvas invariants on cancellation or failure. The gain map follows

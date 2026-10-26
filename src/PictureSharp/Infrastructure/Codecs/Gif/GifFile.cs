@@ -53,6 +53,29 @@ internal sealed class GifFile
 
     public byte[]? Icc { get; private set; }
 
+    /// <summary>Whether an ICCRGBG1012 application extension exists; recorded also when metadata is not read.</summary>
+    public bool HasIccExtension { get; private set; }
+
+    /// <summary>
+    /// The index depth of the largest colour table (global or local), 1–8; without any table, the largest LZW minimum
+    /// code size, which bounds the indices.
+    /// </summary>
+    public int IndexBits
+    {
+        get
+        {
+            int colors = GlobalColorTable?.Length ?? 0, codeSize = 1;
+            foreach (GifFrameInfo frame in Frames)
+            {
+                colors = Math.Max(colors, frame.LocalColorTable?.Length ?? 0);
+                codeSize = Math.Max(codeSize, frame.MinCodeSize);
+            }
+
+            // Tables hold 2^n entries, n = 1–8.
+            return colors > 0 ? int.Log2(colors - 1) + 1 : Math.Min(codeSize, 8);
+        }
+    }
+
     /// <summary>Whether the decoded canvas can contain transparent pixels.</summary>
     public bool HasTransparency
     {
@@ -230,6 +253,7 @@ internal sealed class GifFile
             return;
         }
 
+        HasIccExtension |= identifier.SequenceEqual(GifConstants.IccIdentifier);
         if (metadataOptions is null)
         {
             return;

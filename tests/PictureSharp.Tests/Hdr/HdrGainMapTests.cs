@@ -59,7 +59,7 @@ public class HdrGainMapTests
         JsonElement c = Case(name);
         using Image image = Image.Load(File(name + ".jpg"), Hdr);
         await Assert.That(image.HasHdr).IsTrue();
-        HdrInfo info = image.Hdr!;
+        GainMapInfo info = image.GainMap!;
         await Assert.That(info.CanDecode).IsTrue();
         await Assert.That(info.Selected).IsEqualTo(c.GetProperty("model").GetString() == "iso" ? HdrGainMapKinds.Iso21496 : HdrGainMapKinds.Apple);
         HdrGainMapKinds detected = c.GetProperty("detected").EnumerateArray().Aggregate(HdrGainMapKinds.None, (k, e) => k | Enum.Parse<HdrGainMapKinds>(e.GetString()!));
@@ -103,10 +103,10 @@ public class HdrGainMapTests
         using Image plain = Image.Load(File(name + ".jpg"), new DecoderOptions { ApplyExifOrientation = true });
         using Image withMap = Image.Load(File(name + ".jpg"), Hdr);
         await Assert.That(withMap.GetPixelSpan().ToArray()).IsEquivalentTo(plain.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
-        await Assert.That(plain.Hdr).IsNull();
+        await Assert.That(plain.GainMap).IsNull();
         await Assert.That(plain.HasHdr).IsFalse();
-        await Assert.That(Image.Identify(File(name + ".jpg")).Hdr).IsNull();
-        await Assert.That(Image.Identify(File(name + ".jpg"), Hdr).Hdr).IsEqualTo(withMap.Hdr);
+        await Assert.That(Image.Identify(File(name + ".jpg")).GainMap).IsNull();
+        await Assert.That(Image.Identify(File(name + ".jpg"), Hdr).GainMap).IsEqualTo(withMap.GainMap);
     }
 
     [Test]
@@ -118,11 +118,11 @@ public class HdrGainMapTests
         using Image image = Image.Load(File(name + ".jpg"), new DecoderOptions { LoadGainMap = true });
         await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(plain.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
         await Assert.That(image.HasHdr).IsFalse();
-        await Assert.That(image.Hdr).IsNotNull();
-        await Assert.That(image.Hdr!.CanDecode).IsFalse();
-        await Assert.That(image.Hdr.Selected).IsEqualTo(HdrGainMapKinds.None);
-        await Assert.That(image.Hdr.UnsupportedReason).IsNotNull();
-        await Assert.That(Image.Identify(File(name + ".jpg"), new DecoderOptions { LoadGainMap = true }).Hdr).IsEqualTo(image.Hdr);
+        await Assert.That(image.GainMap).IsNotNull();
+        await Assert.That(image.GainMap!.CanDecode).IsFalse();
+        await Assert.That(image.GainMap.Selected).IsEqualTo(HdrGainMapKinds.None);
+        await Assert.That(image.GainMap.UnsupportedReason).IsNotNull();
+        await Assert.That(Image.Identify(File(name + ".jpg"), new DecoderOptions { LoadGainMap = true }).GainMap).IsEqualTo(image.GainMap);
         if (failure == "unsupported")
         {
             Assert.ThrowsExactly<NotSupportedException>(() => image.ToHdr());
@@ -137,7 +137,7 @@ public class HdrGainMapTests
     public async Task PlainMultiPictureFile_HasNoGainMap()
     {
         using Image image = Image.Load(File("plain_mpo.jpg"), new DecoderOptions { LoadGainMap = true });
-        await Assert.That(image.Hdr).IsNull();
+        await Assert.That(image.GainMap).IsNull();
         Assert.ThrowsExactly<InvalidOperationException>(() => image.ToHdr());
     }
 
@@ -145,7 +145,7 @@ public class HdrGainMapTests
     public async Task OtherFormatsAndDefaultOptions_HaveNoGainMap()
     {
         using Image png = new(4, 4);
-        await Assert.That(png.Hdr).IsNull();
+        await Assert.That(png.GainMap).IsNull();
         InvalidOperationException error = Assert.ThrowsExactly<InvalidOperationException>(() => png.ToHdr());
         await Assert.That(error.Message).Contains("LoadGainMap");
         using Image jpeg = Image.Load(File("iso_mono_srgb.jpg"));
@@ -160,7 +160,7 @@ public class HdrGainMapTests
         using Image clone = image.Clone();
         using Image processed = image.Clone(x => x.Brightness(1.1f));
         await Assert.That(clone.HasHdr).IsTrue();
-        await Assert.That(processed.Hdr).IsNull();
+        await Assert.That(processed.GainMap).IsNull();
         using (HdrImage a = image.ToHdr())
         using (HdrImage b = clone.ToHdr())
         {
@@ -168,9 +168,9 @@ public class HdrGainMapTests
         }
 
         image.Mutate(x => x.Grayscale());
-        await Assert.That(image.Hdr).IsNull();
+        await Assert.That(image.GainMap).IsNull();
         clone.Frames.Add(new ImageFrame(clone.Width, clone.Height));
-        await Assert.That(clone.Hdr).IsNull();
+        await Assert.That(clone.GainMap).IsNull();
     }
 
     [Test]
@@ -279,7 +279,7 @@ public class HdrGainMapTests
         var options = new DecoderOptions { LoadGainMap = true, MaxPixels = (long)probe.Width * probe.Height };
         using Image image = Image.Load(File("iso_mono_srgb.jpg"), options);
         await Assert.That(image.HasHdr).IsFalse();
-        await Assert.That(image.Hdr!.UnsupportedReason).Contains("MaxPixels");
+        await Assert.That(image.GainMap!.UnsupportedReason).Contains("MaxPixels");
         Assert.ThrowsExactly<ImageFormatException>(() => image.ToHdr());
     }
 

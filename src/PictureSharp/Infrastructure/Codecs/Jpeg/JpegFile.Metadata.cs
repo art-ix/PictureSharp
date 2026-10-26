@@ -81,22 +81,24 @@ internal sealed partial class JpegFile
         return [.. ordered.SelectMany(c => c)];
     }
 
-    /// <summary>Resolution from the JFIF header, else from the EXIF IFD0, else 96 DPI.</summary>
-    public (float X, float Y) Resolution()
+    /// <summary>Resolution from the JFIF header, else from the EXIF IFD0, else null.</summary>
+    public ImageResolution? DeclaredResolution()
     {
         if (_jfif && _jfifDensityX > 0 && _jfifDensityY > 0 && _jfifUnit is 1 or 2)
         {
             float scale = _jfifUnit == 2 ? 2.54f : 1f;
-            return (_jfifDensityX * scale, _jfifDensityY * scale);
+            return new ImageResolution(_jfifDensityX * scale, _jfifDensityY * scale);
         }
 
-        if (Exif is not null && ExifReader.GetResolution(Exif) is (float x, float y))
-        {
-            return (x, y);
-        }
-
-        return (96f, 96f);
+        return Exif is not null && ExifReader.GetResolution(Exif) is (float x, float y) ? ImageResolution.FromDeclared(x, y) : null;
     }
+
+    /// <summary>Resolution from the JFIF header, else from the EXIF IFD0, else 96 DPI.</summary>
+    public (float X, float Y) Resolution() =>
+        DeclaredResolution() is { } r ? (r.Horizontal, r.Vertical) : (96f, 96f);
+
+    /// <summary>Whether the file has APP2 ICC chunks, complete or not.</summary>
+    public bool HasIccChunks => _iccChunks.Count > 0;
 
     /// <summary>Color space of the coded data, decided like libjpeg's <c>default_decompress_parms</c>.</summary>
     public JpegColorSpace ColorSpace()

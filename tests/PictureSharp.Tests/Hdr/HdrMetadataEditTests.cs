@@ -16,7 +16,7 @@ public class HdrMetadataEditTests
     {
         await Assert.That(MapBytes(edited)).IsEquivalentTo(MapBytes(original), CollectionOrdering.Matching);
         using Image a = Image.Load(original, Hdr), b = Image.Load(edited, Hdr);
-        await Assert.That(b.Hdr).IsEqualTo(a.Hdr);
+        await Assert.That(b.GainMap).IsEqualTo(a.GainMap);
         await Assert.That(b.GetPixelSpan().ToArray()).IsEquivalentTo(a.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
         using HdrImage ha = a.ToHdr(), hb = b.ToHdr();
         await Assert.That(hb.GetPixelSpan().ToArray()).IsEquivalentTo(ha.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
@@ -86,8 +86,8 @@ public class HdrMetadataEditTests
         byte[] edited = Image.EditMetadata(original, m => m.ExifProfile.RemoveGps());
         await Assert.That(Image.ReadMetadata(edited).ExifProfile.TryGetGpsLocation(out _)).IsFalse();
         await Assert.That(MapBytes(edited)).IsEquivalentTo(MapBytes(original), CollectionOrdering.Matching);
-        await Assert.That(Image.Identify(edited, Hdr).Hdr).IsEqualTo(Image.Identify(original, Hdr).Hdr);
+        await Assert.That(Image.Identify(edited, Hdr).GainMap).IsEqualTo(Image.Identify(original, Hdr).GainMap);
         byte[] stripped = Image.EditMetadata(original, m => m.RemoveBlocks(MetadataKinds.Exif | MetadataKinds.Xmp));
-        await Assert.That(Image.Identify(stripped, Hdr).Hdr!.CanDecode).IsTrue();
+        await Assert.That(Image.Identify(stripped, Hdr).GainMap!.CanDecode).IsTrue();
     }
 }

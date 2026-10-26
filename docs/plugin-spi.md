@@ -1,7 +1,8 @@
 # Stable plugin SPI
 
-From PictureSharp 0.8.2 the types plugins build on are stable: until 2.0 they only grow. A plugin built against 0.8.2
+From PictureSharp 0.8.5 the types plugins build on are stable: until 2.0 they only grow. A plugin built against 0.8.5
 keeps compiling and running on every later 0.x and 1.x release, so a plugin can make its own 1.0 promise on top of it.
+0.8.5 itself broke the promise made in 0.8.2 once, for `ImageInfo` (see [0.8.5: one-time change](#085-one-time-change)).
 [Extending PictureSharp](extending-picturesharp.md) shows how the types are used.
 
 ## What is stable
@@ -11,10 +12,11 @@ The plugin contracts:
 | Area | Types |
 | --- | --- |
 | Registration | `IImageFormatModule`, `ImageFormat` (`Create`), `ImageConfigurationBuilder` (`AddFormat`, `ReplaceFormat`) |
-| Decoding | `IImageFormatDecoder`, `ImageDecodeContext`, `DecoderOptions`, `FormatDecoderOptions`, `EmbeddedPartOptions`, `ImageInfo` |
+| Decoding | `IImageFormatDecoder`, `ImageDecodeContext`, `DecoderOptions`, `FormatDecoderOptions`, `EmbeddedPartOptions` |
+| Identification | `ImageInfo`, `ImageColorInfo`, `ImageColorModel`, `ImageSampleFormat`, `ImageAlphaMode`, `ImageCompression`, `CicpColorDescription`, `ImageResolution` |
 | Encoding | `IImageFormatEncoder`, `IImageFormatEncoder<TOptions>`, `EncoderOptions` |
 | Metadata | `IImageFormatMetadataCodec`, `ImageMetadata`, `FormatMetadata`, `MetadataKinds` |
-| HDR gain maps | `GainMapMetadata`, `GainMapImage`, `EncodableGainMap`, `GainMapExtensions.GetGainMap`, `HdrInfo`, `HdrGainMapKinds`, `HdrColorSpace` |
+| HDR gain maps | `GainMapMetadata`, `GainMapImage`, `EncodableGainMap`, `GainMapExtensions.GetGainMap`, `GainMapInfo`, `HdrGainMapKinds`, `HdrColorSpace` |
 | Errors | `ImageFormatException`; the exception rules below |
 
 The model plugins create and fill: `Image`, `ImageFrame`, `ImageFrameCollection` and `Rgba32`.
@@ -49,9 +51,26 @@ notes.
 
 ## Minimum PictureSharp version
 
-A plugin depends on the lowest PictureSharp version whose API it uses (`PictureSharp >= 0.8.2` in its package) and
-raises it only when it starts using something newer. 0.8.2 is the first version with this promise, so a plugin that
-wants a stable base needs at least 0.8.2.
+A plugin depends on the lowest PictureSharp version whose API it uses (`PictureSharp >= 0.8.5` in its package) and
+raises it only when it starts using something newer. 0.8.5 is the first version a plugin can build on: `AddFormat` and
+`ReplaceFormat` throw `NotSupportedException` for a module whose assembly was built against an older PictureSharp,
+because it would fail inside `Identify` or report an `ImageInfo` without its required members.
+
+## 0.8.5: one-time change
+
+0.8.5 replaced `ImageInfo` members that duplicated each other or used a default to mean "unknown". Plugins need a new
+build against 0.8.5:
+
+| 0.8.4 | 0.8.5 |
+| --- | --- |
+| `ImageInfo.HasAlpha` | `Color.HasAlpha`, computed from `Color.AlphaMode` |
+| `ImageInfo.BitsPerChannel` (8 by default) | `Color.BitsPerSample`, required; the index depth for palettes |
+| `ImageInfo.WebPCompression`, `enum WebPCompression` | `ImageInfo.Compression` (`Unknown`, `Lossless`, `Lossy`, `Mixed`), required |
+| `ImageInfo.HorizontalResolution`, `VerticalResolution` (96 by default) | `ImageInfo.Resolution`, null when the file declares none |
+| `ImageInfo.FrameCount` 0 for "unknown" | `FrameCount` null for "unknown"; 0 is rejected |
+| `ImageInfo.Hdr`, `Image.Hdr`, `HdrInfo` | `ImageInfo.GainMap`, `Image.GainMap`, `GainMapInfo` |
+| `GainMapMetadata.ToHdrInfo(Size)` | `GainMapMetadata.ToGainMapInfo(Size)` |
+| — | `ImageInfo.Color` (`ImageColorInfo`): model, channels, sample format, alpha mode, ICC presence, CICP; required |
 
 ## How the promise is kept
 

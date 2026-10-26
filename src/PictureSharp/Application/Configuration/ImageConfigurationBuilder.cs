@@ -27,6 +27,7 @@ public sealed class ImageConfigurationBuilder
     /// <exception cref="ArgumentException">
     /// The module is invalid, or its format, name, MIME type or a file extension is already registered.
     /// </exception>
+    /// <exception cref="NotSupportedException">The module was built against PictureSharp older than 0.8.5.</exception>
     public ImageConfigurationBuilder AddFormat(IImageFormatModule module)
     {
         FormatRegistration registration = FormatRegistration.FromModule(module);
@@ -40,6 +41,7 @@ public sealed class ImageConfigurationBuilder
     /// <see cref="IImageFormatModule.Format"/> must be the registered instance, e.g. <see cref="ImageFormat.Png"/>.
     /// </summary>
     /// <exception cref="ArgumentException">The module is invalid or its format is not registered.</exception>
+    /// <exception cref="NotSupportedException">The module was built against PictureSharp older than 0.8.5.</exception>
     public ImageConfigurationBuilder ReplaceFormat(IImageFormatModule module)
     {
         FormatRegistration registration = FormatRegistration.FromModule(module);

@@ -44,7 +44,7 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
 
     internal void AcceptTransferredFrame(ImageFrame frame)
     {
-        _owner.GainMap = null;
+        _owner.AttachedGainMap = null;
         _frames[0].Detach(_owner.FrameOwner);
         _frames[0] = frame;
         frame.Attach(_owner.FrameOwner);
@@ -107,7 +107,7 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
     private void Insert(int index, ImageFrame frame, bool hasAlpha)
     {
         ValidateInsertion(index, frame);
-        _owner.GainMap = null;
+        _owner.AttachedGainMap = null;
         _frames.Insert(index, frame);
         frame.Attach(_owner.FrameOwner);
         _owner.HasAlpha |= hasAlpha;
@@ -123,7 +123,7 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
         }
 
         ImageFrame removed = _frames[index];
-        _owner.GainMap = null;
+        _owner.AttachedGainMap = null;
         _frames.RemoveAt(index);
         removed.Detach(_owner.FrameOwner);
     }
@@ -138,7 +138,7 @@ public sealed class ImageFrameCollection : IReadOnlyList<ImageFrame>
             throw new ArgumentOutOfRangeException(nameof(toIndex));
         }
 
-        _owner.GainMap = null;
+        _owner.AttachedGainMap = null;
         _frames.RemoveAt(fromIndex);
         _frames.Insert(toIndex, frame);
     }

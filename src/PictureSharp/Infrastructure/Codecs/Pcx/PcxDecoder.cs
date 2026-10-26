@@ -19,15 +19,24 @@ internal sealed class PcxDecoder : IImageDecoder
             throw Unsupported(header);
         }
 
-        (float dpiX, float dpiY) = header.Resolution;
+        bool rgb = header.Planes >= 3 && header.BitsPerPixel == 8;
         return new ImageInfo
         {
             Format = ImageFormat.Pcx,
             Width = header.Width,
             Height = header.Height,
-            HasAlpha = header.HasAlphaPlane,
-            HorizontalResolution = dpiX,
-            VerticalResolution = dpiY,
+            Color = new ImageColorInfo
+            {
+                // Grey PCX is an 8-bit palette (PaletteInfo 2 is only a hint); bit planes together form the index.
+                Model = rgb ? ImageColorModel.Rgb : ImageColorModel.Palette,
+                ChannelCount = rgb ? header.Planes : 1,
+                BitsPerSample = rgb ? 8 : header.Planes * header.BitsPerPixel,
+                SampleFormat = ImageSampleFormat.UnsignedInteger,
+                AlphaMode = header.HasAlphaPlane ? ImageAlphaMode.Straight : ImageAlphaMode.None,
+                HasIccProfile = false,
+            },
+            Compression = ImageCompression.Lossless,
+            Resolution = header.DeclaredResolution,
         };
     }
 

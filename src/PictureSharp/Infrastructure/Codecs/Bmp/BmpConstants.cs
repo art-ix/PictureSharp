@@ -6,6 +6,7 @@ internal static class BmpConstants
     public const int CoreHeaderSize = 12;       // BITMAPCOREHEADER (OS/2 1.x)
     public const int InfoHeaderSize = 40;       // BITMAPINFOHEADER
     public const int V3HeaderSize = 56;         // BITMAPV3INFOHEADER (with alpha mask)
+    public const int V4HeaderSize = 108;        // BITMAPV4HEADER
     public const int V5HeaderSize = 124;        // BITMAPV5HEADER
 
     // biCompression values

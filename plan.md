@@ -8,7 +8,7 @@ kolorem, operacje graficzne i korekcja fotograficzna, adaptery (System.Drawing, 
 
 0.8.4 zmniejsza paczki NuGet: ikona 128×128 zamiast oryginału 1254×1254 z 0.8.3. Bez zmian API i przetwarzania obrazów. Wtyczka HEIC `PictureSharp.Heif`
 (własny port HEVC intra w C#) powstaje równolegle w osobnym repozytorium, z własnym SemVer od 0.1.0. Weryfikacja
-Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF, JPEG XL)
+Apple na macOS (0.6.6) czeka na dostęp do sprzętu. Pozostałe nowe formaty (CUR, TIFF, QOI, TGA, PNM, AVIF)
 są poza planem.
 
 Decyzje użytkownika (2026-10-16): kolejność rdzenia 0.6.9 → 0.7.0 → 0.8.0; HEIF jako wtyczka z portem dekodera i
@@ -57,6 +57,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.8.1 | Generowanie gain map ISO z `HdrImage` i zapis HDR do JPEG (etapy B, C), konwersja Apple→ISO; addytywnie | Wydana (2026-10-23; NuGet 0.8.1, bez ARM64) |
 | 0.8.3 | Ikona projektu w paczkach NuGet i banner w README; bez zmian kodu biblioteki | Wydana (2026-10-26; tag v0.8.3, NuGet 0.8.3) |
 | 0.8.4 | Ikona paczek 128×128 (12 KB) zamiast 1254×1254; paczki adapterów z ~490 KB do ~30 KB | Wydanie 2026-10-26 |
+| 0.8.5 | `ImageInfo.Color` (model, kanały, typ próbek, alfa, ICC, CICP) i `Compression`; czyste `ImageInfo`; jednorazowe złamanie SPI z blokadą starych wtyczek | Wydanie 2026-10-26 |
 | 0.8.2 | Prośby wtyczek: limit zagnieżdżenia dekodowania, metadane specyficzne dla formatu (`FormatMetadata`), deklaracja stabilnego SPI; addytywnie | Wydana (2026-10-25; tag v0.8.2, NuGet 0.8.2, bez ARM64) |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
@@ -1077,3 +1078,30 @@ Szczegóły w `docs/releases/release-x.y.z.md` i historii Git.
 - Paczki zawierają `docs/assets/picturesharp-icon-128.png` (128×128, 12 KB); oryginał 1254×1254 zostaje w `docs/assets` dla README.
 - PictureSharp z 1,09 MB do 0,63 MB, adaptery z ~0,49 MB do 26–35 KB.
 - Bez zmian API i algorytmów; notatki: `docs/releases/release-0.8.4.md`.
+
+## 0.8.5 — opis koloru i kanałów w `ImageInfo` (wydana 2026-10-26)
+
+`Identify` zgłasza bez dekodowania pikseli model koloru, kanały, typ próbek, tryb alfy, obecność ICC i opis CICP oraz
+bezstratność. Decyzje użytkownika (2026-10-26): czyste `ImageInfo` bez dublowania i wartości udających wiedzę, numer
+0.8.5, jednorazowe złamanie stabilnego SPI z 0.8.2; wtyczki wydawane ponownie pod `PictureSharp >= 0.8.5`.
+
+- API: `ImageColorInfo` (wymagane `Model`, `ChannelCount`, `BitsPerSample`, `SampleFormat`, `AlphaMode`,
+  `HasIccProfile`; `Cicp`; wyliczane `HasAlpha`), `ImageColorModel` (model po obowiązkowej transformacji formatu,
+  bez `YCbCr`), `ImageSampleFormat`, `ImageAlphaMode`, `ImageCompression` (`Unknown`, `Lossless`, `Lossy`, `Mixed`),
+  `CicpColorDescription`, `ImageResolution`. W `ImageInfo` wymagane `Color` i `Compression`, `FrameCount` i
+  `Resolution` nullowalne.
+- Usunięte: `ImageInfo.HasAlpha`, `BitsPerChannel`, `WebPCompression` (z enumem), `HorizontalResolution`,
+  `VerticalResolution`. Przemianowane: `HdrInfo` → `GainMapInfo`, `Hdr` → `GainMap` (`ImageInfo`, `Image`),
+  `ToHdrInfo` → `ToGainMapInfo`; wewnętrzny załącznik mapy w `Image` → `AttachedGainMap`.
+- Formaty wbudowane: JPEG (Adobe/YCCK → model po dekodowaniu, ICC z APP2), PNG (cICP, sRGB bez iCCP, obecność iCCP,
+  niezależnie od `IgnoreMetadata`), WebP (`Mixed`), GIF (głębia największej tablicy, rozszerzenie ICC), BMP (maski,
+  V4/V5 `sRGB`, profil osadzony vs PROFILE_LINKED, BI_PNG/BI_JPEG z obrazu osadzonego), ICO (maska AND jako kanał),
+  PCX (głębia indeksu). `BitsPerSample` zmienia się względem 0.8.4 dla GIF, BMP, ICO i PCX.
+- Blokada: `AddFormat`/`ReplaceFormat` rzucają `NotSupportedException` dla modułu zbudowanego na PictureSharp < 0.8.5
+  (sprawdzone testem z wtyczką skompilowaną na zastępczym rdzeniu 0.8.4).
+- Testy: korpus `tests/assets/corpus/identify/` (67 plików, `identify_corpus.py`) z `identify_reference.json`
+  sprawdzanym przez Pillow; testy niezmienników na całym korpusie, kompilacji konsumenta (składowe `required`),
+  blokady wtyczek. 8957 testów bez błędów, `verify-package-consumer.sh` (trimming, Native AOT) zielone; bez ARM64.
+- Wtyczki sprawdzone na lokalnej paczce 0.8.5: TIFF 3899/3899 (wydawany razem z rdzeniem), Formats.Extra 1188 + 31,
+  HEIF (testy kolorów 10/10); ich wydania osobno.
+- Notatki: `docs/releases/release-0.8.5.md`; migracja w `docs/plugin-spi.md`.

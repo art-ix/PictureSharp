@@ -19,10 +19,12 @@ public class PluginSpiSnapshotTests
         typeof(IImageFormatMetadataCodec), typeof(ImageDecodeContext), typeof(FormatDecoderOptions), typeof(FormatMetadata),
         typeof(EmbeddedPartOptions), typeof(GainMapMetadata), typeof(GainMapImage), typeof(EncodableGainMap),
         typeof(GainMapExtensions), typeof(ImageFormat), typeof(ImageFormatException), typeof(ImageConfigurationBuilder),
-        typeof(DecoderOptions), typeof(EncoderOptions), typeof(ImageInfo),
+        typeof(DecoderOptions), typeof(EncoderOptions), typeof(ImageInfo), typeof(ImageColorInfo), typeof(ImageColorModel),
+        typeof(ImageSampleFormat), typeof(ImageAlphaMode), typeof(ImageCompression), typeof(CicpColorDescription),
+        typeof(ImageResolution),
         // Model.
         typeof(Image), typeof(ImageFrame), typeof(ImageFrameCollection), typeof(Rgba32), typeof(ImageMetadata),
-        typeof(MetadataKinds), typeof(HdrInfo), typeof(HdrGainMapKinds), typeof(HdrColorSpace),
+        typeof(MetadataKinds), typeof(GainMapInfo), typeof(HdrGainMapKinds), typeof(HdrColorSpace),
     ];
 
     [Test]

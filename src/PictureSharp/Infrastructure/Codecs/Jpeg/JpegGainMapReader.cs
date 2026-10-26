@@ -62,7 +62,7 @@ internal static class JpegGainMapReader
             return null;
         }
 
-        var info = new HdrInfo();
+        var info = new GainMapInfo();
         try
         {
             return ReadCore(file, primary, options, budget, copyMap, ref info);
@@ -82,7 +82,7 @@ internal static class JpegGainMapReader
     }
 
     private static GainMapAttachment? ReadCore(ReadOnlySpan<byte> file, JpegHeader primary, DecoderOptions options, DecodeBudget? budget,
-        bool copyMap, ref HdrInfo info)
+        bool copyMap, ref GainMapInfo info)
     {
         bool primaryUltraHdr = primary.Xmp is { } px && file[px].IndexOf("hdrgm:"u8) >= 0;
         if (primary.Mpf is null)

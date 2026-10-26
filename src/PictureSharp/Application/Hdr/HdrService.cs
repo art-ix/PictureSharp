@@ -13,7 +13,7 @@ internal static class HdrService
         ArgumentNullException.ThrowIfNull(image);
         options ??= HdrOptions.Default;
         cancellationToken.ThrowIfCancellationRequested();
-        GainMapAttachment attachment = image.GainMap
+        GainMapAttachment attachment = image.AttachedGainMap
             ?? throw new InvalidOperationException(
                 "The image has no HDR gain map: load it with DecoderOptions.LoadGainMap = true from a file that has one. Resize, Thumbnail, Crop, AutoOrient, quarter-turn rotations and flips keep the map; other Mutate operations and frame changes remove it.");
         if (!attachment.CanDecode)

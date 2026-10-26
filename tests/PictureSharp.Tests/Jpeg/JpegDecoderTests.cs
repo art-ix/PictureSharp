@@ -42,12 +42,12 @@ public class JpegDecoderTests
         ImageInfo info = Image.Identify(Corpus.PathOf(file));
         await Assert.That(info.Format).IsEqualTo(ImageFormat.Jpeg);
         await Assert.That((info.Width, info.Height)).IsEqualTo((r.Width, r.Height));
-        await Assert.That(info.HasAlpha).IsFalse();
+        await Assert.That(info.Color.HasAlpha).IsFalse();
         await Assert.That(info.FrameCount).IsEqualTo(1);
         await Assert.That((int)info.Orientation).IsEqualTo(r.Orientation);
         if (r.Dpi is { } dpi)
         {
-            await Assert.That(Math.Round((double)info.HorizontalResolution, 1)).IsEqualTo(Math.Round((double)(dpi[0]), 1));
+            await Assert.That(Math.Round((double)info.Resolution!.Value.Horizontal, 1)).IsEqualTo(Math.Round((double)(dpi[0]), 1));
         }
     }
 
@@ -65,7 +65,7 @@ public class JpegDecoderTests
         // Pillow 10.2 ignores JFIF density unit 2, so this is not covered by the reference.
         using Image image = Image.Load(Corpus.PathOf("jpeg/dpcm.jpg"));
         await Assert.That(Math.Round((double)image.Metadata.HorizontalResolution, 2)).IsEqualTo(Math.Round((double)(28 * 2.54f), 2));
-        await Assert.That(Math.Round((double)(Image.Identify(Corpus.PathOf("jpeg/dpcm.jpg")).VerticalResolution), 2)).IsEqualTo(Math.Round((double)(28 * 2.54f), 2));
+        await Assert.That(Math.Round((double)(Image.Identify(Corpus.PathOf("jpeg/dpcm.jpg")).Resolution!.Value.Vertical), 2)).IsEqualTo(Math.Round((double)(28 * 2.54f), 2));
     }
 
     [Test]
