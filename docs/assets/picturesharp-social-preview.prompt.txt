@@ -1,0 +1,9 @@
+Generated with the built-in image_gen tool on 2026-10-26.
+Final correction: replace subtitle with "Pure managed image processing library for .NET" in two lines, preserving all other elements. Exported at 1280x640 pixels.
+Reference: picturesharp-icon.png
+
+Use case: compositing
+Asset type: GitHub repository social preview banner.
+Edit the referenced PictureSharp icon into a polished horizontal social preview image. Output canvas exactly 1280 by 640 pixels, aspect ratio 2:1.
+Preserve the existing icon's P silhouette, photographic landscape geometry, blue colors and golden sun. Place the icon on the left, scaled proportionally with comfortable margins. On the right, set the exact title "PictureSharp" in bold clean dark navy sans-serif, with the exact subtitle "Pure managed image processing for .NET" below, smaller and readable, wrapping to two lines if needed.
+Solid near-white background, minimal crisp composition, generous whitespace, all content comfortably within the image with at least 60px safe margins. No extra decorations, no shadows, no watermarks, no UI mockup. Keep logo recognizable and unchanged in design. One finished 2:1 banner only.
