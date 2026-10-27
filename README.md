@@ -17,9 +17,9 @@ libjpeg-turbo and Pillow.
 | BMP | Windows bitmaps | ✔ | | |
 | ICO | favicons, app icons | ✔ | | |
 | PCX | legacy files | ✔ | | |
-| HEIC ¹ | iPhone photos | ✔ | | read, write |
-| TIFF ² | scans, print, archives | ✔ | | |
-| JPEG XL ³ | photos, lossless JPEG archiving | ✔ | | |
+| HEIC [¹](#plugin-packages) | iPhone photos | ✔ | | read, write |
+| TIFF [²](#plugin-packages) | scans, print, archives | ✔ | | |
+| JPEG XL [³](#plugin-packages) | photos, lossless JPEG archiving | ✔ | | |
 
 Features:
 
