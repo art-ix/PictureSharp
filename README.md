@@ -21,7 +21,7 @@ libjpeg-turbo and Pillow.
 | TIFF [²](#plugin-packages) | scans, print, archives | ✔ | | |
 | JPEG XL [³](#plugin-packages) | photos, lossless JPEG archiving | ✔ | | |
 
-Features:
+**Features:**
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
