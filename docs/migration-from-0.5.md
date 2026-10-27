@@ -2,7 +2,8 @@
 
 The image model and the `Load` → `Mutate`/`Clone` → `Save` flow of **RasterSharp 0.5.0** are unchanged in
 **PictureSharp 0.7**; the package name, namespaces, a few decoder options and some defaults differ. Going straight from
-0.5.0, skip the short-lived 0.5.5 layered API (`ImageReader`/`ImageWriter`).
+0.5.0, skip the short-lived 0.5.5 layered API (`ImageReader`/`ImageWriter`). Going on to 0.8.5 or later, also see the
+renamed `ImageInfo` members in [Stable plugin SPI](plugin-spi.md#085-one-time-change).
 
 ## 1. Package and namespace
 

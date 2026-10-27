@@ -19,7 +19,7 @@ meta.Clear();                             // drop ICC, EXIF and XMP (the resolut
 
 | Member | Meaning |
 | --- | --- |
-| `HorizontalResolution`, `VerticalResolution` | DPI; 96 when the file does not specify it. |
+| `HorizontalResolution`, `VerticalResolution` | DPI; 96 when the file does not specify it (`ImageInfo.Resolution` is then null). |
 | `IccProfile` | Raw ICC profile, written back; pixels are converted only on request ([Color management](color-management.md)). |
 | `Exif` | Raw EXIF as a TIFF stream (`II*\0`/`MM\0*`); a JPEG `Exif\0\0` prefix is stripped. |
 | `Xmp` | Raw XMP packet (UTF-8 XML). |

@@ -22,8 +22,8 @@ Errors are printed as `error: ...` with exit code 2.
 | `decode` | `decode <file> [iterations]` |
 | `raw` | `raw <input> <output.rgba>` |
 
-- **`info`** prints format, size, alpha, frames, WebP compression, orientation and the HDR gain map without decoding
-  pixels.
+- **`info`** prints format, size, frames, compression, orientation, the colour description (model, channels, sample
+  depth and type, alpha, ICC, CICP) and the HDR gain map without decoding pixels.
 - **`convert`** applies the EXIF orientation and saves in the format of the output extension (`.webp`, `.png`, `.jpg`,
   `.bmp`, `.gif`, `.pcx`, `.ico`). `-q`/`-m` set WebP quality and method (75 and 4) or JPEG quality; GIF output takes
   `-colors`, `-octree` and `-dither`. GIF to WebP is lossless like `gif2webp` unless `-q` or `-m` is given (add

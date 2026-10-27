@@ -16,8 +16,8 @@ detected but not decoded; other containers can supply maps through a [plugin](#g
 ## Loading
 
 HDR is opt-in: `DecoderOptions.LoadGainMap` attaches the compressed map without decoding it. The base pixels are the
-same as without the option, and a damaged or unsupported map never fails the load; `image.GainMap` describes it. Without the
-option nothing about HDR is parsed.
+same as without the option, and a damaged or unsupported map never fails the load; `image.GainMap` describes it.
+Without the option nothing about HDR is parsed.
 
 ```csharp
 using PictureSharp;
@@ -52,8 +52,8 @@ else if (hdr is not null)
 }
 ```
 
-`GainMapInfo` reports every detected model (`Detected`), the one used (`Selected`), the map size, the maximum headroom as a
-linear ratio (4 means two stops above SDR white) and whether the headers allow `ToHdr` (`CanDecode`).
+`GainMapInfo` reports every detected model (`Detected`), the one used (`Selected`), the map size, the maximum headroom
+as a linear ratio (4 means two stops above SDR white) and whether the headers allow `ToHdr` (`CanDecode`).
 
 ## Reconstruction
 
