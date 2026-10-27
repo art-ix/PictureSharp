@@ -19,16 +19,20 @@ libjpeg-turbo and Pillow.
 | PCX | legacy files | ✔ | | |
 | HEIC ¹ | iPhone photos | ✔ | | read, write |
 | TIFF ² | scans, print, archives | ✔ | | |
+| JPEG XL ³ | photos, lossless JPEG archiving | ✔ | | |
 
 Variants and options for each format are listed in
 [Loading and saving](https://github.com/art-ix/PictureSharp/blob/main/docs/loading-and-saving.md#supported-formats).
-HEIC and TIFF come from plugin packages, also 100% C#:
+HEIC, TIFF and JPEG XL come from plugin packages, also 100% C#:
 
 ¹ [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif): `dotnet add package PictureSharp.Heif`. Own HEVC
 decoder and encoder; HDR gain maps, thumbnails, depth and Portrait blur from iPhone photos.
 
 ² [PictureSharp.Tiff](https://github.com/art-ix/PictureSharp.Tiff): `dotnet add package PictureSharp.Tiff`. Multi-page
 TIFF and BigTIFF; reads CMYK, YCbCr, CIE L\*a\*b\* and 1- to 32-bit or floating-point samples.
+
+³ [PictureSharp.Jxl](https://github.com/art-ix/PictureSharp.Jxl): `dotnet add package PictureSharp.Jxl`. Lossy and
+lossless encoding, ICC/EXIF/XMP editing, and byte-exact lossless JPEG transcoding.
 
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
