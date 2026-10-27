@@ -36,6 +36,7 @@ jobs:
 
   oracle:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -45,9 +46,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install reference prerequisites
+        # cmake ships with the runner image; recommends would pull in fonts, ghostscript and netpbm.
+        # Short apt timeouts with retries keep a stalled mirror from hanging the job.
+        timeout-minutes: 5
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake libgif-dev libpng-dev libjpeg-dev imagemagick
+          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=20"
+          sudo apt-get update $APT_OPTS
+          sudo apt-get install -y --no-install-recommends $APT_OPTS libgif-dev libpng-dev libjpeg-dev imagemagick
           python -m pip install Pillow==10.2.0 numpy==1.26.4
       - run: bash scripts/build-webp-reference.sh
       - name: Require reference tools
