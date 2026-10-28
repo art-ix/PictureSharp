@@ -886,7 +886,7 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext AutoCrop(PictureSharp.Processing.AutoCropOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext AutoOrient()
     method PictureSharp.Processing.ImageProcessingContext AutoWhiteBalance(System.Single strength = 1)
-    method PictureSharp.Processing.ImageProcessingContext BackgroundColor(Rgba32 color)
+    method PictureSharp.Processing.ImageProcessingContext BackgroundColor(Rgba64 color)
     method PictureSharp.Processing.ImageProcessingContext BoxBlur(System.Single radius)
     method PictureSharp.Processing.ImageProcessingContext Brightness(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Clarity(System.Single amount, System.Single radius = 0)
@@ -905,8 +905,8 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, System.Single opacity = 1)
     method PictureSharp.Processing.ImageProcessingContext Equalize()
     method PictureSharp.Processing.ImageProcessingContext Exposure(System.Single stops)
-    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color)
-    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color, System.Drawing.Rectangle region)
+    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba64 color)
+    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba64 color, System.Drawing.Rectangle region)
     method PictureSharp.Processing.ImageProcessingContext Flip(PictureSharp.Processing.FlipMode flipMode)
     method PictureSharp.Processing.ImageProcessingContext Gamma(System.Single gamma, PictureSharp.Processing.ColorChannels channels = Rgb)
     method PictureSharp.Processing.ImageProcessingContext GaussianBlur(System.Single sigma)
@@ -925,7 +925,7 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height, PictureSharp.Processing.ResamplingFilter filter)
     method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height, PictureSharp.Processing.ResizeMode mode, PictureSharp.Processing.ResamplingFilter filter = Lanczos3)
     method PictureSharp.Processing.ImageProcessingContext Rotate(PictureSharp.Processing.RotateMode rotateMode)
-    method PictureSharp.Processing.ImageProcessingContext Rotate(System.Single degrees, PictureSharp.Processing.ResamplingFilter filter = Bicubic, Rgba32 background = default, System.Boolean expand = true)
+    method PictureSharp.Processing.ImageProcessingContext Rotate(System.Single degrees, PictureSharp.Processing.ResamplingFilter filter = Bicubic, Rgba64 background = default, System.Boolean expand = true)
     method PictureSharp.Processing.ImageProcessingContext RotateFlip(PictureSharp.Processing.RotateMode rotateMode, PictureSharp.Processing.FlipMode flipMode)
     method PictureSharp.Processing.ImageProcessingContext Saturate(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Sepia()
@@ -1022,7 +1022,7 @@ sealed record PictureSharp.Processing.ResizeOptions : System.IEquatable<PictureS
     property PictureSharp.Processing.AnchorPosition Position { get; init; }
     property PictureSharp.Processing.ResamplingFilter Filter { get; init; }
     property PictureSharp.Processing.ResizeMode Mode { get; init; }
-    property Rgba32 PadColor { get; init; }
+    property Rgba64 PadColor { get; init; }
     property System.Boolean AllowUpscale { get; init; }
     property System.Boolean LinearLight { get; init; }
     property required System.Drawing.Size Size { get; init; }

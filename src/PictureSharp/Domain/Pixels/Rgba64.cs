@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PictureSharp.Domain.Pixels;
@@ -118,6 +119,16 @@ public struct Rgba64 : IEquatable<Rgba64>, IPixelOps<Rgba64>
     static Rgba64 IPixelOps<Rgba64>.FromRgba32(Rgba32 pixel) => FromRgba32(pixel);
 
     static int IPixelOps<Rgba64>.Alpha(Rgba64 pixel) => pixel.A;
+
+    static Rgba64 IPixelOps<Rgba64>.WithAlpha(Rgba64 pixel, int alpha) => new(pixel.R, pixel.G, pixel.B, (ushort)alpha);
+
+    static int IPixelOps<Rgba64>.Luma(Rgba64 pixel) => PixelConverter.Luma16(pixel.R, pixel.G, pixel.B);
+
+    static Vector4 IPixelOps<Rgba64>.ToUnit(Rgba64 pixel) => new Vector4(pixel.R, pixel.G, pixel.B, pixel.A) / ushort.MaxValue;
+
+    static Rgba64 IPixelOps<Rgba64>.FromUnit(Vector4 unit) =>
+        new((ushort)PixelDepth.Quantize(unit.X, ushort.MaxValue), (ushort)PixelDepth.Quantize(unit.Y, ushort.MaxValue),
+            (ushort)PixelDepth.Quantize(unit.Z, ushort.MaxValue), (ushort)PixelDepth.Quantize(unit.W, ushort.MaxValue));
 
     static int IPixelOps<Rgba64>.MaxChannelDifference(Rgba64 x, Rgba64 y) =>
         Math.Max(Math.Max(Math.Abs(x.R - y.R), Math.Abs(x.G - y.G)), Math.Max(Math.Abs(x.B - y.B), Math.Abs(x.A - y.A)));

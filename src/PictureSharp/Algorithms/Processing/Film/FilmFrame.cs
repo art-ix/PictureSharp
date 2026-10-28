@@ -27,7 +27,7 @@ public sealed class FilmFrame
 
     /// <summary>
     /// The clockwise angle in degrees (from −45 to 45) that makes the perforation rows horizontal or vertical, as
-    /// <see cref="ImageProcessingContext.Rotate(float, ResamplingFilter, Rgba32, bool)"/> takes it; 0 when the strip
+    /// <see cref="ImageProcessingContext.Rotate(float, ResamplingFilter, Rgba64, bool)"/> takes it; 0 when the strip
     /// is already straight to within half a pixel.
     /// </summary>
     public float Angle { get; }

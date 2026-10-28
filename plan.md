@@ -1169,7 +1169,12 @@ ważony `MaxPixels`, `ReservePixels(…, PixelType, …)` z kontrolą zwróconeg
 < 0.9.0, PNG 16-bit (odczyt wszystkich typów koloru z `tRNS`, Adam7, APNG, czytnik sekwencyjny; zapis z `PngBitDepth`),
 geometria przez wspólny dispatch, zaokrąglanie w pozostałych koderach (w tym ICO). Poza etapem 1 zostało m.in.: `sBIT`
 (D15), SIMD `TrimBounds` dla `ushort`, konwersja wierszami zamiast kopii całego obrazu w zapisie przez fallback.
-Etapy 2–4: nierozpoczęte (operacje rzucają `NotSupportedException` na `Rgba64`, D4). `VERSION` = 0.9.0.
+Etap 2 zaimplementowany (2026-10-28; szczegóły, błędy względem referencji i pomiary w `progres.md`): Resize (wszystkie
+filtry, encoded/linear, pad), Rotate/Affine, GaussianBlur, BoxBlur, Sharpen, UnsharpMask, Vignette, DrawImage (wszystkie
+tryby, mieszane głębokości), ApplyMask, Opacity, Fill, BackgroundColor na `Rgba64` przez `PixelDispatch`; kolory opcji
+`Rgba64`; błąd ≤ 1 kod 16-bit względem niezależnej referencji double; ścieżka 8-bit bajtowo bez zmian i bez regresji
+w BenchmarkDotNet. Poza etapem 2: SIMD 16-bit, ARM64, próg `UnsharpMask` na 0–1 (etap 3).
+Etapy 3–4: nierozpoczęte (operacje rzucają `NotSupportedException` na `Rgba64`, D4). `VERSION` = 0.9.0.
 
 DoD:
 - Każda operacja i kodek wbudowany działa na obrazach `Rgba64` z 16-bitową precyzją (gradient 65536 poziomów nie

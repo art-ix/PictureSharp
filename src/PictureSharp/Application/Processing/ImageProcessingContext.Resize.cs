@@ -1,4 +1,5 @@
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Application.Hdr;
 using PictureSharp.Application.Processing;
 using System.Drawing;
@@ -121,24 +122,14 @@ public readonly ref partial struct ImageProcessingContext
         GainMapEdit? gainMapEdit = pad ? null
             : cropOnly is { } crop ? GainMapEdit.Crop(crop)
             : GainMapEdit.Region(x0, y0, x1, y1, w, h, options.Filter);
-        _state.ReplaceFrames((cropOnly, resample, srcWidth, srcHeight, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset), static (frame, state, token) =>
+        _state.ReplaceFrames((cropOnly, resample, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset), static (frame, state, token) =>
         {
-            var (cropOnly, resample, srcWidth, srcHeight, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset) = state;
-            Rgba32[] pixels = cropOnly is { } rect ? Geometry.Crop(frame, rect)
-                : resample ? Resizer.Resize(frame.Pixels, srcWidth, srcHeight, w, h, options.Filter, x0, y0, x1, y1, token, options.LinearLight)
-                : frame.Pixels;
-            if (pad)
-            {
-                var canvas = GC.AllocateUninitializedArray<Rgba32>(canvasWidth * canvasHeight);
-                canvas.AsSpan().Fill(options.PadColor);
-                Geometry.Place(pixels, w, h, canvas, canvasWidth, canvasHeight, offset.X, offset.Y);
-                pixels = canvas;
-            }
-
-            return new FrameReplacement(canvasWidth, canvasHeight, pixels);
+            var (cropOnly, resample, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset) = state;
+            var operation = new Resizer.ResizeFrame(frame, cropOnly, resample, w, h, options, x0, y0, x1, y1, pad, canvasWidth, canvasHeight, offset, token);
+            return new FrameReplacement(canvasWidth, canvasHeight, PixelDispatch.Run<Resizer.ResizeFrame, PixelBuffer>(frame.PixelType, ref operation));
         }, gainMapEdit);
         image.Metadata.PixelsMoved();
-        if (pad && options.PadColor.A != 255)
+        if (pad && !PixelTypes.IsOpaque(options.PadColor, image.PixelType))
         {
             image.HasAlpha = true;
         }

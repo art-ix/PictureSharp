@@ -1,5 +1,6 @@
 using System.Drawing;
 using PictureSharp.Algorithms.Processing;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Processing;
@@ -23,6 +24,11 @@ public readonly ref partial struct ImageProcessingContext
     /// Draws the first frame of <paramref name="source"/> over every frame with its top-left corner at
     /// <paramref name="location"/>, blended as <paramref name="options"/> describe. Parts outside are clipped.
     /// </summary>
+    /// <remarks>
+    /// Two 8-bit images blend as described for each option. When either image is 16-bit, the blend runs in float on
+    /// unrounded values and each result is rounded once to the destination's depth, so a 16-bit source keeps its
+    /// precision even on an 8-bit destination.
+    /// </remarks>
     /// <param name="source">Image to draw; may be the image being processed.</param>
     /// <param name="location">Position of the source's top-left corner; may be negative.</param>
     /// <param name="options">Opacity and blending space.</param>
@@ -36,22 +42,11 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        Rgba32[] pixels = ReferenceEquals(source, Target) ? (Rgba32[])src.Pixels.Clone() : src.Pixels;
-
+        PixelBuffer pixels = ReferenceEquals(source, Target) ? src.Buffer.Clone() : src.Buffer;
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            if (options.BlendMode != BlendMode.Normal)
-            {
-                Compositor.DrawBlended(frame, pixels, src.Width, src.Height, location, options.Opacity, options.BlendMode, options.LinearLight, cancellationToken: _state.CancellationToken);
-            }
-            else if (options.LinearLight)
-            {
-                Compositor.DrawOverLinear(frame, pixels, src.Width, src.Height, location, options.Opacity, cancellationToken: _state.CancellationToken);
-            }
-            else
-            {
-                Compositor.DrawOver(frame, pixels, src.Width, src.Height, location, options.Opacity, cancellationToken: _state.CancellationToken);
-            }
+            var operation = new Compositor.DrawFrame(frame, pixels, src.Width, src.Height, location, options, _state.CancellationToken);
+            PixelDispatch.Run<Compositor.DrawFrame, bool>(frame.PixelType, ref operation);
         }
 
         return this;

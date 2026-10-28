@@ -34,6 +34,10 @@ internal static class PixelTypes
     /// <summary>The charge of one pixel against <see cref="DecoderOptions.MaxPixels"/>: 2 for 16-bit storage.</summary>
     public static int Weight(PixelType pixelType) => pixelType == PixelType.Rgba64 ? 2 : 1;
 
+    /// <summary>Whether <paramref name="color"/> is opaque once stored at <paramref name="pixelType"/>'s depth.</summary>
+    public static bool IsOpaque(Rgba64 color, PixelType pixelType) =>
+        pixelType == PixelType.Rgba32 ? Rgba64.Narrow(color.A) == byte.MaxValue : color.A == ushort.MaxValue;
+
     /// <summary>Throws for an operation without a 16-bit implementation yet, instead of rounding to 8 bits silently.</summary>
     public static NotSupportedException NotYetSupported() =>
         new("This operation does not support 16-bit (Rgba64) images yet; convert with ConvertPixelType(PixelType.Rgba32) first.");

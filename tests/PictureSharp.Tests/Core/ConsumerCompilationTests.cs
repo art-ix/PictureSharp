@@ -165,6 +165,9 @@ public class ConsumerCompilationTests
                     using Image narrow = Image.LoadPixelData(new Rgba32[4], 2, 2);
                     using Image raw = Image.LoadPixelData(new byte[12], 1, 1, PixelFormat.Rgba64, pixelType: PixelType.Rgba64);
                     wide.Mutate(x => x.Pad(5, 5, Color.Red).Pad(6, 6, new Rgba32(1, 2, 3)).Pad(7, 7).ConvertPixelType(PixelType.Rgba32, dither: true));
+                    narrow.Mutate(x => x.Fill(Color.Red).Fill(new Rgba32(1, 2, 3), new Rectangle(0, 0, 1, 1)).Fill(default(Rgba64))
+                        .BackgroundColor(Color.White).BackgroundColor(new Rgba64(1, 2, 3, 4)).Rotate(10f, background: Color.Black)
+                        .Rotate(5f, ResamplingFilter.Bilinear, new Rgba32(1, 2, 3)).Resize(new ResizeOptions { Size = new(1, 1), PadColor = Color.Red }));
                     _ = (Rgba32)pixels[0];
                     _ = wide.ToPng(new PngEncoderOptions { BitDepth = PngBitDepth.Sixteen });
                     _ = PixelFormat.Gray16.BitsPerChannel();

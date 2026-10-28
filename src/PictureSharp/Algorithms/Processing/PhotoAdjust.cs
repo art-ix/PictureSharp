@@ -1,5 +1,7 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using PictureSharp.Algorithms.ColorManagement;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Numerics;
 using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
@@ -94,40 +96,66 @@ internal static class PhotoAdjust
     /// <summary>
     /// Multiplies linear light by <c>2^(−2 · Amount · w)</c>, where <c>w</c> is a smoothstep of the distance from the
     /// center (relative to half the diagonal) from <c>Midpoint</c> to <c>Midpoint + Feather · (1 − Midpoint)</c>.
+    /// 8-bit pixels go through the transfer tables; others are decoded and encoded continuously and rounded once.
     /// </summary>
-    public static void Vignette(Rgba32[] pixels, int width, int height, VignetteOptions options, CancellationToken cancellationToken)
+    public static void Vignette<TPixel>(TPixel[] pixels, int width, int height, VignetteOptions options, CancellationToken cancellationToken)
+        where TPixel : unmanaged, IPixelOps<TPixel>
     {
-        float inner = options.Midpoint;
-        float outer = inner + (options.Feather * (1f - inner));
-        float scale = -2f * options.Amount;
-        float inverseRadius = 1f / (0.5f * MathF.Sqrt((width * (float)width) + (height * (float)height)));
-        float centerX = (width - 1) * 0.5f, centerY = (height - 1) * 0.5f;
+        var shape = new VignetteShape(width, height, options);
         Parallelism.ForBands(height, Math.Max(1, BandLength / width), (long)width * height, cancellationToken, (top, bottom) =>
         {
             for (int y = top; y < bottom; y++)
             {
-                Span<Rgba32> row = pixels.AsSpan(y * width, width);
-                float dy = y - centerY;
+                Span<TPixel> row = pixels.AsSpan(y * width, width);
+                float dy = y - shape.CenterY;
                 for (int x = 0; x < width; x++)
                 {
-                    float dx = x - centerX;
-                    float d = MathF.Sqrt((dx * dx) + (dy * dy)) * inverseRadius;
-                    float t = outer > inner ? Math.Clamp((d - inner) / (outer - inner), 0f, 1f) : d >= inner ? 1f : 0f;
+                    float t = shape.Weight(x - shape.CenterX, dy);
                     if (t == 0f)
                     {
                         continue;
                     }
 
-                    float gain = DeterministicMath.Exp2(scale * (t * t * (3f - (2f * t))));
-                    Rgba32 p = row[x];
-                    row[x] = new Rgba32(
-                        SrgbTransfer.Encode(SrgbTransfer.Decode(p.R) * gain),
-                        SrgbTransfer.Encode(SrgbTransfer.Decode(p.G) * gain),
-                        SrgbTransfer.Encode(SrgbTransfer.Decode(p.B) * gain),
-                        p.A);
+                    float gain = DeterministicMath.Exp2(shape.Scale * (t * t * (3f - (2f * t))));
+                    if (typeof(TPixel) == typeof(Rgba32))
+                    {
+                        Rgba32 p = Unsafe.As<TPixel, Rgba32>(ref row[x]);
+                        Unsafe.As<TPixel, Rgba32>(ref row[x]) = new Rgba32(
+                            SrgbTransfer.Encode(SrgbTransfer.Decode(p.R) * gain),
+                            SrgbTransfer.Encode(SrgbTransfer.Decode(p.G) * gain),
+                            SrgbTransfer.Encode(SrgbTransfer.Decode(p.B) * gain),
+                            p.A);
+                    }
+                    else
+                    {
+                        Vector4 v = LinearUnit.Load(row[x]);
+                        row[x] = LinearUnit.Store<TPixel>(new Vector4(new Vector3(v.X, v.Y, v.Z) * gain, v.W));
+                    }
                 }
             }
         });
+    }
+
+    /// <summary>The geometry of <see cref="Vignette"/>.</summary>
+    private readonly struct VignetteShape(int width, int height, VignetteOptions options)
+    {
+        private readonly float _inner = options.Midpoint;
+        private readonly float _outer = options.Midpoint + (options.Feather * (1f - options.Midpoint));
+        private readonly float _inverseRadius = 1f / (0.5f * MathF.Sqrt((width * (float)width) + (height * (float)height)));
+
+        public float Scale { get; } = -2f * options.Amount;
+
+        public float CenterX { get; } = (width - 1) * 0.5f;
+
+        public float CenterY { get; } = (height - 1) * 0.5f;
+
+        /// <summary>The smoothstep argument at offset (<paramref name="dx"/>, <paramref name="dy"/>) from the center.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public float Weight(float dx, float dy)
+        {
+            float d = MathF.Sqrt((dx * dx) + (dy * dy)) * _inverseRadius;
+            return _outer > _inner ? Math.Clamp((d - _inner) / (_outer - _inner), 0f, 1f) : d >= _inner ? 1f : 0f;
+        }
     }
 
     private const int BandLength = 1 << 16;

@@ -3,6 +3,7 @@ using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.ColorManagement;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
 
@@ -92,17 +93,19 @@ public readonly ref partial struct ImageProcessingContext
     /// <summary>Inverts the color channels; alpha is kept.</summary>
     public ImageProcessingContext Invert() => ForEachPixelSpan(ColorOps.Invert);
 
-    /// <summary>Overwrites every pixel with <paramref name="color"/> (no blending).</summary>
-    public ImageProcessingContext Fill(Rgba32 color)
+    /// <summary>Overwrites every pixel with <paramref name="color"/> (no blending), rounded to 8 bits on an 8-bit image.</summary>
+    public ImageProcessingContext Fill(Rgba64 color)
     {
-        ForEachPixelSpan(color, static (pixels, value) => pixels.Fill(value));
-
-        Target.HasAlpha = color.A != 255;
+        Fill(color, Target.Bounds);
+        Target.HasAlpha = !PixelTypes.IsOpaque(color, Target.PixelType);
         return this;
     }
 
-    /// <summary>Overwrites the pixels inside <paramref name="region"/> with <paramref name="color"/> (no blending), clipped to the image.</summary>
-    public ImageProcessingContext Fill(Rgba32 color, Rectangle region)
+    /// <summary>
+    /// Overwrites the pixels inside <paramref name="region"/> with <paramref name="color"/> (no blending), clipped to the
+    /// image and rounded to 8 bits on an 8-bit image.
+    /// </summary>
+    public ImageProcessingContext Fill(Rgba64 color, Rectangle region)
     {
         region.Intersect(Target.Bounds);
         if (region.IsEmpty)
@@ -112,10 +115,11 @@ public readonly ref partial struct ImageProcessingContext
 
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            ColorOps.Fill(frame, region, color);
+            var operation = new ColorOps.FillFrame(frame, region, color);
+            PixelDispatch.Run<ColorOps.FillFrame, bool>(frame.PixelType, ref operation);
         }
 
-        Target.HasAlpha |= color.A != 255;
+        Target.HasAlpha |= !PixelTypes.IsOpaque(color, Target.PixelType);
         return this;
     }
 
@@ -130,13 +134,18 @@ public readonly ref partial struct ImageProcessingContext
 
     /// <summary>
     /// Composites the image over <paramref name="color"/> (as Pillow's <c>Image.alpha_composite</c>), removing
-    /// transparency when the color is opaque.
+    /// transparency when the color is opaque. On an 8-bit image a color between 8-bit levels is blended unrounded and
+    /// each result is rounded once.
     /// </summary>
-    public ImageProcessingContext BackgroundColor(Rgba32 color)
+    public ImageProcessingContext BackgroundColor(Rgba64 color)
     {
-        ForEachPixelSpan(color, static (pixels, value) => ColorOps.BackgroundColor(pixels, value));
+        foreach (ImageFrame frame in _state.WritableFrames)
+        {
+            var operation = new ColorOps.BackgroundFrame(frame, color);
+            PixelDispatch.Run<ColorOps.BackgroundFrame, bool>(frame.PixelType, ref operation);
+        }
 
-        if (color.A == 255)
+        if (PixelTypes.IsOpaque(color, Target.PixelType))
         {
             Target.HasAlpha = false;
         }
@@ -153,7 +162,11 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        ForEachPixelSpan(opacity, static (pixels, value) => ColorOps.Opacity(pixels, value));
+        foreach (ImageFrame frame in _state.WritableFrames)
+        {
+            var operation = new ColorOps.OpacityFrame(frame, opacity);
+            PixelDispatch.Run<ColorOps.OpacityFrame, bool>(frame.PixelType, ref operation);
+        }
 
         Target.HasAlpha = true;
         return this;

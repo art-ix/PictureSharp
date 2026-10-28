@@ -1,5 +1,6 @@
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Processing;
 
@@ -152,7 +153,8 @@ public readonly ref partial struct ImageProcessingContext
 
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            PhotoAdjust.Vignette(frame.Pixels, frame.Width, frame.Height, options, _state.CancellationToken);
+            var operation = new VignetteFrame(frame, options, _state.CancellationToken);
+            PixelDispatch.Run<VignetteFrame, bool>(frame.PixelType, ref operation);
         }
 
         return this;
@@ -246,6 +248,15 @@ public readonly ref partial struct ImageProcessingContext
         if (!(value is >= -1f and <= 1f))
         {
             throw new ArgumentOutOfRangeException(paramName, value, "Expected a number between -1 and 1.");
+        }
+    }
+
+    private readonly struct VignetteFrame(ImageFrame frame, VignetteOptions options, CancellationToken cancellationToken) : IPixelOperation<bool>
+    {
+        public bool Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            PhotoAdjust.Vignette(frame.Buffer.As<TPixel>(), frame.Width, frame.Height, options, cancellationToken);
+            return true;
         }
     }
 }

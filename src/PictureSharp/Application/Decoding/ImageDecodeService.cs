@@ -1,5 +1,6 @@
 using System.Drawing;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Processing;
@@ -95,9 +96,9 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
             ImageFrame frame = image.Frames[i];
             // A reduced decode covers the stored size divided by the scale, which may end in a fractional pixel.
             (float x1, float y1) = scale == 1 ? (frame.Width, frame.Height) : ((float)stored.Width / scale, (float)stored.Height / scale);
-            Rgba32[] pixels = Resizer.Resize(frame.Pixels, frame.Width, frame.Height, size.Width, size.Height, options.TargetResampling,
-                0, 0, x1, y1, cancellationToken, maxDegreeOfParallelism: options.MaxDegreeOfParallelism);
-            replacements[i] = new FrameReplacement(size.Width, size.Height, pixels);
+            var operation = new Resizer.ScaleFrame(frame, size.Width, size.Height, options.TargetResampling, x1, y1, cancellationToken,
+                options.MaxDegreeOfParallelism);
+            replacements[i] = new FrameReplacement(size.Width, size.Height, PixelDispatch.Run<Resizer.ScaleFrame, PixelBuffer>(frame.PixelType, ref operation));
         }
 
         cancellationToken.ThrowIfCancellationRequested();

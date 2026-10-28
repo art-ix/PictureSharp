@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -27,12 +29,28 @@ internal static class ColorOps
         }
     }
 
-    /// <summary>Overwrites <paramref name="rect"/> (already clipped to the frame) with <paramref name="value"/>.</summary>
-    public static void Fill(ImageFrame frame, Rectangle rect, Rgba32 value)
+    /// <summary>
+    /// Overwrites <paramref name="rect"/> (already clipped to the frame) of every frame with a color, rounded once to
+    /// the storage depth.
+    /// </summary>
+    public readonly struct FillFrame(ImageFrame frame, Rectangle rect, Rgba64 color) : IPixelOperation<bool>
     {
-        for (int y = rect.Top; y < rect.Bottom; y++)
+        public bool Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
         {
-            frame.PixelRow(y).Slice(rect.X, rect.Width).Fill(value);
+            TPixel[] pixels = frame.Buffer.As<TPixel>();
+            TPixel value = TPixel.FromRgba64(color);
+            if (rect.Width == frame.Width)
+            {
+                pixels.AsSpan(rect.Top * frame.Width, rect.Height * frame.Width).Fill(value);
+                return true;
+            }
+
+            for (int y = rect.Top; y < rect.Bottom; y++)
+            {
+                pixels.AsSpan((y * frame.Width) + rect.X, rect.Width).Fill(value);
+            }
+
+            return true;
         }
     }
 
@@ -48,12 +66,61 @@ internal static class ColorOps
         }
     }
 
+    /// <summary>
+    /// Composites the frame over a background. An 8-bit frame over an 8-bit color uses <see cref="Compositor.Over"/>;
+    /// otherwise the blend runs on unrounded values and is rounded once to the storage depth.
+    /// </summary>
+    public readonly struct BackgroundFrame(ImageFrame frame, Rgba64 background) : IPixelOperation<bool>
+    {
+        public bool Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            TPixel[] pixels = frame.Buffer.As<TPixel>();
+            if (typeof(TPixel) == typeof(Rgba32) && PixelDepth.IsExact8Bit([background]))
+            {
+                BackgroundColor(Unsafe.As<Rgba32[]>(pixels), background.ToRgba32());
+                return true;
+            }
+
+            Vector4 backdrop = EncodedUnit.Load(background);
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] = TPixel.FromUnit(Compositor.OverWide(backdrop, TPixel.ToUnit(pixels[i])));
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>Composites the pixels over <paramref name="background"/>.</summary>
     public static void BackgroundColor(Span<Rgba32> pixels, Rgba32 background)
     {
         for (int i = 0; i < pixels.Length; i++)
         {
             pixels[i] = Compositor.Over(background, pixels[i]);
+        }
+    }
+
+    /// <summary>
+    /// Scales alpha by an opacity: 8-bit frames with the rounding of <see cref="Compositor.DrawOver"/>, others rounding
+    /// the exact product half up.
+    /// </summary>
+    public readonly struct OpacityFrame(ImageFrame frame, float opacity) : IPixelOperation<bool>
+    {
+        public bool Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            TPixel[] pixels = frame.Buffer.As<TPixel>();
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                Opacity(Unsafe.As<Rgba32[]>(pixels), opacity);
+                return true;
+            }
+
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] = TPixel.WithAlpha(pixels[i], (int)((TPixel.Alpha(pixels[i]) * (double)opacity) + 0.5));
+            }
+
+            return true;
         }
     }
 

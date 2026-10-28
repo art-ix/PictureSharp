@@ -1,5 +1,6 @@
 using System.Drawing;
 using PictureSharp.Algorithms.Processing;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Processing;
 
@@ -8,7 +9,8 @@ public readonly ref partial struct ImageProcessingContext
     /// <summary>
     /// Multiplies the alpha of every frame by the first frame of <paramref name="mask"/>, placed with its top-left corner
     /// at the image's top-left corner: <c>A' = round(A · v / 255)</c>, where v is the mask's alpha or luminance
-    /// (see <see cref="MaskOptions"/>). Color channels are never changed. Parts of the mask outside the image are ignored.
+    /// (see <see cref="MaskOptions"/>); with a 16-bit mask v is read at 16 bits and divided by 65535, also on an 8-bit
+    /// image. Color channels are never changed. Parts of the mask outside the image are ignored.
     /// </summary>
     /// <param name="mask">The mask; may be the image being processed.</param>
     /// <param name="options">Mask channel, inversion and what happens outside the mask.</param>
@@ -29,12 +31,11 @@ public readonly ref partial struct ImageProcessingContext
         ArgumentNullException.ThrowIfNull(mask);
         options ??= MaskOptions.Default;
         ImageFrame source = mask.Frames.RootFrame;
-        Rgba32[] pixels = ReferenceEquals(mask, Target) ? (Rgba32[])source.Pixels.Clone() : source.Pixels;
-        int width = source.Width;
-        int height = source.Height;
+        PixelBuffer pixels = ReferenceEquals(mask, Target) ? source.Buffer.Clone() : source.Buffer;
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            AlphaMask.Apply(frame, pixels, width, height, location, options, cancellationToken: _state.CancellationToken);
+            var operation = new AlphaMask.ApplyFrame(frame, pixels, source.Width, source.Height, location, options, _state.CancellationToken);
+            PixelDispatch.Run<AlphaMask.ApplyFrame, bool>(frame.PixelType, ref operation);
         }
 
         return this;

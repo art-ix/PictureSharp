@@ -525,3 +525,19 @@ Operations with a Pillow counterpart reproduce Pillow 10.2.0 pixel for pixel: `I
 Pillow on an `RGBa` (premultiplied) image, so semi-transparent colors may shift slightly while opaque ones are exact.
 Operations without a Pillow counterpart follow the formulas in their
 sections.
+
+## 16-bit images
+
+Images with `PixelType.Rgba64` keep 16 bits per channel through resizing (every filter, both blending spaces),
+rotation, blur and sharpening, the vignette and composition (`DrawImage` with every blend mode, `ApplyMask`, `Opacity`,
+`Fill`, `BackgroundColor`). These operations use the formulas of the 8-bit operations without rounding to 8 bits in
+between. Pixels are premultiplied in floating point, sums run in double precision, and each result is rounded once.
+The 8-bit results of the Pillow ports therefore differ slightly from a 16-bit result rounded to 8 bits: the 16-bit
+path neither truncates affine samples nor rounds between box-blur passes. Low alpha keeps its colors, which 8-bit
+premultiplication would round to black. Measured against an independent double-precision reference, results are
+within 1 code of 65535 (alpha-weighted RMS below 0.03).
+
+Colors in options (`Fill`, `BackgroundColor`, `Rotate`'s background, `ResizeOptions.PadColor`, `Pad`) are `Rgba64`;
+`Rgba32` and `System.Drawing.Color` values convert implicitly and exactly. On an 8-bit image a written color is rounded to
+8 bits, while a blended color (`BackgroundColor`) or a 16-bit source or mask (`DrawImage`, `ApplyMask`) keeps its
+precision until the result is rounded once. `UnsharpMask`'s `threshold` stays in 8-bit levels on every depth.

@@ -135,9 +135,9 @@ public readonly ref partial struct ImageProcessingContext
     /// </summary>
     /// <param name="degrees">Clockwise angle.</param>
     /// <param name="filter"><see cref="ResamplingFilter.Nearest"/>, <see cref="ResamplingFilter.Bilinear"/> or <see cref="ResamplingFilter.Bicubic"/>.</param>
-    /// <param name="background">Fill for the uncovered corners. Default: transparent black.</param>
+    /// <param name="background">Fill for the uncovered corners, rounded to 8 bits on an 8-bit image. Default: transparent black.</param>
     /// <param name="expand">Whether the canvas grows to fit the rotated image. Default: true.</param>
-    public ImageProcessingContext Rotate(float degrees, ResamplingFilter filter = ResamplingFilter.Bicubic, Rgba32 background = default, bool expand = true)
+    public ImageProcessingContext Rotate(float degrees, ResamplingFilter filter = ResamplingFilter.Bicubic, Rgba64 background = default, bool expand = true)
     {
         CheckFinite(degrees, nameof(degrees));
         if (filter is not (ResamplingFilter.Nearest or ResamplingFilter.Bilinear or ResamplingFilter.Bicubic))
@@ -171,36 +171,14 @@ public readonly ref partial struct ImageProcessingContext
 
         (double[] matrix, int width, int height) = Affine.RotationMatrix(w, h, angle, expand);
         ImageFrame.ValidateSize(width, height);
-        bool premultiplied = filter != ResamplingFilter.Nearest;
-        Rgba32 fill = background;
-        if (premultiplied)
+        _state.ReplaceFrames((width, height, matrix, filter, background), static (frame, state, token) =>
         {
-            Span<Rgba32> one = [background];
-            Premultiplied.FromStraight(one, one);
-            fill = one[0];
-        }
-
-        Rgba32[]? scratch = premultiplied ? GC.AllocateUninitializedArray<Rgba32>(w * h) : null;
-        _state.ReplaceFrames((width, height, w, h, fill, scratch, matrix, filter), static (frame, state, token) =>
-        {
-            var (width, height, w, h, fill, scratch, matrix, filter) = state;
-            var output = GC.AllocateUninitializedArray<Rgba32>(width * height);
-            output.AsSpan().Fill(fill);
-            if (scratch is null)
-            {
-                Affine.TransformNearest(frame.Pixels, w, h, output, width, height, matrix, token);
-            }
-            else
-            {
-                Premultiplied.FromStraight(frame.Pixels, scratch);
-                Affine.TransformFiltered(scratch, w, h, output, width, height, matrix, filter, token);
-                Premultiplied.ToStraight(output);
-            }
-
-            return new FrameReplacement(width, height, output);
+            var (width, height, matrix, filter, background) = state;
+            var operation = new Affine.TransformFrame(frame, width, height, matrix, filter, background, token);
+            return new FrameReplacement(width, height, PixelDispatch.Run<Affine.TransformFrame, PixelBuffer>(frame.PixelType, ref operation));
         });
         image.Metadata.PixelsMoved();
-        image.HasAlpha |= background.A != 255;
+        image.HasAlpha |= !PixelTypes.IsOpaque(background, image.PixelType);
         return this;
     }
 }

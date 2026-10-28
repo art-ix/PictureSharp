@@ -304,8 +304,7 @@ public class HighBitDepthTests
         using Image image = Png16Tests.Ramp(4, 4);
         Rgba64[] before = image.GetPixelSpan<Rgba64>().ToArray();
         Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Grayscale()));
-        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Resize(2, 2)));
-        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Rotate(10f)));
+        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Levels(new LevelsOptions { Gamma = 2f })));
         await Assert.That(image.GetPixelSpan<Rgba64>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
 

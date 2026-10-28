@@ -23,6 +23,10 @@ internal static class PixelDepth
         }
     }
 
+    /// <summary>A unit value as the nearest integer in 0–<paramref name="max"/>, rounding half up; NaN gives 0.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Quantize(float unit, int max) => unit > 0f ? (unit < 1f ? (int)((unit * max) + 0.5f) : max) : 0;
+
     /// <summary>Whether every sample is a multiple of 257, i.e. the pixels reduce to 8 bits without loss.</summary>
     public static bool IsExact8Bit(ReadOnlySpan<Rgba64> pixels)
     {
