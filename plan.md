@@ -1,4 +1,4 @@
-# PictureSharp: plan rozwoju (zrealizowany do 0.8.5, w toku 0.9.0)
+# PictureSharp: plan rozwoju (zrealizowany do 0.8.5, 0.9.0 przygotowane do wydania)
 
 ## Stan i cel
 
@@ -34,7 +34,7 @@ wtyczek: `docs/plugin-spi.md`. Pomiary: `docs/performance.md`. Ukończone wydani
 | --- | --- | --- |
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
 | 0.6.9–0.8.5 | HDR przy edycji, SPI wtyczek, optymalizacje JPEG i WebP, korekcja fotograficzna, negatywy, gain map w enkoderach, generowanie map, stabilne SPI, `ImageInfo.Color` | Wydane (szczegóły w [changelogu](#changelog)) |
-| 0.9.0 | 16 bitów na kanał w całym rdzeniu (`Rgba64`, `PixelType`, PNG 16-bit, wszystkie operacje) i konwersja kolorów we float na `Rgba64`; złamanie API i SPI z blokadą starych wtyczek | Bramka techniczna zaliczona (2026-10-28), przygotowanie wydania i scalenie do main zlecone przez użytkownika; wtyczki publikowane po rdzeniu; projekt w `docs/proposals/high-bit-depth.md` |
+| 0.9.0 | 16 bitów na kanał w całym rdzeniu (`Rgba64`, `PixelType`, PNG 16-bit, wszystkie operacje) i konwersja kolorów we float na `Rgba64`; złamanie API i SPI z blokadą starych wtyczek | Bramka techniczna zaliczona (2026-10-28), wydanie przygotowane lokalnie, zmiany scalone do main; wtyczki publikowane po rdzeniu; projekt w `docs/proposals/high-bit-depth.md` |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości.
 
@@ -106,7 +106,7 @@ Etapy (1–5 wychodzą razem jako 0.9.0, bez stabilnego wydania z niepełnym zes
 | 2 | Resize, Affine, rozmycia i wyostrzanie, kompozycja, `DrawImage`, premultiplikacja | Zrobiony (2026-10-28; bez SIMD 16-bit tych operacji; ARM64 zestaw funkcjonalny zaliczony w bramce) |
 | 3 | Operacje tonalne i kolorystyczne; `LevelsOptions` (`*Normalized`), `CurvesNormalized` i progi na 0–1, `ImageHistogram` z `FullResolution`, `IFrameProcessor<TPixel>` | Zrobiony (2026-10-28; bez SIMD 16-bit tych operacji; ARM64 zestaw funkcjonalny zaliczony w bramce) |
 | 4 | Negatywy, czyszczenie (kurz, szum), ICC i `ToSrgb` we float na `Rgba64` (D18), HDR i gain map z bazą `Rgba64` | Zrobiony (2026-10-28; bez SIMD 16-bit tych operacji; ARM64 zestaw funkcjonalny zaliczony w bramce) |
-| 5 | Adaptery (Skia `Rgba16161616`, System.Drawing 32bpp); wydania wtyczek TIFF, HEIF, JPEG XL na 0.9.0 (Formats.Extra poza zakresem: decyzja użytkownika 2026-10-28) | Implementacja i weryfikacja lokalna zrobione (2026-10-28): adaptery, TIFF, HEIF Main 10 i JPEG XL 16-bit; testy, wyrocznie, AOT i pomiary 8-bit OK. Przygotowanie wydań zlecone; TIFF 0.7.4, HEIF 0.7.0, JPEG XL 0.7.8, po rdzeniu |
+| 5 | Adaptery (Skia `Rgba16161616`, System.Drawing 32bpp); wydania wtyczek TIFF, HEIF, JPEG XL na 0.9.0 (Formats.Extra poza zakresem: decyzja użytkownika 2026-10-28) | Implementacja i weryfikacja lokalna zrobione (2026-10-28): adaptery, TIFF, HEIF Main 10 i JPEG XL 16-bit; testy, wyrocznie, AOT i pomiary 8-bit OK. Wydania przygotowane na main: TIFF 0.7.4, HEIF 0.7.0, JPEG XL 0.7.8; publikacja po rdzeniu |
 
 Stan (2026-10-28): etap 1 zaimplementowany (szczegóły i pozostałości w `progres.md`): `Rgba64`, `PixelType`,
 generyczny dostęp do pikseli, nowe `PixelFormat`, `ConvertPixelType` z ditheringiem, zasady D10, `PreserveBitDepth`,
@@ -158,7 +158,7 @@ oraz Native AOT linux-x64 OK. ARM64 jak wyżej. Nowa regresja GIF sprawdza rozmi
 alokacją indeksów. Test generatora HDR dopuszcza 2 ULP liniowego boostu względem natywnej wyroczni ARM; pozostałe
 pola są dokładne, a writer ułamków/payloadu pozostaje bajtowo zgodny dla tych samych parametrów.
 Migracja: docs/migration-from-0.8.md; nota: docs/releases/release-0.9.0.md; wyniki:
-docs/measurements/release-0.9.0-gate.json. **2026-10-28: użytkownik zlecił przygotowanie wydań i scalenie do main. Publiczna publikacja nie została wykonana.**
+docs/measurements/release-0.9.0-gate.json. **2026-10-28: wydania przygotowane lokalnie; rdzeń scalony z high-bit-depth do main, wtyczki zapisane na main. Paczki i podsumowanie: ../../releases/0.9.0/. Bez push i publicznej publikacji.**
 
 DoD:
 - Każda operacja i kodek wbudowany działa na obrazach `Rgba64` z 16-bitową precyzją (gradient 65536 poziomów nie
