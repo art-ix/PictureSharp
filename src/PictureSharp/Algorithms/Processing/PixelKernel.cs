@@ -31,3 +31,22 @@ internal readonly struct PixelKernelFrame<TKernel>(ImageFrame frame, TKernel ker
         return true;
     }
 }
+
+/// <summary>A filter from a frame's pixels into a new buffer of the same size and pixel type.</summary>
+internal interface ILocalFilter
+{
+    void Run<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, CancellationToken cancellationToken)
+        where TPixel : unmanaged, IPixelOps<TPixel>;
+}
+
+/// <summary>Runs an <see cref="ILocalFilter"/> on one frame into a new buffer through <see cref="PixelDispatch"/>.</summary>
+internal readonly struct LocalFilterFrame<TFilter>(ImageFrame frame, TFilter filter, CancellationToken cancellationToken) : IPixelOperation<PixelBuffer>
+    where TFilter : struct, ILocalFilter
+{
+    public PixelBuffer Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+    {
+        TPixel[] result = GC.AllocateUninitializedArray<TPixel>(frame.Width * frame.Height);
+        filter.Run(frame.Buffer.As<TPixel>(), result, frame.Width, frame.Height, cancellationToken);
+        return PixelBuffer.From(result);
+    }
+}

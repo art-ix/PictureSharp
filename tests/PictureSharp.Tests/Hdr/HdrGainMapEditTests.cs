@@ -104,7 +104,7 @@ public class HdrGainMapEditTests
                 int worst = 0, at = -1;
                 for (int i = 0; i < map.Pixels.Length; i++)
                 {
-                    Rgba32 p = map.Pixels[i];
+                    Rgba32 p = map.Pixels.Rgba32![i];
                     ReadOnlySpan<byte> actual = [p.R, p.G, p.B];
                     for (int c = 0; c < 3; c++)
                     {

@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -7,7 +9,8 @@ namespace PictureSharp.Algorithms.Processing;
 /// Color-noise reduction: the chroma differences Cb = B − Y and Cr = R − Y of the premultiplied values (0–1, Rec. 709
 /// luma Y) are smoothed with a guided filter (He, Sun and Tang, 2010) that the luma guides, so color blotches in flat
 /// areas average out while color edges that coincide with luma edges stay; the luma is not changed. Fully transparent
-/// pixels keep their color. Mirrored by tests/assets/photo_adjust_reference.py.
+/// pixels keep their color. Planes are float at every depth; results are rounded once to the storage depth. Mirrored by
+/// tests/assets/photo_adjust_reference.py.
 /// </summary>
 internal static class ChromaFilter
 {
@@ -24,8 +27,8 @@ internal static class ChromaFilter
     /// windows, <c>Q = mean(a) · Y + mean(b)</c> and <c>P + strength · (Q − P)</c>; then R = Y + Cr, B = Y + Cb and
     /// G = (Y − 0.2126 R − 0.0722 B) / 0.7152.
     /// </summary>
-    public static void Reduce(Rgba32[] source, Rgba32[] destination, int width, int height, float strength, int radius,
-        CancellationToken cancellationToken)
+    public static void Reduce<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, float strength, int radius,
+        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel>
     {
         int length = width * height;
         float[] guide = ArrayPool<float>.Shared.Rent(length);
@@ -65,8 +68,9 @@ internal static class ChromaFilter
             {
                 for (int i = start; i < end; i++)
                 {
-                    Rgba32 p = source[i];
-                    if (p.A == 0)
+                    TPixel p = source[i];
+                    int alpha = TPixel.Alpha(p);
+                    if (alpha == 0)
                     {
                         destination[i] = p;
                         continue;
@@ -75,8 +79,17 @@ internal static class ChromaFilter
                     float y = guide[i];
                     float r = y + first[i], b = y + blue[i];
                     float g = (y - (PhotoAdjust.LumaR * r) - (PhotoAdjust.LumaB * b)) / PhotoAdjust.LumaG;
-                    float scale = 65025f / p.A;
-                    destination[i] = new Rgba32(PhotoAdjust.ToByte(r * scale), PhotoAdjust.ToByte(g * scale), PhotoAdjust.ToByte(b * scale), p.A);
+                    if (typeof(TPixel) == typeof(Rgba32))
+                    {
+                        float scale = 65025f / alpha;
+                        Unsafe.As<TPixel, Rgba32>(ref destination[i]) = new Rgba32(PhotoAdjust.ToByte(r * scale), PhotoAdjust.ToByte(g * scale),
+                            PhotoAdjust.ToByte(b * scale), (byte)alpha);
+                    }
+                    else
+                    {
+                        destination[i] = TPixel.FromRgba64(new Rgba64(PremultipliedChannel.Store16(r, alpha), PremultipliedChannel.Store16(g, alpha),
+                            PremultipliedChannel.Store16(b, alpha), (ushort)alpha));
+                    }
                 }
             });
         }
@@ -96,9 +109,9 @@ internal static class ChromaFilter
     /// Filters the difference of <paramref name="channel"/> (0 red, 2 blue) and the luma into <paramref name="result"/>,
     /// which may be <paramref name="first"/>.
     /// </summary>
-    private static void Filter(Rgba32[] source, float[] guide, float[] guideMean, float[] guideVariance, int channel,
+    private static void Filter<TPixel>(TPixel[] source, float[] guide, float[] guideMean, float[] guideVariance, int channel,
         float[] first, float[] second, float[] result, float[] scratch, int width, int height, float strength, int radius,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel>
     {
         int length = width * height;
         ForBands(length, cancellationToken, (start, end) =>
@@ -136,16 +149,14 @@ internal static class ChromaFilter
         });
     }
 
-    private static float Premultiplied(Rgba32 p, int channel)
-    {
-        int value = channel switch { 0 => p.R, 1 => p.G, _ => p.B };
-        return value * p.A / 65025f;
-    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float Luma<TPixel>(TPixel p) where TPixel : unmanaged, IPixelOps<TPixel> =>
+        (PhotoAdjust.LumaR * PremultipliedChannel.Load(p, 0)) + (PhotoAdjust.LumaG * PremultipliedChannel.Load(p, 1))
+            + (PhotoAdjust.LumaB * PremultipliedChannel.Load(p, 2));
 
-    private static float Luma(Rgba32 p) =>
-        (PhotoAdjust.LumaR * Premultiplied(p, 0)) + (PhotoAdjust.LumaG * Premultiplied(p, 1)) + (PhotoAdjust.LumaB * Premultiplied(p, 2));
-
-    private static float Difference(Rgba32 p, float luma, int channel) => Premultiplied(p, channel) - luma;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float Difference<TPixel>(TPixel p, float luma, int channel) where TPixel : unmanaged, IPixelOps<TPixel> =>
+        PremultipliedChannel.Load(p, channel) - luma;
 
     private static void ForBands(int length, CancellationToken cancellationToken, Action<int, int> body) =>
         Parallelism.ForBands(length, BandLength, length, cancellationToken, body);

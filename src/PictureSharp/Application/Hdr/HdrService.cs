@@ -1,6 +1,7 @@
 using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Application.Hdr;
@@ -27,12 +28,12 @@ internal static class HdrService
         GainMapParameters parameters = attachment.Parameters!;
         DecodedGainMap map = attachment.EditedMap ?? DecodeMap(image, attachment, options, cancellationToken);
         HdrColorSpace outputSpace = options.ColorSpace ?? attachment.BaseSpace;
-        var reconstructor = new GainMapReconstructor(parameters, map, attachment.BaseSpace, attachment.BaseLinearization, outputSpace,
+        var reconstructor = new GainMapReconstructor(parameters, map, attachment.BaseSpace, attachment.BaseTransfer, outputSpace,
             options.TargetHeadroom, image.Size, attachment.StoredSize, attachment.AppliedOrientation);
         Rgba128[] pixels = GC.AllocateUninitializedArray<Rgba128>(checked(image.Width * image.Height));
         try
         {
-            reconstructor.Run(image.Frames[0].Pixels, pixels, options.MaxDegreeOfParallelism, cancellationToken);
+            reconstructor.Run(image.Frames[0].Buffer, pixels, options.MaxDegreeOfParallelism, cancellationToken);
         }
         catch (AggregateException ex) when (CodecErrors.Canceled(ex, cancellationToken))
         {
@@ -76,14 +77,16 @@ internal static class HdrService
         options ??= ToneMappingOptions.Default;
         cancellationToken.ThrowIfCancellationRequested();
         ReadOnlySpan<Rgba128> source = hdr.GetPixelSpan();
-        Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(source.Length);
         var mapper = new ToneMapper(hdr.ColorSpace, options.Exposure, options.WhitePoint ?? hdr.Headroom);
         int width = hdr.Width;
         bool alpha = false;
+        PixelBuffer pixels = PixelBuffer.Allocate(options.PixelType, source.Length, clear: false);
         for (int y = 0; y < hdr.Height; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            alpha |= mapper.Map(hdr.GetRowSpan(y), pixels.AsSpan(y * width, width));
+            alpha |= pixels.Rgba32 is { } narrow
+                ? mapper.Map(hdr.GetRowSpan(y), narrow.AsSpan(y * width, width))
+                : mapper.Map(hdr.GetRowSpan(y), pixels.Rgba64.AsSpan(y * width, width));
         }
 
         ImageMetadata metadata = hdr.Metadata.Clone();

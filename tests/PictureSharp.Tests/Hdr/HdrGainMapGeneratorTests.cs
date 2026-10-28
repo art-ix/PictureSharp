@@ -201,7 +201,7 @@ public class HdrGainMapGeneratorTests
         await Assert.That((map.Width, map.Height)).IsEqualTo((50 / scale, 31 / scale));
         await Assert.That(image.AttachedGainMap.Parameters!.ChannelCount).IsEqualTo(channels);
         await Assert.That(image.AttachedGainMap.Parameters.Gamma).IsEquivalentTo(new[] { 2f, 2f, 2f }, CollectionOrdering.Matching);
-        await Assert.That(map.Pixels.All(p => p.A == 255 && (channels == 3 || (p.R == p.G && p.G == p.B)))).IsTrue();
+        await Assert.That(map.Pixels.Rgba32!.All(p => p.A == 255 && (channels == 3 || (p.R == p.G && p.G == p.B)))).IsTrue();
         using Image reloaded = Image.Load(image.ToJpeg(Require), Hdr);
         await Assert.That(reloaded.GainMap!.GainMapSize).IsEqualTo(new System.Drawing.Size(map.Width, map.Height));
     }
@@ -248,7 +248,7 @@ public class HdrGainMapGeneratorTests
         await Assert.That((gainMap.Metadata.Kind, gainMap.Metadata.ChannelCount, gainMap.Map.Size)).IsEqualTo((HdrGainMapKinds.Iso21496, 3, new System.Drawing.Size(48, 32)));
         await Assert.That(gainMap.Metadata.ToIso().Length).IsGreaterThan(0);
         using Image map = gainMap.Map.Decode(-1, default);
-        await Assert.That(map.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.AttachedGainMap!.EditedMap!.Value.Pixels, CollectionOrdering.Matching);
+        await Assert.That(map.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.AttachedGainMap!.EditedMap!.Value.Pixels.Rgba32!, CollectionOrdering.Matching);
         image.Mutate(x => x.Grayscale());
         await Assert.That(image.HasHdr).IsFalse();
     }
@@ -270,7 +270,7 @@ public class HdrGainMapGeneratorTests
         using HdrImage hdr = HdrSynthetic.Smooth(HdrColorSpace.LinearDisplayP3, 768, 512);
         using Image one = hdr.ToGainMapImage(new GainMapOptions { MaxDegreeOfParallelism = 1 });
         using Image many = hdr.ToGainMapImage(new GainMapOptions { MaxDegreeOfParallelism = 8, ChannelCount = 3 });
-        await Assert.That(many.AttachedGainMap!.EditedMap!.Value.Pixels).IsEquivalentTo(one.AttachedGainMap!.EditedMap!.Value.Pixels, CollectionOrdering.Matching);
+        await Assert.That(many.AttachedGainMap!.EditedMap!.Value.Pixels.Rgba32!).IsEquivalentTo(one.AttachedGainMap!.EditedMap!.Value.Pixels.Rgba32!, CollectionOrdering.Matching);
         await Assert.That(many.AttachedGainMap.Parameters!.GainMapMax).IsEquivalentTo(one.AttachedGainMap.Parameters!.GainMapMax, CollectionOrdering.Matching);
     }
 }

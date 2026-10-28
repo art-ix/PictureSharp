@@ -175,7 +175,7 @@ internal static class JpegGainMapReader
             throw new NotSupportedException("HDR reconstruction requires an RGB (YCbCr) base image.");
         }
 
-        (HdrColorSpace baseSpace, float[]? linearization) = ReadBaseColor(file, primary);
+        (HdrColorSpace baseSpace, BaseTransfer? transfer) = ReadBaseColor(file, primary);
         info = info with
         {
             Selected = parameters.Kind,
@@ -190,7 +190,7 @@ internal static class JpegGainMapReader
             MapData = copyMap ? file.Slice(gainMap.mapStart, gainMap.mapLength).ToArray() : default,
             Decoder = JpegGainMapDecoder.Instance,
             BaseSpace = baseSpace,
-            BaseLinearization = linearization,
+            BaseTransfer = transfer,
         };
     }
 
@@ -199,8 +199,8 @@ internal static class JpegGainMapReader
 
     private static ImageFormatException Error(string message) => new(ImageFormat.Jpeg, message);
 
-    /// <summary>The primaries and linearization of the base image from its ICC profile; no profile means sRGB.</summary>
-    private static (HdrColorSpace Space, float[]? Linearization) ReadBaseColor(ReadOnlySpan<byte> file, JpegHeader primary) =>
+    /// <summary>The primaries and transfer function of the base image from its ICC profile; no profile means sRGB.</summary>
+    private static (HdrColorSpace Space, BaseTransfer? Transfer) ReadBaseColor(ReadOnlySpan<byte> file, JpegHeader primary) =>
         HdrBaseColor.FromModel(JoinIcc(file, primary.IccChunks) is { } icc ? IccProfileParser.Parse(icc, ImageFormat.Jpeg) : null);
 
     /// <summary>Joins the APP2 chunks of an ICC profile; an incomplete or inconsistent set counts as none.</summary>

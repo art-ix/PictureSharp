@@ -1,4 +1,5 @@
 using PictureSharp.Algorithms.Processing;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Processing;
 
@@ -38,8 +39,7 @@ public readonly ref partial struct ImageProcessingContext
             throw new ArgumentOutOfRangeException(nameof(threshold), threshold, "Expected a number above 0 and at most 1.");
         }
 
-        return LocalFilter((size, threshold), static (source, destination, w, h, state, token) =>
-            DustFilter.Remove(source, destination, w, h, state.size, state.threshold, token));
+        return LocalFilter(new DustRemoval(size, threshold));
     }
 
     /// <summary>
@@ -65,7 +65,20 @@ public readonly ref partial struct ImageProcessingContext
         }
 
         int r = radius > 0 ? radius : ChromaFilter.AutomaticRadius(Target.Width, Target.Height);
-        return LocalFilter((strength, r), static (source, destination, w, h, state, token) =>
-            ChromaFilter.Reduce(source, destination, w, h, state.strength, state.r, token));
+        return LocalFilter(new ColorNoiseReduction(strength, r));
+    }
+
+    private readonly struct DustRemoval(int size, float threshold) : ILocalFilter
+    {
+        public void Run<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, CancellationToken cancellationToken)
+            where TPixel : unmanaged, IPixelOps<TPixel> =>
+            DustFilter.Remove(source, destination, width, height, size, threshold, cancellationToken);
+    }
+
+    private readonly struct ColorNoiseReduction(float strength, int radius) : ILocalFilter
+    {
+        public void Run<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, CancellationToken cancellationToken)
+            where TPixel : unmanaged, IPixelOps<TPixel> =>
+            ChromaFilter.Reduce(source, destination, width, height, strength, radius, cancellationToken);
     }
 }

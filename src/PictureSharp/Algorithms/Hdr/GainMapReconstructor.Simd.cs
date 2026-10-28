@@ -10,10 +10,15 @@ internal sealed partial class GainMapReconstructor
 {
     /// <summary>
     /// Reconstructs whole groups of eight (AVX2) and four pixels of row <paramref name="y"/> with the operations of
-    /// <see cref="RowScalar"/> in the same order, so the floats are identical; returns the pixels written.
+    /// <see cref="RowScalar(Rgba32[], Rgba128[], int, int)"/> in the same order, so the floats are identical; returns the pixels written.
     /// </summary>
     internal int RowSimd(Rgba32[] basePixels, Rgba128[] output, int y)
     {
+        if (_map.Pixels.Rgba32 is null)
+        {
+            return 0;   // a 16-bit map is sampled by the scalar code only
+        }
+
         int done = Avx2.IsSupported ? RowAvx2(basePixels, output, y) : 0;
         return Simd.IsSupported128 ? RowVector128(basePixels, output, y, done) : done;
     }
@@ -24,7 +29,7 @@ internal sealed partial class GainMapReconstructor
         ReadOnlySpan<Rgba32> source = basePixels.AsSpan(y * _width, _width);
         ref float target = ref MemoryMarshal.GetReference(MemoryMarshal.Cast<Rgba128, float>(output.AsSpan(y * _width, _width)));
         ReadOnlySpan<float> linear = _linear;
-        ReadOnlySpan<Rgba32> map = _map.Pixels;
+        ReadOnlySpan<Rgba32> map = _map.Pixels.Rgba32;
         bool iso = _p.Kind == HdrGainMapKinds.Iso21496;
         bool scaled = IsScaled;
 

@@ -298,21 +298,6 @@ public class HighBitDepthTests
         await Assert.That(image.Frames[1].PixelType).IsEqualTo(PixelType.Rgba64);
     }
 
-    [Test]
-    public async Task UnportedOperations_ThrowNotSupported_On16BitImages()
-    {
-        using Image image = Png16Tests.Ramp(4, 4);
-        Rgba64[] before = image.GetPixelSpan<Rgba64>().ToArray();
-        // Step 4 (cleanup and film) is not ported yet.
-        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Denoise(0.5f)));
-        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.InvertNegative(new NegativeCalibration
-        {
-            FilmBase = new(0.8f, 0.6f, 0.4f),
-            DensityRange = new(2f, 2f, 2f),
-        })));
-        await Assert.That(image.GetPixelSpan<Rgba64>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
-    }
-
     // ------------------------------------------------------------ geometry
 
     public static IEnumerable<Func<ImageProcessingContext, ImageProcessingContext>> GeometryOperations() =>

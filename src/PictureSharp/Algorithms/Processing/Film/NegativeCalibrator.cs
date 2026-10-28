@@ -1,12 +1,15 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 using PictureSharp.Algorithms.ColorManagement;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
 
 /// <summary>
 /// Measures a photographed negative: the film base, each channel's density range and the midtone gammas, from integer
-/// histograms of a regular sample of the measured region, so the result does not depend on threads. Mirrored by
+/// histograms of a regular sample of the measured region, so the result does not depend on threads. The histograms
+/// have one bin per stored value (65536 on 16-bit images), so statistics keep the image's precision. Mirrored by
 /// tests/assets/photo_adjust_reference.py (analyze_negative).
 /// </summary>
 internal static class NegativeCalibrator
@@ -25,24 +28,25 @@ internal static class NegativeCalibrator
     /// Measures <paramref name="pixels"/> (one frame, stored values) with <paramref name="options"/>, inside
     /// <paramref name="frame"/> and with its rebate as the film base when there is one.
     /// </summary>
-    public static NegativeAnalysis Analyze(ReadOnlySpan<Rgba32> pixels, int width, int height, NegativeOptions options, FilmFrame? frame,
-        CancellationToken cancellationToken)
+    public static NegativeAnalysis Analyze<TPixel>(ReadOnlySpan<TPixel> pixels, int width, int height, NegativeOptions options, FilmFrame? frame,
+        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel>
     {
+        int bins = TPixel.MaxValue + 1;
         Rectangle region = options.Region ?? frame?.MeasuredRegion ?? new Rectangle(0, 0, width, height);
         bool gray = options.FilmType == FilmType.BlackAndWhiteNegative;
         int step = Math.Max(1, (int)Math.Ceiling(Math.Sqrt((double)region.Width * region.Height / SampleTarget)));
-        long[] candidates = new long[3 * 256];
-        long[] all = new long[3 * 256];
+        long[] candidates = new long[3 * bins];
+        long[] all = new long[3 * bins];
         Span<long> clipped = stackalloc long[3];
         long opaque = 0, usable = 0;
         for (int y = region.Y; y < region.Bottom; y += step)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ReadOnlySpan<Rgba32> row = pixels.Slice(y * width, width);
+            ReadOnlySpan<TPixel> row = pixels.Slice(y * width, width);
             for (int x = region.X; x < region.Right; x += step)
             {
-                Rgba32 p = row[x];
-                if (p.A == 0)
+                TPixel p = row[x];
+                if (TPixel.Alpha(p) == 0)
                 {
                     continue;
                 }
@@ -52,8 +56,8 @@ internal static class NegativeCalibrator
                 for (int c = 0; c < 3; c++)
                 {
                     int v = Value(p, c, gray);
-                    all[(c * 256) + v]++;
-                    if (v is <= 2 or >= 253)
+                    all[(c * bins) + v]++;
+                    if (IsClipped<TPixel>(v))
                     {
                         clipped[c]++;
                         candidate = false;
@@ -65,7 +69,7 @@ internal static class NegativeCalibrator
                     usable++;
                     for (int c = 0; c < 3; c++)
                     {
-                        candidates[(c * 256) + Value(p, c, gray)]++;
+                        candidates[(c * bins) + Value(p, c, gray)]++;
                     }
                 }
             }
@@ -91,7 +95,7 @@ internal static class NegativeCalibrator
         {
             for (int c = 0; c < 3; c++)
             {
-                filmBase[c] = SrgbTransfer.Decode((byte)Percentile(counts.AsSpan(c * 256, 256), BasePercentile));
+                filmBase[c] = Linear<TPixel>(Percentile(counts.AsSpan(c * bins, bins), BasePercentile));
             }
         }
 
@@ -99,11 +103,11 @@ internal static class NegativeCalibrator
         Span<double> median = stackalloc double[3];
         for (int c = 0; c < 3; c++)
         {
-            ReadOnlySpan<long> channel = counts.AsSpan(c * 256, 256);
+            ReadOnlySpan<long> channel = counts.AsSpan(c * bins, bins);
             filmBase[c] = Math.Clamp(filmBase[c], SrgbTransfer.Decode(1), 1.0);
             // The densest pixels have the lowest values.
-            range[c] = Math.Clamp(Density(filmBase[c], Percentile(channel, 100f - options.HighlightPercentile)), 0.05, 6.0);
-            median[c] = Math.Clamp(Density(filmBase[c], Percentile(channel, 50f)) / range[c], 0.01, 0.99);
+            range[c] = Math.Clamp(Density<TPixel>(filmBase[c], Percentile(channel, 100f - options.HighlightPercentile)), 0.05, 6.0);
+            median[c] = Math.Clamp(Density<TPixel>(filmBase[c], Percentile(channel, 50f)) / range[c], 0.01, 0.99);
         }
 
         // Each channel's median moves towards the geometric mean of the medians: t^γ = target exactly at balance 1.
@@ -149,13 +153,44 @@ internal static class NegativeCalibrator
         return new NegativeAnalysis(calibration, clippedFraction, warnings, frame);
     }
 
-    /// <summary>The density above <paramref name="filmBase"/> of the encoded value <paramref name="value"/>.</summary>
-    public static double Density(double filmBase, int value) =>
-        Math.Log10(filmBase / Math.Max(SrgbTransfer.Decode((byte)value), DensityFloor));
+    /// <summary>The density above <paramref name="filmBase"/> of the encoded 8-bit value <paramref name="value"/>.</summary>
+    public static double Density(double filmBase, int value) => Density<Rgba32>(filmBase, value);
+
+    /// <summary>The density above <paramref name="filmBase"/> of the encoded value <paramref name="value"/> at the depth of <typeparamref name="TPixel"/>.</summary>
+    public static double Density<TPixel>(double filmBase, int value) where TPixel : unmanaged, IPixelOps<TPixel> =>
+        Math.Log10(filmBase / Math.Max(Linear<TPixel>(value), DensityFloor));
+
+    /// <summary>Linear light of the encoded value <paramref name="value"/> at the depth of <typeparamref name="TPixel"/> (sRGB transfer function).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static double Linear<TPixel>(int value) where TPixel : unmanaged, IPixelOps<TPixel> =>
+        typeof(TPixel) == typeof(Rgba32) ? SrgbTransfer.Decode((byte)value) : SrgbTransfer.Decode16((ushort)value);
 
     /// <summary>The value read by a black-and-white negative (the integer Rec. 709 luma) or the color channel.</summary>
     public static int Value(Rgba32 p, int channel, bool gray) =>
         gray ? GrayWorld.Luma(p) : channel switch { 0 => p.R, 1 => p.G, _ => p.B };
+
+    /// <summary><see cref="Value(Rgba32, int, bool)"/> at the storage depth of <typeparamref name="TPixel"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Value<TPixel>(TPixel p, int channel, bool gray) where TPixel : unmanaged, IPixelOps<TPixel>
+    {
+        if (typeof(TPixel) == typeof(Rgba32))
+        {
+            return Value(Unsafe.As<TPixel, Rgba32>(ref p), channel, gray);
+        }
+
+        Rgba64 q = TPixel.ToRgba64(p);
+        return gray ? GrayWorld.Luma(q) : channel switch { 0 => q.R, 1 => q.G, _ => q.B };
+    }
+
+    /// <summary>
+    /// Whether a value counts as clipped: 0–2 or 253–255 on 8 bits, and the 16-bit values that round to them, so an
+    /// exactly widened image is measured from the same pixels.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsClipped<TPixel>(int value) where TPixel : unmanaged, IPixelOps<TPixel> =>
+        typeof(TPixel) == typeof(Rgba32)
+            ? value is <= 2 or >= 253
+            : value is < GrayWorld.LowestCandidate16 or > GrayWorld.HighestCandidate16;
 
     /// <summary>The smallest value whose cumulative count reaches <c>ceil(percentile / 100 · n)</c>, at least the first.</summary>
     private static int Percentile(ReadOnlySpan<long> counts, float percentile)
@@ -168,7 +203,7 @@ internal static class NegativeCalibrator
 
         long rank = Math.Clamp((long)Math.Ceiling(percentile / 100.0 * n), 1, Math.Max(1, n));
         long cumulative = 0;
-        for (int v = 0; v < 256; v++)
+        for (int v = 0; v < counts.Length; v++)
         {
             cumulative += counts[v];
             if (cumulative >= rank)
@@ -177,33 +212,34 @@ internal static class NegativeCalibrator
             }
         }
 
-        return 255;
+        return counts.Length - 1;
     }
 
-    private static void MedianOfRegion(ReadOnlySpan<Rgba32> pixels, int width, Rectangle region, bool gray, Span<double> filmBase,
-        CancellationToken cancellationToken)
+    private static void MedianOfRegion<TPixel>(ReadOnlySpan<TPixel> pixels, int width, Rectangle region, bool gray, Span<double> filmBase,
+        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel>
     {
-        long[] counts = new long[3 * 256];
+        int bins = TPixel.MaxValue + 1;
+        long[] counts = new long[3 * bins];
         for (int y = region.Y; y < region.Bottom; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (Rgba32 p in pixels.Slice((y * width) + region.X, region.Width))
+            foreach (TPixel p in pixels.Slice((y * width) + region.X, region.Width))
             {
-                if (p.A == 0)
+                if (TPixel.Alpha(p) == 0)
                 {
                     continue;
                 }
 
                 for (int c = 0; c < 3; c++)
                 {
-                    counts[(c * 256) + Value(p, c, gray)]++;
+                    counts[(c * bins) + Value(p, c, gray)]++;
                 }
             }
         }
 
         for (int c = 0; c < 3; c++)
         {
-            filmBase[c] = SrgbTransfer.Decode((byte)Percentile(counts.AsSpan(c * 256, 256), 50f));
+            filmBase[c] = Linear<TPixel>(Percentile(counts.AsSpan(c * bins, bins), 50f));
         }
     }
 }

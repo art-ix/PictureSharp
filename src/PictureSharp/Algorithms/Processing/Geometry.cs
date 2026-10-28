@@ -9,8 +9,6 @@ namespace PictureSharp.Algorithms.Processing;
 /// <summary>Lossless geometric transforms of frame buffers, generic over the storage pixel type.</summary>
 internal static partial class Geometry
 {
-    public static Rgba32[] Crop(ImageFrame frame, Rectangle rect) => Crop(frame.Pixels, frame.Width, rect);
-
     public static TPixel[] Crop<TPixel>(TPixel[] src, int width, Rectangle rect) where TPixel : unmanaged
     {
         var dst = GC.AllocateUninitializedArray<TPixel>(rect.Width * rect.Height);

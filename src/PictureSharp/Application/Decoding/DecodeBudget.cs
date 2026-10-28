@@ -41,12 +41,13 @@ internal sealed class DecodeBudget(DecoderOptions limits)
         _frames += frames;
     }
 
-    /// <summary>Reserves pixels that are not a frame (a gain map); false when they would exceed the limit.</summary>
-    public bool TryReservePixels(long width, long height)
+    /// <summary>Reserves pixels that are not a frame (a gain map) at their weight; false when they would exceed the limit.</summary>
+    public bool TryReservePixels(long width, long height, PixelType pixelType = PixelType.Rgba32)
     {
-        if (width <= 0 || height <= 0 || width > (limits.MaxPixels - _pixels) / height)
+        int weight = PixelTypes.Weight(pixelType);
+        if (width <= 0 || height <= 0 || width > (limits.MaxPixels - _pixels) / height / weight)
             return false;
-        _pixels += width * height;
+        _pixels += width * height * weight;
         return true;
     }
 

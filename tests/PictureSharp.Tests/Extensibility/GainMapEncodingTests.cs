@@ -63,7 +63,7 @@ public class GainMapEncodingTests
         using Image jpeg = Image.Load(HdrGainMapTests.File(name + ".jpg"), new DecoderOptions { LoadGainMap = true });
         jpeg.Mutate(x => x.AutoOrient());
         await Assert.That((jpeg.Width, jpeg.Height)).IsEqualTo((plugin.Width, plugin.Height));
-        await Assert.That(Pixels(map)).IsEquivalentTo(jpeg.AttachedGainMap!.EditedMap!.Value.Pixels, CollectionOrdering.Matching);
+        await Assert.That(Pixels(map)).IsEquivalentTo(jpeg.AttachedGainMap!.EditedMap!.Value.Pixels.Rgba32!, CollectionOrdering.Matching);
         await Assert.That((map.Size.Width, map.Size.Height)).IsEqualTo((jpeg.AttachedGainMap.EditedMap.Value.Width, jpeg.AttachedGainMap.EditedMap.Value.Height));
     }
 
@@ -76,7 +76,7 @@ public class GainMapEncodingTests
         await Assert.That(map.Size).IsEqualTo(image.GainMap!.GainMapSize);
 
         using Image first = map.Decode(1, default);
-        Rgba32[] expected = image.AttachedGainMap!.EditedMap!.Value.Pixels;
+        Rgba32[] expected = image.AttachedGainMap!.EditedMap!.Value.Pixels.Rgba32!;
         await Assert.That(first.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
         first.GetPixelSpan<Rgba32>()[0] = new Rgba32(1, 2, 3, 4);
         await Assert.That(Pixels(map)).IsEquivalentTo(expected, CollectionOrdering.Matching);

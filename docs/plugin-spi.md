@@ -68,6 +68,8 @@ frames (design: [docs/proposals/high-bit-depth.md](proposals/high-bit-depth.md))
 | `GetPixelSpan()`, `GetRowSpan(y)`, `GetPixelMemory()`, `CopyPixelDataTo/From(Span<Rgba32>)`, `LoadPixelData(ReadOnlySpan<Rgba32>, …)` | generic forms with the type argument: `GetPixelSpan<Rgba32>()`, `LoadPixelData<TPixel>(…)`; a mismatched type throws `InvalidOperationException` |
 | — | `DecoderOptions.PreserveBitDepth`: decode sources with more than 8 bits per sample to `new Image(width, height, PixelType.Rgba64)` or `LoadPixelData<Rgba64>` |
 | — | `IImageFormatEncoder.SupportsPixelType(PixelType)`, default `Rgba32` only: other images reach the encoder as an 8-bit copy rounded to the nearest value |
+| `GainMapImage(size)` | `GainMapImage(size, pixelType = PixelType.Rgba32)` and `GainMapImage.PixelType`: a map stored with more than 8 bits can decode to `Rgba64`; it is charged with that type when attached, and a decoded map of another type is reported as corrupt |
+| `ColorConversion = ToSrgb` decoded at the requested depth | with `PreserveBitDepth` off, the decoder receives `PreserveBitDepth = true`; the library converts the 16-bit result and rounds it to `Rgba32` once. A decoder that renders to sRGB itself reports no profile afterwards and is not converted again |
 
 ## 0.8.5: one-time change
 

@@ -570,6 +570,23 @@ these operations is within 1 code of 65535 (RMS at most 0.15), alpha exact; roun
 of the 8-bit operation, except `Equalize` (up to 3 levels, Pillow's steps). A full 65536-level ramp passes unchanged
 through identity settings.
 
+Film and cleanup work at 16 bits as well. `AnalyzeNegative` (and `DevelopNegative`'s measurement) counts one bin per
+16-bit value, so a film base or percentile between 8-bit levels is measured exactly; clipping uses the 16-bit values
+that round to 0–2 and 253–255, so an exactly widened negative gives exactly the 8-bit calibration. `FindFilmFrame`
+builds its preview from 16-bit sums and reads the rebate without rounding; a widened strip gives the same frame.
+`InvertNegative` uses a table with one entry per 16-bit value, each print evaluated in double precision; the
+backlight-corrected print tabulates the print curve at 65536 steps (4096 at 8 bits). Straightening the found frame
+rounds its bicubic samples once, where the 8-bit Pillow port truncates; after the inversion this can differ by a few
+8-bit levels in the dense parts of the negative. `Denoise` and `ReduceColorNoise` filter float planes of the
+premultiplied 16-bit values; `RemoveDust` examines the 16-bit luma with the same rules (limits scaled to 0–65535) and
+replaces specks with 16-bit medians, so pixels it does not touch keep every bit. Against double-precision references
+these operations are within 1 code of 65535 (RMS at most 0.06), and a widened image rounded back to 8 bits matches the
+8-bit operation within 1 level (`RemoveDust` exactly).
+
+`ConvertToSrgb` converts 16-bit images in floating point (see
+[Color management](color-management.md#sixteen-bits-per-channel)); HDR reconstruction, tone mapping and gain maps
+accept 16-bit images (see [HDR](hdr.md#sixteen-bit-images)). No operation rejects a 16-bit image.
+
 Sample-level settings are normalized to 0–1 at every depth: `LevelsOptions.*Normalized`, `CurvesNormalized`,
 `AutoCropOptions.AlphaThresholdNormalized` and `ToleranceNormalized`, and `UnsharpMask`'s `thresholdNormalized`. A
 level v of the 8-bit API written as `v / 255f` gives exactly the former 8-bit result (also for halves and quarters of a

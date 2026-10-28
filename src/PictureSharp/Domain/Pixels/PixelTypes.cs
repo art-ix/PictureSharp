@@ -38,10 +38,6 @@ internal static class PixelTypes
     public static bool IsOpaque(Rgba64 color, PixelType pixelType) =>
         pixelType == PixelType.Rgba32 ? Rgba64.Narrow(color.A) == byte.MaxValue : color.A == ushort.MaxValue;
 
-    /// <summary>Throws for an operation without a 16-bit implementation yet, instead of rounding to 8 bits silently.</summary>
-    public static NotSupportedException NotYetSupported() =>
-        new("This operation does not support 16-bit (Rgba64) images yet; convert with ConvertPixelType(PixelType.Rgba32) first.");
-
     public static InvalidOperationException Mismatch(PixelType actual, Type requested) =>
         new($"The pixels are stored as {actual}, not {requested.Name}; check PixelType before typed access.");
 }

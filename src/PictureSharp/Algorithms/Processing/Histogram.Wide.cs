@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PictureSharp.Domain.Pixels;
@@ -26,7 +27,7 @@ internal static partial class Histogram
 
         if (typeof(TPixel) != typeof(Rgba64))
         {
-            throw PixelTypes.NotYetSupported();
+            throw new UnreachableException();
         }
 
         ReadOnlySpan<Rgba64> wide = MemoryMarshal.Cast<TPixel, Rgba64>(pixels);

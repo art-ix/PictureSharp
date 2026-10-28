@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Numerics;
 
 namespace PictureSharp.Algorithms.Hdr;
@@ -13,7 +14,8 @@ internal static partial class GainMapMath
     /// </summary>
     // port: libultrahdr v2.0.2 lib/src/gainmapmath.cpp sampleMap (float version; its ShepardsIDW tables for integer
     // scale factors give the same weights)
-    public static float SampleIdw(ReadOnlySpan<Rgba32> map, int width, int height, float xMap, float yMap, int channel)
+    public static float SampleIdw<TPixel>(ReadOnlySpan<TPixel> map, int width, int height, float xMap, float yMap, int channel)
+        where TPixel : unmanaged, IPixelOps<TPixel>
     {
         int xLower = Math.Min((int)MathF.Floor(xMap), width - 1);
         int yLower = Math.Min((int)MathF.Floor(yMap), height - 1);
@@ -54,7 +56,8 @@ internal static partial class GainMapMath
     }
 
     /// <summary>Bilinear interpolation of the encoded map at pixel-center coordinates (Apple model).</summary>
-    public static float SampleBilinear(ReadOnlySpan<Rgba32> map, int width, int height, float x, float y, int channel)
+    public static float SampleBilinear<TPixel>(ReadOnlySpan<TPixel> map, int width, int height, float x, float y, int channel)
+        where TPixel : unmanaged, IPixelOps<TPixel>
     {
         x = Math.Clamp(x, 0f, width - 1);
         y = Math.Clamp(y, 0f, height - 1);
@@ -96,11 +99,18 @@ internal static partial class GainMapMath
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Rec709ToLinear(float v) => v < 0.081f ? v / 4.5f : DeterministicMath.Pow((v + 0.099f) / 1.099f, 1f / 0.45f);
 
+    // A map value in [0, 1]: the code divided by 255 or 65535.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static float Sample(ReadOnlySpan<Rgba32> map, int index, int channel)
+    private static float Sample<TPixel>(ReadOnlySpan<TPixel> map, int index, int channel) where TPixel : unmanaged, IPixelOps<TPixel>
     {
-        Rgba32 p = map[index];
-        return (channel == 0 ? p.R : channel == 1 ? p.G : p.B) / 255f;
+        if (typeof(TPixel) == typeof(Rgba32))
+        {
+            Rgba32 p = Unsafe.As<TPixel, Rgba32>(ref Unsafe.AsRef(in map[index]));
+            return (channel == 0 ? p.R : channel == 1 ? p.G : p.B) / 255f;
+        }
+
+        Rgba64 w = TPixel.ToRgba64(map[index]);
+        return (channel == 0 ? w.R : channel == 1 ? w.G : w.B) / 65535f;
     }
 
     private static float Distance(float x, float y) => MathF.Sqrt((x * x) + (y * y));

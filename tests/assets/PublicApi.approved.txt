@@ -126,6 +126,7 @@ static class PictureSharp.Formats.GainMapExtensions
     method [Extension] static PictureSharp.Formats.EncodableGainMap? GetGainMap(Image image, System.Boolean require = false)
 abstract class PictureSharp.Formats.GainMapImage
     method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
+    property PixelType PixelType { get; }
     property System.Drawing.Size Size { get; }
 sealed class PictureSharp.Formats.GainMapMetadata
     method GainMapInfo ToGainMapInfo(System.Drawing.Size mapSize)
@@ -1035,6 +1036,7 @@ enum PictureSharp.Processing.RotateMode
     Rotate270 = 270
 sealed record PictureSharp.Processing.ToneMappingOptions : System.IEquatable<PictureSharp.Processing.ToneMappingOptions>
     ctor()
+    property PixelType PixelType { get; init; }
     property System.Single Exposure { get; init; }
     property System.Single? WhitePoint { get; init; }
     property static PictureSharp.Processing.ToneMappingOptions Default { get; }

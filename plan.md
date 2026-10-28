@@ -34,7 +34,7 @@ wtyczek: `docs/plugin-spi.md`. Pomiary: `docs/performance.md`. Ukończone wydani
 | --- | --- | --- |
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
 | 0.6.9–0.8.5 | HDR przy edycji, SPI wtyczek, optymalizacje JPEG i WebP, korekcja fotograficzna, negatywy, gain map w enkoderach, generowanie map, stabilne SPI, `ImageInfo.Color` | Wydane (szczegóły w [changelogu](#changelog)) |
-| 0.9.0 | 16 bitów na kanał w całym rdzeniu (`Rgba64`, `PixelType`, PNG 16-bit, wszystkie operacje) i konwersja kolorów we float na `Rgba64`; złamanie API i SPI z blokadą starych wtyczek | W toku: etap 1 zrobiony, etapy 2–5 przed nami; projekt w `docs/proposals/high-bit-depth.md` |
+| 0.9.0 | 16 bitów na kanał w całym rdzeniu (`Rgba64`, `PixelType`, PNG 16-bit, wszystkie operacje) i konwersja kolorów we float na `Rgba64`; złamanie API i SPI z blokadą starych wtyczek | W toku: etapy 1–4 zrobione, etap 5 (adaptery, wtyczki) i bramka wydania przed nami; projekt w `docs/proposals/high-bit-depth.md` |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości.
 
@@ -104,7 +104,7 @@ Etapy (1–5 wychodzą razem jako 0.9.0, bez stabilnego wydania z niepełnym zes
 | 1 | `Rgba64`, `PixelType`, typowany dostęp do pikseli, nowe `PixelFormat` i konwersje; PNG 16-bit odczyt i zapis (z `tRNS` i APNG); geometria; zmniejszanie głębi w pozostałych koderach; `SupportsPixelType` w SPI, blokada wtyczek < 0.9.0; budżet `MaxPixels` | Zrobiony (2026-10-28) |
 | 2 | Resize, Affine, rozmycia i wyostrzanie, kompozycja, `DrawImage`, premultiplikacja | Zrobiony (2026-10-28; bez SIMD 16-bit, ARM64 nieuruchomione) |
 | 3 | Operacje tonalne i kolorystyczne; `LevelsOptions` (`*Normalized`), `CurvesNormalized` i progi na 0–1, `ImageHistogram` z `FullResolution`, `IFrameProcessor<TPixel>` | Zrobiony (2026-10-28; bez SIMD 16-bit, ARM64 nieuruchomione) |
-| 4 | Negatywy, czyszczenie (kurz, szum), ICC i `ToSrgb` we float na `Rgba64` (D18), HDR i gain map z bazą `Rgba64` | Nierozpoczęty |
+| 4 | Negatywy, czyszczenie (kurz, szum), ICC i `ToSrgb` we float na `Rgba64` (D18), HDR i gain map z bazą `Rgba64` | Zrobiony (2026-10-28; bez SIMD 16-bit, ARM64 nieuruchomione) |
 | 5 | Adaptery (Skia `Rgba16161616`, System.Drawing 32bpp); wydania czterech wtyczek na 0.9.0 | Nierozpoczęty |
 
 Stan (2026-10-28): etap 1 zaimplementowany (szczegóły i pozostałości w `progres.md`): `Rgba64`, `PixelType`,
@@ -127,7 +127,16 @@ w pełnej rozdzielczości); API: `LevelsOptions.*Normalized`, `CurvesNormalized`
 i `UnsharpMask(thresholdNormalized)` (decyzja użytkownika 2026-10-28: sufiks `Normalized` jak D12), `MakeTransparent`,
 `WhiteBalance(neutral)` i `AutoCropOptions.Background` jako `Rgba64`; stare nazwy usunięte. Ustawienia 8-bit zapisane jako
 v / 255f dają dokładnie dawne wyniki. Błąd ≤ 1 kod 16-bit względem referencji double; ścieżka 8-bit bajtowo bez zmian.
-Etap 4: nierozpoczęty (negatywy, czyszczenie i ICC rzucają `NotSupportedException` na `Rgba64`, D4). `VERSION` = 0.9.0.
+Etap 4 zaimplementowany (2026-10-28; szczegóły, błędy względem referencji i pomiary w `progres.md`): DevelopNegative,
+InvertNegative, AnalyzeNegative, FindFilmFrame i obrót kadru, RemoveDust, Denoise, ReduceColorNoise na `Rgba64`
+(statystyki filmu w pełnej rozdzielczości, mediany kurzu 16-bit, płaszczyzny float); `ConvertToSrgb` na `Rgba64` we float
+z jednym zaokrągleniem, `ToSrgb` bez `PreserveBitDepth` dekoduje głębiej, konwertuje i raz zmniejsza do `Rgba32`
+(źródła głębsze opłacane jak 16-bit); `ToHdr` z bazą `Rgba64`, `ToneMappingOptions.PixelType`, `ToGainMapImage` z bazą
+16-bit (mapa liczona względem zapisanej bazy), mapy 16-bit z wtyczek (`GainMapImage(size, pixelType)`, opłata zadeklarowanego
+typu, kontrola typu po dekodowaniu, geometria i próbkowanie w 16 bitach). D4 spełnione: żadna operacja rdzenia nie odrzuca
+obrazu 16-bitowego (test obejmujący wszystkie operacje `ImageProcessingContext`, analizę, HDR i kodery). Błąd ≤ 1 kod
+16-bit względem referencji double; ścieżka 8-bit bajtowo bez zmian (FindFilmFrame 8-bit +2–4%, niezbadane). Zostaje: etap 5, bramka wydania (przewodnik migracji,
+nota, CLI `--depth`, AOT/trimming, ARM64), SIMD 16-bit, `sBIT`, waga typu w `DecodeEmbeddedPart`. `VERSION` = 0.9.0.
 
 DoD:
 - Każda operacja i kodek wbudowany działa na obrazach `Rgba64` z 16-bitową precyzją (gradient 65536 poziomów nie

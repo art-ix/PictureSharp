@@ -48,6 +48,7 @@ static class PictureSharp.Formats.GainMapExtensions
 static class PictureSharp.Formats.GainMapExtensions :: method [Extension] static PictureSharp.Formats.EncodableGainMap? GetGainMap(Image image, System.Boolean require = false)
 abstract class PictureSharp.Formats.GainMapImage
 abstract class PictureSharp.Formats.GainMapImage :: method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
+abstract class PictureSharp.Formats.GainMapImage :: property PixelType PixelType { get; }
 abstract class PictureSharp.Formats.GainMapImage :: property System.Drawing.Size Size { get; }
 sealed class PictureSharp.Formats.GainMapMetadata
 sealed class PictureSharp.Formats.GainMapMetadata :: method GainMapInfo ToGainMapInfo(System.Drawing.Size mapSize)

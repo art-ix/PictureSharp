@@ -27,7 +27,7 @@ public class HdrGainMapEncoderTests
         int worst = 0;
         for (int i = 0; i < a.Pixels.Length; i++)
         {
-            worst = Math.Max(worst, Math.Max(Math.Abs(a.Pixels[i].R - b.Pixels[i].R), Math.Max(Math.Abs(a.Pixels[i].G - b.Pixels[i].G), Math.Abs(a.Pixels[i].B - b.Pixels[i].B))));
+            worst = Math.Max(worst, Math.Max(Math.Abs(a.Pixels.Rgba32![i].R - b.Pixels.Rgba32![i].R), Math.Max(Math.Abs(a.Pixels.Rgba32![i].G - b.Pixels.Rgba32![i].G), Math.Abs(a.Pixels.Rgba32![i].B - b.Pixels.Rgba32![i].B))));
         }
 
         return (worst, a.Pixels.Length);
@@ -56,7 +56,7 @@ public class HdrGainMapEncoderTests
         DecodedGainMap source = DecodeMap(image.AttachedGainMap!), written = DecodeMap(reloaded.AttachedGainMap!);
         if (image.AttachedGainMap!.AppliedOrientation is ExifOrientation.Unknown or ExifOrientation.TopLeft)
         {
-            await Assert.That(written.Pixels).IsEquivalentTo(source.Pixels, CollectionOrdering.Matching);
+            await Assert.That(written.Pixels.Rgba32!).IsEquivalentTo(source.Pixels.Rgba32!, CollectionOrdering.Matching);
         }
         else
         {

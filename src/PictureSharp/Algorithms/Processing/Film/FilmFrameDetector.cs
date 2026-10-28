@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
 
@@ -23,7 +25,8 @@ internal static class FilmFrameDetector
     private const int TextureSamples = 2000;
 
     /// <summary>Finds the frame nearest the center of <paramref name="pixels"/>, or null without a row of perforation.</summary>
-    public static FilmFrame? Find(Rgba32[] pixels, int width, int height, CancellationToken cancellationToken)
+    public static FilmFrame? Find<TPixel>(TPixel[] pixels, int width, int height, CancellationToken cancellationToken)
+        where TPixel : unmanaged, IPixelOps<TPixel>
     {
         var preview = Preview.Create(pixels, width, height, cancellationToken);
         bool[] lamp = preview.Lamp();
@@ -43,7 +46,8 @@ internal static class FilmFrameDetector
         return Build(pixels, width, height, preview, strip, found);
     }
 
-    private static FilmFrame Build(Rgba32[] pixels, int width, int height, Preview preview, Strip strip, FoundFrame found)
+    private static FilmFrame Build<TPixel>(TPixel[] pixels, int width, int height, Preview preview, Strip strip, FoundFrame found)
+        where TPixel : unmanaged, IPixelOps<TPixel>
     {
         int k = preview.Scale;
         double straighten = strip.Angle - (Math.Round(strip.Angle / (Math.PI / 2)) * (Math.PI / 2));
@@ -98,14 +102,18 @@ internal static class FilmFrameDetector
         return result;
     }
 
-    /// <summary>A box-filtered copy whose side is at most about 1024 pixels, in stored channel values.</summary>
+    /// <summary>
+    /// A box-filtered copy whose side is at most about 1024 pixels, in stored channel values on the 8-bit scale (a
+    /// 16-bit image's values divided by 257, unrounded).
+    /// </summary>
     private sealed class Preview
     {
-        private Preview(int width, int height, int scale)
+        private Preview(int width, int height, int scale, bool wide)
         {
             Width = width;
             Height = height;
             Scale = scale;
+            Wide = wide;
             Red = new float[width * height];
             Green = new float[width * height];
             Blue = new float[width * height];
@@ -119,6 +127,9 @@ internal static class FilmFrameDetector
         /// <summary>Source pixels per preview pixel along each axis.</summary>
         public int Scale { get; }
 
+        /// <summary>Whether the source has 16-bit samples, whose preview values fall between 8-bit levels.</summary>
+        public bool Wide { get; }
+
         public float[] Red { get; }
 
         public float[] Green { get; }
@@ -127,10 +138,17 @@ internal static class FilmFrameDetector
 
         public float[] Luma { get; }
 
-        public static Preview Create(Rgba32[] pixels, int width, int height, CancellationToken cancellationToken)
+        public static Preview Create<TPixel>(TPixel[] pixels, int width, int height, CancellationToken cancellationToken)
+            where TPixel : unmanaged, IPixelOps<TPixel>
         {
+            if (typeof(TPixel) != typeof(Rgba32))
+            {
+                return CreateWide(Unsafe.As<Rgba64[]>(pixels), width, height, cancellationToken);
+            }
+
+            Rgba32[] narrow = Unsafe.As<Rgba32[]>(pixels);
             int k = Math.Max(1, (Math.Max(width, height) + PreviewSide - 1) / PreviewSide);
-            var preview = new Preview(Math.Max(1, width / k), Math.Max(1, height / k), k);
+            var preview = new Preview(Math.Max(1, width / k), Math.Max(1, height / k), k, wide: false);
             int pw = preview.Width;
             float share = 1f / Math.Min(k * k, width * height);
             Parallelism.ForBands(preview.Height, 8, (long)width * height, cancellationToken, (start, end) =>
@@ -141,7 +159,7 @@ internal static class FilmFrameDetector
                     Array.Clear(sums);
                     for (int y = py * k; y < Math.Min(height, (py + 1) * k); y++)
                     {
-                        ReadOnlySpan<Rgba32> row = pixels.AsSpan(y * width, Math.Min(width, pw * k));
+                        ReadOnlySpan<Rgba32> row = narrow.AsSpan(y * width, Math.Min(width, pw * k));
                         for (int x = 0; x < row.Length; x++)
                         {
                             int s = (x / k) * 3;
@@ -165,6 +183,53 @@ internal static class FilmFrameDetector
 
             return preview;
         }
+
+        // Create on 16-bit samples: 64-bit sums, each mean scaled to the 8-bit scale once, in double precision.
+        private static Preview CreateWide(Rgba64[] pixels, int width, int height, CancellationToken cancellationToken)
+        {
+            int k = Math.Max(1, (Math.Max(width, height) + PreviewSide - 1) / PreviewSide);
+            var preview = new Preview(Math.Max(1, width / k), Math.Max(1, height / k), k, wide: true);
+            int pw = preview.Width;
+            double share = 1.0 / (Math.Min(k * k, width * height) * 257.0);
+            Parallelism.ForBands(preview.Height, 8, (long)width * height, cancellationToken, (start, end) =>
+            {
+                long[] sums = new long[pw * 3];
+                for (int py = start; py < end; py++)
+                {
+                    Array.Clear(sums);
+                    for (int y = py * k; y < Math.Min(height, (py + 1) * k); y++)
+                    {
+                        ReadOnlySpan<Rgba64> row = pixels.AsSpan(y * width, Math.Min(width, pw * k));
+                        for (int x = 0; x < row.Length; x++)
+                        {
+                            int s = (x / k) * 3;
+                            Rgba64 p = row[x];
+                            sums[s] += p.R;
+                            sums[s + 1] += p.G;
+                            sums[s + 2] += p.B;
+                        }
+                    }
+
+                    for (int px = 0; px < pw; px++)
+                    {
+                        int i = (py * pw) + px;
+                        preview.Red[i] = (float)(sums[px * 3] * share);
+                        preview.Green[i] = (float)(sums[(px * 3) + 1] * share);
+                        preview.Blue[i] = (float)(sums[(px * 3) + 2] * share);
+                        preview.Luma[i] = (0.2126f * preview.Red[i]) + (0.7152f * preview.Green[i]) + (0.0722f * preview.Blue[i]);
+                    }
+                }
+            });
+
+            return preview;
+        }
+
+        /// <summary>
+        /// log10 of the linear light of a preview value: tabulated at 1/16 of a level for 8-bit sources, exact for
+        /// 16-bit ones, whose values the table would round.
+        /// </summary>
+        public double LogLinear(float value) =>
+            Wide ? Math.Log10(Math.Max(Linear(Math.Clamp(value, 0f, 255f)), NegativeCalibrator.DensityFloor)) : FilmFrameDetector.LogLinear(value);
 
         /// <summary>
         /// The backlight: within 15% of the 99.5th percentile of blue and at least as blue as red. The film base's
@@ -790,8 +855,8 @@ internal static class FilmFrameDetector
         /// The film base and the backlight's change, from the rebate bands beside the frame (holes, edge printing and
         /// bright or dark strays left out), and the texture of the backlight seen through them.
         /// </summary>
-        public (ChannelValues? FilmBase, FilmFrame.Illumination Illumination, float? Uniformity) MeasureRebate(
-            Rgba32[] pixels, int width, int height, FoundFrame frame)
+        public (ChannelValues? FilmBase, FilmFrame.Illumination Illumination, float? Uniformity) MeasureRebate<TPixel>(
+            TPixel[] pixels, int width, int height, FoundFrame frame) where TPixel : unmanaged, IPixelOps<TPixel>
         {
             (double u0, double t, double u1, double b) = frame.Rectangle;
             double p = _pitch;
@@ -830,8 +895,8 @@ internal static class FilmFrameDetector
             }
 
             KeepNear(samples, i => _luma[i], 1);
-            KeepNear(samples, i => LogLinear(_preview.Blue[PreviewIndex(i)]) - LogLinear(_preview.Red[PreviewIndex(i)]), 0.01);
-            KeepNear(samples, i => LogLinear(_preview.Green[PreviewIndex(i)]) - LogLinear(_preview.Red[PreviewIndex(i)]), 0.01);
+            KeepNear(samples, i => _preview.LogLinear(_preview.Blue[PreviewIndex(i)]) - _preview.LogLinear(_preview.Red[PreviewIndex(i)]), 0.01);
+            KeepNear(samples, i => _preview.LogLinear(_preview.Green[PreviewIndex(i)]) - _preview.LogLinear(_preview.Red[PreviewIndex(i)]), 0.01);
             if (samples.Count < 50)
             {
                 return (null, default, null);
@@ -862,7 +927,7 @@ internal static class FilmFrameDetector
                     int i = samples[s];
                     (double x, double y) = ToPreview(i % Width, i / Width);
                     float value = plane[((int)Math.Round(y) * _preview.Width) + (int)Math.Round(x)];
-                    double z = LogLinear(value);
+                    double z = _preview.LogLinear(value);
                     double uu = fitU ? ((i % Width) - cu) / length : 0, vv = fitV ? ((i / Width) - cv) / frameHeight : 0;
                     ReadOnlySpan<double> row = [1, uu, vv];
                     for (int a = 0; a < 3; a++)
@@ -945,8 +1010,10 @@ internal static class FilmFrameDetector
 
         // The median standard deviation of the source luma in the block behind each of up to 2000 rebate samples: a
         // monitor's pixel grid or a patterned backlight shows through the film.
-        private float Texture(Rgba32[] pixels, int width, int height, List<int> samples)
+        // Luma in 8-bit levels, so the 16-bit texture is measured on the same scale and threshold.
+        private float Texture<TPixel>(TPixel[] pixels, int width, int height, List<int> samples) where TPixel : unmanaged, IPixelOps<TPixel>
         {
+            double unit = 255.0 / TPixel.MaxValue;
             int k = _preview.Scale, step = Math.Max(1, samples.Count / TextureSamples), half = k >= 2 ? 0 : 1;
             List<float> deviations = [];
             for (int s = 0; s < samples.Count; s += step)
@@ -959,8 +1026,18 @@ internal static class FilmFrameDetector
                 {
                     for (int x = Math.Max(0, x0); x < Math.Min(width, x0 + side); x++)
                     {
-                        Rgba32 q = pixels[(y * width) + x];
-                        double luma = (0.2126 * q.R) + (0.7152 * q.G) + (0.0722 * q.B);
+                        double luma;
+                        if (typeof(TPixel) == typeof(Rgba32))
+                        {
+                            Rgba32 q = Unsafe.As<TPixel, Rgba32>(ref pixels[(y * width) + x]);
+                            luma = (0.2126 * q.R) + (0.7152 * q.G) + (0.0722 * q.B);
+                        }
+                        else
+                        {
+                            Rgba64 q = TPixel.ToRgba64(pixels[(y * width) + x]);
+                            luma = ((0.2126 * q.R) + (0.7152 * q.G) + (0.0722 * q.B)) * unit;
+                        }
+
                         sum += luma;
                         squares += luma * luma;
                         n++;

@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.ColorManagement;
@@ -19,7 +20,8 @@ public readonly ref partial struct ImageProcessingContext
     /// </summary>
     /// <remarks>
     /// RGB and Gray matrix/TRC profiles of ICC v2 and v4 are supported, with the relative colorimetric intent and
-    /// without black-point compensation; colors outside sRGB are clipped and alpha is kept.
+    /// without black-point compensation; colors outside sRGB are clipped and alpha is kept. A 16-bit image is converted
+    /// in floating point (curves, matrix and sRGB transfer function) and rounded once to 16 bits.
     /// </remarks>
     /// <exception cref="NotSupportedException">The profile is LUT-based, CMYK, Lab or otherwise not matrix/TRC.</exception>
     /// <exception cref="ImageFormatException">The ICC profile is malformed.</exception>
@@ -31,9 +33,8 @@ public readonly ref partial struct ImageProcessingContext
             // New buffers are committed together, so a canceled conversion leaves pixels and profile consistent.
             _state.ReplaceFrames(conversion, static (frame, conversion, token) =>
             {
-                Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(frame.Width * frame.Height);
-                ConvertBands(conversion, pixels.Length, frame.Pixels, pixels, token);
-                return new FrameReplacement(frame.Width, frame.Height, pixels);
+                var operation = new ConvertFrame(frame, conversion, InPlace: false, token);
+                return new FrameReplacement(frame.Width, frame.Height, PixelDispatch.Run<ConvertFrame, PixelBuffer>(frame.PixelType, ref operation));
             });
         }
 
@@ -53,7 +54,8 @@ public readonly ref partial struct ImageProcessingContext
         {
             foreach (ImageFrame frame in _state.WritableFrames)
             {
-                ConvertBands(conversion, frame.Width * frame.Height, frame.Pixels, frame.Pixels, _state.CancellationToken);
+                var operation = new ConvertFrame(frame, conversion, InPlace: true, _state.CancellationToken);
+                PixelDispatch.Run<ConvertFrame, PixelBuffer>(frame.PixelType, ref operation);
             }
         }
 
@@ -62,8 +64,31 @@ public readonly ref partial struct ImageProcessingContext
         return this;
     }
 
+    // The frame converted into a new buffer, or in place.
+    private readonly record struct ConvertFrame(ImageFrame Frame, SrgbConversion Conversion, bool InPlace, CancellationToken Token)
+        : IPixelOperation<PixelBuffer>
+    {
+        public PixelBuffer Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            TPixel[] source = Frame.Buffer.As<TPixel>();
+            TPixel[] target = InPlace ? source : GC.AllocateUninitializedArray<TPixel>(source.Length);
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                ConvertBands(Conversion, source.Length, Unsafe.As<Rgba32[]>(source), Unsafe.As<Rgba32[]>(target), Token);
+            }
+            else
+            {
+                Conversion.PrepareWide();
+                ConvertBands(Conversion, source.Length, Unsafe.As<Rgba64[]>(source), Unsafe.As<Rgba64[]>(target), Token);
+            }
+
+            return PixelBuffer.From(target);
+        }
+    }
+
     // Pixels convert independently, so bands of them may run on several threads (like Resize).
-    private static void ConvertBands(SrgbConversion conversion, int count, Rgba32[] source, Rgba32[] target, CancellationToken token)
+    private static void ConvertBands<TPixel>(SrgbConversion conversion, int count, TPixel[] source, TPixel[] target, CancellationToken token)
+        where TPixel : unmanaged
     {
         const int band = 1 << 16;
         int bands = (count + band - 1) / band;
@@ -83,7 +108,14 @@ public readonly ref partial struct ImageProcessingContext
         {
             token.ThrowIfCancellationRequested();
             int start = index * band, length = Math.Min(band, count - start);
-            conversion.Convert(source.AsSpan(start, length), target.AsSpan(start, length));
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                conversion.Convert(Unsafe.As<Rgba32[]>(source).AsSpan(start, length), Unsafe.As<Rgba32[]>(target).AsSpan(start, length));
+            }
+            else
+            {
+                conversion.Convert(Unsafe.As<Rgba64[]>(source).AsSpan(start, length), Unsafe.As<Rgba64[]>(target).AsSpan(start, length));
+            }
         }
     }
 

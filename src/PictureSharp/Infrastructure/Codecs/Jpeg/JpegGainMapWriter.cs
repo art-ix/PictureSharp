@@ -4,6 +4,7 @@ using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Hdr;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Formats.Jpeg;
 
 namespace PictureSharp.Infrastructure.Codecs.Jpeg;
@@ -135,7 +136,7 @@ internal static class JpegGainMapWriter
             return new(source.IsoPayload, source.Icc, attachment.MapData.ToArray(), source);
         }
 
-        byte[] mapJpeg = EncodeMap(edited, source.Components == 3, options, cancellationToken);
+        byte[] mapJpeg = EncodeMap(Codes(edited), edited.Width, edited.Height, source.Components == 3, options, cancellationToken);
         return new(source.IsoPayload, source.Icc, mapJpeg, Split(mapJpeg) ?? throw new InvalidOperationException("The encoded gain map has no scan."));
     }
 
@@ -161,9 +162,23 @@ internal static class JpegGainMapWriter
             icc.Add(segment.ToArray());
         }
 
-        bool color = parameters.ChannelCount == 3 || !IsGray(map.Pixels);
-        byte[] mapJpeg = EncodeMap(map, color, options, cancellationToken);
+        Rgba32[] codes = Codes(map);
+        bool color = parameters.ChannelCount == 3 || !IsGray(codes);
+        byte[] mapJpeg = EncodeMap(codes, map.Width, map.Height, color, options, cancellationToken);
         return new(iso, icc, mapJpeg, Split(mapJpeg) ?? throw new InvalidOperationException("The encoded gain map has no scan."));
+    }
+
+    // A copy of the map's codes; JPEG stores 8 bits, so a 16-bit map is rounded, as any 16-bit image saved as JPEG.
+    private static Rgba32[] Codes(DecodedGainMap map)
+    {
+        if (map.Pixels.Rgba32 is { } narrow)
+        {
+            return (Rgba32[])narrow.Clone();
+        }
+
+        var codes = GC.AllocateUninitializedArray<Rgba32>(map.Pixels.Length);
+        PixelDepth.Narrow(map.Pixels.Rgba64, codes);
+        return codes;
     }
 
     private static bool IsGray(ReadOnlySpan<Rgba32> pixels)
@@ -180,10 +195,9 @@ internal static class JpegGainMapWriter
     }
 
     // The map as libultrahdr compresses it: GainMapQuality, 4:4:4, a gray map with one component.
-    private static byte[] EncodeMap(DecodedGainMap map, bool color, JpegEncoderOptions options, CancellationToken cancellationToken)
+    private static byte[] EncodeMap(Rgba32[] pixels, int width, int height, bool color, JpegEncoderOptions options, CancellationToken cancellationToken)
     {
-        var pixels = (Rgba32[])map.Pixels.Clone();
-        using var mapImage = new Image([new ImageFrame(map.Width, map.Height, pixels)]);
+        using var mapImage = new Image([new ImageFrame(width, height, pixels)]);
         var mapStream = new MemoryStream();
         var mapOptions = new JpegEncoderOptions
         {

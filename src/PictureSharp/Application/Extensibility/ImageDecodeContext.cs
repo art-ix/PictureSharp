@@ -100,7 +100,7 @@ public sealed class ImageDecodeContext
         }
 
         GainMapInfo info = metadata.ToGainMapInfo(map.Size) with { Detected = detected };
-        if (!_context.Budget.TryReservePixels(map.Size.Width, map.Size.Height))
+        if (!_context.Budget.TryReservePixels(map.Size.Width, map.Size.Height, map.PixelType))
         {
             GainMap = GainMapAttachment.Failed(info, GainMapFailure.Corrupt,
                 new ImageFormatException(_format, "The gain map exceeds DecoderOptions.MaxPixels.").Message);

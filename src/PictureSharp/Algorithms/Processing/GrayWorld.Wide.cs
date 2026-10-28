@@ -11,7 +11,7 @@ internal static partial class GrayWorld
     public const int ChannelLength16 = 3 * (ushort.MaxValue + 1);
 
     // The 8-bit limits 3–252 for the samples that round to them: (v + 128) / 257 in 3–252.
-    private const int LowestCandidate16 = (3 * 257) - 128, HighestCandidate16 = (253 * 257) - 129;
+    public const int LowestCandidate16 = (3 * 257) - 128, HighestCandidate16 = (253 * 257) - 129;
 
     /// <summary>Integer Rec. 709 luma of 16-bit encoded values, rounded half up.</summary>
     public static int Luma(Rgba64 p) => ((2126 * p.R) + (7152 * p.G) + (722 * p.B) + 5000) / 10000;

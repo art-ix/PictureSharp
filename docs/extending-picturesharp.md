@@ -372,13 +372,16 @@ if (context.Options.LoadGainMap)
 
 - `GainMapMetadata.ParseIso` reads an ISO 21496-1 payload, `ParseApple` the Apple model.
 - A `GainMapImage` owns its data, never uses the decode context and returns the map at its stored size.
+- A map with more than 8 bits per sample keeps them with `GainMapImage(size, PixelType.Rgba64)` (resolve it as for the
+  image, from the map's headers and `PreserveBitDepth`); `Decode` must then return an `Rgba64` image. The map is charged
+  with its declared type, and a decoded map of another type makes `ToHdr` throw `ImageFormatException`.
 - In `Identify`, report `ImageInfo.GainMap = metadata.ToGainMapInfo(mapSize)` when `LoadGainMap` is set.
 - When a file describes the map in several models (iPhones since iOS 18 store ISO 21496-1 and Apple metadata), pass
   them all, `metadata.Kind` included: `AttachGainMap(metadata, map, detected)` in `Decode` and
   `metadata.ToGainMapInfo(mapSize) with { Detected = detected }` in `Identify`. `Image.GainMap.Detected` then matches a JPEG
   (0.7.1).
 - Keep the base image's ICC profile or `Chromaticities`/`Gamma` when attaching a map, also with `IgnoreMetadata`.
-- Map pixels count toward `MaxPixels`. An oversized map, unparsable metadata or a base color other than sRGB or Display
+- Map pixels count toward `MaxPixels` (16-bit ones twice). An oversized map, unparsable metadata or a base color other than sRGB or Display
   P3 is reported through `Image.GainMap` and never fails the load.
 - The library carries the map through `TargetSize`, orientation, color conversion and geometric edits. Saving as JPEG
   writes it like an edited JPEG map, with metadata from `ToIso()` (0.8.0).

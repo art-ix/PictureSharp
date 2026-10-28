@@ -89,7 +89,9 @@ Geometric operations edit the map together with the base; everything else remove
 | Frame insertion, removal or reordering | removed |
 | `Clone()`, `Clone(operation)` | kept, then the rules above apply to the copy |
 
-The edited map keeps the map-to-base ratio and is resampled deterministically in its 8-bit codes.
+The edited map keeps the map-to-base ratio and is resampled deterministically in its codes (8-bit, or 16-bit for a
+16-bit map from a plugin). `ConvertPixelType(PixelType.Rgba64)` keeps the map, because widening does not change the
+base; reducing a 16-bit base to 8 bits changes the samples the map describes and removes it.
 
 - `ApplyExifOrientation` and `TargetSize` while loading are the cheapest route: no map decode until `ToHdr`, and with
   `TargetSize` the map uses a reduced inverse DCT.
@@ -128,13 +130,14 @@ Display P3); otherwise the metadata uses the base color space.
 
 ## Tone mapping
 
-`hdr.ToneMap(options)` returns an 8-bit sRGB `Image` with a deterministic operator (it does not imitate the Photos app):
+`hdr.ToneMap(options)` returns an sRGB `Image` with a deterministic operator (it does not imitate the Photos app):
 
 1. Convert to linear sRGB.
 2. Multiply by 2^`Exposure` (default 0).
 3. Extended Reinhard on Rec. 709 luminance with white point W (`WhitePoint`, default `hdr.Headroom`):
    `Lout = L × (1 + L / W²) / (1 + L)`, with the same scale for R, G and B. `WhitePoint = 1` is plain clipping.
-4. Clip each channel to [0, 1], apply the sRGB transfer function and round to 8 bits.
+4. Clip each channel to [0, 1], apply the sRGB transfer function and round to 8 bits, or with
+   `ToneMappingOptions.PixelType = PixelType.Rgba64` once to 16 bits.
 
 The result's metadata has no ICC profile. Whether to use the SDR base (what the camera chose for SDR displays) or a
 tone-mapped rendering is up to the application.
@@ -173,6 +176,28 @@ clipped, and dark base pixels (below 2/255) never brighten by more than 2.3 stop
 map 95) a smooth synthetic image comes back with a median error of 0.8% and iPhone photos with 2.8% (sRGB) to 4.2%
 (Display P3), at or below libultrahdr's own encoder; most of it is the base's JPEG compression.
 
+## Sixteen-bit images
+
+`ToHdr` reconstructs from a 16-bit base at its precision: the base is linearized at every 16-bit code (by the sRGB
+curve or the base's ICC curves) and a 16-bit map from a plugin is sampled at 16 bits. A base of 8 bits with an 8-bit
+map keeps the vector path; the others use the scalar code.
+
+`ToGainMapImage` produces a 16-bit SDR base for formats that store more than 8 bits (HEIF 10-bit, JPEG XL): give it a
+16-bit base, or let it tone-map one with `ToneMapping = new ToneMappingOptions { PixelType = PixelType.Rgba64 }`. The map
+is always computed against the base as the result stores it, so `ToHdr` of the result reproduces the ISO 21496-1
+reconstruction of exactly those samples (within 3·10⁻⁷ relative in the tests) and comes closer to the HDR image than
+with an 8-bit base. Generated maps stay 8-bit (libultrahdr's codes).
+
+```csharp
+var options = new GainMapOptions { ToneMapping = new ToneMappingOptions { PixelType = PixelType.Rgba64 } };
+using Image deep = hdr.ToGainMapImage(options);   // Rgba64 base, map generated against it
+```
+
+An encoder that stores fewer bits than the base rounds it at the format boundary: saving a 16-bit base as JPEG rounds
+it to 8 bits and keeps the map, which was computed for the 16-bit samples (within half an 8-bit level of the stored
+ones). For an exact 8-bit pair, generate the map with an 8-bit base. JPEG also stores 8-bit map codes, so a 16-bit map
+is rounded when written there.
+
 ## Editing metadata of HDR files
 
 `Image.EditMetadata` keeps both compressed images byte for byte and updates the MPF offsets. EXIF (for example
@@ -198,7 +223,10 @@ JPEG with the ISO 21496-1 map (Apple-only maps converted; not with padding or fo
 
 A plugin can attach its container's map (for example HEIC) with `ImageDecodeContext.AttachGainMap`; loading, `ToHdr`,
 `ToneMap`, geometric edits and saving as JPEG with the map then work as for JPEG (saving since 0.8.0). A plugin's
-encoder writes the attached map with `image.GetGainMap()`. See [Extending PictureSharp](extending-picturesharp.md#hdr-gain-maps).
+encoder writes the attached map with `image.GetGainMap()`. A map stored with more than 8 bits per sample can stay at
+16 bits: the plugin passes `PixelType.Rgba64` to the `GainMapImage` constructor, the map is charged as 16-bit against
+`MaxPixels` when attached, and geometric edits and `ToHdr` keep its precision. See
+[Extending PictureSharp](extending-picturesharp.md#hdr-gain-maps).
 
 ## Limitations
 

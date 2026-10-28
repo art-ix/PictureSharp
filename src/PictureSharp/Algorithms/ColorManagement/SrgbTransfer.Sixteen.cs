@@ -9,6 +9,9 @@ internal static partial class SrgbTransfer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Decode16(ushort value) => Tables16.Decode[value];
 
+    /// <summary>Linear light of every 16-bit sRGB value (shared; never written).</summary>
+    public static float[] DecodeTable16 => Tables16.Decode;
+
     /// <summary>
     /// The encoded value of linear light <paramref name="linear"/> clamped to [0, 1], unquantized; within 2e-6 of
     /// <see cref="EncodeExact"/> and identical on every architecture.

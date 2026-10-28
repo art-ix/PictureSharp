@@ -76,11 +76,9 @@ public sealed partial class ImageFrame
 
     internal PixelBuffer Buffer => _pixels;
 
-    /// <summary>
-    /// The 8-bit pixels for algorithms that have no 16-bit implementation yet.
-    /// </summary>
-    /// <exception cref="NotSupportedException">The frame stores <see cref="Rgba64"/> pixels.</exception>
-    internal Rgba32[] Pixels => _pixels.Rgba32 ?? throw PixelTypes.NotYetSupported();
+    /// <summary>The 8-bit pixels, for 8-bit paths (codecs, ports) that have checked <see cref="PixelType"/>.</summary>
+    /// <exception cref="InvalidOperationException">The frame stores <see cref="Rgba64"/> pixels.</exception>
+    internal Rgba32[] Pixels => _pixels.Rgba32 ?? throw PixelTypes.Mismatch(PixelType, typeof(Rgba32));
 
     /// <summary>Row <paramref name="y"/> of <see cref="Pixels"/>.</summary>
     internal Span<Rgba32> PixelRow(int y)

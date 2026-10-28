@@ -13,12 +13,12 @@ internal static class GainMapGeneration
         options ??= GainMapOptions.Default;
         cancellationToken.ThrowIfCancellationRequested();
         HdrColorSpace baseSpace;
-        float[]? linearization;
+        BaseTransfer? transfer;
         Image result;
         if (sdrBase is null)
         {
             result = HdrService.ToneMap(hdr, options.ToneMapping, cancellationToken);
-            (baseSpace, linearization) = (HdrColorSpace.LinearSrgb, null);
+            (baseSpace, transfer) = (HdrColorSpace.LinearSrgb, null);
         }
         else
         {
@@ -32,13 +32,13 @@ internal static class GainMapGeneration
                 throw new ArgumentException($"The SDR base must have the HDR image's size, {hdr.Width}x{hdr.Height}.", nameof(sdrBase));
             }
 
-            (baseSpace, linearization) = HdrBaseColor.FromMetadata(sdrBase.Metadata, sdrBase.SourceFormat);
+            (baseSpace, transfer) = HdrBaseColor.FromMetadata(sdrBase.Metadata, sdrBase.SourceFormat);
             result = sdrBase.Clone();
         }
 
         try
         {
-            result.AttachedGainMap = Generate(result, baseSpace, linearization, hdr, options, cancellationToken);
+            result.AttachedGainMap = Generate(result, baseSpace, transfer, hdr, options, cancellationToken);
             return result;
         }
         catch
@@ -48,10 +48,11 @@ internal static class GainMapGeneration
         }
     }
 
-    private static GainMapAttachment Generate(Image image, HdrColorSpace baseSpace, float[]? linearization, HdrImage hdr, GainMapOptions options,
+    // The map describes the base pixels as they are stored in the result, at their depth.
+    private static GainMapAttachment Generate(Image image, HdrColorSpace baseSpace, BaseTransfer? transfer, HdrImage hdr, GainMapOptions options,
         CancellationToken cancellationToken)
     {
-        var generator = new GainMapGenerator(image.Frames[0].Pixels, baseSpace, linearization, hdr.GetPixelMemory(), hdr.ColorSpace,
+        var generator = new GainMapGenerator(image.Frames[0].Buffer, baseSpace, transfer, hdr.GetPixelMemory(), hdr.ColorSpace,
             image.Width, image.Height, options.Scale, options.ChannelCount);
         (DecodedGainMap map, float[] min, float[] max) = generator.Generate(options.Gamma, options.MaxDegreeOfParallelism, cancellationToken);
         float headroom = options.Headroom ?? hdr.Headroom;
@@ -88,7 +89,7 @@ internal static class GainMapGeneration
             StoredSize = image.Size,
             AppliedOrientation = ExifOrientation.Unknown,
             BaseSpace = baseSpace,
-            BaseLinearization = linearization,
+            BaseTransfer = transfer,
         };
 
         static float Log2OfExp2(float value) => (float)Math.Log2((float)double.Exp2(value));
@@ -103,6 +104,8 @@ internal sealed class GeneratedGainMapDecoder(DecodedGainMap map) : IGainMapDeco
 {
     public bool CanScale => false;
 
+    public PixelType PixelType => map.PixelType;
+
     public DecodedGainMap Decode(ReadOnlyMemory<byte> data, int scale, int maxDegreeOfParallelism, CancellationToken cancellationToken) =>
-        map with { Pixels = (Rgba32[])map.Pixels.Clone() };
+        map with { Pixels = map.Pixels.Clone() };
 }

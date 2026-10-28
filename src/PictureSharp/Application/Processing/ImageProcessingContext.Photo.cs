@@ -197,8 +197,7 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        return LocalFilter((strength, radius), static (source, destination, w, h, state, token) =>
-            GuidedFilter.Denoise(source, destination, w, h, state.strength, state.radius, token));
+        return LocalFilter(new DenoiseFilter(strength, radius));
     }
 
     /// <summary>Runs shadows/highlights or clarity into new buffers that replace all frames together.</summary>
@@ -247,21 +246,23 @@ public readonly ref partial struct ImageProcessingContext
         }
     }
 
-    /// <summary>Runs <paramref name="filter"/> into new buffers that replace all frames together.</summary>
-    private ImageProcessingContext LocalFilter<TState>(TState state, LocalFilterAction<TState> filter)
+    /// <summary>Runs <paramref name="filter"/> at each frame's depth into new buffers that replace all frames together.</summary>
+    private ImageProcessingContext LocalFilter<TFilter>(TFilter filter) where TFilter : struct, ILocalFilter
     {
-        (int w, int h) = (Target.Width, Target.Height);
-        _state.ReplaceFrames((state, filter, w, h), static (frame, data, token) =>
+        _state.ReplaceFrames(filter, static (frame, filter, token) =>
         {
-            Rgba32[] result = GC.AllocateUninitializedArray<Rgba32>(data.w * data.h);
-            data.filter(frame.Pixels, result, data.w, data.h, data.state, token);
-            return new FrameReplacement(data.w, data.h, result);
+            var operation = new LocalFilterFrame<TFilter>(frame, filter, token);
+            return new FrameReplacement(frame.Width, frame.Height, PixelDispatch.Run<LocalFilterFrame<TFilter>, PixelBuffer>(frame.PixelType, ref operation));
         });
         return this;
     }
 
-    private delegate void LocalFilterAction<TState>(Rgba32[] source, Rgba32[] destination, int width, int height,
-        TState state, CancellationToken cancellationToken);
+    private readonly struct DenoiseFilter(float strength, int radius) : ILocalFilter
+    {
+        public void Run<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, CancellationToken cancellationToken)
+            where TPixel : unmanaged, IPixelOps<TPixel> =>
+            GuidedFilter.Denoise(source, destination, width, height, strength, radius, cancellationToken);
+    }
 
     private readonly struct ExposureMaps(float stops) : IChannelMaps
     {

@@ -8,7 +8,7 @@ namespace PictureSharp.Algorithms.Hdr;
 internal static partial class GainMapMath
 {
     /// <summary>
-    /// <see cref="SampleIdw(ReadOnlySpan{Rgba32}, int, int, float, float, int)"/> of eight positions for channels 0, 1 and 2 (only channel 0 when
+    /// <see cref="SampleIdw{TPixel}(ReadOnlySpan{TPixel}, int, int, float, float, int)"/> of eight positions for channels 0, 1 and 2 (only channel 0 when
     /// <paramref name="channels"/> is 1); the weights are shared by the channels as the scalar code computes them the same.
     /// </summary>
     public static void SampleIdw(ReadOnlySpan<Rgba32> map, int width, int height, Vector256<float> xMap, Vector256<float> yMap, int channels,
@@ -57,7 +57,7 @@ internal static partial class GainMapMath
         }
     }
 
-    /// <summary><see cref="SampleBilinear(ReadOnlySpan{Rgba32}, int, int, float, float, int)"/> of channel 0 at eight positions.</summary>
+    /// <summary><see cref="SampleBilinear{TPixel}(ReadOnlySpan{TPixel}, int, int, float, float, int)"/> of channel 0 at eight positions.</summary>
     public static Vector256<float> SampleBilinear(ReadOnlySpan<Rgba32> map, int width, int height, Vector256<float> x, Vector256<float> y)
     {
         x = Vector256.Clamp(x, Vector256<float>.Zero, Vector256.Create((float)(width - 1)));

@@ -13,6 +13,6 @@ internal sealed class JpegGainMapDecoder : IGainMapDecoder
         var options = new DecoderOptions { IgnoreMetadata = true, MaxPixels = long.MaxValue, MaxDegreeOfParallelism = maxDegreeOfParallelism };
         Image map = JpegDecoder.DecodeScaled(data, options, scale, cancellationToken);
         ImageFrame frame = map.Frames[0];
-        return new DecodedGainMap(frame.Pixels, frame.Width, frame.Height);
+        return new DecodedGainMap(frame.Buffer, frame.Width, frame.Height);
     }
 }

@@ -72,6 +72,33 @@ public sealed class DocsExamplesTests : IDisposable
     }
 
     [Test]
+    public async Task ColorManagement_ToSrgbOnSixteenBits()
+    {
+        using (Image source = Image.Load(P("wide-gamut.png")))
+        {
+            source.Mutate(x => x.ConvertPixelType(PixelType.Rgba64));
+            source.SaveAsPng(P("scan16.png"), new PngEncoderOptions { BitDepth = PngBitDepth.Sixteen });
+        }
+
+        using Image eight = Image.Load(P("scan16.png"), new DecoderOptions { ColorConversion = ColorConversionMode.ToSrgb });   // Rgba32, rounded once
+        using Image sixteen = Image.Load(P("scan16.png"), new DecoderOptions { ColorConversion = ColorConversionMode.ToSrgb, PreserveBitDepth = true });
+        await Assert.That(eight.PixelType).IsEqualTo(PixelType.Rgba32);
+        await Assert.That(sixteen.PixelType).IsEqualTo(PixelType.Rgba64);
+        await Assert.That(eight.Metadata.HasColorDescription).IsFalse();
+    }
+
+    [Test]
+    public async Task Hdr_SixteenBitBase()
+    {
+        using Image photo = Image.Load(P("IMG_8113.jpeg"), new DecoderOptions { LoadGainMap = true, TargetSize = new Size(400, 400) });
+        using HdrImage hdr = photo.ToHdr();
+        var options = new GainMapOptions { ToneMapping = new ToneMappingOptions { PixelType = PixelType.Rgba64 } };
+        using Image deep = hdr.ToGainMapImage(options);   // Rgba64 base, map generated against it
+        await Assert.That(deep.PixelType).IsEqualTo(PixelType.Rgba64);
+        await Assert.That(deep.HasHdr).IsTrue();
+    }
+
+    [Test]
     public async Task Hdr_SaveWithTheGainMap()
     {
         using Image photo = Image.Load(P("IMG_8113.jpeg"), new DecoderOptions { LoadGainMap = true, ApplyExifOrientation = true });

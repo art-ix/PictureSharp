@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Drawing;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Processing;
@@ -181,7 +182,7 @@ public readonly ref partial struct ImageProcessingContext
 
             if (typeof(TPixel) != typeof(Rgba64))
             {
-                throw PixelTypes.NotYetSupported();
+                throw new UnreachableException();
             }
 
             ushort[] wide = ToneLut.RentIdentity16();

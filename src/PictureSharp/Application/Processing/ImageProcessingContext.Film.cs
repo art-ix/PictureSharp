@@ -1,4 +1,7 @@
+using System.Buffers;
 using System.Drawing;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Domain.Frames;
 using PictureSharp.Domain.Pixels;
@@ -46,8 +49,7 @@ public readonly ref partial struct ImageProcessingContext
 
         if (lighting is { } light)
         {
-            LocalFilter((calibration, options.Print, light), static (source, destination, w, h, state, token) =>
-                NegativePrinter.PrintLit(source, destination, w, h, state.calibration, state.Print, state.light.X, state.light.Y, state.light.C, token));
+            LocalFilter(new LitPrint(calibration, options.Print, light));
         }
         else
         {
@@ -83,7 +85,7 @@ public readonly ref partial struct ImageProcessingContext
         return MapChannels(new NegativePrintMaps(calibration, print ?? NegativePrintOptions.Default));
     }
 
-    // Film processing has no 16-bit form yet (0.9.0 step 4); it throws instead of rounding to 8 bits.
+    // The integer Rec. 709 luma at the image's depth in all three channels.
     private readonly struct FilmLumaKernel : IPixelKernel
     {
         public void Run(Rgba32[] pixels)
@@ -95,14 +97,83 @@ public readonly ref partial struct ImageProcessingContext
             }
         }
 
-        public void RunWide<TPixel>(TPixel[] pixels) where TPixel : unmanaged, IPixelOps<TPixel> => throw PixelTypes.NotYetSupported();
+        public void RunWide<TPixel>(TPixel[] pixels) where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                Rgba64 p = TPixel.ToRgba64(pixels[i]);
+                ushort y = (ushort)GrayWorld.Luma(p);
+                pixels[i] = TPixel.FromRgba64(new Rgba64(y, y, y, p.A));
+            }
+        }
     }
 
     private readonly struct NegativePrintMaps(NegativeCalibration calibration, NegativePrintOptions print) : IChannelMaps
     {
         public void Fill(Span<byte> lut) => NegativePrinter.Lut(lut, calibration, print);
 
-        public void Fill(Span<ushort> lut) => throw PixelTypes.NotYetSupported();
+        public void Fill(Span<ushort> lut) => NegativePrinter.Lut(lut, calibration, print);
+    }
+
+    private readonly struct LitPrint(NegativeCalibration calibration, NegativePrintOptions print, FilmFrame.Illumination light) : ILocalFilter
+    {
+        public void Run<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, CancellationToken cancellationToken)
+            where TPixel : unmanaged, IPixelOps<TPixel> =>
+            NegativePrinter.PrintLit(source, destination, width, height, calibration, print, light.X, light.Y, light.C, cancellationToken);
+    }
+
+    private readonly struct FindFrame(ImageFrame frame, CancellationToken cancellationToken) : IPixelOperation<FilmFrame?>
+    {
+        public FilmFrame? Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel> =>
+            FilmFrameDetector.Find(frame.Buffer.As<TPixel>(), frame.Width, frame.Height, cancellationToken);
+    }
+
+    private readonly struct AnalyzeFrame(ImageFrame frame, NegativeOptions options, FilmFrame? found, CancellationToken cancellationToken)
+        : IPixelOperation<NegativeAnalysis>
+    {
+        public NegativeAnalysis Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel> =>
+            NegativeCalibrator.Analyze<TPixel>(frame.Buffer.As<TPixel>(), frame.Width, frame.Height, options, found, cancellationToken);
+    }
+
+    // Rotate(angle).Crop(bounds) in one resampling: the 8-bit port, otherwise the same sampling on premultiplied
+    // working values, rounded once.
+    private readonly struct StraightenFrame(ImageFrame frame, double[] matrix, Rectangle bounds, CancellationToken cancellationToken)
+        : IPixelOperation<PixelBuffer>
+    {
+        public PixelBuffer Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            (int w, int h) = (frame.Width, frame.Height);
+            TPixel[] source = frame.Buffer.As<TPixel>();
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                Rgba32[] scratch = GC.AllocateUninitializedArray<Rgba32>(w * h);
+                Premultiplied.FromStraight(Unsafe.As<Rgba32[]>(source), scratch);
+                Rgba32[] output = new Rgba32[bounds.Width * bounds.Height];
+                Affine.TransformFiltered(scratch, w, h, output, bounds.Width, bounds.Height, matrix, ResamplingFilter.Bicubic, cancellationToken,
+                    bounds.X, bounds.Y);
+                Premultiplied.ToStraight(output);
+                return output;
+            }
+
+            TPixel[] result = GC.AllocateUninitializedArray<TPixel>(bounds.Width * bounds.Height);
+            Vector4[] premultiplied = ArrayPool<Vector4>.Shared.Rent(source.Length);
+            Vector4[] transformed = ArrayPool<Vector4>.Shared.Rent(result.Length);
+            try
+            {
+                UnitRows.Premultiply<TPixel, EncodedUnit>(source, premultiplied);
+                transformed.AsSpan(0, result.Length).Clear();
+                Affine.TransformFilteredWide(premultiplied, w, h, transformed, bounds.Width, bounds.Height, matrix, ResamplingFilter.Bicubic,
+                    cancellationToken, bounds.X, bounds.Y);
+                UnitRows.Unpremultiply<TPixel, EncodedUnit>(transformed.AsSpan(0, result.Length), result);
+            }
+            finally
+            {
+                ArrayPool<Vector4>.Shared.Return(premultiplied);
+                ArrayPool<Vector4>.Shared.Return(transformed);
+            }
+
+            return PixelBuffer.From(result);
+        }
     }
 
     /// <summary>Measures a single-frame image; regions are validated here.</summary>
@@ -113,7 +184,8 @@ public readonly ref partial struct ImageProcessingContext
     internal static FilmFrame? FindFilmFrame(Image image, CancellationToken cancellationToken)
     {
         CheckSingleFrame(image);
-        return FilmFrameDetector.Find(image.Frames[0].Pixels, image.Width, image.Height, cancellationToken);
+        var operation = new FindFrame(image.Frames[0], cancellationToken);
+        return PixelDispatch.Run<FindFrame, FilmFrame?>(image.PixelType, ref operation);
     }
 
     private static NegativeAnalysis AnalyzeNegative(Image image, NegativeOptions options, FilmFrame? frame, CancellationToken cancellationToken)
@@ -129,8 +201,8 @@ public readonly ref partial struct ImageProcessingContext
             Image.CheckRectangle(filmBase, image.Width, image.Height, nameof(options));
         }
 
-        ImageFrame pixels = image.Frames[0];
-        return NegativeCalibrator.Analyze(pixels.Pixels.AsSpan(), image.Width, image.Height, options, frame, cancellationToken);
+        var operation = new AnalyzeFrame(image.Frames[0], options, frame, cancellationToken);
+        return PixelDispatch.Run<AnalyzeFrame, NegativeAnalysis>(image.PixelType, ref operation);
     }
 
     // The given frame, or a found one unless the options measure fixed regions.
@@ -163,16 +235,11 @@ public readonly ref partial struct ImageProcessingContext
         {
             (double[] m, _, _) = Affine.RotationMatrix(Target.Width, Target.Height, FilmFrameDetector.PillowAngle(frame.Angle), expand: true);
             matrix = m;
-            (int w, int h) = (Target.Width, Target.Height);
-            _state.ReplaceFrames((m, w, h, bounds), static (source, state, token) =>
+            _state.ReplaceFrames((m, bounds), static (source, state, token) =>
             {
-                var (m, w, h, bounds) = state;
-                Rgba32[] scratch = GC.AllocateUninitializedArray<Rgba32>(w * h);
-                Premultiplied.FromStraight(source.Pixels, scratch);
-                Rgba32[] output = new Rgba32[bounds.Width * bounds.Height];
-                Affine.TransformFiltered(scratch, w, h, output, bounds.Width, bounds.Height, m, ResamplingFilter.Bicubic, token, bounds.X, bounds.Y);
-                Premultiplied.ToStraight(output);
-                return new FrameReplacement(bounds.Width, bounds.Height, output);
+                var operation = new StraightenFrame(source, state.m, state.bounds, token);
+                return new FrameReplacement(state.bounds.Width, state.bounds.Height,
+                    PixelDispatch.Run<StraightenFrame, PixelBuffer>(source.PixelType, ref operation));
             });
             Target.Metadata.PixelsMoved();
         }

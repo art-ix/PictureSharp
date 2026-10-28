@@ -78,12 +78,12 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
 
         try
         {
-            (HdrColorSpace space, float[]? linearization) = HdrBaseColor.FromMetadata(image.Metadata, format);
+            (HdrColorSpace space, BaseTransfer? transfer) = HdrBaseColor.FromMetadata(image.Metadata, format);
             return gainMap with
             {
                 Parameters = gainMap.Parameters! with { MultiplicationSpace = gainMap.Parameters.MultiplicationSpace ?? space },
                 BaseSpace = space,
-                BaseLinearization = linearization,
+                BaseTransfer = transfer,
             };
         }
         catch (NotSupportedException ex)
@@ -121,6 +121,8 @@ internal sealed class ModuleGainMapDecoder(ImageFormat format, GainMapImage map)
     /// <summary>The map as the plugin attached it.</summary>
     public GainMapImage Map => map;
 
+    public PixelType PixelType => map.PixelType;
+
     public DecodedGainMap Decode(ReadOnlyMemory<byte> data, int scale, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         Image? decoded;
@@ -140,10 +142,14 @@ internal sealed class ModuleGainMapDecoder(ImageFormat format, GainMapImage map)
             throw new ImageFormatException(format, "The decoded HDR gain map does not match its declared size.");
         }
 
+        // The declared type was charged; another one would exceed or silently round it.
+        if (image.PixelType != map.PixelType)
+        {
+            throw new ImageFormatException(format, $"The decoded HDR gain map has {image.PixelType} pixels, not the declared {map.PixelType}.");
+        }
+
         // The image is disposed here, so the attachment keeps its own copy of the pixels.
-        var pixels = GC.AllocateUninitializedArray<Rgba32>(image.Width * image.Height);
-        image.Frames[0].Pixels.AsSpan(0, pixels.Length).CopyTo(pixels);
-        return new DecodedGainMap(pixels, image.Width, image.Height);
+        return new DecodedGainMap(image.Frames[0].Buffer.Clone(), image.Width, image.Height);
     }
 }
 
