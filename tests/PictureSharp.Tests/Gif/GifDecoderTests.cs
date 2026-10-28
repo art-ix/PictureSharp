@@ -71,6 +71,23 @@ public class GifDecoderTests
     }
 
     [Test]
+    public async Task Decode_OverhangingFrame_RespectsMaxPixelsBeforeRentingIndices()
+    {
+        byte[] gif = new GifBuilder(4, 4, GifBuilder.Palette4)
+            .Image(0, 0, 8, 8, new byte[64]).ToArray();
+        var options = new DecoderOptions { MaxPixels = 32 };
+        ImageFormatException error = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(gif, options));
+        await Assert.That(error.Format).IsSameReferenceAs(ImageFormat.Gif);
+        await using ImageFrameReader reader = await Image.OpenFrameReaderAsync(new MemoryStream(gif), options);
+        await Assert.ThrowsAsync<ImageFormatException>(async () =>
+        {
+            await foreach (ImageFrame frame in reader.ReadFramesAsync()) { }
+        });
+        using Image allowed = Image.Load(gif, options with { MaxPixels = 64 });
+        await Assert.That(allowed.Size).IsEqualTo(new System.Drawing.Size(4, 4));
+    }
+
+    [Test]
     public async Task Decode_FramePastCanvas_IsClipped()
     {
         byte[] gif = new GifBuilder(4, 4, GifBuilder.Palette4)

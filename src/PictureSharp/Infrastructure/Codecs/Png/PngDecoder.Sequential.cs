@@ -341,7 +341,7 @@ internal sealed partial class PngDecoder : ISequentialImageDecoder
                 if (keepChunk && name == "eXIf") _ = options.AddMetadata(ImageFormat.Png, Png.MetadataBytes, Length);
                 if (name == "PLTE" && Length > 768) throw Error("Invalid PLTE chunk.");
                 // Color chunks keep one byte more than valid, so oversized bodies stay detectable.
-                int keepBytes = name switch { "tRNS" => 256, "pHYs" => 9, "acTL" => 8, "fcTL" => 26, "gAMA" => 5, "cHRM" => 33, "sRGB" => 2, _ => int.MaxValue };
+                int keepBytes = name switch { "tRNS" => 256, "pHYs" => 9, "acTL" => 8, "fcTL" => 26, "gAMA" => 5, "cHRM" => 33, "sRGB" => 2, "sBIT" => 5, _ => int.MaxValue };
                 if (!await ReadBodyAsync(keepChunk ? _body : null, 0, cancellationToken, keepBytes).ConfigureAwait(false))
                 {
                     EndAfterTruncation();

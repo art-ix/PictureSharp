@@ -30,58 +30,7 @@ internal static partial class TrimBounds
         public Rectangle? Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel> =>
             typeof(TPixel) == typeof(Rgba32)
                 ? FindRgba32(frames, width, height, options, cancellationToken, vectorize)
-                : FindScalar<TPixel>(frames, width, height, options, cancellationToken);
-    }
-
-    /// <summary>
-    /// The scan at any depth. The normalized thresholds of <see cref="AutoCropOptions"/> become integer codes of the
-    /// storage depth (an 8-bit level t / 255f is t · 257 at 16 bits), so an exactly widened image has the same bounds
-    /// as the 8-bit original.
-    /// </summary>
-    private static Rectangle? FindScalar<TPixel>(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options,
-        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel>
-    {
-        int alphaThreshold = NormalizedLevel.Threshold(options.AlphaThresholdNormalized, TPixel.MaxValue);
-        int tolerance = NormalizedLevel.Threshold(options.ToleranceNormalized, TPixel.MaxValue);
-        bool alphaMode = options.Mode == AutoCropMode.Alpha;
-        int left = width;
-        int top = height;
-        int right = -1;
-        int bottom = -1;
-        TPixel background = default;
-        bool first = true;
-        foreach (ImageFrame frame in frames)
-        {
-            TPixel[] pixels = frame.Buffer.As<TPixel>();
-            if (first)
-            {
-                background = options.Background is { } color ? TPixel.FromRgba64(color) : pixels[0];
-                first = false;
-            }
-
-            bool transparentBackground = TPixel.Alpha(background) == 0;
-            for (int y = 0; y < height; y++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                ReadOnlySpan<TPixel> row = pixels.AsSpan(y * width, width);
-                for (int x = 0; x < row.Length; x++)
-                {
-                    TPixel p = row[x];
-                    bool content = alphaMode
-                        ? TPixel.Alpha(p) > alphaThreshold
-                        : !(transparentBackground && TPixel.Alpha(p) == 0) && TPixel.MaxChannelDifference(p, background) > tolerance;
-                    if (content)
-                    {
-                        left = Math.Min(left, x);
-                        right = Math.Max(right, x);
-                        top = Math.Min(top, y);
-                        bottom = Math.Max(bottom, y);
-                    }
-                }
-            }
-        }
-
-        return Bounds(left, top, right, bottom, width, height, options.Padding);
+                : FindRgba64(frames, width, height, options, cancellationToken, vectorize);
     }
 
     private static Rectangle? FindRgba32(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions autoCrop,

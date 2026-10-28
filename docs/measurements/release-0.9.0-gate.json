@@ -1,0 +1,212 @@
+{
+  "date": "2026-10-28",
+  "version": "0.9.0",
+  "source": "0.9.0 release candidate; measured before the final documentation and package-metadata cleanup",
+  "status": "Technical release gate passed; not published",
+  "x64": {
+    "build": {
+      "configuration": "Release",
+      "warnings": 0,
+      "errors": 0
+    },
+    "full": {
+      "total": 9406,
+      "failed": 0,
+      "succeeded": 9398,
+      "skipped": 8,
+      "duration": "1m 38s 804ms"
+    },
+    "withoutHardwareIntrinsics": {
+      "total": 9406,
+      "failed": 0,
+      "succeeded": 9398,
+      "skipped": 8,
+      "duration": "1m 48s 969ms",
+      "note": "Full run after GIF fix; later platform-specific ARM dispatch leaves this fallback unchanged."
+    },
+    "oracles": {
+      "total": 261,
+      "failed": 0,
+      "succeeded": 261,
+      "skipped": 0,
+      "duration": "29s 230ms"
+    },
+    "packageConsumer": {
+      "coreAndAdapters": true,
+      "fullTrimming": true,
+      "nativeAot": "linux-x64",
+      "packageContentsAndDependencies": true
+    },
+    "cancellationAfterWarmupGc": {
+      "total": 33,
+      "failed": 0,
+      "succeeded": 33,
+      "skipped": 0
+    }
+  },
+  "tiffOnGateCorePackage": {
+    "total": 4220,
+    "failed": 0,
+    "succeeded": 4220,
+    "skipped": 0,
+    "duration": "10s 282ms"
+  },
+  "arm64": {
+    "host": "Orange Pi 5 / RK3588 / 8 GB",
+    "suiteFilter": "Category!=Local",
+    "heapHardLimitGiB": 4,
+    "processorCountLimit": 4,
+    "reasonForLocalExclusion": "Full-size private 48 MP HDR photos exceed this hardware budget; these pass in the x64 full suite.",
+    "full": {
+      "total": 9303,
+      "failed": 0,
+      "succeeded": 9295,
+      "skipped": 8,
+      "duration": "3m 39s 128ms"
+    },
+    "simd": {
+      "total": 138,
+      "failed": 0,
+      "succeeded": 138,
+      "skipped": 0,
+      "duration": "9s 328ms"
+    },
+    "withoutHardwareIntrinsics": {
+      "total": 9303,
+      "failed": 0,
+      "succeeded": 9295,
+      "skipped": 8,
+      "duration": "4m 31s 475ms"
+    },
+    "smoke": "passed"
+  },
+  "cliPngDepth": {
+    "autoOn16BitSource": 16,
+    "8On16BitSource": 8,
+    "16On8BitSource": 16
+  },
+  "hdrNativeGeneratorOracle": {
+    "linearBoostToleranceFloatUlps": 2,
+    "otherParameters": "exact",
+    "fractionAndIsoWriterOracle": "byte exact for identical inputs",
+    "mapMaxCodeDifference": 1,
+    "mapMinimumIdenticalFraction": 0.999
+  },
+  "trim16": {
+    "x64": {
+      "runtime": "10.0.12",
+      "architecture": "X64",
+      "cpuAffinity": "0",
+      "tieredCompilation": false,
+      "width": 2049,
+      "height": 1024,
+      "medianOf": 11,
+      "iterationsPerSample": 10,
+      "results": [
+        {
+          "mode": "Alpha",
+          "empty": false,
+          "scalarRowScanMs": 1.02179,
+          "simdMs": 0.9206300000000001
+        },
+        {
+          "mode": "Alpha",
+          "empty": true,
+          "scalarRowScanMs": 1.23526,
+          "simdMs": 1.07292
+        },
+        {
+          "mode": "Background",
+          "empty": false,
+          "scalarRowScanMs": 1.12391,
+          "simdMs": 0.9849
+        },
+        {
+          "mode": "Background",
+          "empty": true,
+          "scalarRowScanMs": 1.33274,
+          "simdMs": 1.2199
+        }
+      ]
+    },
+    "arm64Initial32BitMask": {
+      "runtime": "10.0.13",
+      "architecture": "Arm64",
+      "cpuAffinity": "0",
+      "tieredCompilation": false,
+      "width": 2049,
+      "height": 1024,
+      "medianOf": 11,
+      "iterationsPerSample": 10,
+      "results": [
+        {
+          "mode": "Alpha",
+          "empty": false,
+          "scalarRowScanMs": 12.920490000000001,
+          "simdMs": 17.49641
+        },
+        {
+          "mode": "Alpha",
+          "empty": true,
+          "scalarRowScanMs": 15.598580000000002,
+          "simdMs": 21.0661
+        },
+        {
+          "mode": "Background",
+          "empty": false,
+          "scalarRowScanMs": 15.97803,
+          "simdMs": 17.83471
+        },
+        {
+          "mode": "Background",
+          "empty": true,
+          "scalarRowScanMs": 19.518520000000002,
+          "simdMs": 21.504929999999998
+        }
+      ]
+    },
+    "arm64Dispatch": "NEON for background; scalar for alpha after measurements",
+    "arm64": {
+      "runtime": "10.0.13",
+      "architecture": "Arm64",
+      "cpuAffinity": "0",
+      "tieredCompilation": false,
+      "width": 2049,
+      "height": 1024,
+      "medianOf": 11,
+      "iterationsPerSample": 10,
+      "results": [
+        {
+          "mode": "Alpha",
+          "empty": false,
+          "scalarRowScanMs": 12.92749,
+          "simdMs": 12.89567
+        },
+        {
+          "mode": "Alpha",
+          "empty": true,
+          "scalarRowScanMs": 15.585249999999998,
+          "simdMs": 15.59365
+        },
+        {
+          "mode": "Background",
+          "empty": false,
+          "scalarRowScanMs": 15.98118,
+          "simdMs": 10.717749999999999
+        },
+        {
+          "mode": "Background",
+          "empty": true,
+          "scalarRowScanMs": 19.51121,
+          "simdMs": 12.43132
+        }
+      ]
+    }
+  },
+  "publication": {
+    "published": false,
+    "committed": false,
+    "pushed": false,
+    "note": "State at completion of the technical gate, before release preparation and merge commits."
+  }
+}

@@ -86,6 +86,10 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
     {
         // The color description follows the ICC selection. PNG forbids sRGB together with iCCP; gAMA and cHRM may
         // accompany either as fallbacks for older decoders.
+        if (options.Metadata != MetadataKinds.None && meta.GetFormatMetadata<PngSignificantBits>() is { } bits
+            && bits.BitDepth == layout.BitDepth && bits.ColorType == PngColorDescription.ColorType(layout.Color))
+            writer.Write("sBIT", bits.Data);
+
         byte[]? icc = MetadataSelection.Select(meta.IccData, options.Metadata, MetadataKinds.Icc);
         if ((options.Metadata & MetadataKinds.Icc) != 0)
         {

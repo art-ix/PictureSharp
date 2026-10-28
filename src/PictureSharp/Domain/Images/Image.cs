@@ -1,5 +1,6 @@
 using System.Drawing;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp;
 
@@ -33,6 +34,27 @@ public sealed partial class Image : IDisposable
     {
         RootFrame.Pixels.AsSpan().Fill(background);
         HasAlpha = background.A != 255;
+    }
+
+    /// <summary>
+    /// Creates an image with pixels of <paramref name="pixelType"/> filled with <paramref name="background"/>, rounded to
+    /// 8 bits for <see cref="PixelType.Rgba32"/>. <see cref="HasAlpha"/> is false when the stored background is opaque, so a
+    /// decoder can create an opaque 16-bit image and write its pixels through <see cref="GetPixelSpan{TPixel}"/>.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The size is not positive, or <paramref name="pixelType"/> is not defined.</exception>
+    public Image(int width, int height, PixelType pixelType, Rgba64 background)
+        : this([ImageFrame.CreateUninitialized(width, height, PixelTypes.Check(pixelType))])
+    {
+        if (pixelType == PixelType.Rgba64)
+        {
+            RootFrame.GetPixelSpan<Rgba64>().Fill(background);
+        }
+        else
+        {
+            RootFrame.Pixels.AsSpan().Fill(background.ToRgba32());
+        }
+
+        HasAlpha = !PixelTypes.IsOpaque(background, pixelType);
     }
 
     internal Image(List<ImageFrame> frames)

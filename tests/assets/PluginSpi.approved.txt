@@ -110,6 +110,7 @@ enum HdrColorSpace :: LinearDisplayP3 = 1
 sealed class Image : System.IDisposable
 sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height)
 sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, PixelType pixelType)
+sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, PixelType pixelType, Rgba64 background)
 sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, Rgba32 background)
 sealed class Image : System.IDisposable :: method Image Clone()
 sealed class Image : System.IDisposable :: method System.Boolean IsOpaque()

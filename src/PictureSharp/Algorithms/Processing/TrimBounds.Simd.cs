@@ -59,7 +59,7 @@ internal static partial class TrimBounds
         return -1;
     }
 
-    /// <summary>All-ones lanes for the pixels that <see cref="IsContent"/> accepts.</summary>
+    /// <summary>All-ones lanes for the pixels that <see cref="IsContent(Rgba32, Criteria, Rgba32)"/> accepts.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<uint> Content(Vector128<uint> p, Criteria options, Rgba32 background)
     {

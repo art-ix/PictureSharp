@@ -211,3 +211,10 @@ await Image.EditMetadataAsync("photo.jpg", "photo.jpg", m => m.Clear());
 - **Resolution.** `HorizontalResolution`/`VerticalResolution` update JPEG JFIF or PNG pHYs; `ExifTag.XResolution`/
   `YResolution` change only EXIF. Update both if they must agree. WebP has only the EXIF tags.
 
+
+## PNG source precision
+
+PNG `sBIT` is available as `image.Metadata.GetFormatMetadata<PngSignificantBits>()` (`PictureSharp.Formats.Png`).
+It describes source precision only: samples and `PreserveBitDepth` still follow IHDR. A save retains it only when
+the output depth and color type match. Remove it after edits when it no longer describes the pixels; metadata-only
+edits can also add, replace or remove it without recompressing image data. Invalid precision chunks are ignored.

@@ -33,6 +33,32 @@ internal static class TestImages
         return image;
     }
 
+    /// <summary>
+    /// A deterministic 16-bit image: samples that are not multiples of 257, every alpha class (0 with nonzero color,
+    /// 65535, low and intermediate values).
+    /// </summary>
+    public static Image CreateWide(int width, int height, int seed = 1)
+    {
+        var image = new Image(width, height, PixelType.Rgba64);
+        var random = new Random(seed);
+        ushort[] alphas = [0, 65535, 1, 7, 32768, 65534, 1234];
+        for (int y = 0; y < height; y++)
+        {
+            Span<Rgba64> row = image.GetRowSpan<Rgba64>(y);
+            for (int x = 0; x < width; x++)
+            {
+                row[x] = new Rgba64((ushort)random.Next(65536), (ushort)random.Next(65536), (ushort)random.Next(65536), alphas[((y * width) + x) % alphas.Length]);
+            }
+        }
+
+        return image;
+    }
+
+    public static Rgba64[] WidePixels(Image image) => image.GetPixelSpan<Rgba64>().ToArray();
+
+    /// <summary>The 8-bit image PictureSharp itself produces from a 16-bit one (one rounding per sample).</summary>
+    public static Rgba32[] Rounded(Image image) => [.. image.GetPixelSpan<Rgba64>().ToArray().Select(p => p.ToRgba32())];
+
     /// <summary>The same image with every pixel opaque.</summary>
     public static Image CreateOpaque(int width, int height, int seed = 1)
     {

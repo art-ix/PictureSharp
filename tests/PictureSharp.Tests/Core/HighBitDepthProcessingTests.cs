@@ -550,6 +550,9 @@ public class HighBitDepthProcessingTests
     [Arguments("rotate")]
     [Arguments("gauss")]
     [Arguments("vignette")]
+    [Arguments("vibrance")]
+    [Arguments("shadows-highlights")]
+    [Arguments("clarity")]
     public async Task SixteenBitKernels_AreIndependentOfThreadCount(string name)
     {
         using Image image = Image16(700, 520, Alpha.Varying);
@@ -559,6 +562,9 @@ public class HighBitDepthProcessingTests
             "resize-linear" => x => x.Resize(new ResizeOptions { Size = new(311, 233), LinearLight = true }),
             "rotate" => x => x.Rotate(31f),
             "gauss" => x => x.GaussianBlur(6f),
+            "vibrance" => x => x.Vibrance(0.6f),
+            "shadows-highlights" => x => x.ShadowsHighlights(0.5f, -0.4f),
+            "clarity" => x => x.Clarity(0.6f),
             _ => x => x.Vignette(0.5f),
         };
 

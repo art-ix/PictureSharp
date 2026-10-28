@@ -323,6 +323,11 @@ static class PictureSharp.Formats.Png.PngImageExtensions
     method [Extension] static System.Threading.Tasks.Task SaveAsPngAsync(Image image, System.String path, PictureSharp.Formats.Png.PngEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method [Extension] static System.Void SaveAsPng(Image image, System.IO.Stream stream, PictureSharp.Formats.Png.PngEncoderOptions? options = null)
     method [Extension] static System.Void SaveAsPng(Image image, System.String path, PictureSharp.Formats.Png.PngEncoderOptions? options = null)
+sealed record PictureSharp.Formats.Png.PngSignificantBits : PictureSharp.Formats.FormatMetadata, System.IEquatable<PictureSharp.Formats.FormatMetadata>, System.IEquatable<PictureSharp.Formats.Png.PngSignificantBits>
+    ctor(System.Int32 bitDepth, PictureSharp.Formats.Png.PngColorType colorType, System.ReadOnlySpan<System.Byte> values)
+    property PictureSharp.Formats.Png.PngColorType ColorType { get; }
+    property System.Collections.Generic.IReadOnlyList<System.Byte> Values { get; }
+    property System.Int32 BitDepth { get; }
 enum PictureSharp.Formats.WebP.WebPAlphaFilter
     None = 0
     Fast = 1
@@ -425,6 +430,7 @@ sealed record HdrOptions : System.IEquatable<HdrOptions>
 sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height)
     ctor(System.Int32 width, System.Int32 height, PixelType pixelType)
+    ctor(System.Int32 width, System.Int32 height, PixelType pixelType, Rgba64 background)
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
     method Image Clone()
     method System.Boolean IsOpaque()

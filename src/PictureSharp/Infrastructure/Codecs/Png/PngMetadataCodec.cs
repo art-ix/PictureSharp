@@ -3,6 +3,7 @@ using PictureSharp.Algorithms.Compression;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Infrastructure.Metadata;
+using PictureSharp.Formats.Png;
 using PictureSharp.Primitives.Memory;
 
 namespace PictureSharp.Infrastructure.Codecs.Png;
@@ -70,11 +71,15 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
         output.Write(data.Span[..8]);
         foreach (Chunk chunk in chunks)
         {
-            if (chunk.Kind != MetadataKinds.None || resolution && chunk.Type == Phys
+            if (chunk.Type == PngColorDescription.Sbit || chunk.Kind != MetadataKinds.None || resolution && chunk.Type == Phys
                 || (color && chunk.Type is Gama or Chrm or Srgb)
                 || metadata.IccData is { Length: > 0 } && chunk.Type == Srgb) continue;
             MetadataContainer.Write(output, data.Span.Slice(chunk.Start, chunk.Length), context.CancellationToken);
             if (chunk.Type != Ihdr) continue;
+            if (metadata.GetFormatMetadata<PngSignificantBits>() is { } bits
+                && bits.BitDepth == data.Span[chunk.Body + 8]
+                && bits.ColorType == PngColorDescription.ColorType((PngColor)data.Span[chunk.Body + 9]))
+                MetadataContainer.PngChunk(output, "sBIT"u8, bits.Data, context.CancellationToken);
             if (color)
             {
                 if (metadata.SrgbRenderingIntent is { } intent && metadata.IccData is not { Length: > 0 })
@@ -104,10 +109,11 @@ internal sealed class PngMetadataCodec : IImageMetadataCodec
         return MetadataContainer.ToArray(output);
     }
 
-    /// <summary>Reads gAMA, cHRM and sRGB like the decoder: the first of each before the image data.</summary>
+    /// <summary>Reads gAMA, cHRM, sRGB and sBIT like the decoder: the first of each before the image data.</summary>
     private static void ReadColorDescription(ReadOnlySpan<byte> data, List<Chunk> chunks, ImageMetadata metadata)
     {
         var description = new PngColorDescription();
+        description.SetHeader(data[chunks[0].Body + 8], (PngColor)data[chunks[0].Body + 9]);
         foreach (Chunk chunk in chunks)
         {
             if (chunk.Type == Idat) break;

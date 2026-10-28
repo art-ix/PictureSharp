@@ -8,7 +8,7 @@ kolorem, operacje graficzne, korekcja fotograficzna i negatywy, adaptery (System
 odczyt oraz zapis HDR z JPEG z gain map.
 
 Wtyczki mają osobne repozytoria i własny SemVer: `PictureSharp.Heif` (HEIC, własny port HEVC intra), `PictureSharp.Tiff`,
-`PictureSharp.Formats.Extra`, JPEG XL (prywatna). Weryfikacja Apple na macOS (0.6.6) czeka na dostęp do sprzętu.
+`PictureSharp.Formats.Extra`, JPEG XL. Weryfikacja Apple na macOS (0.6.6) czeka na dostęp do sprzętu.
 CUR, TIFF, QOI, TGA, PNM i AVIF są poza rdzeniem (TIFF, QOI, TGA, PNM we wtyczkach).
 
 Istniejące API i ograniczenia: `README.md`, `docs/`, XML docs, `tests/assets/PublicApi.approved.txt`, stabilne SPI
@@ -34,7 +34,7 @@ wtyczek: `docs/plugin-spi.md`. Pomiary: `docs/performance.md`. Ukończone wydani
 | --- | --- | --- |
 | 0.6.6 | Weryfikacja HDR z ImageIO/Core Image na macOS, usuwanie deklaracji Ultra HDR przy zapisie SDR | Odłożona do dostępności macOS |
 | 0.6.9–0.8.5 | HDR przy edycji, SPI wtyczek, optymalizacje JPEG i WebP, korekcja fotograficzna, negatywy, gain map w enkoderach, generowanie map, stabilne SPI, `ImageInfo.Color` | Wydane (szczegóły w [changelogu](#changelog)) |
-| 0.9.0 | 16 bitów na kanał w całym rdzeniu (`Rgba64`, `PixelType`, PNG 16-bit, wszystkie operacje) i konwersja kolorów we float na `Rgba64`; złamanie API i SPI z blokadą starych wtyczek | W toku: etapy 1–4 zrobione, etap 5 (adaptery, wtyczki) i bramka wydania przed nami; projekt w `docs/proposals/high-bit-depth.md` |
+| 0.9.0 | 16 bitów na kanał w całym rdzeniu (`Rgba64`, `PixelType`, PNG 16-bit, wszystkie operacje) i konwersja kolorów we float na `Rgba64`; złamanie API i SPI z blokadą starych wtyczek | Bramka techniczna zaliczona (2026-10-28), przygotowanie wydania i scalenie do main zlecone przez użytkownika; wtyczki publikowane po rdzeniu; projekt w `docs/proposals/high-bit-depth.md` |
 
 Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD oraz wspólnej bramki jakości.
 
@@ -44,9 +44,10 @@ Numery określają kolejność, nie terminy. Każde wydanie wymaga własnego DoD
   systemu i tolerancje; benchmarki HDR względem ImageIO na tym samym sprzęcie; sprawdzić, czy zapis SDR nie przenosi
   nieaktualnych deklaracji HDR (np. XMP `hdrgm`). Brak środowiska Apple nie jest zaliczeniem: wariant Apple pozostaje
   „zgodny z referencjami Linux, niepotwierdzony na Apple”. Nie blokuje żadnego wydania (decyzja użytkownika 2026-10-17).
-- **ARM64:** wydania od 0.6.9 do 0.8.5 (oprócz 0.7.0) nie były uruchamiane na ARM64 (Orange Pi, wymaga zgody
-  użytkownika). Przed 0.9.0 wymagane są testy i `*SimdTests` oraz wariant bez intrinsics, bo etap 1 dodaje kod
-  zależny od platformy (SIMD `TrimBounds` dla `ushort`, konwersje pikseli).
+- **ARM64:** bramka 0.9.0 zaliczona na Orange Pi 5 (zgoda użytkownika w tym czacie): zestaw Category!=Local
+  9303 testy, 0 błędów, 8 GDI+ pominiętych; bez intrinsics ten sam wynik, *SimdTests 138/138, smoke OK.
+  Prywatne 48 MP HDR z Category=Local przekraczają limit sterty 4 GiB na tym urządzeniu; pełny zestaw Local zaliczony
+  na x64. GDI+ nadal wymaga Windows. Szczegóły: docs/measurements/release-0.9.0-gate.json.
 - **Kandydat SPI:** `ReportStoredSize` dla miniatur `thmb` (HEIF) czeka na pomiar zysku we wtyczce; bez zgłoszenia nie
   jest zobowiązaniem.
 - **Wtyczki po 0.8.2 / 0.8.5:** przejście Tiff, Formats.Extra i Heif na `FormatMetadata` (hotspot XBM), opcje dekodera
@@ -102,22 +103,23 @@ Etapy (1–5 wychodzą razem jako 0.9.0, bez stabilnego wydania z niepełnym zes
 | Etap | Zakres | Stan |
 | --- | --- | --- |
 | 1 | `Rgba64`, `PixelType`, typowany dostęp do pikseli, nowe `PixelFormat` i konwersje; PNG 16-bit odczyt i zapis (z `tRNS` i APNG); geometria; zmniejszanie głębi w pozostałych koderach; `SupportsPixelType` w SPI, blokada wtyczek < 0.9.0; budżet `MaxPixels` | Zrobiony (2026-10-28) |
-| 2 | Resize, Affine, rozmycia i wyostrzanie, kompozycja, `DrawImage`, premultiplikacja | Zrobiony (2026-10-28; bez SIMD 16-bit, ARM64 nieuruchomione) |
-| 3 | Operacje tonalne i kolorystyczne; `LevelsOptions` (`*Normalized`), `CurvesNormalized` i progi na 0–1, `ImageHistogram` z `FullResolution`, `IFrameProcessor<TPixel>` | Zrobiony (2026-10-28; bez SIMD 16-bit, ARM64 nieuruchomione) |
-| 4 | Negatywy, czyszczenie (kurz, szum), ICC i `ToSrgb` we float na `Rgba64` (D18), HDR i gain map z bazą `Rgba64` | Zrobiony (2026-10-28; bez SIMD 16-bit, ARM64 nieuruchomione) |
-| 5 | Adaptery (Skia `Rgba16161616`, System.Drawing 32bpp); wydania czterech wtyczek na 0.9.0 | Nierozpoczęty |
+| 2 | Resize, Affine, rozmycia i wyostrzanie, kompozycja, `DrawImage`, premultiplikacja | Zrobiony (2026-10-28; bez SIMD 16-bit tych operacji; ARM64 zestaw funkcjonalny zaliczony w bramce) |
+| 3 | Operacje tonalne i kolorystyczne; `LevelsOptions` (`*Normalized`), `CurvesNormalized` i progi na 0–1, `ImageHistogram` z `FullResolution`, `IFrameProcessor<TPixel>` | Zrobiony (2026-10-28; bez SIMD 16-bit tych operacji; ARM64 zestaw funkcjonalny zaliczony w bramce) |
+| 4 | Negatywy, czyszczenie (kurz, szum), ICC i `ToSrgb` we float na `Rgba64` (D18), HDR i gain map z bazą `Rgba64` | Zrobiony (2026-10-28; bez SIMD 16-bit tych operacji; ARM64 zestaw funkcjonalny zaliczony w bramce) |
+| 5 | Adaptery (Skia `Rgba16161616`, System.Drawing 32bpp); wydania wtyczek TIFF, HEIF, JPEG XL na 0.9.0 (Formats.Extra poza zakresem: decyzja użytkownika 2026-10-28) | Implementacja i weryfikacja lokalna zrobione (2026-10-28): adaptery, TIFF, HEIF Main 10 i JPEG XL 16-bit; testy, wyrocznie, AOT i pomiary 8-bit OK. Przygotowanie wydań zlecone; TIFF 0.7.4, HEIF 0.7.0, JPEG XL 0.7.8, po rdzeniu |
 
 Stan (2026-10-28): etap 1 zaimplementowany (szczegóły i pozostałości w `progres.md`): `Rgba64`, `PixelType`,
 generyczny dostęp do pikseli, nowe `PixelFormat`, `ConvertPixelType` z ditheringiem, zasady D10, `PreserveBitDepth`,
 ważony `MaxPixels`, `ReservePixels(…, PixelType, …)` z kontrolą zwróconego obrazu, `SupportsPixelType`, blokada wtyczek
 < 0.9.0, PNG 16-bit (odczyt wszystkich typów koloru z `tRNS`, Adam7, APNG, czytnik sekwencyjny; zapis z `PngBitDepth`),
-geometria przez wspólny dispatch, zaokrąglanie w pozostałych koderach (w tym ICO). Poza etapem 1 zostało m.in.: `sBIT`
-(D15), SIMD `TrimBounds` dla `ushort`, konwersja wierszami zamiast kopii całego obrazu w zapisie przez fallback.
+geometria przez wspólny dispatch, zaokrąglanie w pozostałych koderach (w tym ICO). Bramka uzupełniła `sBIT`
+(D15), SIMD `TrimBounds` dla `ushort` i ważenie części osadzonych. Dalsza optymalizacja: konwersja wierszami zamiast
+kopii całego obrazu przy zapisie przez fallback (obecny fallback jest poprawny i objęty testami).
 Etap 2 zaimplementowany (2026-10-28; szczegóły, błędy względem referencji i pomiary w `progres.md`): Resize (wszystkie
 filtry, encoded/linear, pad), Rotate/Affine, GaussianBlur, BoxBlur, Sharpen, UnsharpMask, Vignette, DrawImage (wszystkie
 tryby, mieszane głębokości), ApplyMask, Opacity, Fill, BackgroundColor na `Rgba64` przez `PixelDispatch`; kolory opcji
 `Rgba64`; błąd ≤ 1 kod 16-bit względem niezależnej referencji double; ścieżka 8-bit bajtowo bez zmian i bez regresji
-w BenchmarkDotNet. Poza etapem 2: SIMD 16-bit, ARM64.
+w BenchmarkDotNet. Poza etapem 2: dalsze SIMD 16-bit; funkcjonalna weryfikacja ARM64 wykonana w bramce.
 Etap 3 zaimplementowany (2026-10-28; szczegóły w `progres.md`): Brightness, Contrast, Gamma, Exposure, Levels, Curves,
 Invert, Grayscale, Sepia, Saturate, Vibrance, WhiteBalance, AutoWhiteBalance, AutoContrast, Equalize, ShadowsHighlights,
 Clarity na `Rgba64` przez `PixelDispatch` (tablice 65536 × `ushort` z puli albo float, jedno zaokrąglenie; liczności
@@ -135,8 +137,28 @@ z jednym zaokrągleniem, `ToSrgb` bez `PreserveBitDepth` dekoduje głębiej, kon
 16-bit (mapa liczona względem zapisanej bazy), mapy 16-bit z wtyczek (`GainMapImage(size, pixelType)`, opłata zadeklarowanego
 typu, kontrola typu po dekodowaniu, geometria i próbkowanie w 16 bitach). D4 spełnione: żadna operacja rdzenia nie odrzuca
 obrazu 16-bitowego (test obejmujący wszystkie operacje `ImageProcessingContext`, analizę, HDR i kodery). Błąd ≤ 1 kod
-16-bit względem referencji double; ścieżka 8-bit bajtowo bez zmian (FindFilmFrame 8-bit +2–4%, niezbadane). Zostaje: etap 5, bramka wydania (przewodnik migracji,
-nota, CLI `--depth`, AOT/trimming, ARM64), SIMD 16-bit, `sBIT`, waga typu w `DecodeEmbeddedPart`. `VERSION` = 0.9.0.
+16-bit względem referencji double; ścieżka 8-bit bajtowo bez zmian (FindFilmFrame 8-bit +2–4%, zaakceptowane przez użytkownika jako szum pomiarowy 2026-10-28). Bramka wydania jest zaliczona: przewodnik migracji, nota, CLI `--depth`, AOT/trimming x64,
+`sBIT`, waga typu w `DecodeEmbeddedPart` i testy ARM64 są uzupełnione. `VERSION` = 0.9.0.
+Etap 5 (2026-10-28; implementacja i weryfikacja lokalna zakończone, szczegóły w `progres.md`): adaptery zrobione (Skia `Rgba16161616` ↔
+`Rgba64`/premultiplied, System.Drawing 32bpp). Rdzeń i adaptery: pełny Release 9391 testów, 0 błędów, 8 pominiętych
+(GDI+ na Linux). TIFF 0.7.4: 4220/4220 na aktualnej paczce rdzenia; Native AOT
+linux-x64: 322 dekodowania bez różnic i pełna rampa 16-bit przez LZW/Deflate. HEIF 0.7.0: odczyt i zapis Main 10,
+alfa i mapy 16-bit (Main 10 / Monochrome 10), 795/795 funkcjonalnych testów Release (bez Local/Measurement), heif-dec
+oraz HM (dokładne YUV 8/10-bit) przechodzą, 28 plików korpusu × odczyt/zapis 8-bit identyczne z HEAD na 0.8.5.
+JPEG XL: `PreserveBitDepth`, typowana rezerwacja, zapis Modular 16-bit bezstratny i VarDCT bez zmniejszania do 8 bit,
+alfa bezstratna 16-bit; Release 467/467, JIT i Native AOT rzeczywistej końcowej paczki OK.
+Golden JPEG XL: 1139/1142 bez zmian (po normalizacji separatora dziesiętnego), 3 zamierzone różnice `ToSrgb` dla
+źródeł 10/12/16-bit przez D18; wejścia 8-bit i bajty kodera/transkodera bez zmian. Pomiary 8-bit: bez regresji poza tolerancją 1% po kontroli JIT/CPU; surowe dane
+`docs/measurements/plugins-0.9.0-step5.json`. Numeracja i noty wydań: TIFF 0.7.4, HEIF 0.7.0, JPEG XL 0.7.8; bramka rdzenia zaliczona.
+Nie publikowano żadnej paczki. HEVC > 10 bit nadal nieobsługiwane — wcześniejszy zapis „10/12-bit HEIF” był zbyt szeroki.
+
+Bramka techniczna 0.9.0 (2026-10-28): **zaliczona**. Release bez ostrzeżeń; pełny x64 9406 testów (9398 OK,
+8 GDI+ pominiętych), bez intrinsics tak samo; Oracle 261/261; consumer rdzenia i adapterów z pełnym trimmingiem
+oraz Native AOT linux-x64 OK. ARM64 jak wyżej. Nowa regresja GIF sprawdza rozmiar ramki wystającej poza płótno przed
+alokacją indeksów. Test generatora HDR dopuszcza 2 ULP liniowego boostu względem natywnej wyroczni ARM; pozostałe
+pola są dokładne, a writer ułamków/payloadu pozostaje bajtowo zgodny dla tych samych parametrów.
+Migracja: docs/migration-from-0.8.md; nota: docs/releases/release-0.9.0.md; wyniki:
+docs/measurements/release-0.9.0-gate.json. **2026-10-28: użytkownik zlecił przygotowanie wydań i scalenie do main. Publiczna publikacja nie została wykonana.**
 
 DoD:
 - Każda operacja i kodek wbudowany działa na obrazach `Rgba64` z 16-bitową precyzją (gradient 65536 poziomów nie
@@ -147,7 +169,7 @@ DoD:
   ImageMagick), bo Pillow zaokrągla RGB/RGBA 16-bit do 8 bitów.
 - Moduł zbudowany na rdzeniu 0.8.5 odrzucany przez `AddFormat`/`ReplaceFormat`.
 - Migawka API zatwierdzona, migracja opisana w `docs/plugin-spi.md` i nowym przewodniku; `verify-package-consumer.sh`
-  (trimming, Native AOT) zielone; wtyczki TIFF, HEIF, JPEG XL i Formats.Extra sprawdzone na lokalnej paczce.
+  (trimming, Native AOT) zielone; wtyczki TIFF, HEIF i JPEG XL sprawdzone na lokalnej paczce (Formats.Extra poza zakresem decyzją użytkownika).
 
 ## Wtyczka HEIF — osobne repozytorium
 

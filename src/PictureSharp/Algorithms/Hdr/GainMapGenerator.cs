@@ -293,8 +293,8 @@ internal sealed class GainMapGenerator
         ((m[0] * r) + (m[1] * g) + (m[2] * b), (m[3] * r) + (m[4] * g) + (m[5] * b), (m[6] * r) + (m[7] * g) + (m[8] * b));
 
     // port: computeGain — dark base pixels may not signal large gains, which would blow out if they brighten slightly.
-    // As in libultrahdr, log2 is taken in double precision and rounded to float, so the gain bounds (and the ISO
-    // fractions written from them) are bit-identical to its; the rounded result does not depend on the platform.
+    // As in libultrahdr, log2 is taken in double precision and rounded to float. The native reference's later
+    // exp2/log2 metadata round-trip can differ on ARM by a float ulp in the linear boost (covered by the oracle).
     private static float ComputeGain(float sdr, float hdr)
     {
         float gain = (float)Math.Log2((hdr + Offset) / (sdr + Offset));

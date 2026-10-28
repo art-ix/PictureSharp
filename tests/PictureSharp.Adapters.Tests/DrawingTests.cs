@@ -57,6 +57,52 @@ public sealed class DrawingTests
     }
 
     [Test]
+    [MethodDataSource(nameof(Sizes))]
+    public async Task RowCopies_RoundSixteenBitImagesToEightBits(int width, int height)
+    {
+        // D7: GDI+ gets 32-bit layouts only; a 16-bit frame is written as its once-rounded 8-bit copy.
+        using Image image = TestImages.CreateWide(width, height);
+        using Image rounded = image.Clone(x => x.ConvertPixelType(PixelType.Rgba32));
+        foreach (PixelFormat format in new[] { PixelFormat.Bgra32, PixelFormat.Bgra32Premultiplied, PixelFormat.Bgr24 })
+        {
+            int rowBytes = width * format.BytesPerPixel();
+            IntPtr memory = Marshal.AllocHGlobal(rowBytes * height);
+            try
+            {
+                BitmapPixels.Write(image.Frames.RootFrame, memory, rowBytes, format);
+                var bytes = new byte[rowBytes * height];
+                Marshal.Copy(memory, bytes, 0, bytes.Length);
+                byte[] expected = format == PixelFormat.Bgra32Premultiplied ? image.ToPixelData(format) : rounded.ToPixelData(format);
+                await Assert.That(bytes).IsEquivalentTo(expected, CollectionOrdering.Matching);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(memory);
+            }
+        }
+
+        await Assert.That(TestImages.Pixels(rounded)).IsEquivalentTo(TestImages.Rounded(image), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task Bitmap_SixteenBitImage_IsWrittenAsFormat32bppArgb()
+    {
+        Skip.Unless(OperatingSystem.IsWindows(), "GDI+ (System.Drawing.Common) is supported on Windows only.");
+        if (OperatingSystem.IsWindows()) await SixteenBit();
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static async Task SixteenBit()
+    {
+        using Image image = TestImages.CreateWide(7, 5);
+        using Bitmap bitmap = image.ToBitmap();
+        await Assert.That(bitmap.PixelFormat).IsEqualTo(GdiPixelFormat.Format32bppArgb);
+        using Image back = Image.FromBitmap(bitmap);
+        await Assert.That(back.PixelType).IsEqualTo(PixelType.Rgba32);
+        await Assert.That(TestImages.Pixels(back)).IsEquivalentTo(TestImages.Rounded(image), CollectionOrdering.Matching);
+    }
+
+    [Test]
     public async Task RowCopies_RejectAStrideShorterThanARow()
     {
         using Image image = TestImages.Create(3, 2);

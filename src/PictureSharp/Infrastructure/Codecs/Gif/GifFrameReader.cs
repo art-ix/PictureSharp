@@ -114,6 +114,8 @@ internal sealed class GifFrameReader : FrameReadSession
         }
 
         ValidateNextFrame();
+        if (frame.Width > 0 && frame.Height > 0)
+            Context.Options.ValidateDimensions(ImageFormat.Gif, frame.Width, frame.Height);
         if (_previous is not null)
         {
             _canvas.ApplyDisposal(_previous);

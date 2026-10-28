@@ -29,6 +29,38 @@ public class HighBitDepthTests
     }
 
     [Test]
+    public async Task Image_WithBackground_FillsAtEitherDepth_AndClearsHasAlphaWhenOpaque()
+    {
+        var opaque = new Rgba64(1000, 30000, 65535);
+        using (var wide = new Image(3, 2, PixelType.Rgba64, opaque))
+        {
+            await Assert.That(wide.PixelType).IsEqualTo(PixelType.Rgba64);
+            await Assert.That(wide.HasAlpha).IsFalse();
+            await Assert.That(wide.GetPixelSpan<Rgba64>().ToArray().All(p => p == opaque)).IsTrue();
+        }
+
+        using (var narrow = new Image(3, 2, PixelType.Rgba32, opaque))
+        {
+            await Assert.That(narrow.HasAlpha).IsFalse();
+            await Assert.That(narrow.GetPixelSpan<Rgba32>().ToArray().All(p => p == opaque.ToRgba32())).IsTrue();
+        }
+
+        // 65534 is transparent at 16 bits but rounds to opaque 255 at 8 bits.
+        using (var wide = new Image(1, 1, PixelType.Rgba64, new Rgba64(0, 0, 0, 65534)))
+        {
+            await Assert.That(wide.HasAlpha).IsTrue();
+        }
+
+        using (var narrow = new Image(1, 1, PixelType.Rgba32, new Rgba64(0, 0, 0, 65534)))
+        {
+            await Assert.That(narrow.HasAlpha).IsFalse();
+        }
+
+        await Assert.That(() => new Image(0, 1, PixelType.Rgba64, opaque)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new Image(1, 1, (PixelType)7, opaque)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
     public async Task Rgba64_RoundsEvery16BitValueToTheNearest8BitValue()
     {
         for (int v = 0; v <= ushort.MaxValue; v++)

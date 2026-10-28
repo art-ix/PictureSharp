@@ -35,11 +35,11 @@ internal sealed class DecodeContext
     }
 
     /// <summary>A context with its own budget, for a part of an image whose pixels this budget already holds.</summary>
-    public DecodeContext Detached(ImageFormat format, DecoderOptions options)
+    public DecodeContext Detached(ImageFormat format, DecoderOptions options, long maxPixelCount = long.MaxValue, PixelType maxPixelType = PixelType.Rgba64)
     {
         CancellationToken.ThrowIfCancellationRequested();
         options = options with { MaxMetadataBytes = Math.Min(options.MaxMetadataBytes, Budget.RemainingMetadata) };
-        return new(options, CancellationToken, new DecodeBudget(options), NextDepth(format));
+        return new(options, CancellationToken, new DecodeBudget(options, maxPixelCount, maxPixelType), NextDepth(format));
     }
 
     public void CheckInput(long length)

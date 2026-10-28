@@ -111,7 +111,8 @@ mv tests/assets/PublicApi.received.txt tests/assets/PublicApi.approved.txt
 
 `PluginSpiSnapshotTests` does the same for the [stable plugin SPI](plugin-spi.md) with
 `tests/assets/PluginSpi.approved.txt`, one line per member. It reports a removed or changed line, or a new interface
-member without a default implementation, as a breaking change; such a change waits for 2.0. Approve an addition with:
+member without a default implementation, as a breaking change. Before 1.0, an approved breaking change also
+requires a minimum plugin-version update and migration notes, as in 0.9.0. Approve a reviewed snapshot with:
 
 ```bash
 mv tests/assets/PluginSpi.received.txt tests/assets/PluginSpi.approved.txt
@@ -119,10 +120,21 @@ mv tests/assets/PluginSpi.received.txt tests/assets/PluginSpi.approved.txt
 
 ## Releasing
 
-Set `VERSION`, add `docs/releases/release-<VERSION>.md`, commit and push a `v<VERSION>` tag. A GitHub Release for the
-tag runs `.github/workflows/release.yml`: it checks the tag against `VERSION`, runs the pull request validation, packs
-the library and adapters, publishes them to nuget.org through Trusted Publishing and attaches the `.nupkg` files. The
-README is packed, so keep its links absolute.
+Prepare the release first:
+
+1. Set `VERSION` and update the release notes, migration guide and package descriptions.
+2. Run the release checks and verify the actual packages with trimming and Native AOT.
+3. Commit the changes, merge the release branch into `main`, and pack the release artifacts.
+
+Publishing is a separate step. On an explicit publication request, push the prepared commits and the matching
+`v<VERSION>` tag, then publish a GitHub Release. That release starts `.github/workflows/release.yml`, which validates,
+packs, publishes to nuget.org through Trusted Publishing, and attaches the packages.
+
+For 0.9.0, publish the core and adapters first. Wait until PictureSharp 0.9.0 can be restored from nuget.org before
+publishing TIFF 0.7.4, HEIF 0.7.0 and JPEG XL 0.7.8. JPEG XL's workflow starts publishing when its tag is pushed;
+its tag push must also wait for the core package. Preparation alone must not trigger those workflows.
+
+The README is included in NuGet packages, so use absolute links there.
 
 ## Trimming and Native AOT
 
@@ -139,3 +151,19 @@ dotnet publish samples/PictureSharp.AotSmoke -c Release -r linux-x64 --self-cont
 ```
 
 ARM64 is verified separately on real hardware: the full suite, `DOTNET_EnableHWIntrinsic=0` and the smoke consumer.
+
+
+### ARM64 release gate on an 8 GB device
+
+The 0.9.0 gate runs all non-Local tests, including Slow and Oracle, on real ARM64 hardware, followed by
+`*SimdTests`, the same suite with `DOTNET_EnableHWIntrinsic=0`, and the smoke application. Use the pinned reference
+tools for Oracle tests. Four logical processors and a 4 GiB managed heap keep the run within the device's memory:
+
+```bash
+DOTNET_PROCESSOR_COUNT=4 DOTNET_GCHeapHardLimit=0x100000000 dotnet test -c Release --treenode-filter "/*/*/*/*[Category!=Local]"
+DOTNET_PROCESSOR_COUNT=4 DOTNET_GCHeapHardLimit=0x100000000 DOTNET_EnableHWIntrinsic=0 dotnet test -c Release --no-build --treenode-filter "/*/*/*/*[Category!=Local]"
+dotnet run -c Release --project samples/PictureSharp.AotSmoke
+```
+
+The private 48 MP HDR Local tests exceed that heap budget; they remain covered by the full x64 run. GDI+ tests
+remain Windows-only. These exclusions are recorded in the gate results, rather than counted as verification.

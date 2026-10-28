@@ -75,12 +75,16 @@ public class NestingTests
         public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
             new() { Format = Format, Width = 1, Height = 1, Color = TestColor.Rgba8, Compression = ImageCompression.Lossless };
 
-        public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context) => mode switch
+        public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
         {
-            Mode.Embedded => context.DecodeEmbedded(data),
-            Mode.Part => context.DecodeEmbeddedPart(data, 1, 1),
-            // Tiles decoded on worker threads: the depth belongs to the context, not to the thread.
-            _ => Task.Run(() => context.DecodeEmbeddedPart(data, 1, 1)).GetAwaiter().GetResult(),
-        };
+            if (mode != Mode.Embedded) context.ReservePixels(1, 1, PixelType.Rgba32);
+            return mode switch
+            {
+                Mode.Embedded => context.DecodeEmbedded(data),
+                Mode.Part => context.DecodeEmbeddedPart(data, 1, 1),
+                // Tiles decoded on worker threads: the depth belongs to the context, not to the thread.
+                _ => Task.Run(() => context.DecodeEmbeddedPart(data, 1, 1)).GetAwaiter().GetResult(),
+            };
+        }
     }
 }

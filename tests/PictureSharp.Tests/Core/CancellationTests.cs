@@ -307,6 +307,9 @@ public class CancellationInFlightTests
         work(CancellationToken.None);
         full = TimeSpan.FromTicks(Math.Min(full.Ticks, watch.Elapsed.Ticks));
 
+        // Reclaim the warm-up's large temporary buffers before timing cancellation on memory-limited hardware.
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+
         using var source = new CancellationTokenSource();
         var started = new ManualResetEventSlim();
         Task run = Task.Run(() =>

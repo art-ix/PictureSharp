@@ -104,3 +104,6 @@ catch (OperationCanceledException)
     // image is unchanged and no file was written
 }
 ```
+
+GIF frames that overhang the logical canvas must also fit `MaxPixels` individually before the decoder allocates
+their temporary index buffers. This applies to ordinary and sequential loads (0.9.0).

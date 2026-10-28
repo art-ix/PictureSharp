@@ -57,3 +57,9 @@ dotnet run -c Release --project samples/PictureSharp.Cli -- metadata photo.jpg s
 dotnet run -c Release --project samples/PictureSharp.Cli -- trim product.jpg product-cut.jpg -color FFFFFF -tolerance 12 -q 90
 dotnet run -c Release --project samples/PictureSharp.Cli -- icon logo.png app.ico 16,32,48,256
 ```
+
+## Conversion depth (0.9.0)
+
+`convert input.png output.png --depth auto|8|16` defaults to `8`. `auto` preserves deeper source samples and lets
+PNG choose the smallest exact depth. `16` preserves source precision, widens an 8-bit input and forces 16-bit PNG
+output. Other output formats use their encoder's supported depth. `-srgb` converts before the final depth reduction.

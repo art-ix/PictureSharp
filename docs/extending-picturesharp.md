@@ -232,7 +232,8 @@ A container format decodes a whole embedded image with `context.DecodeEmbedded(d
 and options as the load.
 
 A format that stores one image as strips or tiles in another format (JPEG tiles in TIFF) reserves the image once and
-decodes each part with `context.DecodeEmbeddedPart`:
+decodes each part with `context.DecodeEmbeddedPart`. Reserve the parent first with its actual pixel type. Each part
+inherits the parent's maximum pixel type and weighted allowance, with a separate pixel-count ceiling:
 
 ```csharp
 context.ReservePixels(width, height, PixelType.Rgba32);
@@ -245,7 +246,7 @@ foreach ((ReadOnlyMemory<byte> data, int x, int y) in tiles)
 ```
 
 - A part is not charged against the reserved image and is not a frame. It may decode to at most `width` x `height`
-  pixels, which must itself fit `MaxPixels`.
+  pixels, whose weighted cost must itself fit `MaxPixels` (a 16-bit pixel counts twice).
 - It is decoded as stored: without EXIF orientation, gain map, color conversion or metadata.
 - Dispose each part before decoding the next, so a load holds at most the image and one part.
 

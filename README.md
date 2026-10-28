@@ -23,6 +23,7 @@ libjpeg-turbo and Pillow.
 
 **Features:**
 
+- 8- and 16-bit integer channels throughout processing; 16-bit PNG/APNG read and write
 - Resizing, geometry, color adjustments, filters, compositing and EXIF auto-orientation
 - Levels, gamma, auto contrast, histograms, trimming, alpha masks and W3C blend modes
 - Photo adjustments: exposure, white balance (also from a neutral or automatic), curves, shadows/highlights, clarity,
@@ -77,6 +78,7 @@ The public API may still change between 0.x releases.
   [Architecture](https://github.com/art-ix/PictureSharp/blob/main/docs/architecture.md) ·
   [Performance](https://github.com/art-ix/PictureSharp/blob/main/docs/performance.md)
 - [Command-line sample](https://github.com/art-ix/PictureSharp/blob/main/docs/cli.md) ·
+  [Migrating from 0.8.5](https://github.com/art-ix/PictureSharp/blob/main/docs/migration-from-0.8.md) ·
   [Migrating from 0.5.0](https://github.com/art-ix/PictureSharp/blob/main/docs/migration-from-0.5.md) ·
   [Development](https://github.com/art-ix/PictureSharp/blob/main/docs/development.md) ·
   [Release notes](https://github.com/art-ix/PictureSharp/tree/main/docs/releases)
@@ -87,6 +89,12 @@ The public API may still change between 0.x releases.
 dotnet build -c Release
 dotnet test -c Release
 ```
+
+## Upgrading to 0.9.0
+
+Update the core and adapters together. Use TIFF 0.7.4, HEIF 0.7.0 or JPEG XL 0.7.8 with this release.
+Direct pixel access and some processing settings have changed; the
+[migration guide](https://github.com/art-ix/PictureSharp/blob/main/docs/migration-from-0.8.md) shows what to replace.
 
 ## Plugin packages
 

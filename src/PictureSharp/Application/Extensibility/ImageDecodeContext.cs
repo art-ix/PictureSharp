@@ -17,6 +17,7 @@ public sealed class ImageDecodeContext
     private readonly DecodeContext _context;
     private readonly ICodecResolver _codecs;
     private readonly ImageFormat _format;
+    private PixelType? _reservedPixelType;
 
     internal ImageDecodeContext(DecodeContext context, ICodecResolver codecs, ImageFormat format)
     {
@@ -43,8 +44,11 @@ public sealed class ImageDecodeContext
     /// </summary>
     /// <exception cref="ImageFormatException">The dimensions are invalid or exceed the remaining limits.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelType"/> is not defined.</exception>
-    public void ReservePixels(int width, int height, PixelType pixelType, int frames = 1) =>
+    public void ReservePixels(int width, int height, PixelType pixelType, int frames = 1)
+    {
         _context.Budget.ReserveImage(_format, width, height, frames, PixelTypes.Check(pixelType));
+        _reservedPixelType = pixelType;
+    }
 
     /// <summary>Charges decompressed ICC, EXIF or XMP bytes against <see cref="DecoderOptions.MaxMetadataBytes"/>.</summary>
     /// <exception cref="ImageFormatException">The metadata exceeds the remaining limit.</exception>
@@ -156,15 +160,18 @@ public sealed class ImageDecodeContext
     /// the codecs of the same configuration. The part covers <paramref name="width"/> x <paramref name="height"/>
     /// pixels of the image, possibly overhanging its edge, and may not decode to more. Parts are not charged against
     /// the image reserved with <see cref="ReservePixels"/>: each part gets its own <see cref="DecoderOptions.MaxPixels"/>
-    /// allowance of <paramref name="width"/> x <paramref name="height"/> and is not a frame, so a decode holds at most
-    /// the image and one part when the caller disposes each part before decoding the next. A part is decoded as
+    /// allowance of <paramref name="width"/> x <paramref name="height"/> weighted by the reserved parent's pixel type,
+    /// with a separate unweighted pixel ceiling. A part cannot have a wider pixel type than its parent and is not a
+    /// frame, so a decode holds at most the image and one part when the caller disposes each part before decoding the
+    /// next. A part is decoded as
     /// stored: full size, without EXIF orientation, gain map, color conversion or metadata. The caller owns the result.
     /// </summary>
     /// <param name="data">The embedded image, e.g. a JPEG strip.</param>
     /// <param name="width">The width of the part in the image, at least 1.</param>
     /// <param name="height">The height of the part in the image, at least 1.</param>
     /// <exception cref="ImageFormatException">
-    /// The part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>, the embedded image is larger
+    /// The parent has not been reserved, the part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>,
+    /// the embedded image has a wider pixel type or is larger
     /// than the part, it is corrupt or not recognized, or images are nested more than 8 levels below the loaded file.
     /// </exception>
     public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height) =>
@@ -180,14 +187,18 @@ public sealed class ImageDecodeContext
     /// <param name="options">The part's own settings, such as how a JPEG part stores CMYK.</param>
     /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
     /// <exception cref="ImageFormatException">
-    /// The part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>, the embedded image is larger
+    /// The parent has not been reserved, the part size is not positive or exceeds <see cref="DecoderOptions.MaxPixels"/>,
+    /// the embedded image has a wider pixel type or is larger
     /// than the part, it is corrupt or not recognized, or images are nested more than 8 levels below the loaded file.
     /// </exception>
     public Image DecodeEmbeddedPart(ReadOnlyMemory<byte> data, int width, int height, EmbeddedPartOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         ThrowIfCancellationRequested();
-        if (width < 1 || height < 1 || (long)width * height > Options.MaxPixels)
+        PixelType pixelType = _reservedPixelType
+            ?? throw new ImageFormatException(_format, "Reserve the parent image before decoding an embedded part.");
+        int weight = PixelTypes.Weight(pixelType);
+        if (width < 1 || height < 1 || width > Options.MaxPixels / height / weight)
         {
             throw new ImageFormatException(_format, "The embedded part size is not positive or exceeds DecoderOptions.MaxPixels.");
         }
@@ -195,7 +206,7 @@ public sealed class ImageDecodeContext
         IImageDecoder decoder = _codecs.GetDecoderFor(data.Span);
         DecodeContext part = _context.Detached(_format, _context.Options with
         {
-            MaxPixels = (long)width * height,
+            MaxPixels = (long)width * height * weight,
             MaxFrames = 1,
             TargetSize = null,
             ApplyExifOrientation = false,
@@ -204,7 +215,7 @@ public sealed class ImageDecodeContext
             ColorConversion = ColorConversionMode.None,
             Jpeg = options.Jpeg ?? _context.Options.Jpeg,
             MaxDegreeOfParallelism = options.MaxDegreeOfParallelism ?? _context.Options.MaxDegreeOfParallelism,
-        });
+        }, (long)width * height, pixelType);
         return decoder.Decode(data, part).Image;
     }
 }

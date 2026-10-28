@@ -146,7 +146,9 @@ tone-mapped rendering is up to the application.
 
 `hdr.ToGainMapImage(options)` turns an `HdrImage` back into an SDR image with an ISO 21496-1 gain map (0.8.1): the base
 is `hdr.ToneMap(options.ToneMapping)` and the map is computed as libultrahdr v2.0.2 computes it (`generateGainMap`, its
-best-quality defaults), so the codes and metadata are identical to libultrahdr's on the same inputs. The result carries
+best-quality defaults), so the codes match libultrahdr within one 8-bit level (at least 99.9% exact in the oracle corpus). Metadata is
+identical on x64; ARM libm can round the native reference's intermediate linear boosts differently, within two
+float ulps. The fraction writer itself remains byte-exact for identical parameters. The result carries
 the map like a loaded image: save it as JPEG with `Require`, call `ToHdr`, or apply geometric edits first.
 
 ```csharp

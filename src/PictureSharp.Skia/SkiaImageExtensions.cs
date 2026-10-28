@@ -9,14 +9,19 @@ namespace PictureSharp.Skia;
 /// and later changes to either side do not affect the other. PictureSharp pixels have straight alpha; the
 /// <see cref="SKAlphaType"/> argument decides whether Skia receives straight (<see cref="SKAlphaType.Unpremul"/>)
 /// or premultiplied (<see cref="SKAlphaType.Premul"/>) colors. Color values are copied without color-space
-/// conversion; call <c>ConvertToSrgb()</c> first when the image carries another profile.
+/// conversion; call <c>ConvertToSrgb()</c> first when the image carries another profile. 16-bit images
+/// (<see cref="PixelType.Rgba64"/>) map to <see cref="SKColorType.Rgba16161616"/> without loss; the 8-bit color types
+/// round them to 8 bits.
 /// </summary>
 public static class SkiaImageExtensions
 {
     extension(Image image)
     {
         /// <summary>Copies the first frame into a new raster bitmap.</summary>
-        /// <param name="colorType"><see cref="SKColorType.Rgba8888"/> (no swizzle) or <see cref="SKColorType.Bgra8888"/>.</param>
+        /// <param name="colorType">
+        /// <see cref="SKColorType.Rgba8888"/> (no swizzle), <see cref="SKColorType.Bgra8888"/> or
+        /// <see cref="SKColorType.Rgba16161616"/> (16 bits per channel; an 8-bit image widens exactly).
+        /// </param>
         /// <param name="alphaType"><see cref="SKAlphaType.Unpremul"/> (exact) or <see cref="SKAlphaType.Premul"/>.</param>
         /// <exception cref="ArgumentOutOfRangeException">The color or alpha type is not one of the above.</exception>
         public SKBitmap ToSKBitmap(SKColorType colorType = SKColorType.Rgba8888, SKAlphaType alphaType = SKAlphaType.Unpremul)
@@ -67,7 +72,7 @@ public static class SkiaImageExtensions
             ArgumentNullException.ThrowIfNull(frame);
             PixelFormat format = Layout(colorType, alphaType);
             var info = new SKImageInfo(frame.Width, frame.Height, colorType, alphaType);
-            if (format == PixelFormat.Rgba32)
+            if (IsNative(format, frame.PixelType))
             {
                 return Created(SKImage.FromPixelCopy(info, frame.GetPixelByteSpan(), info.RowBytes), info);
             }
@@ -90,10 +95,17 @@ public static class SkiaImageExtensions
     {
         /// <summary>
         /// Copies the pixels of a raster bitmap into a new image with straight alpha. Any color and alpha type is
-        /// accepted: Skia converts it to <see cref="SKColorType.Rgba8888"/> with <see cref="SKAlphaType.Unpremul"/>.
+        /// accepted: Skia converts it to <see cref="SKColorType.Rgba8888"/> (for <see cref="PixelType.Rgba32"/>) or
+        /// <see cref="SKColorType.Rgba16161616"/> (for <see cref="PixelType.Rgba64"/>) with <see cref="SKAlphaType.Unpremul"/>.
         /// </summary>
+        /// <param name="bitmap">The source bitmap.</param>
+        /// <param name="pixelType">
+        /// Storage of the new image. The default <see cref="PixelType.Rgba32"/> rounds deeper sources to 8 bits;
+        /// <see cref="PixelType.Rgba64"/> keeps up to 16 bits per channel.
+        /// </param>
         /// <exception cref="ArgumentException">The bitmap is empty or has no readable pixels.</exception>
-        public static Image FromSKBitmap(SKBitmap bitmap)
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelType"/> is not a defined value.</exception>
+        public static Image FromSKBitmap(SKBitmap bitmap, PixelType pixelType = PixelType.Rgba32)
         {
             ArgumentNullException.ThrowIfNull(bitmap);
             using SKPixmap? pixmap = bitmap.PeekPixels();
@@ -102,26 +114,32 @@ public static class SkiaImageExtensions
                 throw new ArgumentException("The bitmap has no readable pixels.", nameof(bitmap));
             }
 
-            return Read(pixmap.Info, pixmap, static (source, destination) => source.ReadPixels(destination), nameof(bitmap));
+            return Read(pixmap.Info, pixmap, static (source, destination) => source.ReadPixels(destination), pixelType, nameof(bitmap));
         }
 
-        /// <summary>Copies the pixels of a pixmap into a new image with straight alpha; any color and alpha type is accepted.</summary>
+        /// <summary>
+        /// Copies the pixels of a pixmap into a new image with straight alpha; any color and alpha type is accepted.
+        /// See <c>FromSKBitmap</c> for <paramref name="pixelType"/>.
+        /// </summary>
         /// <exception cref="ArgumentException">The pixmap is empty or its pixels cannot be converted.</exception>
-        public static Image FromSKPixmap(SKPixmap pixmap)
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelType"/> is not a defined value.</exception>
+        public static Image FromSKPixmap(SKPixmap pixmap, PixelType pixelType = PixelType.Rgba32)
         {
             ArgumentNullException.ThrowIfNull(pixmap);
-            return Read(pixmap.Info, pixmap, static (source, destination) => source.ReadPixels(destination), nameof(pixmap));
+            return Read(pixmap.Info, pixmap, static (source, destination) => source.ReadPixels(destination), pixelType, nameof(pixmap));
         }
 
         /// <summary>
         /// Copies the pixels of an image into a new <see cref="Image"/> with straight alpha. A raster or lazily decoded
-        /// image works; a texture-backed image must be read through its GPU context first.
+        /// image works; a texture-backed image must be read through its GPU context first. See <c>FromSKBitmap</c> for
+        /// <paramref name="pixelType"/>.
         /// </summary>
         /// <exception cref="ArgumentException">The image is empty or its pixels cannot be read.</exception>
-        public static Image FromSKImage(SKImage image)
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelType"/> is not a defined value.</exception>
+        public static Image FromSKImage(SKImage image, PixelType pixelType = PixelType.Rgba32)
         {
             ArgumentNullException.ThrowIfNull(image);
-            return Read(image.Info, image, static (source, destination) => source.ReadPixels(destination, 0, 0), nameof(image));
+            return Read(image.Info, image, static (source, destination) => source.ReadPixels(destination, 0, 0), pixelType, nameof(image));
         }
     }
 
@@ -131,53 +149,55 @@ public static class SkiaImageExtensions
         (SKColorType.Rgba8888, SKAlphaType.Premul) => PixelFormat.Rgba32Premultiplied,
         (SKColorType.Bgra8888, SKAlphaType.Unpremul) => PixelFormat.Bgra32,
         (SKColorType.Bgra8888, SKAlphaType.Premul) => PixelFormat.Bgra32Premultiplied,
-        (not (SKColorType.Rgba8888 or SKColorType.Bgra8888), _) =>
-            throw new ArgumentOutOfRangeException(nameof(colorType), colorType, "Use SKColorType.Rgba8888 or SKColorType.Bgra8888."),
+        (SKColorType.Rgba16161616, SKAlphaType.Unpremul) => PixelFormat.Rgba64,
+        (SKColorType.Rgba16161616, SKAlphaType.Premul) => PixelFormat.Rgba64Premultiplied,
+        (not (SKColorType.Rgba8888 or SKColorType.Bgra8888 or SKColorType.Rgba16161616), _) =>
+            throw new ArgumentOutOfRangeException(nameof(colorType), colorType, "Use SKColorType.Rgba8888, SKColorType.Bgra8888 or SKColorType.Rgba16161616."),
         _ => throw new ArgumentOutOfRangeException(nameof(alphaType), alphaType, "Use SKAlphaType.Unpremul or SKAlphaType.Premul."),
     };
+
+    // The straight layouts equal native storage (Skia's 16-bit channels are native-endian, as Rgba64's fields).
+    private static bool IsNative(PixelFormat format, PixelType pixelType) =>
+        (format, pixelType) is (PixelFormat.Rgba32, PixelType.Rgba32) or (PixelFormat.Rgba64, PixelType.Rgba64);
 
     private static SKImage Created(SKImage? image, SKImageInfo info) =>
         image ?? throw new OutOfMemoryException($"SkiaSharp could not create a {info.Width}x{info.Height} image.");
 
     // Skia writes straight RGBA directly into the pinned pixel array of the new image.
-    private static Image Read<TSource>(SKImageInfo sourceInfo, TSource source, Func<TSource, SKPixmap, bool> read, string parameter)
+    private static Image Read<TSource>(SKImageInfo sourceInfo, TSource source, Func<TSource, SKPixmap, bool> read, PixelType pixelType, string parameter)
     {
         if (sourceInfo.Width <= 0 || sourceInfo.Height <= 0)
         {
             throw new ArgumentException("The source has no pixels.", parameter);
         }
 
-        var image = new Image(sourceInfo.Width, sourceInfo.Height);
+        if (pixelType is not (PixelType.Rgba32 or PixelType.Rgba64))
+        {
+            throw new ArgumentOutOfRangeException(nameof(pixelType), pixelType, "Use PixelType.Rgba32 or PixelType.Rgba64.");
+        }
+
+        var image = new Image(sourceInfo.Width, sourceInfo.Height, pixelType);
         try
         {
-            var info = new SKImageInfo(sourceInfo.Width, sourceInfo.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-            // Image pixels are always one managed array (GC.AllocateUninitializedArray).
-            if (!MemoryMarshal.TryGetArray<Rgba32>(image.GetPixelMemory<Rgba32>(), out ArraySegment<Rgba32> pixels))
-            {
-                throw new InvalidOperationException("The image pixels are not backed by an array.");
-            }
-
-            bool done;
-            GCHandle handle = GCHandle.Alloc(pixels.Array!, GCHandleType.Pinned);
-            try
-            {
-                using var destination = new SKPixmap(info, handle.AddrOfPinnedObject() + (pixels.Offset * 4), info.RowBytes);
-                done = read(source, destination);
-            }
-            finally
-            {
-                handle.Free();
-            }
-
+            bool done = pixelType == PixelType.Rgba32
+                ? ReadInto<Rgba32, TSource>(image, SKColorType.Rgba8888, source, read)
+                : ReadInto<Rgba64, TSource>(image, SKColorType.Rgba16161616, source, read);
             if (!done)
             {
                 throw new ArgumentException("SkiaSharp could not convert the pixels to RGBA.", parameter);
             }
 
-            // Skia copies the undefined fourth byte of an opaque 8888 source unchanged.
+            // Skia copies the undefined fourth channel of an opaque 8888 or 16161616 source unchanged.
             if (sourceInfo.AlphaType == SKAlphaType.Opaque)
             {
-                foreach (ref Rgba32 pixel in image.GetPixelSpan<Rgba32>()) pixel.A = 255;
+                if (pixelType == PixelType.Rgba32)
+                {
+                    foreach (ref Rgba32 pixel in image.GetPixelSpan<Rgba32>()) pixel.A = byte.MaxValue;
+                }
+                else
+                {
+                    foreach (ref Rgba64 pixel in image.GetPixelSpan<Rgba64>()) pixel.A = ushort.MaxValue;
+                }
             }
 
             return image;
@@ -186,6 +206,29 @@ public static class SkiaImageExtensions
         {
             image.Dispose();
             throw;
+        }
+    }
+
+
+    private static bool ReadInto<TPixel, TSource>(Image image, SKColorType colorType, TSource source, Func<TSource, SKPixmap, bool> read)
+        where TPixel : unmanaged
+    {
+        var info = new SKImageInfo(image.Width, image.Height, colorType, SKAlphaType.Unpremul);
+        // Image pixels are always one managed array (GC.AllocateUninitializedArray).
+        if (!MemoryMarshal.TryGetArray<TPixel>(image.GetPixelMemory<TPixel>(), out ArraySegment<TPixel> pixels))
+        {
+            throw new InvalidOperationException("The image pixels are not backed by an array.");
+        }
+
+        GCHandle handle = GCHandle.Alloc(pixels.Array!, GCHandleType.Pinned);
+        try
+        {
+            using var destination = new SKPixmap(info, handle.AddrOfPinnedObject() + (pixels.Offset * info.BytesPerPixel), info.RowBytes);
+            return read(source, destination);
+        }
+        finally
+        {
+            handle.Free();
         }
     }
 }

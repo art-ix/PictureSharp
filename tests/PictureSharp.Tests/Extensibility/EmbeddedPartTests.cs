@@ -180,6 +180,42 @@ public class EmbeddedPartTests
         await Assert.That(new EmbeddedPartOptions { MaxDegreeOfParallelism = null }.MaxDegreeOfParallelism).IsNull();
     }
 
+    [Test]
+    public async Task WideParts_UseTheParentsWeightedAllowance()
+    {
+        using var tile = new Image(4, 4, PixelType.Rgba64, new Rgba64(1001, 2003, 4007, 65009));
+        byte[] part = tile.ToPng(new() { BitDepth = PngBitDepth.Sixteen });
+        byte[] data = TiledContainerFormat.Create(8, 4, 4, 4, part, part);
+        var options = new DecoderOptions
+        {
+            Configuration = Configure(new TiledContainerFormat(pixelType: PixelType.Rgba64)),
+            PreserveBitDepth = true,
+            MaxPixels = 64,
+        };
+        using Image decoded = Image.Load(data, options);
+        await Assert.That(decoded.GetPixel<Rgba64>(7, 3)).IsEqualTo(tile.GetPixel<Rgba64>(0, 0));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, options with { MaxPixels = 63 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, options with { Configuration = WithTiles }));
+    }
+
+    [Test]
+    public async Task WideParent_DoesNotDoubleThePartsGeometryAllowance()
+    {
+        var options = new DecoderOptions
+        {
+            Configuration = Configure(new TiledContainerFormat(pixelType: PixelType.Rgba64)),
+            PreserveBitDepth = true,
+            MaxPixels = 64,
+        };
+        byte[] exact = TiledContainerFormat.Create(4, 4, 4, 4, Tile(4, 4, 0));
+        using Image decoded = Image.Load(exact, options);
+        await Assert.That(decoded.GetPixel<Rgba64>(0, 0)).IsEqualTo(Rgba64.FromRgba32(Color(0)));
+        byte[] oversized = TiledContainerFormat.Create(4, 4, 4, 4, Tile(8, 4, 0));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(oversized, options));
+        byte[] declaredOverBudget = TiledContainerFormat.Create(4, 4, 8, 8, Tile(8, 8, 0));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(declaredOverBudget, options));
+    }
+
     private static ImageConfiguration Configure(TiledContainerFormat format, OptionsProbeFormat? probe = null)
     {
         ImageConfigurationBuilder builder = ImageConfiguration.Default.ToBuilder().AddFormat(format);

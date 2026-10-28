@@ -276,6 +276,7 @@ internal sealed partial class PngDecoder
             Height = (int)h;
             BitDepth = body[8];
             Color = (PngColor)body[9];
+            ColorDescription.SetHeader(BitDepth, Color);
             bool valid = Color switch
             {
                 PngColor.Gray => BitDepth is 1 or 2 or 4 or 8 or 16,

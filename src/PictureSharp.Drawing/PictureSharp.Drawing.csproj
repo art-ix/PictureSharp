@@ -6,7 +6,7 @@
     <RootNamespace>PictureSharp.Drawing</RootNamespace>
     <PackageId>PictureSharp.Drawing</PackageId>
     <Description>Copies PictureSharp images to and from System.Drawing.Bitmap (Windows).</Description>
-    <PackageReleaseNotes>0.8.4 ships a 128×128 package icon instead of the full-size image, cutting package sizes (PictureSharp 1.09 MB to 0.63 MB, adapters about 0.49 MB to 0.03 MB). No API or image-processing changes. Notes: https://github.com/art-ix/PictureSharp/blob/v0.8.4/docs/releases/release-0.8.4.md</PackageReleaseNotes>
+    <PackageReleaseNotes>0.9.0: 16-bit image processing, PNG read/write, typed pixel access and updated adapters. Breaking pixel API and plugin API changes; normalized settings use 0-1. Migration: https://github.com/art-ix/PictureSharp/blob/v0.9.0/docs/migration-from-0.8.md</PackageReleaseNotes>
     <PackageTags>picturesharp;image;system.drawing;bitmap;gdi+;interop</PackageTags>
   </PropertyGroup>
 

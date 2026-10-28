@@ -176,6 +176,20 @@ using (Image wide = source.Clone(x => x.ConvertPixelType(PixelType.Rgba64).Apply
         || wide.GetHistogram(new HistogramOptions { FullResolution = true }).BinCount != 65536)
         throw new InvalidOperationException("Frame processor failed.");
 }
+using (var ramp = new Image(256, 256, PixelType.Rgba64))
+{
+    for (int i = 0; i < 65536; i++)
+        ramp.GetPixelSpan<Rgba64>()[i] = new Rgba64((ushort)i, (ushort)(65535 - i), (ushort)(i ^ 12345), (ushort)i);
+    ramp.Metadata.SetFormatMetadata(new PngSignificantBits(16, PngColorType.Rgba, [16, 16, 16, 16]));
+    byte[] widePng = ramp.ToPng(new() { BitDepth = PngBitDepth.Sixteen, ColorType = PngColorType.Rgba });
+    using Image restored = Image.Load(widePng, new DecoderOptions { PreserveBitDepth = true });
+    if (!restored.GetPixelSpan<Rgba64>().SequenceEqual(ramp.GetPixelSpan<Rgba64>())
+        || restored.Metadata.GetFormatMetadata<PngSignificantBits>()?.Values[0] != 16)
+        throw new InvalidOperationException("16-bit PNG ramp or sBIT failed.");
+    restored.Mutate(x => x.Invert().Invert());
+    if (!restored.GetPixelSpan<Rgba64>().SequenceEqual(ramp.GetPixelSpan<Rgba64>()))
+        throw new InvalidOperationException("16-bit processing lost precision.");
+}
 source.Metadata.Orientation = ExifOrientation.RightTop;
 Span<byte> exif = stackalloc byte[source.Metadata.GetBlockLength(MetadataKinds.Exif)];
 source.Metadata.CopyBlockTo(MetadataKinds.Exif, exif);
