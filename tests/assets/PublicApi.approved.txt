@@ -785,10 +785,10 @@ enum PictureSharp.Processing.AutoCropMode
 sealed record PictureSharp.Processing.AutoCropOptions : System.IEquatable<PictureSharp.Processing.AutoCropOptions>
     ctor()
     property PictureSharp.Processing.AutoCropMode Mode { get; init; }
-    property Rgba32? Background { get; init; }
-    property System.Byte AlphaThreshold { get; init; }
-    property System.Byte Tolerance { get; init; }
+    property Rgba64? Background { get; init; }
     property System.Int32 Padding { get; init; }
+    property System.Single AlphaThresholdNormalized { get; init; }
+    property System.Single ToleranceNormalized { get; init; }
     property static PictureSharp.Processing.AutoCropOptions Default { get; }
 enum PictureSharp.Processing.BlendMode
     Normal = 0
@@ -857,18 +857,20 @@ sealed record PictureSharp.Processing.HistogramOptions : System.IEquatable<Pictu
     ctor()
     property PictureSharp.Processing.HistogramTransparency Transparency { get; init; }
     property System.Boolean AllFrames { get; init; }
+    property System.Boolean FullResolution { get; init; }
     property System.Drawing.Rectangle? Region { get; init; }
     property static PictureSharp.Processing.HistogramOptions Default { get; }
 enum PictureSharp.Processing.HistogramTransparency
     Include = 0
     Exclude = 1
-interface PictureSharp.Processing.IFrameProcessor
+interface PictureSharp.Processing.IFrameProcessor<TPixel>
     method System.Drawing.Size GetOutputSize(System.Drawing.Size source)
-    method System.Void Process(System.ReadOnlySpan<Rgba32> source, System.Drawing.Size sourceSize, System.Span<Rgba32> destination, System.Drawing.Size destinationSize, System.Threading.CancellationToken cancellationToken)
+    method System.Void Process(System.ReadOnlySpan<TPixel> source, System.Drawing.Size sourceSize, System.Span<TPixel> destination, System.Drawing.Size destinationSize, System.Threading.CancellationToken cancellationToken)
 sealed class PictureSharp.Processing.ImageHistogram
-    method System.Byte Percentile(PictureSharp.Processing.HistogramChannel channel, System.Double percent)
-    method System.Double Mean(PictureSharp.Processing.HistogramChannel channel)
+    method System.Double MeanNormalized(PictureSharp.Processing.HistogramChannel channel)
+    method System.Double PercentileNormalized(PictureSharp.Processing.HistogramChannel channel, System.Double percent)
     method System.ReadOnlySpan<System.Int64> GetCounts(PictureSharp.Processing.HistogramChannel channel)
+    property System.Int32 BinCount { get; }
     property System.Int64 PixelCount { get; }
     property System.ReadOnlySpan<System.Int64> Alpha { get; }
     property System.ReadOnlySpan<System.Int64> Blue { get; }
@@ -880,7 +882,7 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext ApplyMask(Image mask, PictureSharp.Processing.AnchorPosition position, PictureSharp.Processing.MaskOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext ApplyMask(Image mask, PictureSharp.Processing.MaskOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext ApplyMask(Image mask, System.Drawing.Point location, PictureSharp.Processing.MaskOptions? options = null)
-    method PictureSharp.Processing.ImageProcessingContext ApplyProcessor<TProcessor>(TProcessor processor)
+    method PictureSharp.Processing.ImageProcessingContext ApplyProcessor<TPixel>(PictureSharp.Processing.IFrameProcessor<TPixel> processor)
     method PictureSharp.Processing.ImageProcessingContext AutoContrast(System.Single cutoff = 0, System.Boolean preserveTone = false)
     method PictureSharp.Processing.ImageProcessingContext AutoContrast(System.Single cutoffLow, System.Single cutoffHigh, System.Boolean preserveTone = false)
     method PictureSharp.Processing.ImageProcessingContext AutoCrop(PictureSharp.Processing.AutoCropOptions? options = null)
@@ -896,7 +898,7 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Drawing.Rectangle rectangle)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 width, System.Int32 height, PictureSharp.Processing.AnchorPosition position = Center)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 x, System.Int32 y, System.Int32 width, System.Int32 height)
-    method PictureSharp.Processing.ImageProcessingContext Curves(System.ReadOnlySpan<System.Drawing.PointF> points, PictureSharp.Processing.ColorChannels channels = Rgb)
+    method PictureSharp.Processing.ImageProcessingContext CurvesNormalized(System.ReadOnlySpan<System.Drawing.PointF> points, PictureSharp.Processing.ColorChannels channels = Rgb)
     method PictureSharp.Processing.ImageProcessingContext Denoise(System.Single strength, System.Int32 radius = 2)
     method PictureSharp.Processing.ImageProcessingContext DevelopNegative(PictureSharp.Processing.NegativeOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, PictureSharp.Processing.DrawImageOptions options)
@@ -914,7 +916,7 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext Invert()
     method PictureSharp.Processing.ImageProcessingContext InvertNegative(PictureSharp.Processing.NegativeCalibration calibration, PictureSharp.Processing.NegativePrintOptions? print = null)
     method PictureSharp.Processing.ImageProcessingContext Levels(PictureSharp.Processing.LevelsOptions options)
-    method PictureSharp.Processing.ImageProcessingContext MakeTransparent(Rgba32 color)
+    method PictureSharp.Processing.ImageProcessingContext MakeTransparent(Rgba64 color)
     method PictureSharp.Processing.ImageProcessingContext Opacity(System.Single opacity)
     method PictureSharp.Processing.ImageProcessingContext Pad(System.Int32 width, System.Int32 height, Rgba64 color = default, PictureSharp.Processing.AnchorPosition position = Center)
     method PictureSharp.Processing.ImageProcessingContext ReduceColorNoise(System.Single strength = 1, System.Int32 radius = 0)
@@ -932,11 +934,11 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext ShadowsHighlights(System.Single shadows, System.Single highlights, System.Single radius = 0)
     method PictureSharp.Processing.ImageProcessingContext Sharpen()
     method PictureSharp.Processing.ImageProcessingContext Thumbnail(System.Int32 maxWidth, System.Int32 maxHeight, PictureSharp.Processing.ResamplingFilter filter = Lanczos3)
-    method PictureSharp.Processing.ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Int32 threshold = 3)
+    method PictureSharp.Processing.ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Single thresholdNormalized = 0.011764706)
     method PictureSharp.Processing.ImageProcessingContext Vibrance(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Vignette(PictureSharp.Processing.VignetteOptions options)
     method PictureSharp.Processing.ImageProcessingContext Vignette(System.Single amount)
-    method PictureSharp.Processing.ImageProcessingContext WhiteBalance(Rgba32 neutral)
+    method PictureSharp.Processing.ImageProcessingContext WhiteBalance(Rgba64 neutral)
     method PictureSharp.Processing.ImageProcessingContext WhiteBalance(System.Single temperature, System.Single tint = 0)
     property PixelType PixelType { get; }
     property System.Drawing.Size Size { get; }
@@ -945,11 +947,11 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
 sealed record PictureSharp.Processing.LevelsOptions : System.IEquatable<PictureSharp.Processing.LevelsOptions>
     ctor()
     property PictureSharp.Processing.ColorChannels Channels { get; init; }
-    property System.Byte InputBlack { get; init; }
-    property System.Byte InputWhite { get; init; }
-    property System.Byte OutputBlack { get; init; }
-    property System.Byte OutputWhite { get; init; }
     property System.Single Gamma { get; init; }
+    property System.Single InputBlackNormalized { get; init; }
+    property System.Single InputWhiteNormalized { get; init; }
+    property System.Single OutputBlackNormalized { get; init; }
+    property System.Single OutputWhiteNormalized { get; init; }
 enum PictureSharp.Processing.MaskChannel
     Alpha = 0
     Luminance = 1

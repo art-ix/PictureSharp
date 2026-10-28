@@ -14,8 +14,8 @@ public class AutoCropTests
         var options = new AutoCropOptions
         {
             Mode = c.GetProperty("mode").GetString() == "background" ? AutoCropMode.Background : AutoCropMode.Alpha,
-            AlphaThreshold = c.TryGetProperty("alpha_threshold", out JsonElement t) ? t.GetByte() : (byte)0,
-            Tolerance = c.TryGetProperty("tolerance", out JsonElement tol) ? tol.GetByte() : (byte)0,
+            AlphaThresholdNormalized = (c.TryGetProperty("alpha_threshold", out JsonElement t) ? t.GetByte() : 0) / 255f,
+            ToleranceNormalized = (c.TryGetProperty("tolerance", out JsonElement tol) ? tol.GetByte() : 0) / 255f,
             Padding = c.TryGetProperty("padding", out JsonElement p) ? p.GetInt32() : 0,
         };
         if (c.TryGetProperty("background", out JsonElement bg) && bg.ValueKind == JsonValueKind.Array)
@@ -75,7 +75,7 @@ public class AutoCropTests
         image[6, 5] = new Rgba32(0, 255, 0, 20);
 
         await Assert.That(image.FindTrimBounds()).IsEqualTo(new Rectangle(2, 3, 5, 3));
-        await Assert.That(image.FindTrimBounds(new AutoCropOptions { AlphaThreshold = 20 })).IsEqualTo(new Rectangle(2, 3, 1, 1));
+        await Assert.That(image.FindTrimBounds(new AutoCropOptions { AlphaThresholdNormalized = 20 / 255f })).IsEqualTo(new Rectangle(2, 3, 1, 1));
         await Assert.That(image.FindTrimBounds(new AutoCropOptions { Padding = 2 })).IsEqualTo(new Rectangle(0, 1, 9, 7));
         await Assert.That(image.FindTrimBounds(new AutoCropOptions { Padding = 100 })).IsEqualTo(new Rectangle(0, 0, 10, 8));
 
@@ -94,7 +94,7 @@ public class AutoCropTests
         image[3, 4] = new Rgba32(100, 100, 100);
 
         var exact = new AutoCropOptions { Mode = AutoCropMode.Background };
-        var tolerant = exact with { Tolerance = 5 };
+        var tolerant = exact with { ToleranceNormalized = 5 / 255f };
         await Assert.That(image.FindTrimBounds(exact)).IsEqualTo(new Rectangle(1, 1, 3, 4));
         await Assert.That(image.FindTrimBounds(tolerant)).IsEqualTo(new Rectangle(3, 4, 1, 1));
 

@@ -1,5 +1,7 @@
 using System.Drawing;
+using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Processing;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Processing;
@@ -48,20 +50,15 @@ public readonly ref partial struct ImageProcessingContext
         return this;
     }
 
-    private ImageProcessingContext ForEachPixelSpan(SpanAction operation) =>
-        ForEachPixelSpan(operation, static (pixels, action) => action(pixels));
-
-    private ImageProcessingContext ForEachPixelSpan<TState>(TState state, SpanAction<TState> operation)
+    /// <summary>Runs <paramref name="kernel"/> in place on every frame, at the frame's depth.</summary>
+    private ImageProcessingContext ForEachFrame<TKernel>(TKernel kernel) where TKernel : struct, IPixelKernel
     {
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            operation(frame.Pixels.AsSpan(), state);
+            var operation = new PixelKernelFrame<TKernel>(frame, kernel);
+            PixelDispatch.Run<PixelKernelFrame<TKernel>, bool>(frame.PixelType, ref operation);
         }
 
         return this;
     }
-
-    private delegate void SpanAction<TState>(Span<Rgba32> pixels, TState state);
-
-    private delegate void SpanAction(Span<Rgba32> pixels);
 }

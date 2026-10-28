@@ -185,7 +185,7 @@ public class HighBitDepthProcessingTests
             "gauss25" => (x => x.GaussianBlur(25f), WideReference.GaussianBlur(v, w, h, 25f)),
             "box2.5" => (x => x.BoxBlur(2.5f), WideReference.BoxBlur(v, w, h, 2.5f, 1)),
             "box0.4" => (x => x.BoxBlur(0.4f), WideReference.BoxBlur(v, w, h, 0.4f, 1)),
-            "unsharp" => (x => x.UnsharpMask(2f, 150, 3), WideReference.UnsharpMask(v, w, h, 2f, 150, 3)),
+            "unsharp" => (x => x.UnsharpMask(2f, 150, 3 / 255f), WideReference.UnsharpMask(v, w, h, 2f, 150, 3 / 255f)),
             _ => (x => x.Sharpen(), WideReference.Sharpen(v, w, h)),
         };
 

@@ -20,4 +20,11 @@ public sealed record HistogramOptions
 
     /// <summary>Whether to count every frame of an animation instead of only the first. Default: false.</summary>
     public bool AllFrames { get; init; }
+
+    /// <summary>
+    /// Whether to count one bin per possible sample value (<see cref="ImageHistogram.BinCount"/> 256 on
+    /// <see cref="PixelType.Rgba32"/> images, 65536 on <see cref="PixelType.Rgba64"/> ones) instead of 256 bins.
+    /// Default: false (256 bins, the nearest to each sample on 16-bit images).
+    /// </summary>
+    public bool FullResolution { get; init; }
 }

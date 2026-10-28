@@ -3,8 +3,8 @@ using PictureSharp.Processing;
 
 namespace PictureSharp.Tests.Extensibility;
 
-/// <summary>Swaps rows and columns; a struct, so ApplyProcessor runs it without boxing.</summary>
-public readonly struct TransposeProcessor : IFrameProcessor
+/// <summary>Swaps rows and columns; a struct processor.</summary>
+public readonly struct TransposeProcessor : IFrameProcessor<Rgba32>
 {
     public Size GetOutputSize(Size source) => new(source.Height, source.Width);
 
@@ -22,7 +22,7 @@ public readonly struct TransposeProcessor : IFrameProcessor
 }
 
 /// <summary>A class processor with configurable behavior for failure and contract tests.</summary>
-public sealed class ScriptedProcessor(Func<Size, Size> size, Action<int>? onFrame = null) : IFrameProcessor
+public sealed class ScriptedProcessor(Func<Size, Size> size, Action<int>? onFrame = null) : IFrameProcessor<Rgba32>
 {
     private int _frame;
 
@@ -145,6 +145,6 @@ public class FrameProcessorTests
     public void NullProcessor_IsRejected()
     {
         using Image image = Numbered(2, 2);
-        Assert.ThrowsExactly<ArgumentNullException>(() => image.Mutate(x => x.ApplyProcessor<IFrameProcessor>(null!)));
+        Assert.ThrowsExactly<ArgumentNullException>(() => image.Mutate(x => x.ApplyProcessor<Rgba32>(null!)));
     }
 }

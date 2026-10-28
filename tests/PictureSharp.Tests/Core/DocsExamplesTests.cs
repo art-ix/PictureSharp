@@ -483,7 +483,7 @@ public sealed class DocsExamplesTests : IDisposable
             .Brightness(1.2f).Contrast(0.8f).Saturate(1.5f).Grayscale().Sepia().Invert()
             .BackgroundColor(Color.White).Opacity(0.5f).MakeTransparent(Color.Magenta)
             .Fill(Color.Black).Fill(Color.FromArgb(128, 255, 0, 0), new Rectangle(0, 0, 50, 50))
-            .GaussianBlur(2.5f).BoxBlur(3).UnsharpMask().UnsharpMask(radius: 1, percent: 80, threshold: 2).Sharpen()
+            .GaussianBlur(2.5f).BoxBlur(3).UnsharpMask().UnsharpMask(radius: 1, percent: 80, thresholdNormalized: 2 / 255f).Sharpen()
             .DrawImage(watermark, AnchorPosition.BottomRight, opacity: 0.6f)
             .DrawImage(watermark, new Point(20, 20))
             .Apply(frame =>
@@ -499,12 +499,12 @@ public sealed class DocsExamplesTests : IDisposable
         await Assert.That(adjusted[0, 0]).IsEqualTo(Rgba32.White);
 
         using Image toned = image.Clone(x => x
-            .Levels(new LevelsOptions { InputBlack = 20, InputWhite = 230 })
-            .Levels(new LevelsOptions { Gamma = 1.4f, OutputBlack = 16, OutputWhite = 235 })
+            .Levels(new LevelsOptions { InputBlackNormalized = 20 / 255f, InputWhiteNormalized = 230 / 255f })
+            .Levels(new LevelsOptions { Gamma = 1.4f, OutputBlackNormalized = 16 / 255f, OutputWhiteNormalized = 235 / 255f })
             .Gamma(2.2f)
             .Gamma(0.8f, ColorChannels.Blue)
-            .Curves([new(0, 0), new(64, 52), new(192, 206), new(255, 255)])
-            .Curves([new(0, 12), new(255, 255)], ColorChannels.Blue));
+            .CurvesNormalized([new(0, 0), new(64 / 255f, 52 / 255f), new(192 / 255f, 206 / 255f), new(1, 1)])
+            .CurvesNormalized([new(0, 12 / 255f), new(1, 1)], ColorChannels.Blue));
         await Assert.That(toned.Size).IsEqualTo(image.Size);
 
         using Image corrected = image.Clone(x => x
@@ -584,11 +584,11 @@ public sealed class DocsExamplesTests : IDisposable
 
         using Image trimmed = image.Clone(x => x
             .AutoCrop()
-            .AutoCrop(new AutoCropOptions { AlphaThreshold = 16, Padding = 4 })
+            .AutoCrop(new AutoCropOptions { AlphaThresholdNormalized = 16 / 255f, Padding = 4 })
             .AutoCrop(new AutoCropOptions
             {
                 Mode = AutoCropMode.Background,
-                Tolerance = 12,
+                ToleranceNormalized = 12 / 255f,
             })
             .AutoCrop(new AutoCropOptions { Mode = AutoCropMode.Background, Background = Color.White }));
         await Assert.That(trimmed.Width <= image.Width && trimmed.Height <= image.Height).IsTrue();
@@ -606,8 +606,9 @@ public sealed class DocsExamplesTests : IDisposable
 
         ImageHistogram histogram = image.GetHistogram();
         long darkPixels = histogram.Luminance[..32].ToArray().Sum();
-        byte median = histogram.Percentile(HistogramChannel.Luminance, 50);
-        double meanRed = histogram.Mean(HistogramChannel.Red);
+        double median = histogram.PercentileNormalized(HistogramChannel.Luminance, 50);   // 0–1
+        double meanRed = histogram.MeanNormalized(HistogramChannel.Red);
+        ImageHistogram exact = image.GetHistogram(new HistogramOptions { FullResolution = true });  // 65536 bins on 16-bit
         ImageHistogram visible = image.GetHistogram(new HistogramOptions
         {
             Transparency = HistogramTransparency.Exclude,
@@ -615,7 +616,7 @@ public sealed class DocsExamplesTests : IDisposable
             AllFrames = true,
         });
         await Assert.That(histogram.PixelCount).IsEqualTo((long)image.Width * image.Height);
-        await Assert.That(darkPixels <= histogram.PixelCount && median <= 255 && meanRed >= 0).IsTrue();
+        await Assert.That(darkPixels <= histogram.PixelCount && median <= 1 && meanRed >= 0 && exact.BinCount == 256).IsTrue();
         await Assert.That(visible.PixelCount <= 100 * 100).IsTrue();
 
         // Custom frame processors: the Transpose sample, same code as Extensibility.TransposeProcessor.

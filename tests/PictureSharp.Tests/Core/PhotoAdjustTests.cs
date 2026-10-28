@@ -23,7 +23,7 @@ public class PhotoAdjustTests
         () => x => x.ShadowsHighlights(0.6f, -0.6f, 2f),
         () => x => x.Clarity(0.8f, 2f),
         () => x => x.Denoise(0.8f, 2),
-        () => x => x.Curves([new(0, 20), new(128, 150), new(255, 230)]),
+        () => x => x.CurvesNormalized([new(0, 20 / 255f), new(128 / 255f, 150 / 255f), new(1, 230 / 255f)]),
         () => x => x.WhiteBalance(new Rgba32(200, 160, 120, 255)),
         () => x => x.AutoWhiteBalance(),
         () => x => x.ReduceColorNoise(1f, 2),

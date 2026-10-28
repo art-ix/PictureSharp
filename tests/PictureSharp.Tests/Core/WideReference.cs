@@ -210,13 +210,13 @@ internal static class WideReference
     public static double[] GaussianBlur(double[] v, int w, int h, float sigma) =>
         BoxBlur(v, w, h, PictureSharp.Algorithms.Processing.Blur.GaussianBlurRadius(sigma, 3), 3);
 
-    public static double[] UnsharpMask(double[] v, int w, int h, float radius, int percent, int threshold)
+    public static double[] UnsharpMask(double[] v, int w, int h, float radius, int percent, float threshold)
     {
         double[] blurred = GaussianBlur(v, w, h, radius);
         for (int i = 0; i < v.Length; i++)
         {
             double diff = v[i] - blurred[i];
-            blurred[i] = Math.Abs(diff) > threshold / 255.0 ? Math.Clamp(v[i] + (diff * percent / 100), 0, 1) : v[i];
+            blurred[i] = Math.Abs(diff) > threshold ? Math.Clamp(v[i] + (diff * percent / 100), 0, 1) : v[i];
         }
 
         return blurred;

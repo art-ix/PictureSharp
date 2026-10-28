@@ -100,11 +100,11 @@ horizontal and vertical resolution.
 
 ```csharp
 image.Mutate(x => x.AutoCrop());                                                    // remove fully transparent margins
-image.Mutate(x => x.AutoCrop(new AutoCropOptions { AlphaThreshold = 16, Padding = 4 })); // also drop faint halos, keep 4 px
+image.Mutate(x => x.AutoCrop(new AutoCropOptions { AlphaThresholdNormalized = 16 / 255f, Padding = 4 })); // drop faint halos, keep 4 px
 image.Mutate(x => x.AutoCrop(new AutoCropOptions
 {
     Mode = AutoCropMode.Background,   // margins of the top-left pixel's color
-    Tolerance = 12,                   // allow JPEG noise
+    ToleranceNormalized = 12 / 255f,  // allow JPEG noise
 }));
 
 if (image.FindTrimBounds() is { } box)                                              // the box only, image unchanged
@@ -113,9 +113,11 @@ if (image.FindTrimBounds() is { } box)                                          
 }
 ```
 
-- `Alpha` mode (default) treats alpha at or below `AlphaThreshold` as margin; with 0 it matches Pillow's `getbbox()`.
-- `Background` mode treats a pixel as margin when every channel, alpha included, is within `Tolerance` of the background
-  (largest channel difference, like ImageMagick's `-trim -fuzz`).
+- `Alpha` mode (default) treats alpha at or below `AlphaThresholdNormalized` as margin; with 0 it matches Pillow's
+  `getbbox()`.
+- `Background` mode treats a pixel as margin when every channel, alpha included, is within `ToleranceNormalized` of the
+  background (largest channel difference, like ImageMagick's `-trim -fuzz`).
+- Both thresholds are normalized: 0–1 of the channel range at any depth, so an 8-bit level v is `v / 255f`.
 - `Padding` keeps extra pixels around the content, within the canvas.
 - An image without content is left unchanged and `FindTrimBounds` returns `null`.
 - An animation is cropped to the union of all frames' content, keeping a common canvas.
@@ -151,40 +153,43 @@ All keep alpha. `Brightness`, `Contrast` and `Saturate` are Pillow's `ImageEnhan
 ### Levels and gamma
 
 ```csharp
-image.Mutate(x => x.Levels(new LevelsOptions { InputBlack = 20, InputWhite = 230 }));     // stretch 20..230 to 0..255
-image.Mutate(x => x.Levels(new LevelsOptions { Gamma = 1.4f, OutputBlack = 16, OutputWhite = 235 }));
+image.Mutate(x => x.Levels(new LevelsOptions { InputBlackNormalized = 20 / 255f, InputWhiteNormalized = 230 / 255f })); // stretch 20..230
+image.Mutate(x => x.Levels(new LevelsOptions { Gamma = 1.4f, OutputBlackNormalized = 16 / 255f, OutputWhiteNormalized = 235 / 255f }));
 image.Mutate(x => x.Gamma(2.2f));                                                         // >1 brightens, <1 darkens
 ```
 
-`Levels` maps each selected channel value x to
+Levels are normalized: 0 is black and 1 white at any depth, so an 8-bit level v is `v / 255f` (and gives exactly the
+table of v). `Levels` maps each selected channel value x (also 0–1) to
 `OutputBlack + (OutputWhite − OutputBlack) · clamp((x − InputBlack) / (InputWhite − InputBlack), 0, 1)^(1 / Gamma)`,
-like ImageMagick's `-level`/`+level`, on encoded sRGB values in double precision, rounding half up. `OutputBlack` above
-`OutputWhite` inverts. `Gamma(g)` is `Levels` with only the gamma set. Every pixel is mapped and alpha is kept.
+like ImageMagick's `-level`/`+level`, on encoded sRGB values in double precision, rounding half up to the image's
+depth. `OutputBlackNormalized` above `OutputWhiteNormalized` inverts; NaN and values outside 0–1 are rejected.
+`Gamma(g)` is `Levels` with only the gamma set. Every pixel is mapped and alpha is kept.
 
 ### Curves
 
 ```csharp
-image.Mutate(x => x.Curves([new(0, 0), new(64, 52), new(192, 206), new(255, 255)]));   // gentle S on R, G and B
-image.Mutate(x => x.Curves([new(0, 12), new(255, 255)], ColorChannels.Blue));          // lift the blue shadows only
+image.Mutate(x => x.CurvesNormalized([new(0, 0), new(0.25f, 0.2f), new(0.75f, 0.8f), new(1, 1)])); // gentle S on R, G and B
+image.Mutate(x => x.CurvesNormalized([new(0, 12 / 255f), new(1, 1)], ColorChannels.Blue));          // lift the blue shadows only
 ```
 
-`Curves` maps the selected channels through a smooth curve that passes through the points (input, output; 0–255,
-input strictly increasing, at least two). Between points it is the shape-preserving piecewise cubic (PCHIP: the
+`CurvesNormalized` maps the selected channels through a smooth curve that passes through the points (input, output;
+normalized 0–1, so an 8-bit level v is `v / 255f`; input strictly increasing, at least two). Between points it is the shape-preserving piecewise cubic (PCHIP: the
 derivatives of Fritsch and Butland with Moler's end conditions, as SciPy's `PchipInterpolator`), so it never
 overshoots: a curve through rising points rises everywhere. Before the first and after the last point the output is
-constant. The table is computed in double precision and rounded half up; for separate channel curves, call `Curves`
-once per channel.
+constant. The table is computed for every sample value of the image's depth in double precision and rounded half up;
+for separate channel curves, call `CurvesNormalized` once per channel.
 
 ### Automatic contrast and equalization
 
 ```csharp
-image.Mutate(x => x.AutoContrast());                       // darkest value → 0, lightest → 255, per channel
+image.Mutate(x => x.AutoContrast());                       // darkest value → black, lightest → white, per channel
 image.Mutate(x => x.AutoContrast(1f, 5f, preserveTone: true)); // one mapping from luminance: keeps the hue
 image.Mutate(x => x.Equalize());                           // spread each channel's values evenly
 ```
 
-Both reproduce Pillow's `ImageOps.autocontrast` and `ImageOps.equalize` on RGB bit for bit, counting every pixel and
-keeping alpha. An animation is analysed as a whole and every frame gets the same mapping, so nothing flickers.
+On 8-bit images both reproduce Pillow's `ImageOps.autocontrast` and `ImageOps.equalize` on RGB bit for bit, counting
+every pixel and keeping alpha. An animation is analysed as a whole and every frame gets the same mapping, so nothing
+flickers. 16-bit images are counted at full resolution (see [16-bit images](#16-bit-images)).
 
 ## Photo adjustments
 
@@ -198,7 +203,7 @@ image.Mutate(x => x
     .Vignette(0.3f));                   // darken the edges, −1..1
 image.Mutate(x => x.Vignette(new VignetteOptions { Amount = 0.6f, Midpoint = 0.3f, Feather = 0.8f }));
 image.Mutate(x => x.Denoise(0.5f));     // edge-preserving smoothing, 0..1, window radius 2
-image.Mutate(x => x.WhiteBalance(new Rgba32(212, 196, 170, 255)));   // this picked color becomes gray
+image.Mutate(x => x.WhiteBalance(new Rgba32(212, 196, 170, 255)));   // this picked color (an Rgba64 at 16 bits) becomes gray
 image.Mutate(x => x.AutoWhiteBalance(0.7f));                         // gray-world on the midtones, 0..1
 ```
 
@@ -212,7 +217,7 @@ architecture and thread count. Luma uses Rec. 709 weights; "linear" means sRGB d
 | `Vibrance(a)` | chroma around the luma scaled by 1 + a · (1 − s) for a > 0, s = (max − min) / max; by 1 + a for a < 0 (−1 is grayscale) |
 | `Vignette` | linear · 2^(−2 · Amount · w); w is a smoothstep of the distance from the center (relative to half the diagonal, so 1 is a corner) from `Midpoint` to `Midpoint + Feather · (1 − Midpoint)`; defaults 0.5 and 1 |
 | `ShadowsHighlights(s, h, radius)` | linear · 2^(1.5 · (s · (1 − B)² + h · B²)), B a Gaussian blur of the luma (0–1) |
-| `Clarity(a, radius)` | each channel + 255 · a · (P − B) · 4P(1 − P), P the luma (0–1), B its Gaussian blur |
+| `Clarity(a, radius)` | each channel (0–1) + a · (P − B) · 4P(1 − P), P the luma (0–1), B its Gaussian blur |
 | `Denoise(strength, radius)` | guided filter (He et al., 2010) per premultiplied channel, windows (2r + 1)², ε = (0.05 · strength)² |
 | `WhiteBalance(neutral)` | linear channel · Y / N, N the neutral's linear channel and Y its luma: the neutral becomes gray of the same luminance |
 | `AutoWhiteBalance(s)` | linear channel · (Y / M)^s, scaled so that M keeps its luminance; M is the mean linear color of the measured pixels, Y its luma |
@@ -385,8 +390,9 @@ For the photograph itself:
 
 ```csharp
 ImageHistogram histogram = image.GetHistogram();
-byte median = histogram.Percentile(HistogramChannel.Luminance, 50);
-double meanRed = histogram.Mean(HistogramChannel.Red);
+double median = histogram.PercentileNormalized(HistogramChannel.Luminance, 50);   // 0–1
+double meanRed = histogram.MeanNormalized(HistogramChannel.Red);
+ImageHistogram exact = image.GetHistogram(new HistogramOptions { FullResolution = true });  // 65536 bins on 16-bit
 
 ImageHistogram visible = image.GetHistogram(new HistogramOptions
 {
@@ -396,16 +402,21 @@ ImageHistogram visible = image.GetHistogram(new HistogramOptions
 });
 ```
 
-`GetHistogram` counts red, green, blue, alpha and BT.601 luminance values 0–255 over the first frame by default, like
-Pillow's `Image.histogram()`, and returns a snapshot. `Percentile` uses the nearest rank (0 minimum, 50 median, 100
-maximum). With nothing counted, `Mean` returns `NaN` and `Percentile` throws.
+`GetHistogram` counts red, green, blue, alpha and BT.601 luminance values over the first frame by default, like
+Pillow's `Image.histogram()`, and returns a snapshot. It has `BinCount` bins per channel: 256 by default, or with
+`FullResolution` one per sample value (256 on an 8-bit image, 65536 on a 16-bit one). A sample v of an image with maximum
+M goes to the nearest bin, `floor(v · (BinCount − 1) / M + 0.5)`, so 8-bit images and full-resolution 16-bit histograms
+count every value exactly. `MeanNormalized` and `PercentileNormalized` return normalized values (0–1, bin i stands for
+`i / (BinCount − 1)`); with 256 bins on a 16-bit image they are approximate. `PercentileNormalized` takes a percentage
+and uses the nearest rank (0 minimum, 50 median, 100 maximum). With nothing counted, `MeanNormalized` returns `NaN` and
+`PercentileNormalized` throws.
 
 ### Transparency and fills
 
 ```csharp
 image.Mutate(x => x.BackgroundColor(Color.White));                    // composite over white: removes transparency
 image.Mutate(x => x.Opacity(0.5f));                                   // scale alpha
-image.Mutate(x => x.MakeTransparent(Color.Magenta));                  // exact color match → alpha 0
+image.Mutate(x => x.MakeTransparent(Color.Magenta));                  // exact color match at the image's depth → alpha 0
 image.Mutate(x => x.Fill(Color.Black));                               // overwrite every pixel
 ```
 
@@ -417,7 +428,8 @@ image.Mutate(x => x.Fill(Color.Black));                               // overwri
 ```csharp
 image.Mutate(x => x.GaussianBlur(2.5f));                    // sigma (Pillow's GaussianBlur radius)
 image.Mutate(x => x.BoxBlur(3));                            // box radius; fractional values allowed
-image.Mutate(x => x.UnsharpMask());                         // radius 2, 150 %, threshold 3
+image.Mutate(x => x.UnsharpMask());                         // radius 2, 150 %, threshold 3 / 255
+image.Mutate(x => x.UnsharpMask(1, 80, thresholdNormalized: 2 / 255f));
 image.Mutate(x => x.Sharpen());                             // 3×3 sharpen kernel
 ```
 
@@ -513,7 +525,7 @@ public static class MyOperations
 image.Mutate(x => x.Resize(600, 0).Polaroid());
 ```
 
-An operation producing new buffers, possibly of another size, implements `IFrameProcessor` and runs through
+An operation producing new buffers, possibly of another size, implements `IFrameProcessor<TPixel>` and runs through
 `ApplyProcessor`: all frames are prepared first and published together, so an exception or cancellation leaves the image
 unchanged. See [Extending PictureSharp](extending-picturesharp.md#custom-frame-processors).
 
@@ -540,4 +552,25 @@ within 1 code of 65535 (alpha-weighted RMS below 0.03).
 Colors in options (`Fill`, `BackgroundColor`, `Rotate`'s background, `ResizeOptions.PadColor`, `Pad`) are `Rgba64`;
 `Rgba32` and `System.Drawing.Color` values convert implicitly and exactly. On an 8-bit image a written color is rounded to
 8 bits, while a blended color (`BackgroundColor`) or a 16-bit source or mask (`DrawImage`, `ApplyMask`) keeps its
-precision until the result is rounded once. `UnsharpMask`'s `threshold` stays in 8-bit levels on every depth.
+precision until the result is rounded once. `MakeTransparent` matches the key exactly at the image's depth (rounded to
+8 bits on an 8-bit image), `WhiteBalance(neutral)` takes an `Rgba64` and `AutoCropOptions.Background` is an `Rgba64?`.
+
+Tone and color operations keep 16 bits too. Channel maps (`Levels`, `Gamma`, `CurvesNormalized`, `Exposure`, both
+`WhiteBalance` forms, `AutoWhiteBalance`, `AutoContrast`, `Equalize`) are tables with one entry per 16-bit value,
+computed from the continuous formulas (sRGB decoded and encoded continuously, not through 256 levels).
+`Brightness`, `Contrast`, `Saturate`, `Grayscale`, `Invert`, `Sepia`, `Vibrance`, `ShadowsHighlights` and `Clarity`
+evaluate their formulas on unrounded values. Each result is rounded once, half up; Pillow's ports truncate on 8-bit
+images, and `Contrast`/`Saturate` use the unrounded mean luma and luma at 16 bits. `AutoContrast`, `Equalize` and
+`AutoWhiteBalance` count 16-bit images at full resolution: `AutoContrast` stretches exactly,
+`65535 · (v − low) / (high − low)`, and `Equalize` maps v to `round(65535 · C(v) / (N − L))` (C(v) the samples below v,
+N all samples, L those of the highest value) instead of Pillow's integer steps, which would leave images of fewer than
+65535 pixels unchanged. `AutoWhiteBalance` measures the pixels whose channels round to 8-bit values outside the clipped
+0–2 and 253–255, so an exactly widened image selects the same pixels. Against a double-precision reference every one of
+these operations is within 1 code of 65535 (RMS at most 0.15), alpha exact; rounded to 8 bits they are within 1 level
+of the 8-bit operation, except `Equalize` (up to 3 levels, Pillow's steps). A full 65536-level ramp passes unchanged
+through identity settings.
+
+Sample-level settings are normalized to 0–1 at every depth: `LevelsOptions.*Normalized`, `CurvesNormalized`,
+`AutoCropOptions.AlphaThresholdNormalized` and `ToleranceNormalized`, and `UnsharpMask`'s `thresholdNormalized`. A
+level v of the 8-bit API written as `v / 255f` gives exactly the former 8-bit result (also for halves and quarters of a
+level); on 16-bit images it means v · 257. Percentages, radii and counts keep their units.

@@ -223,7 +223,7 @@ public class ProcessingOracleTests
                 {
                     string name = string.Create(CultureInfo.InvariantCulture, $"unsharp_{stem}_{radius}_{percent}_{threshold}");
                     jobs.Add(new() { ["name"] = name, ["input"] = input, ["op"] = "filter", ["kind"] = "unsharp", ["radius"] = radius, ["percent"] = percent, ["threshold"] = threshold });
-                    expected[name] = () => inputs[input].Clone(x => x.UnsharpMask(radius, percent, threshold));
+                    expected[name] = () => inputs[input].Clone(x => x.UnsharpMask(radius, percent, threshold / 255f));
                 }
 
                 string sharpen = $"sharpen_{stem}";

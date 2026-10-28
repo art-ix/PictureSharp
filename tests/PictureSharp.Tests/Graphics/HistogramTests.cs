@@ -71,12 +71,13 @@ public class HistogramTests
         await Assert.That(visible.Red[250]).IsEqualTo(0L);
         await Assert.That(visible.Alpha[0]).IsEqualTo(0L);
 
-        // Red values 10, 10, 250, 100: mean 92.5, median (nearest rank 2) 10, minimum 10, maximum 250.
-        await Assert.That(all.Mean(HistogramChannel.Red)).IsEqualTo(92.5);
-        await Assert.That(all.Percentile(HistogramChannel.Red, 50)).IsEqualTo((byte)10);
-        await Assert.That(all.Percentile(HistogramChannel.Red, 51)).IsEqualTo((byte)100);
-        await Assert.That(all.Percentile(HistogramChannel.Red, 0)).IsEqualTo((byte)10);
-        await Assert.That(all.Percentile(HistogramChannel.Red, 100)).IsEqualTo((byte)250);
+        // Red values 10, 10, 250, 100: mean 92.5, median (nearest rank 2) 10, minimum 10, maximum 250; normalized by 255.
+        await Assert.That(all.BinCount).IsEqualTo(256);
+        await Assert.That(all.MeanNormalized(HistogramChannel.Red)).IsEqualTo(92.5 / 255);
+        await Assert.That(all.PercentileNormalized(HistogramChannel.Red, 50)).IsEqualTo(10 / 255.0);
+        await Assert.That(all.PercentileNormalized(HistogramChannel.Red, 51)).IsEqualTo(100 / 255.0);
+        await Assert.That(all.PercentileNormalized(HistogramChannel.Red, 0)).IsEqualTo(10 / 255.0);
+        await Assert.That(all.PercentileNormalized(HistogramChannel.Red, 100)).IsEqualTo(250 / 255.0);
     }
 
     [Test]
@@ -103,8 +104,8 @@ public class HistogramTests
         using var image = new Image(3, 3);
         ImageHistogram histogram = image.GetHistogram(new HistogramOptions { Transparency = HistogramTransparency.Exclude });
         await Assert.That(histogram.PixelCount).IsEqualTo(0L);
-        await Assert.That(double.IsNaN(histogram.Mean(HistogramChannel.Luminance))).IsTrue();
-        Assert.ThrowsExactly<InvalidOperationException>(() => histogram.Percentile(HistogramChannel.Red, 50));
+        await Assert.That(double.IsNaN(histogram.MeanNormalized(HistogramChannel.Luminance))).IsTrue();
+        Assert.ThrowsExactly<InvalidOperationException>(() => histogram.PercentileNormalized(HistogramChannel.Red, 50));
     }
 
     [Test]
@@ -128,8 +129,8 @@ public class HistogramTests
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new HistogramOptions { Transparency = (HistogramTransparency)5 });
         ImageHistogram histogram = image.GetHistogram();
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => histogram.GetCounts((HistogramChannel)9));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => histogram.Percentile(HistogramChannel.Red, 101));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => histogram.Percentile(HistogramChannel.Red, double.NaN));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => histogram.PercentileNormalized(HistogramChannel.Red, 101));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => histogram.PercentileNormalized(HistogramChannel.Red, double.NaN));
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
         Assert.ThrowsExactly<OperationCanceledException>(() => image.GetHistogram(null, cts.Token));

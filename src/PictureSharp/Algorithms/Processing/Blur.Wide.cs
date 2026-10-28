@@ -62,22 +62,21 @@ internal static class BlurWide
     }
 
     /// <summary>
-    /// <see cref="Blur.UnsharpMask"/>: <paramref name="threshold"/> keeps its 8-bit units (a difference must exceed
-    /// threshold / 255), the sharpened value is unrounded.
+    /// <see cref="Blur.UnsharpMask"/>: a difference must exceed <paramref name="threshold"/> (normalized), the sharpened
+    /// value is unrounded.
     /// </summary>
-    public static Vector4[] UnsharpMask(ReadOnlySpan<Vector4> src, int width, int height, float radius, int percent, int threshold,
+    public static Vector4[] UnsharpMask(ReadOnlySpan<Vector4> src, int width, int height, float radius, int percent, float threshold,
         CancellationToken cancellationToken = default)
     {
         Vector4[] blurred = GaussianBlur(src, width, height, radius, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         ReadOnlySpan<float> lineIn = MemoryMarshal.Cast<Vector4, float>(src);
         Span<float> lineOut = MemoryMarshal.Cast<Vector4, float>(blurred.AsSpan());
-        float limit = threshold / 255f;
         float amount = percent / 100f;
         for (int i = 0; i < lineIn.Length; i++)
         {
             float diff = lineIn[i] - lineOut[i];
-            lineOut[i] = MathF.Abs(diff) > limit ? Math.Clamp(lineIn[i] + (diff * amount), 0f, 1f) : lineIn[i];
+            lineOut[i] = MathF.Abs(diff) > threshold ? Math.Clamp(lineIn[i] + (diff * amount), 0f, 1f) : lineIn[i];
         }
 
         return blurred;

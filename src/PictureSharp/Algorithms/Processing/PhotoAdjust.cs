@@ -13,7 +13,7 @@ namespace PictureSharp.Algorithms.Processing;
 /// vibrance on the encoded values and a radial vignette in linear light. The formulas are documented in
 /// docs/image-processing.md and mirrored by tests/assets/photo_adjust_reference.py.
 /// </summary>
-internal static class PhotoAdjust
+internal static partial class PhotoAdjust
 {
     /// <summary>Rec. 709 luma weights.</summary>
     public const float LumaR = 0.2126f, LumaG = 0.7152f, LumaB = 0.0722f;
@@ -36,22 +36,33 @@ internal static class PhotoAdjust
     /// </summary>
     public static void WhiteBalanceLut(Span<byte> lut, float temperature, float tint)
     {
+        (float r, float g, float b) = WhiteBalanceGains(temperature, tint);
+        ChannelGainsLut(lut, r, g, b);
+    }
+
+    /// <summary>The channel gains of <see cref="WhiteBalanceLut(Span{byte}, float, float)"/>.</summary>
+    public static (float R, float G, float B) WhiteBalanceGains(float temperature, float tint)
+    {
         float r = DeterministicMath.Exp2(WhiteBalanceStops * temperature);
         float g = DeterministicMath.Exp2(-WhiteBalanceStops * tint);
         float b = DeterministicMath.Exp2(-WhiteBalanceStops * temperature);
         float normalize = 1f / ((LumaR * r) + (LumaG * g) + (LumaB * b));
-        ChannelGainsLut(lut, r * normalize, g * normalize, b * normalize);
+        return (r * normalize, g * normalize, b * normalize);
     }
 
     /// <summary>
-    /// Fills <paramref name="lut"/> with channel gains <c>Y / C</c> in linear light, where C is a channel of
-    /// <paramref name="neutral"/> (all above 0) and Y its Rec. 709 luma: the neutral becomes gray of the same luminance.
+    /// Channel gains <c>Y / C</c> in linear light, where C is a channel of <paramref name="neutral"/> (all above 0)
+    /// and Y its Rec. 709 luma: the neutral becomes gray of the same luminance. A neutral between 8-bit levels is
+    /// decoded at 16 bits; an 8-bit one gives the 8-bit decode exactly.
     /// </summary>
-    public static void NeutralWhiteBalanceLut(Span<byte> lut, Rgba32 neutral)
+    public static (float R, float G, float B) NeutralGains(Rgba64 neutral)
     {
-        float r = SrgbTransfer.Decode(neutral.R), g = SrgbTransfer.Decode(neutral.G), b = SrgbTransfer.Decode(neutral.B);
+        float r = Decode(neutral.R), g = Decode(neutral.G), b = Decode(neutral.B);
         float luma = (LumaR * r) + (LumaG * g) + (LumaB * b);
-        ChannelGainsLut(lut, luma / r, luma / g, luma / b);
+        return (luma / r, luma / g, luma / b);
+
+        // Equal values either way; the 8-bit table avoids building the 16-bit one for 8-bit colors.
+        static float Decode(ushort v) => v % 257 == 0 ? SrgbTransfer.Decode((byte)(v / 257)) : SrgbTransfer.Decode16(v);
     }
 
     /// <summary>Fills <paramref name="lut"/> (R, G, B × 256) with <c>Encode(Decode(v) · gain)</c> per channel.</summary>

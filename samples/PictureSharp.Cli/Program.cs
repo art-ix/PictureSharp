@@ -312,8 +312,8 @@ try
                     {
                         case "-mode": options = options with { Mode = Enum.Parse<AutoCropMode>(args[++i], ignoreCase: true) }; break;
                         case "-color": options = options with { Mode = AutoCropMode.Background, Background = ParseColor(args[++i]) }; break;
-                        case "-threshold": options = options with { AlphaThreshold = byte.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
-                        case "-tolerance": options = options with { Tolerance = byte.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-threshold": options = options with { AlphaThresholdNormalized = byte.Parse(args[++i], CultureInfo.InvariantCulture) / 255f }; break;
+                        case "-tolerance": options = options with { ToleranceNormalized = byte.Parse(args[++i], CultureInfo.InvariantCulture) / 255f }; break;
                         case "-padding": options = options with { Padding = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                         case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                         default: load = LoadOption(args, ref i, load); break;

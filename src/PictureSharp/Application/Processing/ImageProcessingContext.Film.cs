@@ -1,6 +1,7 @@
 using System.Drawing;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Processing;
 
@@ -76,19 +77,32 @@ public readonly ref partial struct ImageProcessingContext
         ArgumentNullException.ThrowIfNull(calibration);
         if (calibration.FilmType == FilmType.BlackAndWhiteNegative)
         {
-            ForEachPixelSpan(static pixels =>
-            {
-                foreach (ref Rgba32 p in pixels)
-                {
-                    byte y = (byte)GrayWorld.Luma(p);
-                    p = new Rgba32(y, y, y, p.A);
-                }
-            });
+            ForEachFrame(new FilmLumaKernel());
         }
 
-        byte[] lut = new byte[ToneLut.Length];
-        NegativePrinter.Lut(lut, calibration, print ?? NegativePrintOptions.Default);
-        return ApplyToneLut(lut);
+        return MapChannels(new NegativePrintMaps(calibration, print ?? NegativePrintOptions.Default));
+    }
+
+    // Film processing has no 16-bit form yet (0.9.0 step 4); it throws instead of rounding to 8 bits.
+    private readonly struct FilmLumaKernel : IPixelKernel
+    {
+        public void Run(Rgba32[] pixels)
+        {
+            foreach (ref Rgba32 p in pixels.AsSpan())
+            {
+                byte y = (byte)GrayWorld.Luma(p);
+                p = new Rgba32(y, y, y, p.A);
+            }
+        }
+
+        public void RunWide<TPixel>(TPixel[] pixels) where TPixel : unmanaged, IPixelOps<TPixel> => throw PixelTypes.NotYetSupported();
+    }
+
+    private readonly struct NegativePrintMaps(NegativeCalibration calibration, NegativePrintOptions print) : IChannelMaps
+    {
+        public void Fill(Span<byte> lut) => NegativePrinter.Lut(lut, calibration, print);
+
+        public void Fill(Span<ushort> lut) => throw PixelTypes.NotYetSupported();
     }
 
     /// <summary>Measures a single-frame image; regions are validated here.</summary>

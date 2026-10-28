@@ -131,7 +131,7 @@ public class PhotoCleanupTests
     {
         using Image img = ProcessingOracleTests.Noise(9, 7, 3);
         Rgba32[] before = Pixels(img);
-        img.Mutate(x => x.Curves([new(0, 0), new(255, 255)]).AutoWhiteBalance(0).ReduceColorNoise(0));
+        img.Mutate(x => x.CurvesNormalized([new(0, 0), new(1, 1)]).AutoWhiteBalance(0).ReduceColorNoise(0));
         await Assert.That(Pixels(img)).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
 
@@ -139,14 +139,14 @@ public class PhotoCleanupTests
     public async Task Curves_TwoPointsInverted_IsInvert_AndOutsideIsConstant()
     {
         using Image img = ProcessingOracleTests.Noise(16, 12, 4);
-        using Image inverted = img.Clone(x => x.Curves([new(0, 255), new(255, 0)]));
+        using Image inverted = img.Clone(x => x.CurvesNormalized([new(0, 1), new(1, 0)]));
         using Image expected = img.Clone(x => x.Invert());
         await Assert.That(Pixels(inverted)).IsEquivalentTo(Pixels(expected), CollectionOrdering.Matching);
 
         using Image gray = new(2, 1);
         gray[0, 0] = new Rgba32(10, 10, 10, 255);
         gray[1, 0] = new Rgba32(250, 250, 250, 255);
-        using Image flat = gray.Clone(x => x.Curves([new(50, 100), new(200, 150)]));
+        using Image flat = gray.Clone(x => x.CurvesNormalized([new(50 / 255f, 100 / 255f), new(200 / 255f, 150 / 255f)]));
         await Assert.That(flat[0, 0]).IsEqualTo(new Rgba32(100, 100, 100, 255));
         await Assert.That(flat[1, 0]).IsEqualTo(new Rgba32(150, 150, 150, 255));
     }
@@ -161,7 +161,7 @@ public class PhotoCleanupTests
         }
 
         PointF[] points = [new(0, 0), new(40, 10), new(128, 160), new(200, 230), new(255, 255)];
-        using Image curved = ramp.Clone(x => x.Curves(points, ColorChannels.Green));
+        using Image curved = ramp.Clone(x => x.CurvesNormalized([.. points.Select(p => new PointF(p.X / 255f, p.Y / 255f))], ColorChannels.Green));
         foreach (PointF p in points)
         {
             await Assert.That((int)curved[(int)p.X, 0].G).IsEqualTo((int)p.Y);
@@ -182,12 +182,12 @@ public class PhotoCleanupTests
     public async Task Curves_RejectsInvalidPoints()
     {
         using var img = new Image(2, 2);
-        await Assert.That(() => img.Mutate(x => x.Curves([new(0, 0)]))).Throws<ArgumentException>();
-        await Assert.That(() => img.Mutate(x => x.Curves([new(10, 0), new(10, 5)]))).Throws<ArgumentException>();
-        await Assert.That(() => img.Mutate(x => x.Curves([new(0, 0), new(256, 5)]))).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => img.Mutate(x => x.Curves([new(0, float.NaN), new(255, 5)]))).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => img.Mutate(x => x.Curves([new(0, 0), new(255, 255)], ColorChannels.None))).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => img.Mutate(x => x.Curves([new(0, 0), new(255, 255)], (ColorChannels)8))).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => img.Mutate(x => x.CurvesNormalized([new(0, 0)]))).Throws<ArgumentException>();
+        await Assert.That(() => img.Mutate(x => x.CurvesNormalized([new(10 / 255f, 0), new(10 / 255f, 5 / 255f)]))).Throws<ArgumentException>();
+        await Assert.That(() => img.Mutate(x => x.CurvesNormalized([new(0, 0), new(256 / 255f, 5 / 255f)]))).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => img.Mutate(x => x.CurvesNormalized([new(0, float.NaN), new(1, 5 / 255f)]))).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => img.Mutate(x => x.CurvesNormalized([new(0, 0), new(1, 1)], ColorChannels.None))).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => img.Mutate(x => x.CurvesNormalized([new(0, 0), new(1, 1)], (ColorChannels)8))).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]

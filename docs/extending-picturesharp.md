@@ -434,19 +434,20 @@ types and the rules, and how to choose the minimum PictureSharp version of a plu
 
 ## Custom frame processors
 
-`IFrameProcessor` (`PictureSharp.Processing`) produces a new pixel buffer for every frame and may change the canvas size.
-This one keeps the left half of the image:
+`IFrameProcessor<TPixel>` (`PictureSharp.Processing`) produces a new pixel buffer for every frame and may change the
+canvas size. `TPixel` is the image's storage type (`Rgba32`, or `Rgba64` for 16-bit images; see `Image.PixelType`). This
+one keeps the left half of an image of either depth:
 
 ```csharp
 using System.Drawing;
 using PictureSharp;
 using PictureSharp.Processing;
 
-public readonly struct LeftHalf : IFrameProcessor
+public readonly struct LeftHalf<TPixel> : IFrameProcessor<TPixel> where TPixel : unmanaged
 {
     public Size GetOutputSize(Size source) => new(Math.Max(1, source.Width / 2), source.Height);
 
-    public void Process(ReadOnlySpan<Rgba32> source, Size sourceSize, Span<Rgba32> destination, Size destinationSize,
+    public void Process(ReadOnlySpan<TPixel> source, Size sourceSize, Span<TPixel> destination, Size destinationSize,
         CancellationToken cancellationToken)
     {
         for (int y = 0; y < destinationSize.Height; y++)
@@ -458,7 +459,9 @@ public static class MyOperations
 {
     extension(ImageProcessingContext x)
     {
-        public ImageProcessingContext LeftHalf() => x.ApplyProcessor(new LeftHalf());
+        public ImageProcessingContext LeftHalf() => x.PixelType == PixelType.Rgba64
+            ? x.ApplyProcessor(new LeftHalf<Rgba64>())
+            : x.ApplyProcessor(new LeftHalf<Rgba32>());
     }
 }
 
@@ -469,7 +472,9 @@ image.Mutate(x => x.AutoOrient().LeftHalf().Resize(800, 0));
 - `Process` receives row-major straight-alpha pixels and a transparent black destination. Do not keep the spans.
 - All frames are prepared before any is published, so an exception or cancellation leaves the image unchanged. Within
   `Clone` the source is not copied.
-- A struct processor runs without boxing.
+- `ApplyProcessor` infers `TPixel` from the processor and throws `InvalidOperationException` when the image stores
+  another type; convert it with `ConvertPixelType` first, or implement the interface for both types. A processor is
+  boxed once per call, not per pixel or frame.
 
 For edits that keep the size, `Apply(Action<ImageFrame>)` is simpler; see
 [Image processing](image-processing.md#custom-operations).

@@ -160,10 +160,10 @@ public class GraphicsSimdTests
                 ImageFrame[] frames = [new ImageFrame(width, height, pixels)];
                 foreach (AutoCropOptions options in new[]
                 {
-                    new AutoCropOptions(), new AutoCropOptions { AlphaThreshold = 2 },
-                    new AutoCropOptions { Mode = AutoCropMode.Background, Tolerance = 3 },
-                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = background, Tolerance = 0 },
-                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = new Rgba32(1, 2, 3, 0), Tolerance = 5 },
+                    new AutoCropOptions(), new AutoCropOptions { AlphaThresholdNormalized = 2 / 255f },
+                    new AutoCropOptions { Mode = AutoCropMode.Background, ToleranceNormalized = 3 / 255f },
+                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = background, ToleranceNormalized = 0 },
+                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = new Rgba32(1, 2, 3, 0), ToleranceNormalized = 5 / 255f },
                 })
                 {
                     Rectangle? expected = TrimBounds.Find(frames, width, height, options, CancellationToken.None, vectorize: false);

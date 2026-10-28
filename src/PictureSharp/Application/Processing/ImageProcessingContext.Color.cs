@@ -87,11 +87,11 @@ public readonly ref partial struct ImageProcessingContext
         }
     }
 
-    /// <summary>Converts to grayscale (BT.601 luma, as Pillow's "L" mode); alpha is kept.</summary>
-    public ImageProcessingContext Grayscale() => ForEachPixelSpan(ColorOps.Grayscale);
+    /// <summary>Converts to grayscale (BT.601 luma at the image's depth, as Pillow's "L" mode); alpha is kept.</summary>
+    public ImageProcessingContext Grayscale() => ForEachFrame(new ColorOps.GrayscaleKernel());
 
     /// <summary>Inverts the color channels; alpha is kept.</summary>
-    public ImageProcessingContext Invert() => ForEachPixelSpan(ColorOps.Invert);
+    public ImageProcessingContext Invert() => ForEachFrame(new ColorOps.InvertKernel());
 
     /// <summary>Overwrites every pixel with <paramref name="color"/> (no blending), rounded to 8 bits on an 8-bit image.</summary>
     public ImageProcessingContext Fill(Rgba64 color)
@@ -123,10 +123,13 @@ public readonly ref partial struct ImageProcessingContext
         return this;
     }
 
-    /// <summary>Sets alpha to 0 on every pixel equal to <paramref name="color"/> (all four channels); their color channels are kept.</summary>
-    public ImageProcessingContext MakeTransparent(Rgba32 color)
+    /// <summary>
+    /// Sets alpha to 0 on every pixel equal to <paramref name="color"/> in all four channels at the image's depth (on an
+    /// 8-bit image the color is rounded to 8 bits first); their color channels are kept. There is no tolerance.
+    /// </summary>
+    public ImageProcessingContext MakeTransparent(Rgba64 color)
     {
-        ForEachPixelSpan(color, static (pixels, value) => ColorOps.MakeTransparent(pixels, value));
+        ForEachFrame(new ColorOps.MakeTransparentKernel(color));
 
         Target.HasAlpha = true;
         return this;

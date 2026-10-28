@@ -91,7 +91,7 @@ public class ConsumerCompilationTests
                     a.Mutate(x => x.AutoContrast(1f, true));
                     a.Mutate(x => x.AutoContrast(1f, 2f));
                     a.Mutate(x => x.AutoContrast().Equalize().Gamma(2.2f));
-                    _ = a.GetHistogram().Percentile(PictureSharp.Processing.HistogramChannel.Luminance, 50);
+                    _ = a.GetHistogram().PercentileNormalized(PictureSharp.Processing.HistogramChannel.Luminance, 50);
                     a.Mutate(x => x.AutoCrop());
                     a.Mutate(x => x.ApplyMask(b));
                     a.Mutate(x => x.ApplyMask(b, new PictureSharp.Processing.MaskOptions { Invert = true }));
@@ -182,6 +182,99 @@ public class ConsumerCompilationTests
         await Assert.That(result.Success).IsTrue().Because(string.Join(Environment.NewLine, result.Diagnostics));
         SemanticModel model = compilation.GetSemanticModel(tree);
         await Assert.That(FirstParameter(model, tree, "Image.LoadPixelData(pixels, 3, 1)")).IsEqualTo("System.ReadOnlySpan<PictureSharp.Rgba64>");
+    }
+
+    /// <summary>D11, D12 and step 3: normalized tone settings, histogram statistics, colors and typed processors.</summary>
+    [Test]
+    public async Task ToneConsumer_CompilesNormalizedSettingsColorsAndTypedProcessors()
+    {
+        const string source = """
+            using System;
+            using System.Drawing;
+            using System.Threading;
+            using PictureSharp;
+            using PictureSharp.Processing;
+            public sealed class Both : IFrameProcessor<Rgba32>, IFrameProcessor<Rgba64>
+            {
+                public Size GetOutputSize(Size source) => source;
+                public void Process(ReadOnlySpan<Rgba32> s, Size ss, Span<Rgba32> d, Size ds, CancellationToken t) => s.CopyTo(d);
+                public void Process(ReadOnlySpan<Rgba64> s, Size ss, Span<Rgba64> d, Size ds, CancellationToken t) => s.CopyTo(d);
+            }
+            public readonly struct Narrow : IFrameProcessor<Rgba32>
+            {
+                public Size GetOutputSize(Size source) => source;
+                public void Process(ReadOnlySpan<Rgba32> s, Size ss, Span<Rgba32> d, Size ds, CancellationToken t) => s.CopyTo(d);
+            }
+            public static class Consumer
+            {
+                public static void Run(Image image)
+                {
+                    image.Mutate(x => x
+                        .Levels(new LevelsOptions { InputBlackNormalized = 20 / 255f, InputWhiteNormalized = 0.9f, OutputBlackNormalized = 0, OutputWhiteNormalized = 1 })
+                        .CurvesNormalized([new(0, 0), new(0.25f, 0.2f), new(1, 1)])
+                        .CurvesNormalized([new PointF(0, 0.1f), new PointF(1, 1)], ColorChannels.Blue)
+                        .UnsharpMask(thresholdNormalized: 2 / 255f)
+                        .MakeTransparent(new Rgba32(1, 2, 3)).MakeTransparent(default)
+                        .WhiteBalance(Color.Beige).WhiteBalance(new Rgba64(40000, 35000, 30000))
+                        .AutoCrop(new AutoCropOptions { AlphaThresholdNormalized = 0.1f, ToleranceNormalized = 0.05f, Background = Color.White }));
+                    image.Mutate(x => x.ApplyProcessor(new Narrow()).ApplyProcessor<Rgba64>(new Both()));
+                    image.Mutate(x => x.MakeTransparent(Color.Magenta));
+                    ImageHistogram histogram = image.GetHistogram(new HistogramOptions { FullResolution = true });
+                    double median = histogram.PercentileNormalized(HistogramChannel.Luminance, 50) + histogram.MeanNormalized(HistogramChannel.Red);
+                    int bins = histogram.BinCount;
+                }
+            }
+            """;
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
+        CSharpCompilation compilation = CSharpCompilation.Create("ToneConsumer", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        using var output = new MemoryStream();
+        var result = compilation.Emit(output);
+        await Assert.That(result.Success).IsTrue().Because(string.Join(Environment.NewLine, result.Diagnostics));
+        SemanticModel model = compilation.GetSemanticModel(tree);
+        await Assert.That(FirstParameter(model, tree, "x.ApplyProcessor(new Narrow())")).IsEqualTo("PictureSharp.Processing.IFrameProcessor<PictureSharp.Rgba32>");
+        await Assert.That(FirstParameter(model, tree, "x.MakeTransparent(Color.Magenta)")).IsEqualTo("PictureSharp.Rgba64");
+    }
+
+    /// <summary>D11, D12: the 0–255 names are gone, so old calculations stop compiling instead of changing meaning.</summary>
+    [Test]
+    public async Task RemovedToneNames_DoNotCompile()
+    {
+        const string source = """
+            using System;
+            using System.Drawing;
+            using System.Threading;
+            using PictureSharp;
+            using PictureSharp.Processing;
+            public readonly struct Old : IFrameProcessor
+            {
+            }
+            public static class Consumer
+            {
+                public static void Run(Image image, ImageHistogram histogram)
+                {
+                    _ = new LevelsOptions { InputBlack = 10 };
+                    _ = new LevelsOptions { OutputWhite = 200 };
+                    image.Mutate(x => x.Curves([new(0, 0), new(255, 255)]));
+                    _ = histogram.Mean(HistogramChannel.Red);
+                    _ = histogram.Percentile(HistogramChannel.Red, 50);
+                    _ = new AutoCropOptions { AlphaThreshold = 16 };
+                    _ = new AutoCropOptions { Tolerance = 12 };
+                    image.Mutate(x => x.UnsharpMask(threshold: 3));
+                }
+            }
+            """;
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
+        CSharpCompilation compilation = CSharpCompilation.Create("RemovedTone", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        int[] errorLines = [.. compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)
+            .Select(d => d.Location.GetLineSpan().StartLinePosition.Line).Distinct()];
+        string[] lines = source.Split('\n');
+        int[] expected = [.. Enumerable.Range(0, lines.Length).Where(i => lines[i].Contains("IFrameProcessor") || lines[i].TrimStart().StartsWith("_ = ", StringComparison.Ordinal)
+            || lines[i].Contains("image.Mutate", StringComparison.Ordinal))];
+        await Assert.That(expected.Length).IsEqualTo(9);
+        await Assert.That(expected.All(errorLines.Contains)).IsTrue()
+            .Because(string.Join(Environment.NewLine, compilation.GetDiagnostics().Select(d => d.ToString())));
     }
 
     /// <summary>D13: the non-generic pixel accessors are gone, so every access names its pixel type.</summary>

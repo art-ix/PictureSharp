@@ -13,7 +13,7 @@ using (Image adjusted = source.Clone(x => x.Exposure(0.3f).WhiteBalance(0.2f).Vi
     if (adjusted.Size != source.Size || adjusted[8, 6] == source[8, 6])
         throw new InvalidOperationException("Photo adjustments failed.");
 }
-using (Image developed = source.Clone(x => x.Curves([new(0, 0), new(128, 140), new(255, 255)]).AutoWhiteBalance()
+using (Image developed = source.Clone(x => x.CurvesNormalized([new(0, 0), new(128 / 255f, 140 / 255f), new(1, 1)]).AutoWhiteBalance()
     .RemoveDust().ReduceColorNoise().DevelopNegative()))
 {
     NegativeAnalysis analysis = source.AnalyzeNegative();
@@ -132,11 +132,11 @@ using (var canvas = new Image(6, 6))
     canvas[4, 3] = new Rgba32(220, 60, 10, 128);
     if (canvas.FindTrimBounds() != new System.Drawing.Rectangle(1, 2, 4, 2)) throw new InvalidOperationException("Trim bounds failed.");
     ImageHistogram histogram = canvas.GetHistogram(new HistogramOptions { Transparency = HistogramTransparency.Exclude });
-    if (histogram.PixelCount != 2 || histogram.Percentile(HistogramChannel.Red, 100) != 220) throw new InvalidOperationException("Histogram failed.");
+    if (histogram.PixelCount != 2 || histogram.PercentileNormalized(HistogramChannel.Red, 100) != 220 / 255.0) throw new InvalidOperationException("Histogram failed.");
     using var mask = new Image(4, 2, new Rgba32(255, 255, 255));
     canvas.Mutate(x => x
         .AutoCrop(new AutoCropOptions { Padding = 1 })
-        .Levels(new LevelsOptions { InputBlack = 10, InputWhite = 240 })
+        .Levels(new LevelsOptions { InputBlackNormalized = 10 / 255f, InputWhiteNormalized = 240 / 255f })
         .Gamma(1.2f, ColorChannels.Blue)
         .AutoContrast(1f)
         .Equalize()
@@ -169,9 +169,11 @@ using (Image rawCopy = Image.Load(raw))
         throw new InvalidOperationException("Format plugin failed.");
 }
 ImageConfiguration.Default = builtIn;
-using (Image cropped = source.Clone(x => x.ApplyProcessor(new LeftHalf())))
+using (Image cropped = source.Clone(x => x.ApplyProcessor(new LeftHalf<Rgba32>())))
+using (Image wide = source.Clone(x => x.ConvertPixelType(PixelType.Rgba64).ApplyProcessor(new LeftHalf<Rgba64>()).Levels(new LevelsOptions { Gamma = 1.2f })))
 {
-    if (cropped.Width != source.Width / 2 || cropped[0, 0] != source[0, 0])
+    if (cropped.Width != source.Width / 2 || cropped[0, 0] != source[0, 0] || wide.Width != cropped.Width
+        || wide.GetHistogram(new HistogramOptions { FullResolution = true }).BinCount != 65536)
         throw new InvalidOperationException("Frame processor failed.");
 }
 source.Metadata.Orientation = ExifOrientation.RightTop;
@@ -467,12 +469,12 @@ sealed record RawEncoderOptions : EncoderOptions
     public override ImageFormat Format => RawFormat.Kind;
 }
 
-/// <summary>Keeps the left half of every frame: exercises generic struct processors under AOT.</summary>
-readonly struct LeftHalf : IFrameProcessor
+/// <summary>Keeps the left half of every frame: exercises generic struct processors of both depths under AOT.</summary>
+readonly struct LeftHalf<TPixel> : IFrameProcessor<TPixel> where TPixel : unmanaged
 {
     public System.Drawing.Size GetOutputSize(System.Drawing.Size source) => new(source.Width / 2, source.Height);
 
-    public void Process(ReadOnlySpan<Rgba32> source, System.Drawing.Size sourceSize, Span<Rgba32> destination, System.Drawing.Size destinationSize, CancellationToken cancellationToken)
+    public void Process(ReadOnlySpan<TPixel> source, System.Drawing.Size sourceSize, Span<TPixel> destination, System.Drawing.Size destinationSize, CancellationToken cancellationToken)
     {
         for (int y = 0; y < destinationSize.Height; y++)
             source.Slice(y * sourceSize.Width, destinationSize.Width).CopyTo(destination[(y * destinationSize.Width)..]);

@@ -303,8 +303,13 @@ public class HighBitDepthTests
     {
         using Image image = Png16Tests.Ramp(4, 4);
         Rgba64[] before = image.GetPixelSpan<Rgba64>().ToArray();
-        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Grayscale()));
-        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Levels(new LevelsOptions { Gamma = 2f })));
+        // Step 4 (cleanup and film) is not ported yet.
+        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.Denoise(0.5f)));
+        Assert.ThrowsExactly<NotSupportedException>(() => image.Mutate(x => x.InvertNegative(new NegativeCalibration
+        {
+            FilmBase = new(0.8f, 0.6f, 0.4f),
+            DensityRange = new(2f, 2f, 2f),
+        })));
         await Assert.That(image.GetPixelSpan<Rgba64>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
 
@@ -369,8 +374,8 @@ public class HighBitDepthTests
         using Image narrow = new(9, 7);
         narrow[3, 2] = new Rgba32(10, 20, 30, 5);
         narrow[6, 4] = new Rgba32(10, 20, 30, 200);
-        foreach (AutoCropOptions options in new[] { AutoCropOptions.Default, new AutoCropOptions { AlphaThreshold = 5 },
-            new AutoCropOptions { Mode = AutoCropMode.Background, Tolerance = 4, Padding = 1 } })
+        foreach (AutoCropOptions options in new[] { AutoCropOptions.Default, new AutoCropOptions { AlphaThresholdNormalized = 5 / 255f },
+            new AutoCropOptions { Mode = AutoCropMode.Background, ToleranceNormalized = 4 / 255f, Padding = 1 } })
         {
             using Image wide = narrow.Clone(x => x.ConvertPixelType(PixelType.Rgba64).AutoCrop(options));
             using Image expected = narrow.Clone(x => x.AutoCrop(options));

@@ -91,7 +91,7 @@ public class GraphicsBenchmarks
         _ = Op switch
         {
             Operation.CopyOnly => x.Apply(static _ => { }),
-            Operation.Levels => x.Levels(new LevelsOptions { InputBlack = 20, InputWhite = 230, Gamma = 1.2f }),
+            Operation.Levels => x.Levels(new LevelsOptions { InputBlackNormalized = 20 / 255f, InputWhiteNormalized = 230 / 255f, Gamma = 1.2f }),
             Operation.Gamma => x.Gamma(2.2f),
             Operation.AutoContrast => x.AutoContrast(1f),
             Operation.Equalize => x.Equalize(),

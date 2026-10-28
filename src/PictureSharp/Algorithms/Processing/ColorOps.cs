@@ -6,7 +6,7 @@ using PictureSharp.Domain.Pixels;
 namespace PictureSharp.Algorithms.Processing;
 
 /// <summary>Per-pixel color operations on frame buffers.</summary>
-internal static class ColorOps
+internal static partial class ColorOps
 {
     /// <summary>Replaces the color with its BT.601 luma (Pillow's "L" conversion); alpha is kept.</summary>
     public static void Grayscale(Span<Rgba32> pixels)

@@ -56,7 +56,7 @@ public class PhotoAdjustBenchmarks
             Operation.ShadowsHighlights => x.ShadowsHighlights(0.5f, -0.5f),
             Operation.Clarity => x.Clarity(0.5f),
             Operation.Denoise => x.Denoise(0.5f),
-            Operation.Curves => x.Curves([new(0, 0), new(64, 52), new(192, 206), new(255, 255)]),
+            Operation.Curves => x.CurvesNormalized([new(0, 0), new(64 / 255f, 52 / 255f), new(192 / 255f, 206 / 255f), new(1, 1)]),
             Operation.NeutralWhiteBalance => x.WhiteBalance(new Rgba32(212, 196, 170, 255)),
             Operation.AutoWhiteBalance => x.AutoWhiteBalance(),
             Operation.RemoveDust => x.RemoveDust(6),

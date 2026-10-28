@@ -17,7 +17,7 @@ public readonly ref partial struct ImageProcessingContext
     public ImageProcessingContext Brightness(float amount)
     {
         CheckFinite(amount, nameof(amount));
-        return amount == 1f ? this : ForEachPixelSpan(amount, static (pixels, value) => Enhance.Brightness(pixels, value));
+        return amount == 1f ? this : ForEachFrame(new Enhance.Kernel(EnhanceMode.Brightness, amount));
     }
 
     /// <summary>
@@ -27,7 +27,7 @@ public readonly ref partial struct ImageProcessingContext
     public ImageProcessingContext Contrast(float amount)
     {
         CheckFinite(amount, nameof(amount));
-        return amount == 1f ? this : ForEachPixelSpan(amount, static (pixels, value) => Enhance.Contrast(pixels, value));
+        return amount == 1f ? this : ForEachFrame(new Enhance.Kernel(EnhanceMode.Contrast, amount));
     }
 
     /// <summary>
@@ -37,11 +37,11 @@ public readonly ref partial struct ImageProcessingContext
     public ImageProcessingContext Saturate(float amount)
     {
         CheckFinite(amount, nameof(amount));
-        return amount == 1f ? this : ForEachPixelSpan(amount, static (pixels, value) => Enhance.Saturate(pixels, value));
+        return amount == 1f ? this : ForEachFrame(new Enhance.Kernel(EnhanceMode.Saturate, amount));
     }
 
     /// <summary>Applies a sepia tone (the classic 0.393/0.769/0.189 color matrix); alpha is kept.</summary>
-    public ImageProcessingContext Sepia() => ForEachPixelSpan(ColorOps.Sepia);
+    public ImageProcessingContext Sepia() => ForEachFrame(new ColorOps.SepiaKernel());
 
     /// <summary>
     /// Averages each pixel with its neighbours up to <paramref name="radius"/> pixels away in each direction (a fractional
@@ -65,15 +65,20 @@ public readonly ref partial struct ImageProcessingContext
 
     /// <summary>
     /// Sharpens by adding <paramref name="percent"/>% of the difference to a Gaussian blur of the given radius wherever
-    /// that difference exceeds <paramref name="threshold"/> (in 8-bit levels, also on 16-bit images), as Pillow's
-    /// <c>ImageFilter.UnsharpMask</c>.
+    /// that difference exceeds <paramref name="thresholdNormalized"/>, as Pillow's <c>ImageFilter.UnsharpMask</c>.
     /// </summary>
-    public ImageProcessingContext UnsharpMask(float radius = 2f, int percent = 150, int threshold = 3)
+    /// <param name="radius">Standard deviation of the blur in pixels; finite and at least 0.</param>
+    /// <param name="percent">The strength in percent; at least 0.</param>
+    /// <param name="thresholdNormalized">
+    /// The smallest difference that is sharpened, normalized to 0–1 of the channel range at any depth; the default
+    /// 3 / 255 is Pillow's threshold of 3 levels (an 8-bit threshold t is <c>t / 255f</c>).
+    /// </param>
+    public ImageProcessingContext UnsharpMask(float radius = 2f, int percent = 150, float thresholdNormalized = 3f / 255f)
     {
         CheckRadius(radius, nameof(radius));
         ArgumentOutOfRangeException.ThrowIfNegative(percent);
-        ArgumentOutOfRangeException.ThrowIfNegative(threshold);
-        return Spatial(new UnsharpMaskFilter(radius, percent, threshold));
+        NormalizedLevel.Check(thresholdNormalized, nameof(thresholdNormalized));
+        return Spatial(new UnsharpMaskFilter(radius, percent, thresholdNormalized));
     }
 
     /// <summary>Sharpens with Pillow's 3×3 <c>ImageFilter.SHARPEN</c> kernel; the outermost pixels are kept.</summary>
@@ -157,10 +162,10 @@ public readonly ref partial struct ImageProcessingContext
             BlurWide.GaussianBlur(src, width, height, sigma, cancellationToken);
     }
 
-    private readonly struct UnsharpMaskFilter(float radius, int percent, int threshold) : ISpatialFilter
+    private readonly struct UnsharpMaskFilter(float radius, int percent, float threshold) : ISpatialFilter
     {
         public Rgba32[] Run(ReadOnlySpan<Rgba32> src, int width, int height, CancellationToken cancellationToken) =>
-            Blur.UnsharpMask(src, width, height, radius, percent, threshold, cancellationToken);
+            Blur.UnsharpMask(src, width, height, radius, percent, NormalizedLevel.Threshold(threshold, byte.MaxValue), cancellationToken);
 
         public Vector4[] RunWide(ReadOnlySpan<Vector4> src, int width, int height, CancellationToken cancellationToken) =>
             BlurWide.UnsharpMask(src, width, height, radius, percent, threshold, cancellationToken);

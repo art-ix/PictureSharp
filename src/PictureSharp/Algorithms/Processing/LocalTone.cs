@@ -9,7 +9,7 @@ namespace PictureSharp.Algorithms.Processing;
 /// Shadows/highlights and clarity: both compare each pixel with a Gaussian blur <c>B</c> of the luma plane
 /// <c>P = (0.2126 R + 0.7152 G + 0.0722 B) / 255</c> of the encoded values. Transparent pixels count like opaque ones.
 /// </summary>
-internal static class LocalTone
+internal static partial class LocalTone
 {
     // Shadows or highlights at ±1 change the darkest or lightest surroundings by this many stops.
     private const float ShadowsHighlightsStops = 1.5f;
