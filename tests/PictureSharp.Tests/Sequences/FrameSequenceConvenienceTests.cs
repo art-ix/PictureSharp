@@ -72,7 +72,7 @@ public class FrameSequenceConvenienceTests
 
                 using var image = new Image(source.Width, source.Height);
                 image.Frames.RootFrame.Duration = TimeSpan.FromSeconds(9);
-                frame.GetPixelSpan().CopyTo(image.Frames.RootFrame.GetPixelSpan());
+                frame.GetPixelSpan<Rgba32>().CopyTo(image.Frames.RootFrame.GetPixelSpan<Rgba32>());
                 await imageWriter.WriteAsync(image, duration);
                 await Assert.That(image.Frames.RootFrame.Duration).IsEqualTo(TimeSpan.FromSeconds(9));
             }
@@ -125,7 +125,7 @@ public class FrameSequenceConvenienceTests
         await Assert.That(first.FrameCount).IsEqualTo(1);
         await Assert.That(first.SourceFormat).IsEqualTo(reader.Format);
         await Assert.That(first.Frames.RootFrame.Duration).IsEqualTo(source.Frames[0].Duration);
-        await Assert.That(first.Frames.RootFrame.GetPixelSpan().SequenceEqual(source.Frames[0].GetPixelSpan())).IsTrue();
+        await Assert.That(first.Frames.RootFrame.GetPixelSpan<Rgba32>().SequenceEqual(source.Frames[0].GetPixelSpan<Rgba32>())).IsTrue();
 
         first.Frames.RootFrame[0, 0] = new Rgba32(1, 2, 3);
         await Assert.That(reader.Current[0, 0]).IsNotEqualTo(new Rgba32(1, 2, 3));

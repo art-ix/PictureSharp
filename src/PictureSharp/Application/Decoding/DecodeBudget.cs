@@ -1,10 +1,16 @@
 
+using PictureSharp.Domain.Pixels;
+
 namespace PictureSharp.Application.Decoding;
 
-/// <summary>Monotonic totals for one operation, including nested codecs and streamed frames.</summary>
-internal sealed class DecodeBudget(DecoderOptions limits)
+/// <summary>
+/// Monotonic totals for one operation, including nested codecs and streamed frames. Pixels are weighted units: a
+/// 16-bit (<see cref="PixelType.Rgba64"/>) pixel counts twice against <see cref="DecoderOptions.MaxPixels"/>.
+/// </summary>
+internal sealed class DecodeBudget(DecoderOptions limits, long maxPixelCount = long.MaxValue, PixelType maxPixelType = PixelType.Rgba64)
 {
     private long _pixels;
+    private long _pixelCount;
     private long _input;
     private long _frames;
     private long _metadata;
@@ -22,25 +28,32 @@ internal sealed class DecodeBudget(DecoderOptions limits)
     public long MetadataBytes => _metadata;
     public long RemainingMetadata => limits.MaxMetadataBytes - _metadata;
 
-    public void ReserveImage(ImageFormat format, long width, long height, int frames = 1)
+    public void ReserveImage(ImageFormat format, long width, long height, int frames = 1, PixelType pixelType = PixelType.Rgba32)
     {
-        limits.ValidateDimensions(format, width, height);
+        limits.ValidateDimensions(format, width, height, pixelType);
         if (frames < 1 || frames > limits.MaxFrames - _frames)
             throw new ImageFormatException(format, "Decoded frames exceed DecoderOptions.MaxFrames.");
         // Division avoids overflow even for caller-supplied long.MaxValue limits.
+        int weight = PixelTypes.Weight(pixelType);
+        if (weight > PixelTypes.Weight(maxPixelType) || width > (maxPixelCount - _pixelCount) / height / frames)
+            throw new ImageFormatException(format, "The embedded image exceeds the reserved part's pixel count or pixel type.");
         long available = limits.MaxPixels - _pixels;
-        if (width > available / height / frames)
-            throw new ImageFormatException(format, "Decoded pixels exceed DecoderOptions.MaxPixels.");
-        _pixels += width * height * frames;
+        if (width > available / height / frames / weight)
+            throw new ImageFormatException(format, DecodeLimits.PixelsExceeded("Decoded pixels exceed", pixelType));
+        _pixels += width * height * frames * weight;
+        _pixelCount += width * height * frames;
         _frames += frames;
     }
 
-    /// <summary>Reserves pixels that are not a frame (a gain map); false when they would exceed the limit.</summary>
-    public bool TryReservePixels(long width, long height)
+    /// <summary>Reserves pixels that are not a frame (a gain map) at their weight; false when they would exceed the limit.</summary>
+    public bool TryReservePixels(long width, long height, PixelType pixelType = PixelType.Rgba32)
     {
-        if (width <= 0 || height <= 0 || width > (limits.MaxPixels - _pixels) / height)
+        int weight = PixelTypes.Weight(pixelType);
+        if (width <= 0 || height <= 0 || weight > PixelTypes.Weight(maxPixelType)
+            || width > (maxPixelCount - _pixelCount) / height || width > (limits.MaxPixels - _pixels) / height / weight)
             return false;
-        _pixels += width * height;
+        _pixels += width * height * weight;
+        _pixelCount += width * height;
         return true;
     }
 

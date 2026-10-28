@@ -25,7 +25,7 @@ public class PluginGainMapEncoderTests
     private static DecodedGainMap MapOf(Image image)
     {
         using Image map = image.GetGainMap()!.Map.Decode(-1, default);
-        return new(map.GetPixelSpan().ToArray(), map.Width, map.Height);
+        return new(map.GetPixelSpan<Rgba32>().ToArray(), map.Width, map.Height);
     }
 
     private static async Task AssertReloads(Image source, byte[] written, string name)

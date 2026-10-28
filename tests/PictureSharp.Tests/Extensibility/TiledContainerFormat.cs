@@ -11,7 +11,7 @@ namespace PictureSharp.Tests.Extensibility;
 /// <param name="charged">Decodes the tiles with <see cref="ImageDecodeContext.DecodeEmbedded"/> instead, charging them.</param>
 /// <param name="afterTile">Called after each tile with its index, e.g. to cancel the load.</param>
 /// <param name="partOptions">Decodes the tiles with these part settings, through the overload that takes them.</param>
-public sealed class TiledContainerFormat(bool charged = false, Action<int>? afterTile = null, EmbeddedPartOptions? partOptions = null)
+public sealed class TiledContainerFormat(bool charged = false, Action<int>? afterTile = null, EmbeddedPartOptions? partOptions = null, PixelType pixelType = PixelType.Rgba32)
     : IImageFormatModule, IImageFormatDecoder
 {
     public static ImageFormat Format { get; } = ImageFormat.Create("TILE", "application/x-tiled-image", ".tiles");
@@ -33,8 +33,8 @@ public sealed class TiledContainerFormat(bool charged = false, Action<int>? afte
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         Header header = Read(data.Span);
-        context.ReservePixels(header.Width, header.Height);
-        var image = new Image(header.Width, header.Height);
+        context.ReservePixels(header.Width, header.Height, pixelType);
+        var image = new Image(header.Width, header.Height, pixelType);
         int across = (header.Width + header.TileWidth - 1) / header.TileWidth;
         int down = (header.Height + header.TileHeight - 1) / header.TileHeight;
         int offset = 12;
@@ -57,7 +57,13 @@ public sealed class TiledContainerFormat(bool charged = false, Action<int>? afte
 
                 for (int y = 0; y < height; y++)
                 {
-                    tile.GetRowSpan(y)[..width].CopyTo(image.GetRowSpan(y0 + y)[x0..]);
+                    if (pixelType == PixelType.Rgba32)
+                        tile.GetRowSpan<Rgba32>(y)[..width].CopyTo(image.GetRowSpan<Rgba32>(y0 + y)[x0..]);
+                    else if (tile.PixelType == PixelType.Rgba64)
+                        tile.GetRowSpan<Rgba64>(y)[..width].CopyTo(image.GetRowSpan<Rgba64>(y0 + y)[x0..]);
+                    else
+                        for (int x = 0; x < width; x++)
+                            image.GetRowSpan<Rgba64>(y0 + y)[x0 + x] = Rgba64.FromRgba32(tile.GetRowSpan<Rgba32>(y)[x]);
                 }
             }
 

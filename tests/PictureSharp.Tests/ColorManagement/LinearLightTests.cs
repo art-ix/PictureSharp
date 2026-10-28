@@ -45,7 +45,7 @@ public class LinearLightTests
 
         using Image expected = Image.Load(IccConversionTests.Color(c.GetProperty("reference").GetString()!));
         await Assert.That(image.Size).IsEqualTo(expected.Size);
-        await Assert.That(MaxDifference(image.Frames.RootFrame.GetPixelSpan(), expected.Frames.RootFrame.GetPixelSpan())).IsLessThanOrEqualTo(1).Because(name);
+        await Assert.That(MaxDifference(image.Frames.RootFrame.GetPixelSpan<Rgba32>(), expected.Frames.RootFrame.GetPixelSpan<Rgba32>())).IsLessThanOrEqualTo(1).Because(name);
     }
 
     /// <summary>The largest per-channel difference including alpha, which float rounding may also move by one.</summary>

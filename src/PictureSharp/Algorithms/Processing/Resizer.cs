@@ -149,8 +149,9 @@ internal static partial class Resizer
     }
 
     // port: Pillow src/libImaging/Geometry.c ImagingScaleAffine (via _imaging.c _resize for NEAREST)
-    private static void ScaleNearest(Rgba32[] src, int srcWidth, int srcHeight, Rgba32[] dst, int width, int height,
+    private static void ScaleNearest<TPixel>(TPixel[] src, int srcWidth, int srcHeight, TPixel[] dst, int width, int height,
         float x0, float y0, float x1, float y1, CancellationToken cancellationToken)
+        where TPixel : unmanaged
     {
         double a0 = (double)(x1 - x0) / width;
         double a4 = (double)(y1 - y0) / height;
@@ -181,12 +182,12 @@ internal static partial class Resizer
             for (int y = 0; y < height; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Span<Rgba32> row = dst.AsSpan(y * width, width);
+                Span<TPixel> row = dst.AsSpan(y * width, width);
                 row.Clear();
                 int yi = Coord(yo);
                 if (yi >= 0 && yi < srcHeight)
                 {
-                    ReadOnlySpan<Rgba32> inRow = src.AsSpan(yi * srcWidth, srcWidth);
+                    ReadOnlySpan<TPixel> inRow = src.AsSpan(yi * srcWidth, srcWidth);
                     for (int x = xmin; x < xmax; x++)
                     {
                         row[x] = inRow[xintab[x]];

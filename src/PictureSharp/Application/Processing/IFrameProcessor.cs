@@ -4,12 +4,15 @@ namespace PictureSharp.Processing;
 
 /// <summary>
 /// A custom operation that produces a new pixel buffer for every frame, possibly of another size, run by
-/// <see cref="ImageProcessingContext.ApplyProcessor{TProcessor}(TProcessor)"/>. Implement it as a struct to avoid
-/// allocations, or as a class; it must not keep the spans after <see cref="Process"/> returns.
+/// <see cref="ImageProcessingContext.ApplyProcessor{TPixel}(IFrameProcessor{TPixel})"/> on images that store
+/// <typeparamref name="TPixel"/> (<see cref="Rgba32"/> or <see cref="Rgba64"/>, see <see cref="Image.PixelType"/>).
+/// A processor for both depths implements the interface twice. It must not keep the spans after
+/// <see cref="Process"/> returns.
 /// </summary>
+/// <typeparam name="TPixel">The pixel storage type the processor works on.</typeparam>
 /// <example>
 /// <code>
-/// readonly struct MirrorHalf : IFrameProcessor
+/// sealed class MirrorHalf : IFrameProcessor&lt;Rgba32&gt;
 /// {
 ///     public Size GetOutputSize(Size source) => new(source.Width / 2, source.Height);
 ///     public void Process(ReadOnlySpan&lt;Rgba32&gt; source, Size sourceSize, Span&lt;Rgba32&gt; destination, Size destinationSize, CancellationToken cancellationToken)
@@ -22,7 +25,7 @@ namespace PictureSharp.Processing;
 /// image.Mutate(x => x.ApplyProcessor(new MirrorHalf()));
 /// </code>
 /// </example>
-public interface IFrameProcessor
+public interface IFrameProcessor<TPixel> where TPixel : unmanaged
 {
     /// <summary>
     /// The size of the output for a canvas of <paramref name="source"/> size. It is asked once per operation, because all
@@ -35,5 +38,5 @@ public interface IFrameProcessor
     /// straight alpha; the destination starts transparent black. Long work should observe
     /// <paramref name="cancellationToken"/>.
     /// </summary>
-    void Process(ReadOnlySpan<Rgba32> source, Size sourceSize, Span<Rgba32> destination, Size destinationSize, CancellationToken cancellationToken);
+    void Process(ReadOnlySpan<TPixel> source, Size sourceSize, Span<TPixel> destination, Size destinationSize, CancellationToken cancellationToken);
 }

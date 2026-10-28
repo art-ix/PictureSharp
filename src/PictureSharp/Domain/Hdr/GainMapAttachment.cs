@@ -1,4 +1,5 @@
 using System.Drawing;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Domain.Hdr;
 
@@ -54,10 +55,18 @@ internal interface IGainMapDecoder
 
     /// <summary>Whether <see cref="Decode"/> accepts scales above 1; otherwise the map is always decoded at full size.</summary>
     bool CanScale => true;
+
+    /// <summary>The pixel type <see cref="Decode"/> returns, charged before decoding.</summary>
+    PixelType PixelType => PixelType.Rgba32;
 }
 
-/// <summary>Map samples as decoded (gray maps repeat the value in R, G and B).</summary>
-internal readonly record struct DecodedGainMap(Rgba32[] Pixels, int Width, int Height);
+/// <summary>
+/// Map samples as decoded (gray maps repeat the value in R, G and B), at the depth the map was stored or generated with.
+/// </summary>
+internal readonly record struct DecodedGainMap(PixelBuffer Pixels, int Width, int Height)
+{
+    public PixelType PixelType => Pixels.PixelType;
+}
 
 /// <summary>
 /// A gain map attached to a loaded image: header description, compressed map and how the current base pixels relate to
@@ -93,11 +102,8 @@ internal sealed record GainMapAttachment
     /// <summary>The primaries of the current base pixels.</summary>
     public HdrColorSpace BaseSpace { get; init; }
 
-    /// <summary>
-    /// Linear values of the 256 codes of the R, G and B channels of the current base pixels (768 entries), or null for
-    /// the sRGB transfer function.
-    /// </summary>
-    public float[]? BaseLinearization { get; init; }
+    /// <summary>The tone curves of the current base pixels, or null for the sRGB transfer function.</summary>
+    public BaseTransfer? BaseTransfer { get; init; }
 
     /// <summary>Whether reconstruction can run.</summary>
     public bool CanDecode => Failure == GainMapFailure.None && Parameters is not null && Decoder is not null;

@@ -22,7 +22,7 @@ internal sealed class PcxEncoder : IImageEncoder<PcxEncoderOptions>
             throw new NotSupportedException("The image is too large for the PCX format.");
         }
 
-        ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
+        ReadOnlySpan<Rgba32> pixels = frame.Pixels.AsSpan();
         Layout layout = ChooseLayout(pixels, options.BitsPerPixel);
         int bytesPerLine = PlaneStride(width, layout.Bits, layout.Planes);
         int scanBytes = layout.Planes * bytesPerLine;

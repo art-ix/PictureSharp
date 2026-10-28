@@ -15,7 +15,7 @@ public class GifEncoderTests
         await Assert.That(actual.FrameCount).IsEqualTo(expected.FrameCount);
         for (int i = 0; i < expected.FrameCount; i++)
         {
-            await Assert.That(expected.Frames[i].GetPixelSpan().SequenceEqual(actual.Frames[i].GetPixelSpan())).IsTrue().Because($"frame {i} differs");
+            await Assert.That(expected.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(actual.Frames[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"frame {i} differs");
             await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
         }
     }
@@ -70,11 +70,11 @@ public class GifEncoderTests
         if (pixels.Distinct().Count() <= colors)
         {
             // Unlike Image.quantize, the encoder keeps the exact colors when they fit.
-            await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(pixels, CollectionOrdering.Matching);
+            await Assert.That(decoded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(pixels, CollectionOrdering.Matching);
             return;
         }
 
-        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(decoded.GetPixelSpan()))).IsEqualTo(QuantizationTests.References.Value[key].RgbaSha256);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(decoded.GetPixelSpan<Rgba32>()))).IsEqualTo(QuantizationTests.References.Value[key].RgbaSha256);
     }
 
     [Test]
@@ -89,7 +89,7 @@ public class GifEncoderTests
         await Assert.That(gif.LoopCount).IsEqualTo(webp.LoopCount);
         for (int i = 0; i < webp.FrameCount; i++)
         {
-            await Assert.That(gif.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(Binarize(webp.Frames[i].GetPixelSpan()), CollectionOrdering.Matching);
+            await Assert.That(gif.Frames[i].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(Binarize(webp.Frames[i].GetPixelSpan<Rgba32>()), CollectionOrdering.Matching);
             await Assert.That(gif.Frames[i].Duration).IsEqualTo(webp.Frames[i].Duration);
         }
     }
@@ -108,8 +108,8 @@ public class GifEncoderTests
         for (int i = 0; i < webp.FrameCount; i++)
         {
             var colors = new HashSet<Rgba32>();
-            Rgba32[] expected = Binarize(webp.Frames[i].GetPixelSpan());
-            Rgba32[] actual = gif.Frames[i].GetPixelSpan().ToArray();
+            Rgba32[] expected = Binarize(webp.Frames[i].GetPixelSpan<Rgba32>());
+            Rgba32[] actual = gif.Frames[i].GetPixelSpan<Rgba32>().ToArray();
             for (int p = 0; p < expected.Length; p++)
             {
                 await Assert.That(actual[p].A).IsEqualTo(expected[p].A);
@@ -143,7 +143,7 @@ public class GifEncoderTests
                     Rgba32 color = colors[random.Next(colors.Length)];
                     for (int y = y0; y < y1; y++)
                     {
-                        current.GetRowSpan(y)[x0..x1].Fill(color);
+                        current.GetRowSpan<Rgba32>(y)[x0..x1].Fill(color);
                     }
                 }
 
@@ -163,12 +163,12 @@ public class GifEncoderTests
                 TimeSpan elapsed = TimeSpan.Zero;
                 for (int i = 0; i < animation.FrameCount; i++)
                 {
-                    if (i > 0 && optimize && animation.Frames[i].GetPixelSpan().SequenceEqual(animation.Frames[i - 1].GetPixelSpan()))
+                    if (i > 0 && optimize && animation.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(animation.Frames[i - 1].GetPixelSpan<Rgba32>()))
                     {
                         continue;
                     }
 
-                    await Assert.That(animation.Frames[i].GetPixelSpan().SequenceEqual(back.Frames[expectedFrame].GetPixelSpan())).IsTrue().Because($"round {round}, frame {i}");
+                    await Assert.That(animation.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(back.Frames[expectedFrame].GetPixelSpan<Rgba32>())).IsTrue().Because($"round {round}, frame {i}");
                     expectedFrame++;
                 }
 
@@ -255,8 +255,8 @@ public class GifEncoderTests
         foreach (GifQuantizer quantizer in Enum.GetValues<GifQuantizer>())
         {
             using Image back = Image.Load(photo.ToGif(new GifEncoderOptions { ColorCount = count, Quantizer = quantizer, Dither = GifDither.FloydSteinberg }));
-            await Assert.That(back.GetPixelSpan().ToArray().Distinct().Count() <= count).IsTrue();
-            await Assert.That(back.GetPixelSpan().ToArray().Select(p => p.A)).IsEquivalentTo(Binarize(photo.GetPixelSpan()).Select(p => p.A), CollectionOrdering.Matching);
+            await Assert.That(back.GetPixelSpan<Rgba32>().ToArray().Distinct().Count() <= count).IsTrue();
+            await Assert.That(back.GetPixelSpan<Rgba32>().ToArray().Select(p => p.A)).IsEquivalentTo(Binarize(photo.GetPixelSpan<Rgba32>()).Select(p => p.A), CollectionOrdering.Matching);
         }
     }
 
@@ -273,11 +273,11 @@ public class GifEncoderTests
             using var image = new Image(3, height);
             for (int y = 0; y < height; y++)
             {
-                image.GetRowSpan(y).Fill(new Rgba32((byte)(y * 15), 0, 0));
+                image.GetRowSpan<Rgba32>(y).Fill(new Rgba32((byte)(y * 15), 0, 0));
             }
 
             using Image back = Image.Load(image.ToGif(new GifEncoderOptions { Interlace = true }));
-            await Assert.That(back.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+            await Assert.That(back.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         }
     }
 

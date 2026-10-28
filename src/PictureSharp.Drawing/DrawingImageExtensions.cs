@@ -19,7 +19,8 @@ public static class DrawingImageExtensions
         /// Copies the first frame into a new bitmap. The default <see cref="GdiPixelFormat.Format32bppArgb"/> keeps
         /// straight alpha exactly; <see cref="GdiPixelFormat.Format32bppPArgb"/> premultiplies (faster to draw with GDI+);
         /// <see cref="GdiPixelFormat.Format24bppRgb"/> and <see cref="GdiPixelFormat.Format32bppRgb"/> drop alpha
-        /// without compositing. The bitmap gets the image resolution.
+        /// without compositing. A 16-bit image (<see cref="PixelType.Rgba64"/>) is rounded to 8 bits per channel: GDI+
+        /// has no portable 16-bit layout. The bitmap gets the image resolution.
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="format"/> is not one of the four formats above.</exception>
         public Bitmap ToBitmap(GdiPixelFormat format = GdiPixelFormat.Format32bppArgb)
@@ -77,7 +78,8 @@ public static class DrawingImageExtensions
         /// <summary>
         /// Copies the active frame of <paramref name="bitmap"/> into a new image with straight alpha. 32-bit ARGB,
         /// premultiplied ARGB and 24/32-bit RGB are converted by PictureSharp; other formats (indexed, 16-bit, 48/64-bit)
-        /// are converted to 32-bit ARGB by GDI+ first. The image gets the bitmap resolution.
+        /// are converted to 32-bit ARGB by GDI+ first, so the image is always <see cref="PixelType.Rgba32"/>. The image
+        /// gets the bitmap resolution.
         /// </summary>
         public static Image FromBitmap(Bitmap bitmap)
         {

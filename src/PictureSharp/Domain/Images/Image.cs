@@ -1,10 +1,12 @@
 using System.Drawing;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp;
 
 /// <summary>
-/// A decoded raster image. Pixels are stored as <see cref="Rgba32"/> with straight alpha; animated images hold several
+/// A decoded raster image. Pixels are stored with straight alpha as <see cref="Rgba32"/> or, for 16 bits per channel,
+/// <see cref="Rgba64"/>, chosen by <see cref="PixelType"/> and shared by all frames; animated images hold several
 /// full-canvas <see cref="Frames"/>. The image owns its frames and their pixel buffers.
 /// </summary>
 public sealed partial class Image : IDisposable
@@ -13,19 +15,46 @@ public sealed partial class Image : IDisposable
     private bool _disposed;
     internal FrameOwner FrameOwner => new(this);
 
-    /// <summary>Creates a fully transparent image.</summary>
+    /// <summary>Creates a fully transparent image with <see cref="Rgba32"/> pixels.</summary>
     public Image(int width, int height)
-        : this([new ImageFrame(width, height)])
+        : this(width, height, PixelType.Rgba32)
+    {
+    }
+
+    /// <summary>Creates a fully transparent image with pixels of <paramref name="pixelType"/>.</summary>
+    public Image(int width, int height, PixelType pixelType)
+        : this([new ImageFrame(width, height, pixelType)])
     {
         HasAlpha = true;
     }
 
-    /// <summary>Creates an image filled with <paramref name="background"/>.</summary>
+    /// <summary>Creates an image with <see cref="Rgba32"/> pixels filled with <paramref name="background"/>.</summary>
     public Image(int width, int height, Rgba32 background)
         : this(width, height)
     {
-        RootFrame.GetPixelSpan().Fill(background);
+        RootFrame.Pixels.AsSpan().Fill(background);
         HasAlpha = background.A != 255;
+    }
+
+    /// <summary>
+    /// Creates an image with pixels of <paramref name="pixelType"/> filled with <paramref name="background"/>, rounded to
+    /// 8 bits for <see cref="PixelType.Rgba32"/>. <see cref="HasAlpha"/> is false when the stored background is opaque, so a
+    /// decoder can create an opaque 16-bit image and write its pixels through <see cref="GetPixelSpan{TPixel}"/>.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The size is not positive, or <paramref name="pixelType"/> is not defined.</exception>
+    public Image(int width, int height, PixelType pixelType, Rgba64 background)
+        : this([ImageFrame.CreateUninitialized(width, height, PixelTypes.Check(pixelType))])
+    {
+        if (pixelType == PixelType.Rgba64)
+        {
+            RootFrame.GetPixelSpan<Rgba64>().Fill(background);
+        }
+        else
+        {
+            RootFrame.Pixels.AsSpan().Fill(background.ToRgba32());
+        }
+
+        HasAlpha = !PixelTypes.IsOpaque(background, pixelType);
     }
 
     internal Image(List<ImageFrame> frames)
@@ -38,6 +67,12 @@ public sealed partial class Image : IDisposable
 
         _frames = new ImageFrameCollection(this, frames);
     }
+
+    /// <summary>
+    /// The pixel storage of every frame. Conversions such as <c>ConvertPixelType</c> replace all buffers and the type
+    /// together; spans obtained earlier keep referring to the old buffers.
+    /// </summary>
+    public PixelType PixelType => RootFrame.PixelType;
 
     /// <summary>Width in pixels.</summary>
     public int Width => RootFrame.Width;

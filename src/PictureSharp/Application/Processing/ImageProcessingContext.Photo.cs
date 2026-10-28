@@ -1,5 +1,8 @@
+using System.Runtime.CompilerServices;
 using PictureSharp.Algorithms.Processing;
+using PictureSharp.Application.Processing;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Processing;
 
@@ -18,9 +21,7 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        byte[] lut = new byte[ToneLut.Length];
-        PhotoAdjust.ExposureLut(lut, stops);
-        return ApplyToneLut(lut);
+        return MapChannels(new ExposureMaps(stops));
     }
 
     /// <summary>
@@ -38,9 +39,7 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        byte[] lut = new byte[ToneLut.Length];
-        PhotoAdjust.WhiteBalanceLut(lut, temperature, tint);
-        return ApplyToneLut(lut);
+        return MapChannels(new WhiteBalanceMaps(temperature, tint));
     }
 
     /// <summary>
@@ -48,18 +47,20 @@ public readonly ref partial struct ImageProcessingContext
     /// becomes gray of the same luminance: each channel is scaled in linear light by Y / C, where C is the neutral's
     /// channel and Y its Rec. 709 luma. The alpha of <paramref name="neutral"/> is ignored; the image's alpha is kept.
     /// </summary>
-    /// <param name="neutral">The color to make gray; red, green and blue must all be above 0.</param>
+    /// <param name="neutral">
+    /// The color to make gray, at 16-bit precision (an <see cref="Rgba32"/> or <see cref="System.Drawing.Color"/> widens
+    /// exactly, so a color measured on a 16-bit image keeps its precision); red, green and blue must all be above 0.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException">A color channel of <paramref name="neutral"/> is 0.</exception>
-    public ImageProcessingContext WhiteBalance(Rgba32 neutral)
+    public ImageProcessingContext WhiteBalance(Rgba64 neutral)
     {
         if (neutral.R == 0 || neutral.G == 0 || neutral.B == 0)
         {
             throw new ArgumentOutOfRangeException(nameof(neutral), neutral, "Every color channel of the neutral must be above 0.");
         }
 
-        byte[] lut = new byte[ToneLut.Length];
-        PhotoAdjust.NeutralWhiteBalanceLut(lut, neutral);
-        return ApplyToneLut(lut);
+        (float r, float g, float b) = PhotoAdjust.NeutralGains(neutral);
+        return MapChannels(new GainMaps(r, g, b));
     }
 
     /// <summary>
@@ -82,26 +83,7 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        CancellationToken token = _state.CancellationToken;
-        Span<long> luma = stackalloc long[GrayWorld.LumaLength];
-        foreach (ImageFrame frame in Target.Frames)
-        {
-            GrayWorld.CountLuma(frame.GetPixelSpan(), luma, token);
-        }
-
-        if (GrayWorld.MidtoneRange(luma) is not { } range)
-        {
-            return this;
-        }
-
-        long[] counts = new long[GrayWorld.ChannelLength];
-        foreach (ImageFrame frame in Target.Frames)
-        {
-            GrayWorld.CountChannels(frame.GetPixelSpan(), range, counts, token);
-        }
-
-        byte[] lut = new byte[ToneLut.Length];
-        return GrayWorld.Lut(lut, counts, strength) ? ApplyToneLut(lut) : this;
+        return MapChannels(new GrayWorldMaps(_state, strength));
     }
 
     /// <summary>
@@ -118,12 +100,7 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        foreach (ImageFrame frame in _state.WritableFrames)
-        {
-            PhotoAdjust.Vibrance(frame.Pixels, frame.Width * frame.Height, amount, _state.CancellationToken);
-        }
-
-        return this;
+        return ForEachFrame(new VibranceKernel(amount, _state.CancellationToken));
     }
 
     /// <summary>
@@ -152,7 +129,8 @@ public readonly ref partial struct ImageProcessingContext
 
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            PhotoAdjust.Vignette(frame.Pixels, frame.Width, frame.Height, options, _state.CancellationToken);
+            var operation = new VignetteFrame(frame, options, _state.CancellationToken);
+            PixelDispatch.Run<VignetteFrame, bool>(frame.PixelType, ref operation);
         }
 
         return this;
@@ -176,8 +154,7 @@ public readonly ref partial struct ImageProcessingContext
         }
 
         float sigma = radius > 0f ? radius : LocalTone.AutomaticSigma(Target.Width, Target.Height);
-        return LocalFilter((shadows, highlights, sigma), static (source, destination, w, h, state, token) =>
-            LocalTone.ShadowsHighlights(source, destination, w, h, state.shadows, state.highlights, state.sigma, token));
+        return LocalToneFilter(new LocalToneSettings(shadows, highlights, 0f, sigma));
     }
 
     /// <summary>
@@ -197,8 +174,7 @@ public readonly ref partial struct ImageProcessingContext
         }
 
         float sigma = radius > 0f ? radius : LocalTone.AutomaticSigma(Target.Width, Target.Height);
-        return LocalFilter((amount, sigma), static (source, destination, w, h, state, token) =>
-            LocalTone.Clarity(source, destination, w, h, state.amount, state.sigma, token));
+        return LocalToneFilter(new LocalToneSettings(0f, 0f, amount, sigma));
     }
 
     /// <summary>
@@ -221,31 +197,168 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        return LocalFilter((strength, radius), static (source, destination, w, h, state, token) =>
-            GuidedFilter.Denoise(source, destination, w, h, state.strength, state.radius, token));
+        return LocalFilter(new DenoiseFilter(strength, radius));
     }
 
-    /// <summary>Runs <paramref name="filter"/> into new buffers that replace all frames together.</summary>
-    private ImageProcessingContext LocalFilter<TState>(TState state, LocalFilterAction<TState> filter)
+    /// <summary>Runs shadows/highlights or clarity into new buffers that replace all frames together.</summary>
+    private ImageProcessingContext LocalToneFilter(LocalToneSettings settings)
     {
-        (int w, int h) = (Target.Width, Target.Height);
-        _state.ReplaceFrames((state, filter, w, h), static (frame, data, token) =>
+        _state.ReplaceFrames(settings, static (frame, settings, token) =>
         {
-            Rgba32[] result = GC.AllocateUninitializedArray<Rgba32>(data.w * data.h);
-            data.filter(frame.Pixels, result, data.w, data.h, data.state, token);
-            return new FrameReplacement(data.w, data.h, result);
+            var operation = new LocalToneFrame(frame, settings, token);
+            return new FrameReplacement(frame.Width, frame.Height, PixelDispatch.Run<LocalToneFrame, PixelBuffer>(frame.PixelType, ref operation));
         });
         return this;
     }
 
-    private delegate void LocalFilterAction<TState>(Rgba32[] source, Rgba32[] destination, int width, int height,
-        TState state, CancellationToken cancellationToken);
+    /// <summary>Clarity when <see cref="Amount"/> is not 0, otherwise shadows/highlights.</summary>
+    private readonly record struct LocalToneSettings(float Shadows, float Highlights, float Amount, float Sigma);
+
+    private readonly struct LocalToneFrame(ImageFrame frame, LocalToneSettings settings, CancellationToken token) : IPixelOperation<PixelBuffer>
+    {
+        public PixelBuffer Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            (int w, int h) = (frame.Width, frame.Height);
+            TPixel[] source = frame.Buffer.As<TPixel>();
+            TPixel[] result = GC.AllocateUninitializedArray<TPixel>(w * h);
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                Rgba32[] narrowSource = Unsafe.As<Rgba32[]>(source), narrowResult = Unsafe.As<Rgba32[]>(result);
+                if (settings.Amount != 0f)
+                {
+                    LocalTone.Clarity(narrowSource, narrowResult, w, h, settings.Amount, settings.Sigma, token);
+                }
+                else
+                {
+                    LocalTone.ShadowsHighlights(narrowSource, narrowResult, w, h, settings.Shadows, settings.Highlights, settings.Sigma, token);
+                }
+            }
+            else if (settings.Amount != 0f)
+            {
+                LocalTone.ClarityWide(source, result, w, h, settings.Amount, settings.Sigma, token);
+            }
+            else
+            {
+                LocalTone.ShadowsHighlightsWide(source, result, w, h, settings.Shadows, settings.Highlights, settings.Sigma, token);
+            }
+
+            return PixelBuffer.From(result);
+        }
+    }
+
+    /// <summary>Runs <paramref name="filter"/> at each frame's depth into new buffers that replace all frames together.</summary>
+    private ImageProcessingContext LocalFilter<TFilter>(TFilter filter) where TFilter : struct, ILocalFilter
+    {
+        _state.ReplaceFrames(filter, static (frame, filter, token) =>
+        {
+            var operation = new LocalFilterFrame<TFilter>(frame, filter, token);
+            return new FrameReplacement(frame.Width, frame.Height, PixelDispatch.Run<LocalFilterFrame<TFilter>, PixelBuffer>(frame.PixelType, ref operation));
+        });
+        return this;
+    }
+
+    private readonly struct DenoiseFilter(float strength, int radius) : ILocalFilter
+    {
+        public void Run<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, CancellationToken cancellationToken)
+            where TPixel : unmanaged, IPixelOps<TPixel> =>
+            GuidedFilter.Denoise(source, destination, width, height, strength, radius, cancellationToken);
+    }
+
+    private readonly struct ExposureMaps(float stops) : IChannelMaps
+    {
+        public void Fill(Span<byte> lut) => PhotoAdjust.ExposureLut(lut, stops);
+
+        public void Fill(Span<ushort> lut) => PhotoAdjust.ExposureLut(lut, stops);
+    }
+
+    private readonly struct WhiteBalanceMaps(float temperature, float tint) : IChannelMaps
+    {
+        public void Fill(Span<byte> lut) => PhotoAdjust.WhiteBalanceLut(lut, temperature, tint);
+
+        public void Fill(Span<ushort> lut) => PhotoAdjust.WhiteBalanceLut(lut, temperature, tint);
+    }
+
+    private readonly struct GainMaps(float red, float green, float blue) : IChannelMaps
+    {
+        public void Fill(Span<byte> lut) => PhotoAdjust.ChannelGainsLut(lut, red, green, blue);
+
+        public void Fill(Span<ushort> lut) => PhotoAdjust.ChannelGainsLut(lut, red, green, blue);
+    }
+
+    /// <summary>The gray-world gains of <see cref="AutoWhiteBalance"/>, measured on every frame at the image's depth.</summary>
+    private readonly struct GrayWorldMaps(ProcessingState state, float strength) : IChannelMaps
+    {
+        public void Fill(Span<byte> lut)
+        {
+            CancellationToken token = state.CancellationToken;
+            Span<long> luma = stackalloc long[GrayWorld.LumaLength];
+            foreach (ImageFrame frame in state.Image.Frames)
+            {
+                GrayWorld.CountLuma(frame.Buffer.As<Rgba32>(), luma, token);
+            }
+
+            if (GrayWorld.MidtoneRange(luma) is not { } range)
+            {
+                return;
+            }
+
+            long[] counts = new long[GrayWorld.ChannelLength];
+            foreach (ImageFrame frame in state.Image.Frames)
+            {
+                GrayWorld.CountChannels(frame.Buffer.As<Rgba32>(), range, counts, token);
+            }
+
+            GrayWorld.Lut(lut, counts, strength);
+        }
+
+        public void Fill(Span<ushort> lut)
+        {
+            CancellationToken token = state.CancellationToken;
+            long[] luma = new long[GrayWorld.LumaLength16];
+            foreach (ImageFrame frame in state.Image.Frames)
+            {
+                GrayWorld.CountLuma(frame.Buffer.As<Rgba64>(), luma, token);
+            }
+
+            if (GrayWorld.MidtoneRange(luma) is not { } range)
+            {
+                return;
+            }
+
+            long[] counts = new long[GrayWorld.ChannelLength16];
+            foreach (ImageFrame frame in state.Image.Frames)
+            {
+                GrayWorld.CountChannels(frame.Buffer.As<Rgba64>(), range, counts, token);
+            }
+
+            if (GrayWorld.Gains(counts, GrayWorld.LumaLength16, strength) is { } gains)
+            {
+                PhotoAdjust.ChannelGainsLut(lut, gains.R, gains.G, gains.B);
+            }
+        }
+    }
+
+    private readonly struct VibranceKernel(float amount, CancellationToken token) : IPixelKernel
+    {
+        public void Run(Rgba32[] pixels) => PhotoAdjust.Vibrance(pixels, pixels.Length, amount, token);
+
+        public void RunWide<TPixel>(TPixel[] pixels) where TPixel : unmanaged, IPixelOps<TPixel> => PhotoAdjust.VibranceWide(pixels, amount, token);
+    }
 
     private static void CheckUnit(float value, string paramName)
     {
         if (!(value is >= -1f and <= 1f))
         {
             throw new ArgumentOutOfRangeException(paramName, value, "Expected a number between -1 and 1.");
+        }
+    }
+
+    private readonly struct VignetteFrame(ImageFrame frame, VignetteOptions options, CancellationToken cancellationToken) : IPixelOperation<bool>
+    {
+        public bool Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            PhotoAdjust.Vignette(frame.Buffer.As<TPixel>(), frame.Width, frame.Height, options, cancellationToken);
+            return true;
         }
     }
 }

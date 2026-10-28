@@ -1,19 +1,20 @@
 using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
 
-/// <summary>Lossless geometric transforms of frame buffers.</summary>
-internal static class Geometry
+/// <summary>Lossless geometric transforms of frame buffers, generic over the storage pixel type.</summary>
+internal static partial class Geometry
 {
-    public static Rgba32[] Crop(ImageFrame frame, Rectangle rect)
+    public static TPixel[] Crop<TPixel>(TPixel[] src, int width, Rectangle rect) where TPixel : unmanaged
     {
-        var dst = GC.AllocateUninitializedArray<Rgba32>(rect.Width * rect.Height);
+        var dst = GC.AllocateUninitializedArray<TPixel>(rect.Width * rect.Height);
         for (int y = 0; y < rect.Height; y++)
         {
-            frame.GetRowSpan(rect.Y + y).Slice(rect.X, rect.Width).CopyTo(dst.AsSpan(y * rect.Width, rect.Width));
+            src.AsSpan(((rect.Y + y) * width) + rect.X, rect.Width).CopyTo(dst.AsSpan(y * rect.Width, rect.Width));
         }
 
         return dst;
@@ -45,10 +46,14 @@ internal static class Geometry
     /// Rotates the frame by <paramref name="rotation"/> quarter turns clockwise, then mirrors it horizontally when
     /// <paramref name="flipX"/> is set. Even turns work in place; odd turns use RotateQuarterPixels instead.
     /// </summary>
-    public static void RotateFlip(ImageFrame frame, int rotation, bool flipX) => RotateFlip(frame.Pixels, frame.Width, frame.Height, rotation, flipX);
+    public static void RotateFlip(ImageFrame frame, int rotation, bool flipX)
+    {
+        var operation = new RotateFlipInPlace(frame, rotation, flipX);
+        PixelDispatch.Run<RotateFlipInPlace, bool>(frame.PixelType, ref operation);
+    }
 
     /// <summary>Rotates <paramref name="src"/> in place by an even number of quarter turns, then mirrors it when <paramref name="flipX"/> is set.</summary>
-    public static void RotateFlip(Rgba32[] src, int w, int h, int rotation, bool flipX)
+    public static void RotateFlip<TPixel>(TPixel[] src, int w, int h, int rotation, bool flipX) where TPixel : unmanaged
     {
         if (rotation == 0 && !flipX)
         {
@@ -60,8 +65,8 @@ internal static class Geometry
             // Rotate180 + FlipX == FlipY: swap rows.
             for (int y = 0; y < h / 2; y++)
             {
-                Span<Rgba32> top = src.AsSpan(y * w, w);
-                Span<Rgba32> bottom = src.AsSpan((h - 1 - y) * w, w);
+                Span<TPixel> top = src.AsSpan(y * w, w);
+                Span<TPixel> bottom = src.AsSpan((h - 1 - y) * w, w);
                 for (int x = 0; x < w; x++)
                 {
                     (top[x], bottom[x]) = (bottom[x], top[x]);
@@ -98,7 +103,8 @@ internal static class Geometry
     /// exactly one of "90°" and <paramref name="flipX"/> holds. The output is filled in 32x32 tiles so that the column
     /// reads of the source stay within a few kilobytes instead of striding through the whole image.
     /// </remarks>
-    public static Rgba32[] RotateQuarterPixels(Rgba32[] src, int w, int h, int rotation, bool flipX, CancellationToken cancellationToken = default)
+    public static TPixel[] RotateQuarterPixels<TPixel>(TPixel[] src, int w, int h, int rotation, bool flipX, CancellationToken cancellationToken = default)
+        where TPixel : unmanaged
     {
         const int Tile = 32;
         // 90° or 270°: dimensions swap.
@@ -109,9 +115,9 @@ internal static class Geometry
             throw new ArgumentException("The buffer is smaller than the image.", nameof(src));
         }
 
-        var dst = GC.AllocateUninitializedArray<Rgba32>(src.Length);
+        var dst = GC.AllocateUninitializedArray<TPixel>(src.Length);
         bool reverseX = rotation != 1, reverseY = (rotation == 1) != flipX;
-        ref Rgba32 source = ref MemoryMarshal.GetArrayDataReference(src);
+        ref TPixel source = ref MemoryMarshal.GetArrayDataReference(src);
         for (int dy0 = 0; dy0 < nh; dy0 += Tile)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -122,7 +128,7 @@ internal static class Geometry
                 for (int dy = dy0; dy < dy1; dy++)
                 {
                     int x = reverseX ? w - 1 - dy : dy;
-                    Span<Rgba32> row = dst.AsSpan((dy * nw) + dx0, dx1 - dx0);
+                    Span<TPixel> row = dst.AsSpan((dy * nw) + dx0, dx1 - dx0);
                     for (int i = 0; i < row.Length; i++)
                     {
                         int dx = dx0 + i, y = reverseY ? h - 1 - dx : dx;
@@ -153,7 +159,8 @@ internal static class Geometry
     /// Copies a <paramref name="srcWidth"/>-wide image onto <paramref name="dst"/> with its top-left corner at
     /// (<paramref name="x"/>, <paramref name="y"/>), clipped to the destination (no blending).
     /// </summary>
-    public static void Place(ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Span<Rgba32> dst, int dstWidth, int dstHeight, int x, int y)
+    public static void Place<TPixel>(ReadOnlySpan<TPixel> src, int srcWidth, int srcHeight, Span<TPixel> dst, int dstWidth, int dstHeight, int x, int y)
+        where TPixel : unmanaged
     {
         int x0 = Math.Max(0, x);
         int y0 = Math.Max(0, y);

@@ -28,6 +28,8 @@ public sealed class AdapterDocsExamplesTests : IDisposable
         sample.SaveAsPng(P("logo.png"));
         sample.SaveAsPng(P("photo.png"));
         sample.SaveAsPng(Path.Combine(_dir, "images", "cat.png"));
+        using Image scan = TestImages.CreateWide(64, 48);
+        scan.SaveAsPng(P("scan.png"));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
@@ -43,6 +45,12 @@ public sealed class AdapterDocsExamplesTests : IDisposable
         using Image fromSkia = Image.FromSKBitmap(bitmap);
         await Assert.That(TestImages.Pixels(fromSkia)).IsEquivalentTo(TestImages.Pixels(image), CollectionOrdering.Matching);
         await Assert.That(premultiplied.Width).IsEqualTo(64);
+
+        using Image deep = Image.Load(P("scan.png"), new DecoderOptions { PreserveBitDepth = true });
+        using SKBitmap deepBitmap = deep.ToSKBitmap(SKColorType.Rgba16161616);
+        using Image deepBack = Image.FromSKBitmap(deepBitmap, PixelType.Rgba64);
+        await Assert.That(deep.PixelType).IsEqualTo(PixelType.Rgba64);
+        await Assert.That(TestImages.WidePixels(deepBack)).IsEquivalentTo(TestImages.WidePixels(deep), CollectionOrdering.Matching);
     }
 
     [Test]

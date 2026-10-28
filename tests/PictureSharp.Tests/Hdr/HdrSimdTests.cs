@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
+using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Domain.Hdr;
 
@@ -88,7 +89,7 @@ public class HdrSimdTests
     public async Task Reconstruction_WithBaseLinearization_MatchesScalar()
     {
         var rng = new Random(81);
-        float[] linearization = [.. Enumerable.Range(0, 768).Select(i => MathF.Pow((i & 255) / 255f, 2.4f + (i >> 8) * 0.1f))];
+        var linearization = new CurveBaseTransfer(ToneCurve.Power(2.4), ToneCurve.Power(2.5), ToneCurve.Power(2.6));
         var map = new DecodedGainMap(Random(rng, 12 * 7), 12, 7);
         var reconstructor = new GainMapReconstructor(Iso(3, true, null), map, HdrColorSpace.LinearDisplayP3, linearization,
             HdrColorSpace.LinearSrgb, null, new Size(45, 27), new Size(45, 27), ExifOrientation.TopLeft);

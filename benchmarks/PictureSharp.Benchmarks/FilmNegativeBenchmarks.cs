@@ -60,7 +60,7 @@ public class FilmNegativeBenchmarks
     }
 
     // Pitch = width / 16; the frame is 36 × 24 mm in the center, holes 2.8 × 2 mm, the picture a smooth pattern.
-    private static Image Strip(int width, int height)
+    internal static Image Strip(int width, int height)
     {
         float mm = width / 16f / 4.75f, top = (height - (35 * mm)) / 2, cx = width / 2f;
         var image = new Image(width, height, new Rgba32(230, 240, 255, 255));

@@ -8,7 +8,7 @@ namespace PictureSharp.Tests.ColorManagement;
 /// <summary>ConvertToSrgb, DecoderOptions.ColorConversion and the PNG color description (gAMA, cHRM, sRGB).</summary>
 public class ColorConversionTests
 {
-    private static Rgba32[] Pixels(Image image) => [.. image.Frames.SelectMany(f => f.GetPixelSpan().ToArray())];
+    private static Rgba32[] Pixels(Image image) => [.. image.Frames.SelectMany(f => f.GetPixelSpan<Rgba32>().ToArray())];
 
     private static JsonElement PngCases => IccConversionTests.Manifest.GetProperty("png");
 

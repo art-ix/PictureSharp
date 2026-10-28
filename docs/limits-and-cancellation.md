@@ -26,7 +26,7 @@ image.Save(output, new WebPEncoderOptions { Quality = 80 }, timeout.Token);
 | Property | Default | Checked |
 | --- | --- | --- |
 | `MaxInputBytes` | `Array.MaxLength` (no practical limit) | While a file or stream is read, and for in-memory data before decoding. |
-| `MaxPixels` | 2^28 | From the header, before pixels are allocated; for animations all decoded frames together. |
+| `MaxPixels` | 2^28 | From the header, before pixels are allocated; for animations all decoded frames together. A 16-bit pixel (`PreserveBitDepth` on a deeper source, or `ColorConversion = ToSrgb` on one, which decodes at 16 bits before rounding) counts twice, also in gain maps. |
 | `MaxFrames` | 65536 | While the container is parsed, before any frame is decoded; also with `FirstFrameOnly` and in `Identify`. |
 | `MaxMetadataBytes` | 64 MiB | As each ICC, EXIF or XMP block is read, after decompression; the total of one image. |
 
@@ -104,3 +104,6 @@ catch (OperationCanceledException)
     // image is unchanged and no file was written
 }
 ```
+
+GIF frames that overhang the logical canvas must also fit `MaxPixels` individually before the decoder allocates
+their temporary index buffers. This applies to ordinary and sequential loads (0.9.0).

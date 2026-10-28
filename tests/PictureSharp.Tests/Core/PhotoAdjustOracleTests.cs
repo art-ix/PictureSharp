@@ -102,7 +102,7 @@ public class PhotoAdjustOracleTests
                 {
                     float[][] json = [.. points.Select(p => new[] { p.X, p.Y })];
                     Add(input, $"curves_{points.Length}_{(int)channels}", new() { ["op"] = "curves", ["points"] = json, ["channels"] = (int)channels },
-                        x => x.Curves(points, channels));
+                        x => x.CurvesNormalized([.. points.Select(p => new PointF(p.X / 255f, p.Y / 255f))], channels));
                 }
 
                 foreach (Rgba32 neutral in new[] { new Rgba32(200, 180, 120, 255), new Rgba32(30, 60, 90, 0), new Rgba32(1, 255, 128, 255) })
@@ -151,7 +151,7 @@ public class PhotoAdjustOracleTests
                 int newline = Array.IndexOf(file, (byte)'\n');
                 ReadOnlySpan<byte> theirs = file.AsSpan(newline + 1);
                 using Image ours = make();
-                ReadOnlySpan<byte> mine = MemoryMarshal.AsBytes(ours.GetPixelSpan());
+                ReadOnlySpan<byte> mine = MemoryMarshal.AsBytes(ours.GetPixelSpan<Rgba32>());
                 int diffs = 0, maxDiff = 0;
                 for (int i = 0; i < mine.Length; i++)
                 {

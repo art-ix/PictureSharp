@@ -68,7 +68,7 @@ public class FrameReaderTests
                 for (int i = 0; i < frames.Count; i++)
                 {
                     await Assert.That(frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
-                    await Assert.That(frames[i].GetPixelSpan().SequenceEqual(expected.Frames[i].GetPixelSpan())).IsTrue().Because($"frame {i}");
+                    await Assert.That(frames[i].GetPixelSpan<Rgba32>().SequenceEqual(expected.Frames[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"frame {i}");
                 }
 
                 ImageMetadata a = reader.Metadata, b = expected.Metadata;

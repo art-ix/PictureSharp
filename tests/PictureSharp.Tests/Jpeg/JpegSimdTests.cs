@@ -320,6 +320,6 @@ public class JpegSimdTests
 
         using Image serial = Image.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
         using Image parallel = Image.Load(sequential);
-        await Assert.That(serial.Frames[0].GetPixelSpan().SequenceEqual(parallel.Frames[0].GetPixelSpan())).IsTrue();
+        await Assert.That(serial.Frames[0].GetPixelSpan<Rgba32>().SequenceEqual(parallel.Frames[0].GetPixelSpan<Rgba32>())).IsTrue();
     }
 }

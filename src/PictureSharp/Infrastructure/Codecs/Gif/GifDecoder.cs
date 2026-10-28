@@ -61,6 +61,13 @@ internal sealed class GifDecoder : IImageDecoder, ISequentialImageDecoder
         int height = gif.Height;
         int frameCount = options.FirstFrameOnly ? 1 : gif.Frames.Count;
         context.Budget.ReserveImage(ImageFormat.Gif, width, height, frameCount);
+        // A frame may overhang a small canvas; its index buffer still needs the declared full frame size.
+        for (int i = 0; i < frameCount; i++)
+        {
+            GifFrameInfo frame = gif.Frames[i];
+            if (frame.Width > 0 && frame.Height > 0)
+                options.ValidateDimensions(ImageFormat.Gif, frame.Width, frame.Height);
+        }
 
         var canvas = new GifCanvas(width, height);
         var frames = new List<ImageFrame>(frameCount);

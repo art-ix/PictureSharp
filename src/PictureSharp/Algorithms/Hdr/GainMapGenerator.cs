@@ -1,4 +1,6 @@
+using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Algorithms.Hdr;
@@ -6,7 +8,9 @@ namespace PictureSharp.Algorithms.Hdr;
 /// <summary>
 /// Computes an ISO 21496-1 gain map from an SDR base image and its HDR rendition in linear light, as libultrahdr
 /// v2.0.2 does with its default (best-quality, two-pass) encoder settings: box-averaged samples per map pixel, the gain
-/// as log2 of the HDR to SDR ratio, bounds from the image's own gain range and an affine mapping to 8-bit codes.
+/// as log2 of the HDR to SDR ratio, bounds from the image's own gain range and an affine mapping to 8-bit codes. A
+/// 16-bit base is averaged at its precision and linearized by interpolating its curves between 16-bit codes, so the map
+/// describes the stored 16-bit samples; the map itself stays 8-bit.
 /// </summary>
 // port: libultrahdr v2.0.2 lib/src/jpegr.cpp UltraHdr::generateGainMap (generateGainMapTwoPass) and
 // lib/src/gainmapmath.cpp samplePixels, srgbInvOetfLUT, computeGain, affineMapGain. libultrahdr keeps the gains of the
@@ -27,8 +31,11 @@ internal sealed class GainMapGenerator
 
     private static readonly float[] InvOetfTable = CreateInvOetfTable();
 
-    private readonly Rgba32[] _sdr;
+    private readonly Rgba32[]? _sdr;
+    private readonly Rgba64[]? _sdr16;
     private readonly float[]? _sdrLinear;
+    private readonly float[]? _sdrLinear16;
+    private readonly int _linearStride16;
     private readonly ReadOnlyMemory<Rgba128> _hdr;
     private readonly int _width;
     private readonly int _scale;
@@ -36,20 +43,26 @@ internal sealed class GainMapGenerator
     private readonly float[]? _sdrMatrix, _hdrMatrix;
     private readonly float _lumaR, _lumaG, _lumaB;
 
-    /// <param name="sdr">The base pixels (8-bit, gamma encoded).</param>
+    /// <param name="sdr">The base pixels (8- or 16-bit, gamma encoded).</param>
     /// <param name="sdrSpace">Primaries of the base pixels.</param>
-    /// <param name="sdrLinearization">768 linear values of the base codes, or null for the sRGB transfer function.</param>
+    /// <param name="sdrTransfer">The base's transfer function, or null for sRGB.</param>
     /// <param name="hdr">The HDR pixels in linear light, 1 = SDR white, the same size as the base.</param>
     /// <param name="hdrSpace">Primaries of the HDR pixels.</param>
     /// <param name="width">Width of both images.</param>
     /// <param name="height">Height of both images.</param>
     /// <param name="scale">The map is smaller than the images by this factor (1..128).</param>
     /// <param name="channels">1 for a luminance map, 3 for an RGB map.</param>
-    public GainMapGenerator(Rgba32[] sdr, HdrColorSpace sdrSpace, float[]? sdrLinearization, ReadOnlyMemory<Rgba128> hdr, HdrColorSpace hdrSpace,
+    public GainMapGenerator(PixelBuffer sdr, HdrColorSpace sdrSpace, BaseTransfer? sdrTransfer, ReadOnlyMemory<Rgba128> hdr, HdrColorSpace hdrSpace,
         int width, int height, int scale, int channels)
     {
-        _sdr = sdr;
-        _sdrLinear = sdrLinearization;
+        _sdr = sdr.Rgba32;
+        _sdr16 = sdr.Rgba64;
+        _sdrLinear = sdrTransfer?.Codes8;
+        if (_sdr16 is not null)
+        {
+            (_sdrLinear16, _linearStride16) = sdrTransfer is { } transfer ? (transfer.Codes16, ushort.MaxValue + 1) : (SrgbTransfer.DecodeTable16, 0);
+        }
+
         _hdr = hdr;
         _width = width;
         _channels = channels;
@@ -186,26 +199,43 @@ internal sealed class GainMapGenerator
         // port: samplePixels — the box sum in row order, then one division.
         float sr = 0f, sg = 0f, sb = 0f, hr = 0f, hg = 0f, hb = 0f;
         ReadOnlySpan<Rgba128> hdr = _hdr.Span;
+        Rgba32[]? sdr = _sdr;
         for (int dy = 0; dy < _scale; dy++)
         {
             int offset = (((y * _scale) + dy) * _width) + (x * _scale);
             for (int dx = 0; dx < _scale; dx++)
             {
-                Rgba32 s = _sdr[offset + dx];
-                sr += s.R / 255f;
-                sg += s.G / 255f;
-                sb += s.B / 255f;
-
                 // port: getRgbaF16Pixel → sanitizePixel
                 Rgba128 h = hdr[offset + dx];
                 hr += Math.Clamp(h.R, 0f, MaxLinear);
                 hg += Math.Clamp(h.G, 0f, MaxLinear);
                 hb += Math.Clamp(h.B, 0f, MaxLinear);
             }
+
+            if (sdr is not null)
+            {
+                foreach (Rgba32 s in sdr.AsSpan(offset, _scale))
+                {
+                    sr += s.R / 255f;
+                    sg += s.G / 255f;
+                    sb += s.B / 255f;
+                }
+            }
+            else
+            {
+                foreach (Rgba64 s in _sdr16.AsSpan(offset, _scale))
+                {
+                    sr += s.R / 65535f;
+                    sg += s.G / 65535f;
+                    sb += s.B / 65535f;
+                }
+            }
         }
 
         float n = _scale * _scale;
-        (sr, sg, sb) = (Linearize(sr / n, 0), Linearize(sg / n, 256), Linearize(sb / n, 512));
+        (sr, sg, sb) = _sdr is not null
+            ? (Linearize(sr / n, 0), Linearize(sg / n, 256), Linearize(sb / n, 512))
+            : (Linearize16(sr / n, 0), Linearize16(sg / n, 1), Linearize16(sb / n, 2));
         (hr, hg, hb) = (hr / n, hg / n, hb / n);
         if (_sdrMatrix is { } sm)
         {
@@ -249,12 +279,22 @@ internal sealed class GainMapGenerator
         return table[channelOffset + lower] + ((table[channelOffset + lower + 1] - table[channelOffset + lower]) * t);
     }
 
+    // A 16-bit base: its curve (or the sRGB one) interpolated between 16-bit codes, finer than the 10-bit sRGB table.
+    private float Linearize16(float gamma, int channel)
+    {
+        float position = Math.Clamp(gamma, 0f, 1f) * 65535f;
+        int lower = Math.Min((int)position, 65534);
+        float t = position - lower;
+        ReadOnlySpan<float> table = _sdrLinear16.AsSpan(channel * _linearStride16, ushort.MaxValue + 1);
+        return table[lower] + ((table[lower + 1] - table[lower]) * t);
+    }
+
     private static (float R, float G, float B) Convert(float[] m, float r, float g, float b) =>
         ((m[0] * r) + (m[1] * g) + (m[2] * b), (m[3] * r) + (m[4] * g) + (m[5] * b), (m[6] * r) + (m[7] * g) + (m[8] * b));
 
     // port: computeGain — dark base pixels may not signal large gains, which would blow out if they brighten slightly.
-    // As in libultrahdr, log2 is taken in double precision and rounded to float, so the gain bounds (and the ISO
-    // fractions written from them) are bit-identical to its; the rounded result does not depend on the platform.
+    // As in libultrahdr, log2 is taken in double precision and rounded to float. The native reference's later
+    // exp2/log2 metadata round-trip can differ on ARM by a float ulp in the linear boost (covered by the oracle).
     private static float ComputeGain(float sdr, float hdr)
     {
         float gain = (float)Math.Log2((hdr + Offset) / (sdr + Offset));

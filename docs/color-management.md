@@ -1,6 +1,6 @@
 # Color management and linear light
 
-PictureSharp stores 8-bit `Rgba32` pixels and converts colors only when asked: an embedded ICC profile or PNG color
+PictureSharp stores 8-bit `Rgba32` (or, on request, 16-bit `Rgba64`) pixels and converts colors only when asked: an embedded ICC profile or PNG color
 description is kept and written back. On request, images are converted to sRGB, and resizing and compositing can work
 in linear light.
 
@@ -42,6 +42,26 @@ without black-point compensation, Bradford-adapted sRGB as destination, and clip
 | `ColorConversion` on frame readers | `NotSupportedException`; copy the description from `reader.Metadata` to `CloneCurrent()` and call `ConvertToSrgb()` |
 
 On an exception the image and its profile stay unchanged.
+
+### Sixteen bits per channel
+
+`ConvertToSrgb` on an `Rgba64` image evaluates the profile's curves at the 16-bit value (in double precision, stored as
+float), applies the matrix and the sRGB transfer function in floating point and rounds once, `floor(clamp(v, 0, 1) ·
+65535 + 0.5)`, without dithering. Against a double-precision reference the result is within 1 code of 65535 (RMS below
+0.05) for every test profile. 8-bit images keep the 256-entry tables and their byte-exact results.
+
+`ColorConversion = ToSrgb` makes use of this for 8-bit output too: when `PreserveBitDepth` is off, the decoder still
+returns the source's full precision, the conversion runs on it, and the result is rounded once to `Rgba32` before
+`TargetSize` and `ApplyExifOrientation`. An 8-bit source is converted as before. A deeper source (16-bit PNG, or a
+plugin's 10/12/16-bit image) is charged against `DecoderOptions.MaxPixels` as 16-bit, two units per pixel, because it
+is decoded at 16 bits first. A plugin that converts to sRGB itself (the JPEG XL plugin renders XYB as sRGB) reports no
+profile afterwards, so its output is not converted again; it only receives `PreserveBitDepth = true` and its result is
+rounded once.
+
+```csharp
+using Image eight = Image.Load("scan16.png", new DecoderOptions { ColorConversion = ColorConversionMode.ToSrgb });   // Rgba32, rounded once
+using Image sixteen = Image.Load("scan16.png", new DecoderOptions { ColorConversion = ColorConversionMode.ToSrgb, PreserveBitDepth = true });
+```
 
 ## PNG color chunks
 

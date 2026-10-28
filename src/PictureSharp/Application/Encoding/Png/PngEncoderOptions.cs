@@ -15,6 +15,14 @@ public sealed record PngEncoderOptions : EncoderOptions
     /// <summary>Output color type. Default: automatic.</summary>
     public PngColorType ColorType { get; init => field = Check.Defined(value); } = PngColorType.Auto;
 
+    /// <summary>
+    /// Sample depth. A 16-bit selection allows <see cref="PngColorType.Grayscale"/>, <see cref="PngColorType.GrayscaleAlpha"/>,
+    /// <see cref="PngColorType.Rgb"/>, <see cref="PngColorType.Rgba"/> and <see cref="PngColorType.Auto"/>; an explicit
+    /// <see cref="PngColorType.Palette"/> then fails with <see cref="ArgumentException"/> before writing (use
+    /// <see cref="PngBitDepth.UpTo8"/> to reduce the image first). Default: <see cref="PngBitDepth.Auto"/>.
+    /// </summary>
+    public PngBitDepth BitDepth { get; init => field = Check.Defined(value); } = PngBitDepth.Auto;
+
     /// <summary>Scanline filter strategy. Default: adaptive.</summary>
     public PngFilterStrategy FilterStrategy { get; init => field = Check.Defined(value); } = PngFilterStrategy.Adaptive;
 

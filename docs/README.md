@@ -1,5 +1,9 @@
 # PictureSharp documentation
 
+Start with [Getting started](getting-started.md). If you already use 0.8.5, read the
+[migration guide](migration-from-0.8.md). To preserve scan or photo precision, see
+[16-bit images](loading-and-saving.md#preserving-source-depth-090).
+
 ## Using the library
 
 | Guide | What it covers |
@@ -9,7 +13,7 @@
 | [Limits and cancellation](limits-and-cancellation.md) | Limits for untrusted input and cancellation tokens |
 | [Encoder options](encoder-options.md) | WebP, PNG, JPEG, BMP, GIF and PCX encoder options |
 | [Image processing](image-processing.md) | Every `Mutate`/`Clone` operation, photo adjustments and custom operations |
-| [Pixels and interop](pixels-and-interop.md) | `Rgba32`, pixel spans, raw buffers, WPF, SkiaSharp and WinForms |
+| [Pixels and interop](pixels-and-interop.md) | 8-bit and 16-bit pixels, spans, raw buffers, WPF, SkiaSharp and WinForms |
 | [Animation](animation.md) | Frames, animated WebP, APNG and GIF, frame-by-frame I/O |
 | [Metadata](metadata.md) | ICC/EXIF/XMP, typed EXIF and GPS, editing without recompression |
 | [Color management](color-management.md) | Conversion to sRGB, linear-light resizing and compositing |
@@ -17,6 +21,7 @@
 | [ICO icons](ico.md) | Selecting, listing and writing icon variants |
 | [Adapters](adapters.md) | `PictureSharp.Drawing`, `PictureSharp.Skia` and `PictureSharp.AspNetCore` |
 | [Command-line sample](cli.md) | The `samples/PictureSharp.Cli` tool |
+| [Migrating from 0.8.5](migration-from-0.8.md) | 16-bit pixels, normalized settings and plugin migration in 0.9.0 |
 | [Migrating from 0.5.0](migration-from-0.5.md) | From RasterSharp 0.5.0 to the current API |
 
 ## Extending and contributing

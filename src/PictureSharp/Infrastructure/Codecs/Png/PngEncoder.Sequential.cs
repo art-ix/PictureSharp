@@ -18,6 +18,8 @@ internal sealed partial class PngEncoder
         var png = options as PngEncoderOptions ?? throw new ArgumentException("Expected PNG encoder options.", nameof(options));
         if (info.FrameCount != 1 && png.ColorType == PngColorType.Palette)
             throw new NotSupportedException("Sequential APNG requires a fixed non-indexed color type; use Rgba or Auto.");
+        if (png.BitDepth == PngBitDepth.Sixteen && png.ColorType == PngColorType.Palette)
+            throw new ArgumentException("An indexed PNG has at most 8 bits per sample; use PngBitDepth.UpTo8.", nameof(options));
         if (!png.SaveAnimation && info.FrameCount != 1)
             throw new ArgumentException("Sequential APNG writing requires SaveAnimation.", nameof(options));
         return new SequentialWriter(output, info, png, metadata, context, leaveOpen);
@@ -31,13 +33,19 @@ internal sealed partial class PngEncoder
         private int _sequence;
         private long _countOffset;
 
+        protected override bool SupportsPixelType(PixelType pixelType) => pixelType is PixelType.Rgba32 or PixelType.Rgba64;
+
         protected override async ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan duration, CancellationToken cancellationToken)
         {
             _buffer.Reset();
             var writer = new ChunkWriter(_buffer);
             if (_layout is null)
             {
-                _layout = ChooseLayout([frame], options.ColorType == PngColorType.Auto ? PngColorType.Rgba : options.ColorType);
+                // Later frames are unknown, so Auto takes the depth of the first frame.
+                bool sixteen = options.BitDepth == PngBitDepth.Sixteen || (options.BitDepth == PngBitDepth.Auto && frame.PixelType == PixelType.Rgba64);
+                PngColorType colorType = options.ColorType == PngColorType.Auto ? PngColorType.Rgba : options.ColorType;
+                _layout = sixteen ? ChooseLayout16([frame], colorType)
+                    : ChooseLayout([frame.PixelType == PixelType.Rgba32 ? frame : Application.Encoding.EncoderInput.ToRgba32(frame)], colorType);
                 _buffer.Write(PngConstants.Signature);
                 WriteHeader(writer, Info.Width, Info.Height, _layout, options);
                 // Include the chunk header and CRC in the later patch, with offsets relative to the caller's position.
@@ -48,7 +56,7 @@ internal sealed partial class PngEncoder
 
             if (_sequence > int.MaxValue - 4096)
                 throw new NotSupportedException("APNG sequence numbers exceed the supported range.");
-            WriteFrame(writer, frame, duration, _layout, options, FramesWritten, animated: true, ref _sequence, cancellationToken);
+            WriteFrame(writer, AtLayoutDepth(frame, _layout, options), duration, _layout, options, FramesWritten, animated: true, ref _sequence, cancellationToken);
             await _buffer.WriteToAsync(Stream, cancellationToken).ConfigureAwait(false);
         }
 

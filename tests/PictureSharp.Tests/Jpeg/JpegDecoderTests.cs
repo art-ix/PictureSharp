@@ -151,7 +151,7 @@ public class JpegDecoderTests
     private static Rgba32[] Pixels(byte[] jpeg)
     {
         using Image image = Image.Load(jpeg);
-        return image.GetPixelSpan().ToArray();
+        return image.GetPixelSpan<Rgba32>().ToArray();
     }
 
     [Test]
@@ -323,7 +323,7 @@ public class JpegDecoderTests
                 foreach ((string name, byte[] data) in files)
                 {
                     using Image image = PictureSharp.Infrastructure.Codecs.Jpeg.JpegDecoder.DecodeScaled(data, DecoderOptions.Default, scale);
-                    await Assert.That(reference[name] == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because($"{name} at 1/{scale} differs from Pillow");
+                    await Assert.That(reference[name] == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()))).IsTrue().Because($"{name} at 1/{scale} differs from Pillow");
                 }
             }
         }

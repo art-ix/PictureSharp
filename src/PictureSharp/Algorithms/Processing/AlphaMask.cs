@@ -26,7 +26,7 @@ internal static partial class AlphaMask
         for (int y = 0; y < frame.Height; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Span<Rgba32> row = frame.GetRowSpan(y);
+            Span<Rgba32> row = frame.PixelRow(y);
             if (y < y0 || y >= y1 || x0 >= x1)
             {
                 if (clearOutside)

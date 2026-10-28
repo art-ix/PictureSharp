@@ -14,8 +14,8 @@ public class AutoCropTests
         var options = new AutoCropOptions
         {
             Mode = c.GetProperty("mode").GetString() == "background" ? AutoCropMode.Background : AutoCropMode.Alpha,
-            AlphaThreshold = c.TryGetProperty("alpha_threshold", out JsonElement t) ? t.GetByte() : (byte)0,
-            Tolerance = c.TryGetProperty("tolerance", out JsonElement tol) ? tol.GetByte() : (byte)0,
+            AlphaThresholdNormalized = (c.TryGetProperty("alpha_threshold", out JsonElement t) ? t.GetByte() : 0) / 255f,
+            ToleranceNormalized = (c.TryGetProperty("tolerance", out JsonElement tol) ? tol.GetByte() : 0) / 255f,
             Padding = c.TryGetProperty("padding", out JsonElement p) ? p.GetInt32() : 0,
         };
         if (c.TryGetProperty("background", out JsonElement bg) && bg.ValueKind == JsonValueKind.Array)
@@ -64,7 +64,7 @@ public class AutoCropTests
         Rectangle kept = expected ?? new Rectangle(Point.Empty, image.Size);
         await Assert.That(cropped.Size).IsEqualTo(kept.Size);
         using Image manual = image.Clone(x => x.Crop(kept));
-        await Assert.That(cropped.GetPixelSpan().ToArray()).IsEquivalentTo(manual.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(cropped.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(manual.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -75,7 +75,7 @@ public class AutoCropTests
         image[6, 5] = new Rgba32(0, 255, 0, 20);
 
         await Assert.That(image.FindTrimBounds()).IsEqualTo(new Rectangle(2, 3, 5, 3));
-        await Assert.That(image.FindTrimBounds(new AutoCropOptions { AlphaThreshold = 20 })).IsEqualTo(new Rectangle(2, 3, 1, 1));
+        await Assert.That(image.FindTrimBounds(new AutoCropOptions { AlphaThresholdNormalized = 20 / 255f })).IsEqualTo(new Rectangle(2, 3, 1, 1));
         await Assert.That(image.FindTrimBounds(new AutoCropOptions { Padding = 2 })).IsEqualTo(new Rectangle(0, 1, 9, 7));
         await Assert.That(image.FindTrimBounds(new AutoCropOptions { Padding = 100 })).IsEqualTo(new Rectangle(0, 0, 10, 8));
 
@@ -94,7 +94,7 @@ public class AutoCropTests
         image[3, 4] = new Rgba32(100, 100, 100);
 
         var exact = new AutoCropOptions { Mode = AutoCropMode.Background };
-        var tolerant = exact with { Tolerance = 5 };
+        var tolerant = exact with { ToleranceNormalized = 5 / 255f };
         await Assert.That(image.FindTrimBounds(exact)).IsEqualTo(new Rectangle(1, 1, 3, 4));
         await Assert.That(image.FindTrimBounds(tolerant)).IsEqualTo(new Rectangle(3, 4, 1, 1));
 
@@ -125,8 +125,8 @@ public class AutoCropTests
         image[2, 2] = new Rgba32(255, 0, 0);
         image.Frames.RootFrame.Duration = TimeSpan.FromMilliseconds(40);
         ImageFrame second = image.Frames.AddClone(image.Frames.RootFrame);
-        second.GetPixelSpan().Clear();
-        second.GetPixelSpan()[(7 * 10) + 6] = new Rgba32(0, 255, 0);
+        second.GetPixelSpan<Rgba32>().Clear();
+        second.GetPixelSpan<Rgba32>()[(7 * 10) + 6] = new Rgba32(0, 255, 0);
         second.Duration = TimeSpan.FromMilliseconds(90);
 
         await Assert.That(image.FindTrimBounds()).IsEqualTo(new Rectangle(2, 2, 5, 6));
@@ -134,8 +134,8 @@ public class AutoCropTests
 
         await Assert.That(image.Size).IsEqualTo(new Size(5, 6));
         await Assert.That(image.FrameCount).IsEqualTo(2);
-        await Assert.That(image.Frames[0].GetPixelSpan()[0]).IsEqualTo(new Rgba32(255, 0, 0));
-        await Assert.That(image.Frames[1].GetPixelSpan()[(5 * 5) + 4]).IsEqualTo(new Rgba32(0, 255, 0));
+        await Assert.That(image.Frames[0].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(255, 0, 0));
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>()[(5 * 5) + 4]).IsEqualTo(new Rgba32(0, 255, 0));
         await Assert.That(image.Frames[0].Duration).IsEqualTo(TimeSpan.FromMilliseconds(40));
         await Assert.That(image.Frames[1].Duration).IsEqualTo(TimeSpan.FromMilliseconds(90));
     }

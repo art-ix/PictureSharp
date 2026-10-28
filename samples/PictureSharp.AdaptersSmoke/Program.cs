@@ -20,6 +20,19 @@ foreach (SKColorType colorType in new[] { SKColorType.Rgba8888, SKColorType.Bgra
         throw new InvalidOperationException($"SkiaSharp round trip failed: {colorType}.");
 }
 
+// SkiaSharp 16 bits per channel: Rgba16161616 copies Rgba64 samples exactly (straight and premultiplied).
+using (var deep = new Image(7, 5, PixelType.Rgba64))
+{
+    deep.GetPixelSpan<Rgba64>().Fill(new Rgba64(1, 30000, 65534, 40000));
+    deep.SetPixel(0, 0, new Rgba64(12345, 0, 54321, 0));
+    using SKBitmap bitmap = deep.ToSKBitmap(SKColorType.Rgba16161616);
+    using Image back = Image.FromSKBitmap(bitmap, PixelType.Rgba64);
+    using SKImage premultiplied = deep.ToSKImage(SKColorType.Rgba16161616, SKAlphaType.Premul);
+    using Image fromPremultiplied = Image.FromSKImage(premultiplied, PixelType.Rgba64);
+    if (!back.GetPixelByteSpan().SequenceEqual(deep.GetPixelByteSpan()) || fromPremultiplied.PixelType != PixelType.Rgba64)
+        throw new InvalidOperationException("SkiaSharp 16-bit round trip failed.");
+}
+
 // System.Drawing: GDI+ exists only on Windows; elsewhere the adapter must still compile, trim and link.
 if (OperatingSystem.IsWindows())
 {

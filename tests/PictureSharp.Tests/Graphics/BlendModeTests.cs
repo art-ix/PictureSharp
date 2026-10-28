@@ -28,7 +28,7 @@ public class BlendModeTests
         image.Mutate(x => x.DrawImage(source, new Point(c.GetProperty("x").GetInt32(), c.GetProperty("y").GetInt32()), options));
 
         using Image expected = GraphicsReference.Load(c.GetProperty("reference").GetString()!);
-        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan(), expected.GetPixelSpan()))
+        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan<Rgba32>(), expected.GetPixelSpan<Rgba32>()))
             .IsLessThanOrEqualTo(GraphicsReference.Tolerance("blend_max_abs")).Because(name);
     }
 
@@ -104,7 +104,7 @@ public class BlendModeTests
         using Image source = GraphicsReference.Load("source.png");
         using Image legacy = backdrop.Clone(x => x.DrawImage(source, new Point(20, 12), 0.6f));
         using Image normal = backdrop.Clone(x => x.DrawImage(source, new Point(20, 12), new DrawImageOptions { Opacity = 0.6f, BlendMode = BlendMode.Normal }));
-        await Assert.That(normal.GetPixelSpan().ToArray()).IsEquivalentTo(legacy.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(normal.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(legacy.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -114,13 +114,13 @@ public class BlendModeTests
         image[0, 0] = new Rgba32(102, 102, 102);
         image[1, 0] = new Rgba32(204, 204, 204);
         image.Frames.AddClone(image.Frames.RootFrame);
-        image.Frames[1].GetPixelSpan().Fill(new Rgba32(255, 255, 255));
+        image.Frames[1].GetPixelSpan<Rgba32>().Fill(new Rgba32(255, 255, 255));
 
         // Multiplying the first frame by itself: 0.4² = 0.16 → 41, 0.8² = 0.64 → 163; the second frame gets the first frame's colors.
         image.Mutate(x => x.DrawImage(image, Point.Empty, new DrawImageOptions { BlendMode = BlendMode.Multiply }));
-        await Assert.That(image.Frames[0].GetPixelSpan()[0]).IsEqualTo(new Rgba32(41, 41, 41));
-        await Assert.That(image.Frames[0].GetPixelSpan()[1]).IsEqualTo(new Rgba32(163, 163, 163));
-        await Assert.That(image.Frames[1].GetPixelSpan()[0]).IsEqualTo(new Rgba32(102, 102, 102));
+        await Assert.That(image.Frames[0].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(41, 41, 41));
+        await Assert.That(image.Frames[0].GetPixelSpan<Rgba32>()[1]).IsEqualTo(new Rgba32(163, 163, 163));
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(102, 102, 102));
     }
 
     [Test]

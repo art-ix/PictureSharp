@@ -1,4 +1,5 @@
 using PictureSharp.Algorithms.ColorManagement;
+using PictureSharp.Domain.Hdr;
 
 namespace PictureSharp.Algorithms.Hdr;
 
@@ -11,7 +12,7 @@ internal static class HdrBaseColor
     /// <summary>The base color of an image with this metadata.</summary>
     /// <exception cref="ImageFormatException">The ICC profile is malformed.</exception>
     /// <exception cref="NotSupportedException">The color space is not sRGB or Display P3.</exception>
-    public static (HdrColorSpace Space, float[]? Linearization) FromMetadata(ImageMetadata metadata, ImageFormat? format)
+    public static (HdrColorSpace Space, BaseTransfer? Transfer) FromMetadata(ImageMetadata metadata, ImageFormat? format)
     {
         if (metadata.IccData is { Length: > 0 } icc)
         {
@@ -29,7 +30,7 @@ internal static class HdrBaseColor
 
     /// <summary>The base color from a parsed ICC profile or color description; null means sRGB.</summary>
     /// <exception cref="NotSupportedException">The color space is not sRGB or Display P3.</exception>
-    public static (HdrColorSpace Space, float[]? Linearization) FromModel(IccColorModel? model)
+    public static (HdrColorSpace Space, BaseTransfer? Transfer) FromModel(IccColorModel? model)
     {
         if (model is null)
         {
@@ -41,10 +42,6 @@ internal static class HdrBaseColor
             throw new NotSupportedException("HDR reconstruction supports base images in sRGB or Display P3 only.");
         }
 
-        var linear = new float[768];
-        model.Red.Sample8().CopyTo(linear, 0);
-        model.Green!.Sample8().CopyTo(linear, 256);
-        model.Blue!.Sample8().CopyTo(linear, 512);
-        return (space, linear);
+        return (space, new CurveBaseTransfer(model.Red, model.Green!, model.Blue!));
     }
 }

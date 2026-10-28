@@ -6,9 +6,10 @@ namespace PictureSharp.Algorithms.Processing;
 /// <summary>
 /// Automatic white balance under the gray-world assumption, measured on the midtones only: pixels that are not fully
 /// transparent, have no channel at 0–2 or 253–255 (clipped) and whose luma lies between the 10th and 90th percentile
-/// of those pixels. Counts are integers, so the result does not depend on the order of the frames' bands.
+/// of those pixels. Counts are integers, so the result does not depend on the order of the frames' bands. 16-bit
+/// images are counted at full resolution (<c>GrayWorld.Wide.cs</c>).
 /// </summary>
-internal static class GrayWorld
+internal static partial class GrayWorld
 {
     /// <summary>Length of the luma counts.</summary>
     public const int LumaLength = 256;
@@ -60,7 +61,7 @@ internal static class GrayWorld
 
         int low = -1, high = -1;
         long cumulative = 0;
-        for (int y = 0; y < LumaLength; y++)
+        for (int y = 0; y < lumaCounts.Length; y++)
         {
             cumulative += lumaCounts[y];
             if (low < 0 && cumulative * 10 >= total)
@@ -105,21 +106,36 @@ internal static class GrayWorld
     /// </summary>
     public static bool Lut(Span<byte> lut, ReadOnlySpan<long> channelCounts, float strength)
     {
+        if (Gains(channelCounts, 256, strength) is not { } gains)
+        {
+            return false;
+        }
+
+        PhotoAdjust.ChannelGainsLut(lut, gains.R, gains.G, gains.B);
+        return true;
+    }
+
+    /// <summary>
+    /// The channel gains of <see cref="Lut(Span{byte}, ReadOnlySpan{long}, float)"/> from counts of
+    /// <paramref name="binCount"/> values per channel (256 or 65536), or null when nothing was counted.
+    /// </summary>
+    public static (float R, float G, float B)? Gains(ReadOnlySpan<long> channelCounts, int binCount, float strength)
+    {
         Span<float> mean = stackalloc float[3];
         for (int c = 0; c < 3; c++)
         {
             long n = 0;
             double sum = 0;
-            for (int v = 0; v < 256; v++)
+            for (int v = 0; v < binCount; v++)
             {
-                long count = channelCounts[(c * 256) + v];
+                long count = channelCounts[(c * binCount) + v];
                 n += count;
-                sum += count * (double)SrgbTransfer.Decode((byte)v);
+                sum += count * (double)(binCount == 256 ? SrgbTransfer.Decode((byte)v) : SrgbTransfer.Decode16((ushort)v));
             }
 
             if (n == 0)
             {
-                return false;
+                return null;
             }
 
             mean[c] = (float)(sum / n);
@@ -130,7 +146,6 @@ internal static class GrayWorld
         float g = DeterministicMath.Pow(luma / mean[1], strength);
         float b = DeterministicMath.Pow(luma / mean[2], strength);
         float normalize = luma / ((PhotoAdjust.LumaR * r * mean[0]) + (PhotoAdjust.LumaG * g * mean[1]) + (PhotoAdjust.LumaB * b * mean[2]));
-        PhotoAdjust.ChannelGainsLut(lut, r * normalize, g * normalize, b * normalize);
-        return true;
+        return (r * normalize, g * normalize, b * normalize);
     }
 }

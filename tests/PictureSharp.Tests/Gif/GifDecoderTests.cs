@@ -56,7 +56,7 @@ public class GifDecoderTests
         await Assert.That(image.LoopCount).IsEqualTo(0);
         Assert.Null(image.Metadata.Xmp);
         Assert.Null(image.Metadata.IccProfile);
-        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsEqualTo(Corpus.References[file].Frames[0].Sha256);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()))).IsEqualTo(Corpus.References[file].Frames[0].Sha256);
     }
 
     [Test]
@@ -68,6 +68,23 @@ public class GifDecoderTests
         await Assert.That(ImageFormat.Gif.CanDecode).IsTrue();
         await Assert.That(ImageFormat.Gif.CanEncode).IsTrue();
         Assert.Null(Image.DetectFormat("GIF88a\0\0\0\0\0\0\0"u8));
+    }
+
+    [Test]
+    public async Task Decode_OverhangingFrame_RespectsMaxPixelsBeforeRentingIndices()
+    {
+        byte[] gif = new GifBuilder(4, 4, GifBuilder.Palette4)
+            .Image(0, 0, 8, 8, new byte[64]).ToArray();
+        var options = new DecoderOptions { MaxPixels = 32 };
+        ImageFormatException error = Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(gif, options));
+        await Assert.That(error.Format).IsSameReferenceAs(ImageFormat.Gif);
+        await using ImageFrameReader reader = await Image.OpenFrameReaderAsync(new MemoryStream(gif), options);
+        await Assert.ThrowsAsync<ImageFormatException>(async () =>
+        {
+            await foreach (ImageFrame frame in reader.ReadFramesAsync()) { }
+        });
+        using Image allowed = Image.Load(gif, options with { MaxPixels = 64 });
+        await Assert.That(allowed.Size).IsEqualTo(new System.Drawing.Size(4, 4));
     }
 
     [Test]
@@ -93,7 +110,7 @@ public class GifDecoderTests
             .Image(10, 10, 2, 2, [1, 1, 1, 1])
             .ToArray();
         using Image image = Image.Load(gif);
-        await Assert.That(image.Frames[1].GetPixelSpan().ToArray().All(p => p == Red)).IsTrue();
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>().ToArray().All(p => p == Red)).IsTrue();
     }
 
     [Test]
@@ -104,8 +121,8 @@ public class GifDecoderTests
         for (int cut = full.Length - 2; cut > 800; cut -= 97)
         {
             using Image partial = Image.Load(full.AsMemory(0, cut));
-            ReadOnlySpan<Rgba32> a = complete.GetPixelSpan();
-            ReadOnlySpan<Rgba32> b = partial.GetPixelSpan();
+            ReadOnlySpan<Rgba32> a = complete.GetPixelSpan<Rgba32>();
+            ReadOnlySpan<Rgba32> b = partial.GetPixelSpan<Rgba32>();
             int decoded = a.CommonPrefixLength(b);
             bool transparentTail = b[decoded..].ToArray().All(p => p == default);
             await Assert.That(decoded > 0).IsTrue();
@@ -134,7 +151,7 @@ public class GifDecoderTests
         using Image image = Image.Load(gif);
         for (int i = 0; i < indices.Length; i++)
         {
-            await Assert.That(image.GetPixelSpan()[i]).IsEqualTo(GifBuilder.Palette4[indices[i]]);
+            await Assert.That(image.GetPixelSpan<Rgba32>()[i]).IsEqualTo(GifBuilder.Palette4[indices[i]]);
         }
     }
 
@@ -149,9 +166,9 @@ public class GifDecoderTests
             .ToArray();
         using Image image = Image.Load(gif);
         await Assert.That(image.FrameCount).IsEqualTo(4);
-        await Assert.That(image.Frames[1].GetPixelSpan().ToArray()).IsEquivalentTo(new[] { Red, Green, Blue }, CollectionOrdering.Matching);
-        await Assert.That(image.Frames[2].GetPixelSpan().ToArray()).IsEquivalentTo(new[] { Red, new Rgba32(255, 255, 0), Red }, CollectionOrdering.Matching);
-        await Assert.That(image.Frames[3].GetPixelSpan().ToArray()).IsEquivalentTo(new[] { Red, default, Blue }, CollectionOrdering.Matching);
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(new[] { Red, Green, Blue }, CollectionOrdering.Matching);
+        await Assert.That(image.Frames[2].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(new[] { Red, new Rgba32(255, 255, 0), Red }, CollectionOrdering.Matching);
+        await Assert.That(image.Frames[3].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(new[] { Red, default, Blue }, CollectionOrdering.Matching);
         await Assert.That(image.Frames[3].Duration).IsEqualTo(TimeSpan.FromMilliseconds(50));
         await Assert.That(image.LoopCount).IsEqualTo(0);
         await Assert.That(image.HasAlpha).IsTrue();

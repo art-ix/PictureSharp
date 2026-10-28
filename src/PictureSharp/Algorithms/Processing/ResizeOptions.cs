@@ -28,8 +28,10 @@ public sealed record ResizeOptions
     /// <summary>Which part is kept by <see cref="ResizeMode.Crop"/> and where <see cref="ResizeMode.Pad"/> places the image. Default: center.</summary>
     public AnchorPosition Position { get; init => field = Check.Defined(value); }
 
-    /// <summary>Border color for <see cref="ResizeMode.Pad"/>. Default: transparent black.</summary>
-    public Rgba32 PadColor { get; init; }
+    /// <summary>
+    /// Border color for <see cref="ResizeMode.Pad"/>, rounded to 8 bits on an 8-bit image. Default: transparent black.
+    /// </summary>
+    public Rgba64 PadColor { get; init; }
 
     /// <summary>
     /// Whether the image may be enlarged. When false the scale is capped at 1: images that would be enlarged keep

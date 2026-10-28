@@ -44,7 +44,7 @@ public class FrameReaderLimitsTests
         await using var reader = await Image.OpenFrameReaderAsync(firstInput, new DecoderOptions { FirstFrameOnly = true, MaxPixels = 17 * 13 });
         using Image expected = Image.Load(data, new DecoderOptions { FirstFrameOnly = true });
         await Assert.That(await reader.MoveNextAsync()).IsTrue();
-        await Assert.That(reader.Current.GetPixelSpan().SequenceEqual(expected.GetPixelSpan())).IsTrue();
+        await Assert.That(reader.Current.GetPixelSpan<Rgba32>().SequenceEqual(expected.GetPixelSpan<Rgba32>())).IsTrue();
         await Assert.That(reader.Current.Duration).IsEqualTo(expected.Frames[0].Duration);
         await Assert.That(await reader.MoveNextAsync()).IsFalse();
         await Assert.That(reader.LoopCount).IsEqualTo(expected.LoopCount);

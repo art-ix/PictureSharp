@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using PictureSharp.Formats;
+using PictureSharp.Domain.Hdr;
 using PictureSharp.Formats.Jpeg;
 using PictureSharp.Processing;
 using PictureSharp.Tests.Infrastructure;
@@ -120,7 +121,7 @@ public class HdrGainMapGeneratorOracleTests
         reader.ReadBytes(24);   // linear boosts, covered by the payload
         byte[] iso = reader.ReadBytes(reader.ReadInt32());
 
-        ReadOnlySpan<Rgba32> mine = map.GetPixelSpan();
+        ReadOnlySpan<Rgba32> mine = map.GetPixelSpan<Rgba32>();
         long identical = 0;
         int worst = 0;
         for (int i = 0; i < width * height; i++)
@@ -137,7 +138,35 @@ public class HdrGainMapGeneratorOracleTests
         await Assert.That(worst).IsLessThanOrEqualTo(budget.GetProperty("oracle_max_code_difference").GetInt32());
         await Assert.That(identical / (double)codes.Length).IsGreaterThanOrEqualTo(budget.GetProperty("oracle_identical_fraction").GetDouble());
         await Assert.That(image.AttachedGainMap!.Parameters!.UseBaseColorSpace).IsEqualTo(useBase);
-        await Assert.That(gainMap.Metadata.ToIso()).IsEquivalentTo(iso, CollectionOrdering.Matching);
+        byte[] actualIso = gainMap.Metadata.ToIso();
+        if (!actualIso.AsSpan().SequenceEqual(iso))
+        {
+            byte[] icc = gainMap.Metadata.ToAlternateIcc() ?? [];
+            GainMapParameters actualMetadata = GainMapMetadata.ParseIso(actualIso, channels, icc).Parameters;
+            GainMapParameters expectedMetadata = GainMapMetadata.ParseIso(iso, channels, icc).Parameters;
+            await Assert.That(actualMetadata.ChannelCount).IsEqualTo(expectedMetadata.ChannelCount);
+            await Assert.That(actualMetadata.UseBaseColorSpace).IsEqualTo(expectedMetadata.UseBaseColorSpace);
+            await Assert.That(actualMetadata.BaseHeadroom).IsEqualTo(expectedMetadata.BaseHeadroom);
+            await Assert.That(actualMetadata.AlternateHeadroom).IsEqualTo(expectedMetadata.AlternateHeadroom);
+            await Assert.That(actualMetadata.Gamma).IsEquivalentTo(expectedMetadata.Gamma, CollectionOrdering.Matching);
+            await Assert.That(actualMetadata.BaseOffset).IsEquivalentTo(expectedMetadata.BaseOffset, CollectionOrdering.Matching);
+            await Assert.That(actualMetadata.AlternateOffset).IsEquivalentTo(expectedMetadata.AlternateOffset, CollectionOrdering.Matching);
+            for (int c = 0; c < 3; c++)
+            {
+                await CheckBound(actualMetadata.GainMapMin[c], expectedMetadata.GainMapMin[c]);
+                await CheckBound(actualMetadata.GainMapMax[c], expectedMetadata.GainMapMax[c]);
+            }
+        }
+    }
+
+    private static async Task CheckBound(float actual, float expected)
+    {
+        // libultrahdr stores exp2(gain) as float before writing log2(boost). ARM libm can round that
+        // intermediate differently from the double calculation: compare linear boosts within two float ulps.
+        // The dedicated writer oracle still requires identical fractions and payloads for identical parameters.
+        float actualBoost = (float)double.Exp2(actual), expectedBoost = (float)double.Exp2(expected);
+        long ulps = Math.Abs((long)BitConverter.SingleToInt32Bits(actualBoost) - BitConverter.SingleToInt32Bits(expectedBoost));
+        await Assert.That(ulps).IsLessThanOrEqualTo(2).Because($"linear gain {actualBoost:R} vs {expectedBoost:R} (log2 {actual:R} vs {expected:R})");
     }
 
     public static IEnumerable<(HdrColorSpace Space, int Scale, int Channels)> FileCases() =>

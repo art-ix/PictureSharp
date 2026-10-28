@@ -1,5 +1,6 @@
 using System.Drawing;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Processing;
@@ -16,9 +17,11 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
         InputLimits.CheckLength(data.Length, options.MaxInputBytes);
         IImageDecoder decoder = codecs.GetDecoderFor(data.Span);
         DecodedImage result;
+        bool reduce = ReducesAfterConversion(options);
         try
         {
-            var context = new DecodeContext(options, cancellationToken);
+            // ToSrgb converts the source's full precision and rounds to 8 bits once (deeper sources are charged as 16-bit).
+            var context = new DecodeContext(reduce ? options with { PreserveBitDepth = true } : options, cancellationToken);
             context.Budget.ReserveInput(data.Length);
             result = decoder.Decode(data, context);
         }
@@ -40,6 +43,10 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
                 converted = image.Metadata.IccData is not null || image.Metadata.HasColorDescription;
                 // The image is disposed below if anything fails, so it may be converted in place.
                 ImageProcessingService.Mutate(image, static x => x.ConvertToSrgbInPlace(), cancellationToken);
+                if (reduce)
+                {
+                    ReduceToRgba32(image, cancellationToken);
+                }
             }
 
             ApplyTargetSize(result, options, cancellationToken);
@@ -57,7 +64,7 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
                         StoredSize = result.StoredSize,
                         AppliedOrientation = orientation,
                         BaseSpace = converted ? HdrColorSpace.LinearSrgb : gainMap.BaseSpace,
-                        BaseLinearization = converted ? null : gainMap.BaseLinearization,
+                        BaseTransfer = converted ? null : gainMap.BaseTransfer,
                     }
                     : gainMap;
             }
@@ -69,6 +76,22 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
         }
 
         return image;
+    }
+
+    /// <summary>
+    /// Whether <see cref="ColorConversionMode.ToSrgb"/> decodes with <see cref="DecoderOptions.PreserveBitDepth"/> and
+    /// reduces the converted image to <see cref="PixelType.Rgba32"/>, because the caller asked for 8-bit pixels.
+    /// </summary>
+    internal static bool ReducesAfterConversion(DecoderOptions options) =>
+        options.ColorConversion == ColorConversionMode.ToSrgb && !options.PreserveBitDepth;
+
+    /// <summary>Rounds a 16-bit image to 8 bits after its conversion; 8-bit images are left as they are.</summary>
+    internal static void ReduceToRgba32(Image image, CancellationToken cancellationToken)
+    {
+        if (image.PixelType != PixelType.Rgba32)
+        {
+            ImageProcessingService.Mutate(image, static x => x.ConvertPixelType(PixelType.Rgba32), cancellationToken);
+        }
     }
 
     private static void ApplyTargetSize(DecodedImage result, DecoderOptions options, CancellationToken cancellationToken)
@@ -95,9 +118,9 @@ internal sealed class ImageDecodeService(ICodecResolver codecs)
             ImageFrame frame = image.Frames[i];
             // A reduced decode covers the stored size divided by the scale, which may end in a fractional pixel.
             (float x1, float y1) = scale == 1 ? (frame.Width, frame.Height) : ((float)stored.Width / scale, (float)stored.Height / scale);
-            Rgba32[] pixels = Resizer.Resize(frame.Pixels, frame.Width, frame.Height, size.Width, size.Height, options.TargetResampling,
-                0, 0, x1, y1, cancellationToken, maxDegreeOfParallelism: options.MaxDegreeOfParallelism);
-            replacements[i] = new FrameReplacement(size.Width, size.Height, pixels);
+            var operation = new Resizer.ScaleFrame(frame, size.Width, size.Height, options.TargetResampling, x1, y1, cancellationToken,
+                options.MaxDegreeOfParallelism);
+            replacements[i] = new FrameReplacement(size.Width, size.Height, PixelDispatch.Run<Resizer.ScaleFrame, PixelBuffer>(frame.PixelType, ref operation));
         }
 
         cancellationToken.ThrowIfCancellationRequested();

@@ -1,7 +1,10 @@
 namespace PictureSharp.Algorithms.Processing;
 
-/// <summary>Histogram-driven tone tables: Pillow's <c>ImageOps.autocontrast</c> and <c>ImageOps.equalize</c>.</summary>
-internal static class AutoTone
+/// <summary>
+/// Histogram-driven tone tables: Pillow's <c>ImageOps.autocontrast</c> and <c>ImageOps.equalize</c> on 256 counts per
+/// channel, and their extensions to 65536 counts for 16-bit images (<c>AutoTone.Wide.cs</c>).
+/// </summary>
+internal static partial class AutoTone
 {
     /// <summary>
     /// Fills the red, green and blue parts of <paramref name="lut"/> from <paramref name="counts"/> (the layout of
@@ -26,17 +29,38 @@ internal static class AutoTone
     // port: Pillow 10.2.0 src/PIL/ImageOps.py autocontrast (one histogram layer, without ignore and mask)
     private static void AutoContrastLayer(Span<byte> lut, Span<double> h, double cutoffLow, double cutoffHigh)
     {
+        if (ContrastRange(h, cutoffLow, cutoffHigh) is not (int low, int high))
+        {
+            Identity(lut);
+            return;
+        }
+
+        double scale = 255.0 / (high - low);
+        double offset = -low * scale;
+        for (int ix = 0; ix < 256; ix++)
+        {
+            lut[ix] = (byte)Math.Clamp((int)((ix * scale) + offset), 0, 255);
+        }
+    }
+
+    /// <summary>
+    /// The lowest and highest values left after cutting <paramref name="cutoffLow"/> and <paramref name="cutoffHigh"/>
+    /// percent of the counts <paramref name="h"/> (one per value, changed in place), or null when they do not span a range.
+    /// </summary>
+    private static (int Low, int High)? ContrastRange(Span<double> h, double cutoffLow, double cutoffHigh)
+    {
+        int last = h.Length - 1;
         if (cutoffLow != 0 || cutoffHigh != 0)
         {
             double n = 0;
-            for (int ix = 0; ix < 256; ix++)
+            for (int ix = 0; ix <= last; ix++)
             {
                 n += h[ix];
             }
 
             // Counts become fractional once a fractional cut is subtracted, as in Python.
             double cut = PyFloorDivide(n * cutoffLow, 100);
-            for (int lo = 0; lo < 256; lo++)
+            for (int lo = 0; lo <= last; lo++)
             {
                 if (cut > h[lo])
                 {
@@ -56,7 +80,7 @@ internal static class AutoTone
             }
 
             cut = PyFloorDivide(n * cutoffHigh, 100);
-            for (int hi = 255; hi >= 0; hi--)
+            for (int hi = last; hi >= 0; hi--)
             {
                 if (cut > h[hi])
                 {
@@ -77,8 +101,8 @@ internal static class AutoTone
         }
 
         // Python's for loops leave the variable at the last value when nothing breaks.
-        int low = 255;
-        for (int i = 0; i < 256; i++)
+        int low = last;
+        for (int i = 0; i <= last; i++)
         {
             if (h[i] != 0)
             {
@@ -88,7 +112,7 @@ internal static class AutoTone
         }
 
         int high = 0;
-        for (int i = 255; i >= 0; i--)
+        for (int i = last; i >= 0; i--)
         {
             if (h[i] != 0)
             {
@@ -97,18 +121,7 @@ internal static class AutoTone
             }
         }
 
-        if (high <= low)
-        {
-            Identity(lut);
-            return;
-        }
-
-        double scale = 255.0 / (high - low);
-        double offset = -low * scale;
-        for (int ix = 0; ix < 256; ix++)
-        {
-            lut[ix] = (byte)Math.Clamp((int)((ix * scale) + offset), 0, 255);
-        }
+        return high <= low ? null : (low, high);
     }
 
     /// <summary>Fills the red, green and blue parts of <paramref name="lut"/> from <paramref name="counts"/>, each channel equalized separately.</summary>

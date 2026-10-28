@@ -10,7 +10,7 @@ public class FormatPluginTests
     private static Image Sample(int width = 5, int height = 3)
     {
         var image = new Image(width, height);
-        Span<Rgba32> pixels = image.GetPixelSpan();
+        Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
         for (int i = 0; i < pixels.Length; i++)
         {
             pixels[i] = new Rgba32((byte)(i * 17), (byte)(255 - i * 9), (byte)(i * 5));
@@ -40,7 +40,7 @@ public class FormatPluginTests
 
         using Image image = Image.Load(ppm, options);
         await Assert.That(image.SourceFormat).IsSameReferenceAs(PpmFormat.Format);
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         using Image fromStream = Image.Load(new MemoryStream(ppm), options);
         await Assert.That(fromStream.Size).IsEqualTo(source.Size);
         ImageInfo info = Image.Identify(ppm, options);
@@ -104,7 +104,7 @@ public class FormatPluginTests
 
         using Image image = Image.Load(wrapped, new DecoderOptions { Configuration = withWrap });
         await Assert.That(image.SourceFormat).IsSameReferenceAs(WrapFormat.Format);
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(withWrap.CanEncode(WrapFormat.Format)).IsFalse();
 
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(wrapped, new DecoderOptions { Configuration = withWrap, MaxPixels = 10 }));
@@ -209,7 +209,7 @@ public class FormatPluginDefaultTests
             await Assert.That(Image.Identify(path).Width).IsEqualTo(4);
             using (Image loaded = Image.Load(path))
             {
-                await Assert.That(loaded.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+                await Assert.That(loaded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
             }
 
             source.SaveAsPpm(Path.Combine(directory, "b.ppm"), new PpmEncoderOptions { Comment = "shortcut" });

@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -11,7 +13,8 @@ namespace PictureSharp.Algorithms.Processing;
 /// segment along itself. The threshold rises to three times the local noise (the median absolute deviation of each
 /// 32 × 32 tile), so film grain is not taken for dust. Detail between the four directions (a slanted stroke) is
 /// detected too, but only small, isolated groups of speck pixels are replaced. Mirrored by
-/// tests/assets/photo_adjust_reference.py.
+/// tests/assets/photo_adjust_reference.py. A 16-bit image is examined on its 16-bit luma with the same rules (limits
+/// scaled to 0–65535) and replaced by 16-bit medians; 8-bit medians count values, 16-bit ones sort them.
 /// </summary>
 internal static class DustFilter
 {
@@ -35,38 +38,79 @@ internal static class DustFilter
     /// The rim grows from the detected core for at most <c>size</c> rounds: a neighbour of the speck joins when it
     /// differs from the median of its window in the same direction by more than half its limit.
     /// </summary>
-    public static void Remove(Rgba32[] source, Rgba32[] destination, int width, int height, int size, float threshold,
-        CancellationToken cancellationToken)
+    public static void Remove<TPixel>(TPixel[] source, TPixel[] destination, int width, int height, int size, float threshold,
+        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel>
     {
         int length = width * height;
-        byte[] luma = ArrayPool<byte>.Shared.Rent(length);
+        if (typeof(TPixel) == typeof(Rgba32))
+        {
+            Rgba32[] narrow = Unsafe.As<Rgba32[]>(source);
+            byte[] luma = ArrayPool<byte>.Shared.Rent(length);
+            try
+            {
+                Parallelism.ForBands(height, Rows(width), length, cancellationToken, (top, bottom) =>
+                {
+                    for (int i = top * width; i < bottom * width; i++)
+                    {
+                        luma[i] = (byte)GrayWorld.Luma(narrow[i]);
+                    }
+                });
+                Remove(source, destination, new BytePlane(luma), width, height, size, threshold, cancellationToken);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(luma);
+            }
+        }
+        else
+        {
+            ushort[] luma = ArrayPool<ushort>.Shared.Rent(length);
+            try
+            {
+                Parallelism.ForBands(height, Rows(width), length, cancellationToken, (top, bottom) =>
+                {
+                    for (int i = top * width; i < bottom * width; i++)
+                    {
+                        luma[i] = (ushort)GrayWorld.Luma(TPixel.ToRgba64(source[i]));
+                    }
+                });
+                Remove(source, destination, new WidePlane(luma), width, height, size, threshold, cancellationToken);
+            }
+            finally
+            {
+                ArrayPool<ushort>.Shared.Return(luma);
+            }
+        }
+    }
+
+    private static int Rows(int width) => Math.Max(1, (1 << 16) / width);
+
+    private static void Remove<TPixel, TPlane>(TPixel[] source, TPixel[] destination, TPlane luma, int width, int height, int size, float threshold,
+        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel> where TPlane : struct, ILumaPlane
+    {
+        int length = width * height;
         byte[] mask = ArrayPool<byte>.Shared.Rent(length);
         byte[] next = ArrayPool<byte>.Shared.Rent(length);
+        int scratchLength = TPlane.ScratchLength(size);
         try
         {
             source.AsSpan(0, length).CopyTo(destination);
-            int rows = Math.Max(1, (1 << 16) / width);
-            Parallelism.ForBands(height, rows, length, cancellationToken, (top, bottom) =>
-            {
-                for (int i = top * width; i < bottom * width; i++)
-                {
-                    luma[i] = (byte)GrayWorld.Luma(source[i]);
-                }
-            });
-
+            int rows = Rows(width);
             int tilesX = (width + Tile - 1) / Tile, tilesY = (height + Tile - 1) / Tile;
             float[] limits = new float[tilesX * tilesY];
-            float floor = threshold * 255f;
+            float floor = threshold * TPlane.Max;
             Parallelism.ForBands(tilesY, 1, length, cancellationToken, (top, bottom) =>
             {
-                Span<int> counts = stackalloc int[256];
+                int[] counts = ArrayPool<int>.Shared.Rent(scratchLength);
                 for (int ty = top; ty < bottom; ty++)
                 {
                     for (int tx = 0; tx < tilesX; tx++)
                     {
-                        limits[(ty * tilesX) + tx] = MathF.Max(floor, NoiseFactor * TileNoise(luma, width, height, tx, ty, counts));
+                        limits[(ty * tilesX) + tx] = MathF.Max(floor, NoiseFactor * luma.TileNoise(width, height, tx, ty, counts));
                     }
                 }
+
+                ArrayPool<int>.Shared.Return(counts);
             });
 
             Parallelism.ForBands(height, rows, length, cancellationToken, (top, bottom) =>
@@ -89,7 +133,7 @@ internal static class DustFilter
                 int added = 0;
                 Parallelism.ForBands(height, rows, length, cancellationToken, (top, bottom) =>
                 {
-                    Span<int> counts = stackalloc int[256];
+                    int[] counts = ArrayPool<int>.Shared.Rent(scratchLength);
                     int found = 0;
                     for (int y = top; y < bottom; y++)
                     {
@@ -101,7 +145,7 @@ internal static class DustFilter
                                 continue;
                             }
 
-                            float deviation = luma[i] - WindowMedian(luma, width, height, x, y, size, counts);
+                            float deviation = luma.Get(i) - luma.WindowMedian(width, height, x, y, size, counts);
                             float half = 0.5f * limits[((y / Tile) * tilesX) + (x / Tile)];
                             if ((specks & Bright) != 0 && deviation > half)
                             {
@@ -121,6 +165,7 @@ internal static class DustFilter
                     }
 
                     Interlocked.Add(ref added, found);
+                    ArrayPool<int>.Shared.Return(counts);
                 });
                 next.AsSpan(0, length).CopyTo(mask);
                 if (added == 0)
@@ -130,11 +175,11 @@ internal static class DustFilter
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            KeepSpecks(mask, luma, width, height, size);
+            KeepSpecks(mask, luma, width, height, size, scratchLength);
 
             Parallelism.ForBands(height, rows, length, cancellationToken, (top, bottom) =>
             {
-                Span<int> counts = stackalloc int[3 * 256];
+                int[] counts = ArrayPool<int>.Shared.Rent(scratchLength);
                 for (int y = top; y < bottom; y++)
                 {
                     for (int x = 0; x < width; x++)
@@ -146,42 +191,15 @@ internal static class DustFilter
                         }
                     }
                 }
+
+                ArrayPool<int>.Shared.Return(counts);
             });
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(luma);
             ArrayPool<byte>.Shared.Return(mask);
             ArrayPool<byte>.Shared.Return(next);
         }
-    }
-
-    /// <summary>The noise σ of a tile: 1.4826 · the median of |Y − m| over its pixels, m the median of Y in the tile.</summary>
-    private static float TileNoise(byte[] luma, int width, int height, int tx, int ty, Span<int> counts)
-    {
-        int left = tx * Tile, right = Math.Min(width, left + Tile);
-        int top = ty * Tile, bottom = Math.Min(height, top + Tile);
-        int n = (right - left) * (bottom - top);
-        counts.Clear();
-        for (int y = top; y < bottom; y++)
-        {
-            for (int x = left; x < right; x++)
-            {
-                counts[luma[(y * width) + x]]++;
-            }
-        }
-
-        int median = Select(counts, (n - 1) / 2);
-        counts.Clear();
-        for (int y = top; y < bottom; y++)
-        {
-            for (int x = left; x < right; x++)
-            {
-                counts[Math.Abs(luma[(y * width) + x] - median)]++;
-            }
-        }
-
-        return NoiseScale * Select(counts, (n - 1) / 2);
     }
 
     /// <summary>
@@ -189,9 +207,9 @@ internal static class DustFilter
     /// or falls below it by more (dark). The median m is the element (n − 1) / 2 of the sorted segment, so
     /// m &lt; Y − limit exactly when at least (n − 1) / 2 + 1 values lie below Y − limit; counting needs no sorting.
     /// </summary>
-    private static byte Classify(byte[] luma, int width, int height, int x, int y, int size, float limit)
+    private static byte Classify<TPlane>(TPlane luma, int width, int height, int x, int y, int size, float limit) where TPlane : struct, ILumaPlane
     {
-        int value = luma[(y * width) + x];
+        int value = luma.Get((y * width) + x);
         float low = value - limit, high = value + limit;
         bool bright = true, dark = true;
         for (int d = 0; d < 4; d++)
@@ -203,7 +221,7 @@ internal static class DustFilter
                 int sx = x + (k * dx), sy = y + (k * dy);
                 if ((uint)sx < (uint)width && (uint)sy < (uint)height)
                 {
-                    int v = luma[(sy * width) + sx];
+                    int v = luma.Get((sy * width) + sx);
                     n++;
                     below += v < low ? 1 : 0;
                     above += v > high ? 1 : 0;
@@ -231,7 +249,7 @@ internal static class DustFilter
     /// the largest deviation of the group's core: the group continues into larger detail, such as the rest of the
     /// letter. Such groups are kept as they are.
     /// </summary>
-    private static void KeepSpecks(byte[] mask, byte[] luma, int width, int height, int size)
+    private static void KeepSpecks<TPlane>(byte[] mask, TPlane luma, int width, int height, int size, int scratchLength) where TPlane : struct, ILumaPlane
     {
         int length = width * height, count = 0;
         for (int i = 0; i < length; i++)
@@ -244,7 +262,7 @@ internal static class DustFilter
             return;
         }
 
-        Span<int> counts = stackalloc int[256];
+        int[] counts = ArrayPool<int>.Shared.Rent(scratchLength);
         int[] pixels = ArrayPool<int>.Shared.Rent(count);
         try
         {
@@ -270,7 +288,7 @@ internal static class DustFilter
                     bottom = Math.Max(bottom, y);
                     if ((mask[i] & Core) != 0)
                     {
-                        float deviation = luma[i] - WindowMedian(luma, width, height, x, y, size, counts);
+                        float deviation = luma.Get(i) - luma.WindowMedian(width, height, x, y, size, counts);
                         peak = MathF.Max(peak, kind == Bright ? deviation : -deviation);
                     }
 
@@ -312,6 +330,7 @@ internal static class DustFilter
         finally
         {
             ArrayPool<int>.Shared.Return(pixels);
+            ArrayPool<int>.Shared.Return(counts);
         }
     }
 
@@ -319,8 +338,8 @@ internal static class DustFilter
     /// Whether no pixel around the group (outside it, 8-connected) deviates from the median of its window in the
     /// group's direction by more than <paramref name="limit"/>. Examined pixels are marked <see cref="Checked"/>.
     /// </summary>
-    private static bool IsIsolated(byte[] mask, byte[] luma, int width, int height, int size, ReadOnlySpan<int> group,
-        int kind, float limit, Span<int> counts)
+    private static bool IsIsolated<TPlane>(byte[] mask, TPlane luma, int width, int height, int size, ReadOnlySpan<int> group,
+        int kind, float limit, Span<int> counts) where TPlane : struct, ILumaPlane
     {
         foreach (int i in group)
         {
@@ -336,7 +355,7 @@ internal static class DustFilter
                     }
 
                     mask[j] |= Checked;
-                    float deviation = luma[j] - WindowMedian(luma, width, height, sx, sy, size, counts);
+                    float deviation = luma.Get(j) - luma.WindowMedian(width, height, sx, sy, size, counts);
                     if ((kind == Bright ? deviation : -deviation) > limit)
                     {
                         return false;
@@ -362,25 +381,16 @@ internal static class DustFilter
         return specks;
     }
 
-    private static int WindowMedian(byte[] luma, int width, int height, int x, int y, int size, Span<int> counts)
+    private static void Replace<TPixel>(TPixel[] source, TPixel[] destination, byte[] mask, int width, int height, int x, int y, int size,
+        Span<int> counts) where TPixel : unmanaged, IPixelOps<TPixel>
     {
-        counts.Clear();
-        int n = 0;
-        for (int sy = Math.Max(0, y - size); sy <= Math.Min(height - 1, y + size); sy++)
+        if (typeof(TPixel) != typeof(Rgba32))
         {
-            for (int sx = Math.Max(0, x - size); sx <= Math.Min(width - 1, x + size); sx++)
-            {
-                counts[luma[(sy * width) + sx]]++;
-                n++;
-            }
+            ReplaceWide(source, destination, mask, width, height, x, y, size, counts);
+            return;
         }
 
-        return Select(counts, (n - 1) / 2);
-    }
-
-    private static void Replace(Rgba32[] source, Rgba32[] destination, byte[] mask, int width, int height, int x, int y, int size,
-        Span<int> counts)
-    {
+        counts = counts[..(3 * 256)];
         counts.Clear();
         int n = 0;
         for (int sy = Math.Max(0, y - size); sy <= Math.Min(height - 1, y + size); sy++)
@@ -393,7 +403,7 @@ internal static class DustFilter
                     continue;
                 }
 
-                Rgba32 p = source[i];
+                Rgba32 p = Unsafe.As<TPixel, Rgba32>(ref source[i]);
                 counts[p.R]++;
                 counts[256 + p.G]++;
                 counts[512 + p.B]++;
@@ -407,9 +417,50 @@ internal static class DustFilter
         }
 
         int rank = (n - 1) / 2;
-        ref Rgba32 target = ref destination[(y * width) + x];
+        ref Rgba32 target = ref Unsafe.As<TPixel, Rgba32>(ref destination[(y * width) + x]);
         target = new Rgba32((byte)Select(counts[..256], rank), (byte)Select(counts.Slice(256, 256), rank),
             (byte)Select(counts.Slice(512, 256), rank), target.A);
+    }
+
+    // Replace on 16-bit pixels: the three channels of the window's kept pixels side by side, each sorted for its median.
+    private static void ReplaceWide<TPixel>(TPixel[] source, TPixel[] destination, byte[] mask, int width, int height, int x, int y, int size,
+        Span<int> values) where TPixel : unmanaged, IPixelOps<TPixel>
+    {
+        int window = ((2 * size) + 1) * ((2 * size) + 1);
+        Span<int> red = values[..window], green = values.Slice(window, window), blue = values.Slice(2 * window, window);
+        int n = 0;
+        for (int sy = Math.Max(0, y - size); sy <= Math.Min(height - 1, y + size); sy++)
+        {
+            for (int sx = Math.Max(0, x - size); sx <= Math.Min(width - 1, x + size); sx++)
+            {
+                int i = (sy * width) + sx;
+                if ((mask[i] & (SpeckMask | Ring)) != 0)
+                {
+                    continue;
+                }
+
+                Rgba64 p = TPixel.ToRgba64(source[i]);
+                (red[n], green[n], blue[n]) = (p.R, p.G, p.B);
+                n++;
+            }
+        }
+
+        if (n == 0)
+        {
+            return;
+        }
+
+        int rank = (n - 1) / 2;
+        ref TPixel target = ref destination[(y * width) + x];
+        target = TPixel.FromRgba64(new Rgba64((ushort)Selected(red[..n], rank), (ushort)Selected(green[..n], rank), (ushort)Selected(blue[..n], rank),
+            TPixel.ToRgba64(target).A));
+    }
+
+    /// <summary>The value at <paramref name="rank"/> (0-based) of <paramref name="values"/> sorted; reorders them.</summary>
+    private static int Selected(Span<int> values, int rank)
+    {
+        values.Sort();
+        return values[rank];
     }
 
     /// <summary>The value at <paramref name="rank"/> (0-based) of the sorted values counted in <paramref name="counts"/>.</summary>
@@ -426,5 +477,127 @@ internal static class DustFilter
         }
 
         return 255;
+    }
+
+    /// <summary>The luma plane the detection examines, with the medians of its depth.</summary>
+    private interface ILumaPlane
+    {
+        /// <summary>The largest luma value: 255 or 65535.</summary>
+        static abstract int Max { get; }
+
+        /// <summary>Scratch integers that <see cref="WindowMedian"/>, <see cref="TileNoise"/> and <c>Replace</c> need for windows of (2·size + 1)² pixels.</summary>
+        static abstract int ScratchLength(int size);
+
+        int Get(int index);
+
+        /// <summary>The median of the (2·size + 1)² window around (x, y), clipped to the plane.</summary>
+        int WindowMedian(int width, int height, int x, int y, int size, Span<int> scratch);
+
+        /// <summary>The noise σ of a tile: 1.4826 · the median of |Y − m| over its pixels, m the median of Y in the tile.</summary>
+        float TileNoise(int width, int height, int tx, int ty, Span<int> scratch);
+    }
+
+    // 8-bit luma: medians from counts of the 256 values.
+    private readonly struct BytePlane(byte[] luma) : ILumaPlane
+    {
+        public static int Max => 255;
+
+        public static int ScratchLength(int size) => 3 * 256;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int Get(int index) => luma[index];
+
+        public int WindowMedian(int width, int height, int x, int y, int size, Span<int> scratch)
+        {
+            Span<int> counts = scratch[..256];
+            counts.Clear();
+            int n = 0;
+            for (int sy = Math.Max(0, y - size); sy <= Math.Min(height - 1, y + size); sy++)
+            {
+                for (int sx = Math.Max(0, x - size); sx <= Math.Min(width - 1, x + size); sx++)
+                {
+                    counts[luma[(sy * width) + sx]]++;
+                    n++;
+                }
+            }
+
+            return Select(counts, (n - 1) / 2);
+        }
+
+        public float TileNoise(int width, int height, int tx, int ty, Span<int> scratch)
+        {
+            Span<int> counts = scratch[..256];
+            int left = tx * Tile, right = Math.Min(width, left + Tile);
+            int top = ty * Tile, bottom = Math.Min(height, top + Tile);
+            int n = (right - left) * (bottom - top);
+            counts.Clear();
+            for (int y = top; y < bottom; y++)
+            {
+                for (int x = left; x < right; x++)
+                {
+                    counts[luma[(y * width) + x]]++;
+                }
+            }
+
+            int median = Select(counts, (n - 1) / 2);
+            counts.Clear();
+            for (int y = top; y < bottom; y++)
+            {
+                for (int x = left; x < right; x++)
+                {
+                    counts[Math.Abs(luma[(y * width) + x] - median)]++;
+                }
+            }
+
+            return NoiseScale * Select(counts, (n - 1) / 2);
+        }
+    }
+
+    // 16-bit luma: medians by sorting the window's values.
+    private readonly struct WidePlane(ushort[] luma) : ILumaPlane
+    {
+        public static int Max => ushort.MaxValue;
+
+        public static int ScratchLength(int size) => Math.Max(Tile * Tile, 3 * ((2 * size) + 1) * ((2 * size) + 1));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int Get(int index) => luma[index];
+
+        public int WindowMedian(int width, int height, int x, int y, int size, Span<int> scratch)
+        {
+            int n = 0;
+            for (int sy = Math.Max(0, y - size); sy <= Math.Min(height - 1, y + size); sy++)
+            {
+                for (int sx = Math.Max(0, x - size); sx <= Math.Min(width - 1, x + size); sx++)
+                {
+                    scratch[n++] = luma[(sy * width) + sx];
+                }
+            }
+
+            return Selected(scratch[..n], (n - 1) / 2);
+        }
+
+        public float TileNoise(int width, int height, int tx, int ty, Span<int> scratch)
+        {
+            int left = tx * Tile, right = Math.Min(width, left + Tile);
+            int top = ty * Tile, bottom = Math.Min(height, top + Tile);
+            int n = 0;
+            for (int y = top; y < bottom; y++)
+            {
+                for (int x = left; x < right; x++)
+                {
+                    scratch[n++] = luma[(y * width) + x];
+                }
+            }
+
+            Span<int> values = scratch[..n];
+            int median = Selected(values, (n - 1) / 2);
+            foreach (ref int v in values)
+            {
+                v = Math.Abs(v - median);
+            }
+
+            return NoiseScale * Selected(values, (n - 1) / 2);
+        }
     }
 }

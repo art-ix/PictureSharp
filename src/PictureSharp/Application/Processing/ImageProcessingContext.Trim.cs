@@ -12,7 +12,7 @@ public readonly ref partial struct ImageProcessingContext
     /// relative positions. An image without content (fully transparent or uniform) is left unchanged.
     /// </summary>
     /// <example>
-    /// <code>image.Mutate(x => x.AutoCrop(new AutoCropOptions { Mode = AutoCropMode.Background, Tolerance = 12, Padding = 8 }));</code>
+    /// <code>image.Mutate(x => x.AutoCrop(new AutoCropOptions { Mode = AutoCropMode.Background, ToleranceNormalized = 12 / 255f, Padding = 8 }));</code>
     /// </example>
     public ImageProcessingContext AutoCrop(AutoCropOptions? options = null)
     {

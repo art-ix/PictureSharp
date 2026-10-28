@@ -17,7 +17,7 @@ public class HdrMetadataEditTests
         await Assert.That(MapBytes(edited)).IsEquivalentTo(MapBytes(original), CollectionOrdering.Matching);
         using Image a = Image.Load(original, Hdr), b = Image.Load(edited, Hdr);
         await Assert.That(b.GainMap).IsEqualTo(a.GainMap);
-        await Assert.That(b.GetPixelSpan().ToArray()).IsEquivalentTo(a.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(b.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(a.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         using HdrImage ha = a.ToHdr(), hb = b.ToHdr();
         await Assert.That(hb.GetPixelSpan().ToArray()).IsEquivalentTo(ha.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
     }

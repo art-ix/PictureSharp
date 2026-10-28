@@ -45,7 +45,7 @@ public sealed class PagedContainerFormat : IImageFormatModule, IImageFormatDecod
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         Page page = Select(Read(data), context.Options);
-        context.ReservePixels(page.Width, page.Height);
+        context.ReservePixels(page.Width, page.Height, PixelType.Rgba32);
         context.ThrowIfCancellationRequested();
         var image = new Image(page.Width, page.Height, page.Color);
         if (!context.Options.IgnoreMetadata && page.Xmp.Length > 0)

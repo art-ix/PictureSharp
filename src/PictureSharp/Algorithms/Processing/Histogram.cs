@@ -4,11 +4,17 @@ using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Algorithms.Processing;
 
-/// <summary>Counting of channel values into red, green, blue, alpha and luma tables of 256 entries each.</summary>
-internal static class Histogram
+/// <summary>
+/// Counting of channel values into red, green, blue, alpha and luma tables of one bin count each, back to back:
+/// 256 bins, or one per 16-bit value at full resolution (<c>Histogram.Wide.cs</c>).
+/// </summary>
+internal static partial class Histogram
 {
-    /// <summary>Length of the counts for all five channels, back to back.</summary>
-    public const int Length = 5 * 256;
+    /// <summary>The channels counted: red, green, blue, alpha and BT.601 luma.</summary>
+    public const int Channels = 5;
+
+    /// <summary>Length of the 256-bin counts for all five channels, back to back.</summary>
+    public const int Length = Channels * 256;
 
     /// <summary>Adds <paramref name="pixels"/> to <paramref name="counts"/> and returns how many were counted.</summary>
     public static long Accumulate(ReadOnlySpan<Rgba32> pixels, Span<long> counts, bool excludeTransparent, CancellationToken cancellationToken = default)

@@ -33,7 +33,7 @@ public class ProcessingDeterminismTests
             "rotate_noise_-12.5_bicubic_True" => source.Clone(x => x.Rotate(-12.5f, ResamplingFilter.Bicubic, expand: true)),
             _ => source.Clone(x => x.Rotate(45, ResamplingFilter.Bilinear, expand: false)),
         };
-        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan<Rgba32>()))).IsEqualTo(expected);
     }
 
     public static TestCases<string, string> PhotoAdjustCases() => new()
@@ -75,7 +75,7 @@ public class ProcessingDeterminismTests
             "vignette" => x.Vignette(new VignetteOptions { Amount = 0.8f, Midpoint = 0.3f, Feather = 0.7f }),
             "shadows_highlights" => x.ShadowsHighlights(0.6f, -0.6f, 5f),
             "clarity" => x.Clarity(0.7f, 5f),
-            "curves" => x.Curves([new(0, 10), new(70, 50), new(180, 210), new(250, 245)]),
+            "curves" => x.CurvesNormalized([new(0, 10 / 255f), new(70 / 255f, 50 / 255f), new(180 / 255f, 210 / 255f), new(250 / 255f, 245 / 255f)]),
             "white_balance_neutral" => x.WhiteBalance(new Rgba32(180, 150, 110, 255)),
             "auto_white_balance" => x.AutoWhiteBalance(0.8f),
             "remove_dust" => x.RemoveDust(4, 0.08f),
@@ -84,6 +84,6 @@ public class ProcessingDeterminismTests
             "develop_negative_strip" => x.DevelopNegative(new NegativeOptions { DustSize = 2 }),
             _ => x.Denoise(0.7f, 3),
         });
-        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan<Rgba32>()))).IsEqualTo(expected);
     }
 }

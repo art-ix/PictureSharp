@@ -2,6 +2,7 @@ using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Formats;
 
 namespace PictureSharp.Application.Extensibility;
@@ -34,6 +35,7 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
     public DecodedImage Decode(ReadOnlyMemory<byte> data, DecodeContext context)
     {
         var moduleContext = new ImageDecodeContext(context, codecs, format);
+        long charged = context.Budget.Pixels;
         Image image = decoder.Decode(data, moduleContext)
             ?? throw new InvalidOperationException($"The {format.Name} decoder returned no image.");
         GainMapAttachment? gainMap;
@@ -44,7 +46,16 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
                 throw new ImageFormatException(format, "Decoded frames exceed DecoderOptions.MaxFrames.");
             }
 
-            context.Options.ValidateFrames(format, image.Width, image.Height, image.FrameCount);
+            context.Options.ValidateFrames(format, image.Width, image.Height, image.FrameCount, image.PixelType);
+            // The returned pixels must have been charged, by ReservePixels or by the nested decodes that produced them.
+            long required = (long)image.Width * image.Height * image.FrameCount * PixelTypes.Weight(image.PixelType);
+            if (context.Budget.Pixels - charged < required)
+            {
+                throw new InvalidOperationException(
+                    $"The {format.Name} decoder returned {image.FrameCount} frame(s) of {image.Width}x{image.Height} {image.PixelType} "
+                    + "pixels without reserving them; call ImageDecodeContext.ReservePixels with the resolved pixel type before allocating.");
+            }
+
             image.SourceFormat = format;
             gainMap = WithBaseColor(moduleContext.GainMap, image);
         }
@@ -67,12 +78,12 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
 
         try
         {
-            (HdrColorSpace space, float[]? linearization) = HdrBaseColor.FromMetadata(image.Metadata, format);
+            (HdrColorSpace space, BaseTransfer? transfer) = HdrBaseColor.FromMetadata(image.Metadata, format);
             return gainMap with
             {
                 Parameters = gainMap.Parameters! with { MultiplicationSpace = gainMap.Parameters.MultiplicationSpace ?? space },
                 BaseSpace = space,
-                BaseLinearization = linearization,
+                BaseTransfer = transfer,
             };
         }
         catch (NotSupportedException ex)
@@ -96,6 +107,8 @@ internal sealed class ModuleEncoder(ImageFormat format, IImageFormatEncoder enco
 
     public EncoderOptions CreateDefaultOptions() => encoder.CreateDefaultOptions();
 
+    public bool SupportsPixelType(PixelType pixelType) => encoder.SupportsPixelType(pixelType);
+
     public void Encode(Image image, Stream output, EncoderOptions options, CancellationToken cancellationToken) =>
         encoder.Encode(image, output, options, cancellationToken);
 }
@@ -107,6 +120,8 @@ internal sealed class ModuleGainMapDecoder(ImageFormat format, GainMapImage map)
 
     /// <summary>The map as the plugin attached it.</summary>
     public GainMapImage Map => map;
+
+    public PixelType PixelType => map.PixelType;
 
     public DecodedGainMap Decode(ReadOnlyMemory<byte> data, int scale, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
@@ -127,10 +142,14 @@ internal sealed class ModuleGainMapDecoder(ImageFormat format, GainMapImage map)
             throw new ImageFormatException(format, "The decoded HDR gain map does not match its declared size.");
         }
 
+        // The declared type was charged; another one would exceed or silently round it.
+        if (image.PixelType != map.PixelType)
+        {
+            throw new ImageFormatException(format, $"The decoded HDR gain map has {image.PixelType} pixels, not the declared {map.PixelType}.");
+        }
+
         // The image is disposed here, so the attachment keeps its own copy of the pixels.
-        var pixels = GC.AllocateUninitializedArray<Rgba32>(image.Width * image.Height);
-        image.Frames[0].Pixels.AsSpan(0, pixels.Length).CopyTo(pixels);
-        return new DecodedGainMap(pixels, image.Width, image.Height);
+        return new DecodedGainMap(image.Frames[0].Buffer.Clone(), image.Width, image.Height);
     }
 }
 

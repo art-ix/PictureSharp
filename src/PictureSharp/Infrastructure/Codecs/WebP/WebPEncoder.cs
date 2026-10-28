@@ -40,7 +40,7 @@ internal sealed partial class WebPEncoder : IImageEncoder<WebPEncoderOptions>, I
         bool hasAlpha = !image.IsOpaque();
         byte[] payload = options.Lossless ? Vp8LEncoder.Encode(image, options, cancellationToken) : Vp8Encoder.Encode(image, options, cancellationToken);
         byte[]? alpha = !options.Lossless && hasAlpha
-            ? AlphaEncoder.Encode(image.GetPixelSpan(), image.Width, image.Height, options, cancellationToken)
+            ? AlphaEncoder.Encode(image.Pixels.AsSpan(), image.Width, image.Height, options, cancellationToken)
             : null;
         return new WebPEncodedImage(payload, alpha, options.Lossless, hasAlpha);
     }

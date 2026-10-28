@@ -93,8 +93,8 @@ public class EmbeddedPartTests
         using Image stored = Image.Load(jpeg, new DecoderOptions { IgnoreMetadata = true });
         using Image converted = Image.Load(jpeg, options with { Configuration = ImageConfiguration.Default, ApplyExifOrientation = false });
         await Assert.That(image.Size).IsEqualTo(new System.Drawing.Size(16, 8));
-        await Assert.That(image.GetPixelSpan().SequenceEqual(stored.GetPixelSpan())).IsTrue();
-        await Assert.That(converted.GetPixelSpan().SequenceEqual(stored.GetPixelSpan())).IsFalse();
+        await Assert.That(image.GetPixelSpan<Rgba32>().SequenceEqual(stored.GetPixelSpan<Rgba32>())).IsTrue();
+        await Assert.That(converted.GetPixelSpan<Rgba32>().SequenceEqual(stored.GetPixelSpan<Rgba32>())).IsFalse();
         await Assert.That(image.Metadata.IccProfile).IsNull();
 
         // The outer load reduces the image; the tile itself is decoded at full size.
@@ -168,8 +168,8 @@ public class EmbeddedPartTests
 
         using Image image = Image.Load(data, options);
         using Image expected = Image.Load(jpeg, new DecoderOptions { Jpeg = plain });
-        await Assert.That(image.GetPixelSpan().SequenceEqual(expected.GetPixelSpan())).IsTrue();
-        await Assert.That(image.GetPixelSpan().SequenceEqual(stored.GetPixelSpan())).IsFalse();
+        await Assert.That(image.GetPixelSpan<Rgba32>().SequenceEqual(expected.GetPixelSpan<Rgba32>())).IsTrue();
+        await Assert.That(image.GetPixelSpan<Rgba32>().SequenceEqual(stored.GetPixelSpan<Rgba32>())).IsFalse();
     }
 
     [Test]
@@ -178,6 +178,42 @@ public class EmbeddedPartTests
         await Assert.That(() => new EmbeddedPartOptions { MaxDegreeOfParallelism = 0 }).Throws<ArgumentOutOfRangeException>();
         await Assert.That(new EmbeddedPartOptions { MaxDegreeOfParallelism = -1 }.MaxDegreeOfParallelism).IsEqualTo(-1);
         await Assert.That(new EmbeddedPartOptions { MaxDegreeOfParallelism = null }.MaxDegreeOfParallelism).IsNull();
+    }
+
+    [Test]
+    public async Task WideParts_UseTheParentsWeightedAllowance()
+    {
+        using var tile = new Image(4, 4, PixelType.Rgba64, new Rgba64(1001, 2003, 4007, 65009));
+        byte[] part = tile.ToPng(new() { BitDepth = PngBitDepth.Sixteen });
+        byte[] data = TiledContainerFormat.Create(8, 4, 4, 4, part, part);
+        var options = new DecoderOptions
+        {
+            Configuration = Configure(new TiledContainerFormat(pixelType: PixelType.Rgba64)),
+            PreserveBitDepth = true,
+            MaxPixels = 64,
+        };
+        using Image decoded = Image.Load(data, options);
+        await Assert.That(decoded.GetPixel<Rgba64>(7, 3)).IsEqualTo(tile.GetPixel<Rgba64>(0, 0));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, options with { MaxPixels = 63 }));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(data, options with { Configuration = WithTiles }));
+    }
+
+    [Test]
+    public async Task WideParent_DoesNotDoubleThePartsGeometryAllowance()
+    {
+        var options = new DecoderOptions
+        {
+            Configuration = Configure(new TiledContainerFormat(pixelType: PixelType.Rgba64)),
+            PreserveBitDepth = true,
+            MaxPixels = 64,
+        };
+        byte[] exact = TiledContainerFormat.Create(4, 4, 4, 4, Tile(4, 4, 0));
+        using Image decoded = Image.Load(exact, options);
+        await Assert.That(decoded.GetPixel<Rgba64>(0, 0)).IsEqualTo(Rgba64.FromRgba32(Color(0)));
+        byte[] oversized = TiledContainerFormat.Create(4, 4, 4, 4, Tile(8, 4, 0));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(oversized, options));
+        byte[] declaredOverBudget = TiledContainerFormat.Create(4, 4, 8, 8, Tile(8, 8, 0));
+        Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(declaredOverBudget, options));
     }
 
     private static ImageConfiguration Configure(TiledContainerFormat format, OptionsProbeFormat? probe = null)
@@ -218,6 +254,7 @@ public class EmbeddedPartTests
                 Seen.Add(context.Options);
             }
 
+            context.ReservePixels(1, 1, PixelType.Rgba32);
             return new Image(1, 1, Color(0));
         }
     }
@@ -227,7 +264,7 @@ public class EmbeddedPartTests
         var image = new Image(width, height);
         for (int y = 0; y < height; y++)
         {
-            Span<Rgba32> row = image.GetRowSpan(y);
+            Span<Rgba32> row = image.GetRowSpan<Rgba32>(y);
             for (int x = 0; x < width; x++)
             {
                 row[x] = new Rgba32((byte)(x * 16), (byte)(y * 32), (byte)(128 + x * 4), 255);

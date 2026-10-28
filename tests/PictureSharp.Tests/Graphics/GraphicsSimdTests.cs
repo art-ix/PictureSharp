@@ -133,6 +133,35 @@ public class GraphicsSimdTests
     }
 
     [Test]
+    public async Task Trim16_MatchesScalar_AtThresholdsAndVectorTails()
+    {
+        var rng = new Random(9016);
+        foreach (int width in new[] { 1, 2, 3, 4, 7, 16, 33, 65 })
+        foreach (ushort threshold in new ushort[] { 0, 1, 256, 257, 32767, 65534, 65535 })
+        foreach (AutoCropMode mode in Enum.GetValues<AutoCropMode>())
+        foreach (bool transparent in new[] { false, true })
+        {
+            using var image = new Image(width, 7, PixelType.Rgba64);
+            Rgba64 background = new(1001, 30003, 50007, transparent ? (ushort)0 : (ushort)65535);
+            image.GetPixelSpan<Rgba64>().Fill(background);
+            for (int y = 1; y < 6; y++)
+            for (int x = rng.Next(width); x < width; x += 3)
+            {
+                ushort sample = (ushort)Math.Clamp(threshold + rng.Next(-1, 2), 0, 65535);
+                image.SetPixel(x, y, new Rgba64(sample, (ushort)rng.Next(65536), (ushort)rng.Next(65536), sample));
+            }
+            var options = new AutoCropOptions
+            {
+                Mode = mode, Background = background, Padding = 1,
+                AlphaThresholdNormalized = threshold / 65535f, ToleranceNormalized = threshold / 65535f,
+            };
+            Rectangle? expected = TrimBounds.Find(image.Frames, width, 7, options, CancellationToken.None, vectorize: false);
+            Rectangle? actual = TrimBounds.Find(image.Frames, width, 7, options, CancellationToken.None);
+            await Assert.That(actual).IsEqualTo(expected).Because($"{width}, {threshold}, {mode}, {transparent}");
+        }
+    }
+
+    [Test]
     public async Task Trim_MatchesScalar()
     {
         var rng = new Random(91);
@@ -160,10 +189,10 @@ public class GraphicsSimdTests
                 ImageFrame[] frames = [new ImageFrame(width, height, pixels)];
                 foreach (AutoCropOptions options in new[]
                 {
-                    new AutoCropOptions(), new AutoCropOptions { AlphaThreshold = 2 },
-                    new AutoCropOptions { Mode = AutoCropMode.Background, Tolerance = 3 },
-                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = background, Tolerance = 0 },
-                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = new Rgba32(1, 2, 3, 0), Tolerance = 5 },
+                    new AutoCropOptions(), new AutoCropOptions { AlphaThresholdNormalized = 2 / 255f },
+                    new AutoCropOptions { Mode = AutoCropMode.Background, ToleranceNormalized = 3 / 255f },
+                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = background, ToleranceNormalized = 0 },
+                    new AutoCropOptions { Mode = AutoCropMode.Background, Background = new Rgba32(1, 2, 3, 0), ToleranceNormalized = 5 / 255f },
                 })
                 {
                     Rectangle? expected = TrimBounds.Find(frames, width, height, options, CancellationToken.None, vectorize: false);

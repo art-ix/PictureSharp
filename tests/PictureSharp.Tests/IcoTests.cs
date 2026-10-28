@@ -18,7 +18,7 @@ public class IcoTests
             using Image source = Pattern(size, 7);
             byte[] bytes = source.ToIco(new() { Encoding = encoding });
             using Image result = Image.Load(bytes);
-            await Assert.That(result.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+            await Assert.That(result.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
             await Assert.That(result.SourceFormat).IsEqualTo(ImageFormat.Ico);
             await Assert.That(result.IsAnimated).IsFalse();
             await Assert.That(result.FrameCount).IsEqualTo(1);
@@ -55,7 +55,7 @@ public class IcoTests
         await Assert.That(collection.Select(i => i.Width)).IsEquivalentTo([16, 64], CollectionOrdering.Matching);
         collection.Dispose();
         collection.Dispose();
-        Assert.ThrowsExactly<ObjectDisposedException>(() => borrowed.GetPixelSpan());
+        Assert.ThrowsExactly<ObjectDisposedException>(() => borrowed.GetPixelSpan<Rgba32>());
         Assert.ThrowsExactly<ObjectDisposedException>(() => _ = collection[0]);
         await Assert.That(copy.Width).IsEqualTo(16);
         await Assert.That(small.Width).IsEqualTo(16);
@@ -79,7 +79,7 @@ public class IcoTests
         ReverseRows(data, start, stride, height);
         ReverseRows(data, start + (stride * height), 4, height);
         using Image actual = Image.Load(data);
-        await Assert.That(actual.GetPixelSpan().ToArray()).IsEquivalentTo(expected.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(actual.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(expected.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -90,7 +90,7 @@ public class IcoTests
         data[^4] = 0xE0;
         using (Image decoded = Image.Load(data))
         {
-            foreach (var p in decoded.GetPixelSpan().ToArray())
+            foreach (var p in decoded.GetPixelSpan<Rgba32>().ToArray())
             {
                 await Assert.That((int)p.A).IsEqualTo(128);
             }
@@ -103,10 +103,10 @@ public class IcoTests
 
         data[^4] = 0x40;
         using Image legacy = Image.Load(data);
-        await Assert.That(legacy.GetPixelSpan().ToArray().Select(p => p.A)).IsEquivalentTo(new byte[] { 255, 0, 255 }, CollectionOrdering.Matching);
+        await Assert.That(legacy.GetPixelSpan<Rgba32>().ToArray().Select(p => p.A)).IsEquivalentTo(new byte[] { 255, 0, 255 }, CollectionOrdering.Matching);
         using Image transparent = new(3, 1, new Rgba32(9, 8, 7, 0));
         using Image roundtrip = Image.Load(transparent.ToIco(new() { Encoding = IcoEncoding.Dib }));
-        await Assert.That(roundtrip.GetPixelSpan().ToArray()).IsEquivalentTo(transparent.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(roundtrip.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(transparent.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]

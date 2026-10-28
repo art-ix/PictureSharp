@@ -13,7 +13,7 @@ using (Image adjusted = source.Clone(x => x.Exposure(0.3f).WhiteBalance(0.2f).Vi
     if (adjusted.Size != source.Size || adjusted[8, 6] == source[8, 6])
         throw new InvalidOperationException("Photo adjustments failed.");
 }
-using (Image developed = source.Clone(x => x.Curves([new(0, 0), new(128, 140), new(255, 255)]).AutoWhiteBalance()
+using (Image developed = source.Clone(x => x.CurvesNormalized([new(0, 0), new(128 / 255f, 140 / 255f), new(1, 1)]).AutoWhiteBalance()
     .RemoveDust().ReduceColorNoise().DevelopNegative()))
 {
     NegativeAnalysis analysis = source.AnalyzeNegative();
@@ -70,7 +70,7 @@ foreach (ImageFormat format in new[] { ImageFormat.Jpeg, ImageFormat.Png, ImageF
 }
 byte[] png = source.ToPng(new PngEncoderOptions());
 using Image copied = Image.Load(png, new DecoderOptions { Png = new() { StrictChecksums = true } });
-if (!copied.GetPixelSpan().SequenceEqual(source.GetPixelSpan())) throw new InvalidOperationException("PNG pixels changed.");
+if (!copied.GetPixelSpan<Rgba32>().SequenceEqual(source.GetPixelSpan<Rgba32>())) throw new InvalidOperationException("PNG pixels changed.");
 using Image processed = source.Clone(x => x.Flip(FlipMode.Horizontal));
 using var variants = new MemoryStream();
 IcoFile.Save([source, processed], variants);
@@ -132,11 +132,11 @@ using (var canvas = new Image(6, 6))
     canvas[4, 3] = new Rgba32(220, 60, 10, 128);
     if (canvas.FindTrimBounds() != new System.Drawing.Rectangle(1, 2, 4, 2)) throw new InvalidOperationException("Trim bounds failed.");
     ImageHistogram histogram = canvas.GetHistogram(new HistogramOptions { Transparency = HistogramTransparency.Exclude });
-    if (histogram.PixelCount != 2 || histogram.Percentile(HistogramChannel.Red, 100) != 220) throw new InvalidOperationException("Histogram failed.");
+    if (histogram.PixelCount != 2 || histogram.PercentileNormalized(HistogramChannel.Red, 100) != 220 / 255.0) throw new InvalidOperationException("Histogram failed.");
     using var mask = new Image(4, 2, new Rgba32(255, 255, 255));
     canvas.Mutate(x => x
         .AutoCrop(new AutoCropOptions { Padding = 1 })
-        .Levels(new LevelsOptions { InputBlack = 10, InputWhite = 240 })
+        .Levels(new LevelsOptions { InputBlackNormalized = 10 / 255f, InputWhiteNormalized = 240 / 255f })
         .Gamma(1.2f, ColorChannels.Blue)
         .AutoContrast(1f)
         .Equalize()
@@ -165,14 +165,30 @@ ImageConfiguration.Default = builtIn.ToBuilder().AddFormat(new RawFormat()).Buil
 byte[] raw = source.Encode(RawFormat.Kind);
 using (Image rawCopy = Image.Load(raw))
 {
-    if (rawCopy.SourceFormat != RawFormat.Kind || !rawCopy.GetPixelSpan().SequenceEqual(source.GetPixelSpan()))
+    if (rawCopy.SourceFormat != RawFormat.Kind || !rawCopy.GetPixelSpan<Rgba32>().SequenceEqual(source.GetPixelSpan<Rgba32>()))
         throw new InvalidOperationException("Format plugin failed.");
 }
 ImageConfiguration.Default = builtIn;
-using (Image cropped = source.Clone(x => x.ApplyProcessor(new LeftHalf())))
+using (Image cropped = source.Clone(x => x.ApplyProcessor(new LeftHalf<Rgba32>())))
+using (Image wide = source.Clone(x => x.ConvertPixelType(PixelType.Rgba64).ApplyProcessor(new LeftHalf<Rgba64>()).Levels(new LevelsOptions { Gamma = 1.2f })))
 {
-    if (cropped.Width != source.Width / 2 || cropped[0, 0] != source[0, 0])
+    if (cropped.Width != source.Width / 2 || cropped[0, 0] != source[0, 0] || wide.Width != cropped.Width
+        || wide.GetHistogram(new HistogramOptions { FullResolution = true }).BinCount != 65536)
         throw new InvalidOperationException("Frame processor failed.");
+}
+using (var ramp = new Image(256, 256, PixelType.Rgba64))
+{
+    for (int i = 0; i < 65536; i++)
+        ramp.GetPixelSpan<Rgba64>()[i] = new Rgba64((ushort)i, (ushort)(65535 - i), (ushort)(i ^ 12345), (ushort)i);
+    ramp.Metadata.SetFormatMetadata(new PngSignificantBits(16, PngColorType.Rgba, [16, 16, 16, 16]));
+    byte[] widePng = ramp.ToPng(new() { BitDepth = PngBitDepth.Sixteen, ColorType = PngColorType.Rgba });
+    using Image restored = Image.Load(widePng, new DecoderOptions { PreserveBitDepth = true });
+    if (!restored.GetPixelSpan<Rgba64>().SequenceEqual(ramp.GetPixelSpan<Rgba64>())
+        || restored.Metadata.GetFormatMetadata<PngSignificantBits>()?.Values[0] != 16)
+        throw new InvalidOperationException("16-bit PNG ramp or sBIT failed.");
+    restored.Mutate(x => x.Invert().Invert());
+    if (!restored.GetPixelSpan<Rgba64>().SequenceEqual(ramp.GetPixelSpan<Rgba64>()))
+        throw new InvalidOperationException("16-bit processing lost precision.");
 }
 source.Metadata.Orientation = ExifOrientation.RightTop;
 Span<byte> exif = stackalloc byte[source.Metadata.GetBlockLength(MetadataKinds.Exif)];
@@ -218,7 +234,7 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
 {
     ImageConfiguration plugins = builtIn.ToBuilder().AddFormat(new RawFormat()).AddFormat(new HdrRawFormat()).Build();
     using Image rawCopy = Image.Load(source.Encode(new RawEncoderOptions { Configuration = plugins }), new DecoderOptions { Configuration = plugins });
-    if (!rawCopy.GetPixelSpan().SequenceEqual(source.GetPixelSpan())) throw new InvalidOperationException("Plugin encoder configuration failed.");
+    if (!rawCopy.GetPixelSpan<Rgba32>().SequenceEqual(source.GetPixelSpan<Rgba32>())) throw new InvalidOperationException("Plugin encoder configuration failed.");
     static byte[] U32(uint v) => [(byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v];
     byte[] iso = [0, 0, 0, 0, 0x40, .. U32(0), .. U32(1), .. U32(2), .. U32(1), .. U32(0), .. U32(1), .. U32(2), .. U32(1),
         .. U32(1), .. U32(1), .. U32(0), .. U32(1), .. U32(0), .. U32(1)];
@@ -314,13 +330,13 @@ sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEn
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         int width = data.Span[4], height = data.Span[5];
-        context.ReservePixels(width, height);
+        context.ReservePixels(width, height, PixelType.Rgba32);
         return Image.LoadPixelData(data.Span.Slice(6, width * height * 4), width, height, PixelFormat.Rgba32);
     }
     public void Encode(Image image, Stream output, RawEncoderOptions options, CancellationToken cancellationToken)
     {
         output.Write([.. "RAW1"u8, (byte)image.Width, (byte)image.Height]);
-        output.Write(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan()));
+        output.Write(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()));
     }
 }
 
@@ -339,8 +355,8 @@ sealed class HdrRawFormat : IImageFormatModule, IImageFormatDecoder, IImageForma
 
     public static byte[] Write(Image image, Image map, byte[] iso, byte[] xmp) =>
         [.. "RAW2"u8, (byte)image.Width, (byte)image.Height, (byte)map.Width, (byte)map.Height, (byte)iso.Length, (byte)xmp.Length,
-            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan()),
-            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(map.GetPixelSpan()), .. iso, .. xmp];
+            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()),
+            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(map.GetPixelSpan<Rgba32>()), .. iso, .. xmp];
 
     private static (int Base, int Map, int Iso, int Xmp) Layout(ReadOnlySpan<byte> data)
     {
@@ -361,7 +377,7 @@ sealed class HdrRawFormat : IImageFormatModule, IImageFormatDecoder, IImageForma
     {
         ReadOnlySpan<byte> span = data.Span;
         (int baseStart, int mapStart, int iso, _) = Layout(span);
-        context.ReservePixels(span[4], span[5]);
+        context.ReservePixels(span[4], span[5], PixelType.Rgba32);
         Image image = Image.LoadPixelData(span.Slice(baseStart, span[4] * span[5] * 4), span[4], span[5], PixelFormat.Rgba32);
         context.AttachGainMap(GainMapMetadata.ParseIso(span.Slice(iso, span[8]), 1),
             new RawMap(span.Slice(mapStart, span[6] * span[7] * 4).ToArray(), new(span[6], span[7])));
@@ -419,7 +435,7 @@ sealed class PagedRawFormat : IImageFormatModule, IImageFormatDecoder
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         (int offset, int width, int height, _) = Select(data.Span, context.Options);
-        context.ReservePixels(width, height);
+        context.ReservePixels(width, height, PixelType.Rgba32);
         return Image.LoadPixelData(data.Span.Slice(offset, width * height * 4), width, height, PixelFormat.Rgba32);
     }
 }
@@ -442,14 +458,14 @@ sealed class StripedRawFormat : IImageFormatModule, IImageFormatDecoder
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         int width = data.Span[4], stripHeight = data.Span[5], count = data.Span[6], offset = 7;
-        context.ReservePixels(width, stripHeight * count);
+        context.ReservePixels(width, stripHeight * count, PixelType.Rgba32);
         var image = new Image(width, stripHeight * count);
         for (int i = 0; i < count; i++)
         {
             int length = data.Span[offset] << 8 | data.Span[offset + 1];
             using Image strip = context.DecodeEmbeddedPart(data.Slice(offset + 2, length), width, stripHeight);
             if (strip.Width != width || strip.Height != stripHeight) throw new ImageFormatException(Kind, "The strip size is wrong.");
-            strip.GetPixelSpan().CopyTo(image.GetPixelSpan()[(i * width * stripHeight)..]);
+            strip.GetPixelSpan<Rgba32>().CopyTo(image.GetPixelSpan<Rgba32>()[(i * width * stripHeight)..]);
             offset += 2 + length;
         }
 
@@ -467,12 +483,12 @@ sealed record RawEncoderOptions : EncoderOptions
     public override ImageFormat Format => RawFormat.Kind;
 }
 
-/// <summary>Keeps the left half of every frame: exercises generic struct processors under AOT.</summary>
-readonly struct LeftHalf : IFrameProcessor
+/// <summary>Keeps the left half of every frame: exercises generic struct processors of both depths under AOT.</summary>
+readonly struct LeftHalf<TPixel> : IFrameProcessor<TPixel> where TPixel : unmanaged
 {
     public System.Drawing.Size GetOutputSize(System.Drawing.Size source) => new(source.Width / 2, source.Height);
 
-    public void Process(ReadOnlySpan<Rgba32> source, System.Drawing.Size sourceSize, Span<Rgba32> destination, System.Drawing.Size destinationSize, CancellationToken cancellationToken)
+    public void Process(ReadOnlySpan<TPixel> source, System.Drawing.Size sourceSize, Span<TPixel> destination, System.Drawing.Size destinationSize, CancellationToken cancellationToken)
     {
         for (int y = 0; y < destinationSize.Height; y++)
             source.Slice(y * sourceSize.Width, destinationSize.Width).CopyTo(destination[(y * destinationSize.Width)..]);

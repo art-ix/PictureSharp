@@ -17,7 +17,8 @@ public sealed record DecoderOptions
 
     /// <summary>
     /// Maximum number of pixels (width × height) an image may have. For animations the limit covers all decoded frames
-    /// together, because every decoded frame is a full canvas. Default: 2^28.
+    /// together, because every decoded frame is a full canvas. A 16-bit (<see cref="PixelType.Rgba64"/>) pixel counts
+    /// twice, so the limit bounds the pixel storage of the decoded image, not all working memory. Default: 2^28.
     /// </summary>
     public long MaxPixels { get; init => field = Check.AtLeast(value, 1L); } = 1L << 28;
 
@@ -40,6 +41,22 @@ public sealed record DecoderOptions
     /// <see cref="FirstFrameOnly"/> and in <c>Identify</c>, and is checked during parsing (incrementally for frame readers). Default: 65536.
     /// </summary>
     public int MaxFrames { get; init => field = Check.AtLeast(value, 1); } = 1 << 16;
+
+    /// <summary>
+    /// Decodes sources with more than 8 bits per sample (integer or floating point) to <see cref="PixelType.Rgba64"/>
+    /// images and others to <see cref="PixelType.Rgba32"/>. The choice follows the declared sample precision of the
+    /// colour and alpha channels, not palette index width, compressed size or an ICC profile, and is the same for all
+    /// frames of an animation. Floating-point sources map to bounded 16-bit values; this does not preserve an HDR range.
+    /// <see cref="MaxPixels"/> counts 16-bit pixels twice. Default: false (every image decodes to <see cref="PixelType.Rgba32"/>).
+    /// </summary>
+    /// <remarks>
+    /// For an 8-bit source, <c>ConvertPixelType(PixelType.Rgba64)</c> after decoding gives a 16-bit image.
+    /// <see cref="ImageInfo.Color"/> from <c>Identify</c> describes the source samples either way.
+    /// </remarks>
+    public bool PreserveBitDepth { get; init; }
+
+    /// <summary>The storage a decoder produces for a source with <paramref name="bitsPerSample"/> bits per channel.</summary>
+    internal PixelType PixelTypeFor(int bitsPerSample) => PreserveBitDepth && bitsPerSample > 8 ? PixelType.Rgba64 : PixelType.Rgba32;
 
     /// <summary>Decode only the first frame of animations.</summary>
     public bool FirstFrameOnly { get; init; }

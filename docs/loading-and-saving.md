@@ -38,7 +38,7 @@ was decoded (`null` for images created in memory).
 | ICO | PNG and DIB 1/4/8/24/32-bit icons, multiple sizes | PNG or 32-bit DIB icons, multiple sizes |
 | PCX | 1–8-bit, 24-bit RGB, 32-bit RGBA | 1/4/8/24/32-bit, RLE |
 
-HEIC/HEIF (HEVC 8/10-bit, tile grids, alpha, HDR gain maps; writing 8-bit 4:2:0) comes from the
+HEIC/HEIF (HEVC 8/10-bit, tile grids, alpha, HDR gain maps; writing 8/10-bit 4:2:0 in the 0.9.0-compatible plugin) comes from the
 [PictureSharp.Heif](https://github.com/art-ix/PictureSharp.Heif) plugin. Encoder settings: [Encoder options](encoder-options.md).
 
 ### PCX support
@@ -264,3 +264,9 @@ cancellation](limits-and-cancellation.md)), write with `Save(stream, …)` inste
 `WebPConverter.Convert(inputPath, outputPath, options)` follows the `gif2webp` conventions: GIF defaults to lossless and
 delays of 10 ms or less become 100 ms. `Image.Load(...).SaveAsWebP(...)` keeps the original durations. See
 [Animation](animation.md).
+
+## Preserving source depth (0.9.0)
+
+`new DecoderOptions { PreserveBitDepth = true }` returns `Rgba64` for supported sources deeper than 8 bits, and
+`Rgba32` for 8-bit sources. Default decoding still returns `Rgba32`. Every processing operation preserves the
+image's storage depth; saving uses the selected encoder's capabilities. See [Migration to 0.9.0](migration-from-0.8.md).

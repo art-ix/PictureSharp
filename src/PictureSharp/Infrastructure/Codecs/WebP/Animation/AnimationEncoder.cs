@@ -91,14 +91,14 @@ internal static class AnimationEncoder
         }
         Image subframe = scratch;
         for (int y = 0; y < rectangle.Height; y++)
-            current.Slice((y + rectangle.Y) * width + rectangle.X, rectangle.Width).CopyTo(subframe.GetRowSpan(y));
+            current.Slice((y + rectangle.Y) * width + rectangle.X, rectangle.Width).CopyTo(subframe.PixelRow(y));
         WebPEncodedImage encoded = WebPEncoder.EncodeFrame(subframe, options.ForAnimationFrame(lossless, false), cancellationToken);
         PickBest(encoded, rectangle, false, disposePrevious, duration, ref best);
         if (!allowBlend || !IsBlendingPossible(previous, current, width, rectangle)) return;
         bool changed = false;
         for (int y = 0; y < rectangle.Height; y++)
         {
-            Span<Rgba32> row = subframe.GetRowSpan(y);
+            Span<Rgba32> row = subframe.PixelRow(y);
             for (int x = 0; x < rectangle.Width; x++)
             {
                 if (row[x] == previous[(y + rectangle.Y) * width + rectangle.X + x] && row[x] != default)

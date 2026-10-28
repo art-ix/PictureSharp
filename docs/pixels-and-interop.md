@@ -2,7 +2,7 @@
 
 ## `Rgba32`
 
-Pixels are `Rgba32` structs: bytes `R`, `G`, `B`, `A` in memory order, with straight (not premultiplied) alpha.
+By default pixels are `Rgba32` structs: bytes `R`, `G`, `B`, `A` in memory order, with straight (not premultiplied) alpha.
 
 ```csharp
 using System.Drawing;
@@ -20,7 +20,7 @@ string hex = orange.ToHex();                          // "#FF8800FF"
 ```
 
 `Rgba32.Transparent`, `Black` and `White` are predefined; `PackedValue`, `FromArgb(uint)` and `ToArgb()` convert packed
-integers. Every color parameter takes `Rgba32`, so `Color.Red` works everywhere.
+integers. Processing color parameters take `Rgba64` (with implicit `Rgba32` conversion), so `Color.Red` works everywhere.
 
 ## Reading and writing pixels
 
@@ -31,10 +31,10 @@ using PictureSharp;
 using var image = new Image(64, 32, Color.CornflowerBlue);
 image[0, 0] = Rgba32.Parse("#ff8800");                // indexer with bounds checks
 
-Span<Rgba32> row = image.GetRowSpan(1);               // one row
+Span<Rgba32> row = image.GetRowSpan<Rgba32>(1);               // one row
 row.Fill(new Rgba32(255, 255, 255, 128));
 
-Span<Rgba32> all = image.GetPixelSpan();              // all rows, no padding
+Span<Rgba32> all = image.GetPixelSpan<Rgba32>();              // all rows, no padding
 foreach (ref Rgba32 p in all)
 {
     p.A = (byte)(p.A / 2);
@@ -43,10 +43,10 @@ foreach (ref Rgba32 p in all)
 
 | Member | Use |
 | --- | --- |
-| `image[x, y]` | Get or set one pixel (bounds-checked). |
-| `GetRowSpan(y)` | `Span<Rgba32>` over one row. |
-| `GetPixelSpan()` | `Span<Rgba32>` over all pixels, row by row. |
-| `GetPixelMemory()` | Writable `Memory<Rgba32>` without a copy; `Pin()` it for native code. Buffer replacement detaches it. |
+| `image[x, y]` | Get or set one 8-bit pixel (bounds-checked); on `Rgba64` use typed `GetPixel` / `SetPixel`. |
+| `GetRowSpan<TPixel>(y)` | `Span<TPixel>` over one row. |
+| `GetPixelSpan<TPixel>()` | `Span<TPixel>` over all pixels, row by row. |
+| `GetPixelMemory<TPixel>()` | Writable `Memory<TPixel>` without a copy; `Pin()` it for native code. Buffer replacement detaches it. |
 | `GetPixelByteSpan()` | Writable RGBA bytes without a copy. |
 | `IsOpaque()` | True when no pixel of any frame is transparent. |
 
@@ -115,3 +115,10 @@ image.CopyPixelDataTo(bitmap.GetPixelSpan(), PixelFormat.Rgba32, bitmap.RowBytes
 using Image fromSkia = Image.LoadPixelData(skBitmap.GetPixelSpan(), skBitmap.Width, skBitmap.Height,
     PixelFormat.Bgra32Premultiplied, skBitmap.RowBytes);
 ```
+
+## Sixteen-bit storage
+
+`Image.PixelType` selects `Rgba32` or `Rgba64` for every frame. Use `DecoderOptions.PreserveBitDepth` to retain
+a deeper source; 8-bit sources stay `Rgba32`. Typed spans must match the image storage. `Rgba64` has four ushort
+channels with straight alpha. `GetPixel<Rgba64>` / `SetPixel` replace the 8-bit indexer on a wide image. See the
+[0.9.0 migration guide](migration-from-0.8.md) for conversion, normalized settings and encoding policies.

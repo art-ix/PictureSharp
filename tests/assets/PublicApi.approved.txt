@@ -34,6 +34,7 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions>
     property System.Boolean FirstFrameOnly { get; init; }
     property System.Boolean IgnoreMetadata { get; init; }
     property System.Boolean LoadGainMap { get; init; }
+    property System.Boolean PreserveBitDepth { get; init; }
     property System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.FormatDecoderOptions> FormatOptions { get; init; }
     property System.Double TargetReducingGap { get; init; }
     property System.Drawing.Size? TargetSize { get; init; }
@@ -125,6 +126,7 @@ static class PictureSharp.Formats.GainMapExtensions
     method [Extension] static PictureSharp.Formats.EncodableGainMap? GetGainMap(Image image, System.Boolean require = false)
 abstract class PictureSharp.Formats.GainMapImage
     method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
+    property PixelType PixelType { get; }
     property System.Drawing.Size Size { get; }
 sealed class PictureSharp.Formats.GainMapMetadata
     method GainMapInfo ToGainMapInfo(System.Drawing.Size mapSize)
@@ -164,6 +166,7 @@ interface PictureSharp.Formats.IImageFormatDecoder
     method ImageInfo Identify(System.ReadOnlyMemory<System.Byte> data, DecoderOptions options)
 interface PictureSharp.Formats.IImageFormatEncoder
     method EncoderOptions CreateDefaultOptions()
+    method System.Boolean SupportsPixelType(PixelType pixelType)
     method System.Void Encode(Image image, System.IO.Stream output, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
 interface PictureSharp.Formats.IImageFormatEncoder<TOptions> : PictureSharp.Formats.IImageFormatEncoder
     method System.Void Encode(Image image, System.IO.Stream output, TOptions options, System.Threading.CancellationToken cancellationToken)
@@ -231,7 +234,7 @@ sealed class PictureSharp.Formats.ImageDecodeContext
     method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map, HdrGainMapKinds detected)
     method System.Void DeclareGainMap(HdrGainMapKinds detected, System.String reason, System.Boolean corrupt = true)
     method System.Void ReserveMetadata(System.Int64 bytes)
-    method System.Void ReservePixels(System.Int32 width, System.Int32 height, System.Int32 frames = 1)
+    method System.Void ReservePixels(System.Int32 width, System.Int32 height, PixelType pixelType, System.Int32 frames = 1)
     method System.Void ThrowIfCancellationRequested()
     property DecoderOptions Options { get; }
     property System.Threading.CancellationToken CancellationToken { get; }
@@ -283,6 +286,10 @@ static class PictureSharp.Formats.Pcx.PcxImageExtensions
     method [Extension] static System.Threading.Tasks.Task SaveAsPcxAsync(Image image, System.String path, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method [Extension] static System.Void SaveAsPcx(Image image, System.IO.Stream stream, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null)
     method [Extension] static System.Void SaveAsPcx(Image image, System.String path, PictureSharp.Formats.Pcx.PcxEncoderOptions? options = null)
+enum PictureSharp.Formats.Png.PngBitDepth
+    Auto = 0
+    UpTo8 = 1
+    Sixteen = 2
 enum PictureSharp.Formats.Png.PngColorType
     Auto = 0
     Grayscale = 1
@@ -296,6 +303,7 @@ sealed record PictureSharp.Formats.Png.PngDecoderOptions : System.IEquatable<Pic
 sealed record PictureSharp.Formats.Png.PngEncoderOptions : EncoderOptions, System.IEquatable<EncoderOptions>, System.IEquatable<PictureSharp.Formats.Png.PngEncoderOptions>
     ctor()
     property ImageFormat Format { get; }
+    property PictureSharp.Formats.Png.PngBitDepth BitDepth { get; init; }
     property PictureSharp.Formats.Png.PngColorType ColorType { get; init; }
     property PictureSharp.Formats.Png.PngFilterStrategy FilterStrategy { get; init; }
     property System.Boolean Interlace { get; init; }
@@ -315,6 +323,11 @@ static class PictureSharp.Formats.Png.PngImageExtensions
     method [Extension] static System.Threading.Tasks.Task SaveAsPngAsync(Image image, System.String path, PictureSharp.Formats.Png.PngEncoderOptions? options = null, System.Threading.CancellationToken cancellationToken = default)
     method [Extension] static System.Void SaveAsPng(Image image, System.IO.Stream stream, PictureSharp.Formats.Png.PngEncoderOptions? options = null)
     method [Extension] static System.Void SaveAsPng(Image image, System.String path, PictureSharp.Formats.Png.PngEncoderOptions? options = null)
+sealed record PictureSharp.Formats.Png.PngSignificantBits : PictureSharp.Formats.FormatMetadata, System.IEquatable<PictureSharp.Formats.FormatMetadata>, System.IEquatable<PictureSharp.Formats.Png.PngSignificantBits>
+    ctor(System.Int32 bitDepth, PictureSharp.Formats.Png.PngColorType colorType, System.ReadOnlySpan<System.Byte> values)
+    property PictureSharp.Formats.Png.PngColorType ColorType { get; }
+    property System.Collections.Generic.IReadOnlyList<System.Byte> Values { get; }
+    property System.Int32 BitDepth { get; }
 enum PictureSharp.Formats.WebP.WebPAlphaFilter
     None = 0
     Fast = 1
@@ -416,28 +429,33 @@ sealed record HdrOptions : System.IEquatable<HdrOptions>
     property static HdrOptions Default { get; }
 sealed class Image : System.IDisposable
     ctor(System.Int32 width, System.Int32 height)
+    ctor(System.Int32 width, System.Int32 height, PixelType pixelType)
+    ctor(System.Int32 width, System.Int32 height, PixelType pixelType, Rgba64 background)
     ctor(System.Int32 width, System.Int32 height, Rgba32 background)
     method Image Clone()
     method System.Boolean IsOpaque()
     method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
-    method System.Memory<Rgba32> GetPixelMemory()
-    method System.Span<Rgba32> GetPixelSpan()
-    method System.Span<Rgba32> GetRowSpan(System.Int32 y)
+    method System.Memory<TPixel> GetPixelMemory<TPixel>()
     method System.Span<System.Byte> GetPixelByteSpan()
+    method System.Span<TPixel> GetPixelSpan<TPixel>()
+    method System.Span<TPixel> GetRowSpan<TPixel>(System.Int32 y)
     method System.String ToString()
-    method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
     method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
-    method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
+    method System.Void CopyPixelDataFrom<TPixel>(System.ReadOnlySpan<TPixel> source)
     method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
+    method System.Void CopyPixelDataTo<TPixel>(System.Span<TPixel> destination)
     method System.Void Dispose()
+    method System.Void SetPixel<TPixel>(System.Int32 x, System.Int32 y, TPixel value)
+    method TPixel GetPixel<TPixel>(System.Int32 x, System.Int32 y)
     method [OverloadPriority(1)] static Image CreateAnimation(System.TimeSpan frameDuration, params System.ReadOnlySpan<Image> frames)
     method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
-    method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
-    method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
+    method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0, PixelType pixelType = Rgba32)
+    method static Image LoadPixelData<TPixel>(System.ReadOnlySpan<TPixel> pixels, System.Int32 width, System.Int32 height)
     property GainMapInfo? GainMap { get; }
     property ImageFormat? SourceFormat { get; }
     property ImageFrameCollection Frames { get; }
     property ImageMetadata Metadata { get; }
+    property PixelType PixelType { get; }
     property Rgba32 AnimationBackgroundColor { get; set; }
     property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
     property System.Boolean HasAlpha { get; }
@@ -531,17 +549,21 @@ static class ImageFormatExtensions
     method static System.Collections.Generic.IReadOnlyList<ImageFormat> get_All()
 sealed class ImageFrame
     ctor(System.Int32 width, System.Int32 height)
+    ctor(System.Int32 width, System.Int32 height, PixelType pixelType)
     method ImageFrame Clone()
     method System.Boolean IsOpaque()
     method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
-    method System.Memory<Rgba32> GetPixelMemory()
-    method System.Span<Rgba32> GetPixelSpan()
-    method System.Span<Rgba32> GetRowSpan(System.Int32 y)
+    method System.Memory<TPixel> GetPixelMemory<TPixel>()
     method System.Span<System.Byte> GetPixelByteSpan()
-    method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
+    method System.Span<TPixel> GetPixelSpan<TPixel>()
+    method System.Span<TPixel> GetRowSpan<TPixel>(System.Int32 y)
     method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
-    method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
+    method System.Void CopyPixelDataFrom<TPixel>(System.ReadOnlySpan<TPixel> source)
     method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
+    method System.Void CopyPixelDataTo<TPixel>(System.Span<TPixel> destination)
+    method System.Void SetPixel<TPixel>(System.Int32 x, System.Int32 y, TPixel value)
+    method TPixel GetPixel<TPixel>(System.Int32 x, System.Int32 y)
+    property PixelType PixelType { get; }
     property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
     property System.Drawing.Rectangle Bounds { get; }
     property System.Drawing.Size Size { get; }
@@ -743,9 +765,17 @@ enum PixelFormat
     Gray8 = 5
     Rgba32Premultiplied = 6
     Bgra32Premultiplied = 7
+    Rgba64 = 8
+    Rgba64Premultiplied = 9
+    Rgb48 = 10
+    Gray16 = 11
 static class PixelFormatExtensions
     method [Extension] static System.Boolean HasAlpha(PixelFormat format)
+    method [Extension] static System.Int32 BitsPerChannel(PixelFormat format)
     method [Extension] static System.Int32 BytesPerPixel(PixelFormat format)
+enum PixelType
+    Rgba32 = 0
+    Rgba64 = 1
 enum PictureSharp.Processing.AnchorPosition
     Center = 0
     Top = 1
@@ -762,10 +792,10 @@ enum PictureSharp.Processing.AutoCropMode
 sealed record PictureSharp.Processing.AutoCropOptions : System.IEquatable<PictureSharp.Processing.AutoCropOptions>
     ctor()
     property PictureSharp.Processing.AutoCropMode Mode { get; init; }
-    property Rgba32? Background { get; init; }
-    property System.Byte AlphaThreshold { get; init; }
-    property System.Byte Tolerance { get; init; }
+    property Rgba64? Background { get; init; }
     property System.Int32 Padding { get; init; }
+    property System.Single AlphaThresholdNormalized { get; init; }
+    property System.Single ToleranceNormalized { get; init; }
     property static PictureSharp.Processing.AutoCropOptions Default { get; }
 enum PictureSharp.Processing.BlendMode
     Normal = 0
@@ -834,18 +864,20 @@ sealed record PictureSharp.Processing.HistogramOptions : System.IEquatable<Pictu
     ctor()
     property PictureSharp.Processing.HistogramTransparency Transparency { get; init; }
     property System.Boolean AllFrames { get; init; }
+    property System.Boolean FullResolution { get; init; }
     property System.Drawing.Rectangle? Region { get; init; }
     property static PictureSharp.Processing.HistogramOptions Default { get; }
 enum PictureSharp.Processing.HistogramTransparency
     Include = 0
     Exclude = 1
-interface PictureSharp.Processing.IFrameProcessor
+interface PictureSharp.Processing.IFrameProcessor<TPixel>
     method System.Drawing.Size GetOutputSize(System.Drawing.Size source)
-    method System.Void Process(System.ReadOnlySpan<Rgba32> source, System.Drawing.Size sourceSize, System.Span<Rgba32> destination, System.Drawing.Size destinationSize, System.Threading.CancellationToken cancellationToken)
+    method System.Void Process(System.ReadOnlySpan<TPixel> source, System.Drawing.Size sourceSize, System.Span<TPixel> destination, System.Drawing.Size destinationSize, System.Threading.CancellationToken cancellationToken)
 sealed class PictureSharp.Processing.ImageHistogram
-    method System.Byte Percentile(PictureSharp.Processing.HistogramChannel channel, System.Double percent)
-    method System.Double Mean(PictureSharp.Processing.HistogramChannel channel)
+    method System.Double MeanNormalized(PictureSharp.Processing.HistogramChannel channel)
+    method System.Double PercentileNormalized(PictureSharp.Processing.HistogramChannel channel, System.Double percent)
     method System.ReadOnlySpan<System.Int64> GetCounts(PictureSharp.Processing.HistogramChannel channel)
+    property System.Int32 BinCount { get; }
     property System.Int64 PixelCount { get; }
     property System.ReadOnlySpan<System.Int64> Alpha { get; }
     property System.ReadOnlySpan<System.Int64> Blue { get; }
@@ -857,22 +889,23 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext ApplyMask(Image mask, PictureSharp.Processing.AnchorPosition position, PictureSharp.Processing.MaskOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext ApplyMask(Image mask, PictureSharp.Processing.MaskOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext ApplyMask(Image mask, System.Drawing.Point location, PictureSharp.Processing.MaskOptions? options = null)
-    method PictureSharp.Processing.ImageProcessingContext ApplyProcessor<TProcessor>(TProcessor processor)
+    method PictureSharp.Processing.ImageProcessingContext ApplyProcessor<TPixel>(PictureSharp.Processing.IFrameProcessor<TPixel> processor)
     method PictureSharp.Processing.ImageProcessingContext AutoContrast(System.Single cutoff = 0, System.Boolean preserveTone = false)
     method PictureSharp.Processing.ImageProcessingContext AutoContrast(System.Single cutoffLow, System.Single cutoffHigh, System.Boolean preserveTone = false)
     method PictureSharp.Processing.ImageProcessingContext AutoCrop(PictureSharp.Processing.AutoCropOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext AutoOrient()
     method PictureSharp.Processing.ImageProcessingContext AutoWhiteBalance(System.Single strength = 1)
-    method PictureSharp.Processing.ImageProcessingContext BackgroundColor(Rgba32 color)
+    method PictureSharp.Processing.ImageProcessingContext BackgroundColor(Rgba64 color)
     method PictureSharp.Processing.ImageProcessingContext BoxBlur(System.Single radius)
     method PictureSharp.Processing.ImageProcessingContext Brightness(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Clarity(System.Single amount, System.Single radius = 0)
     method PictureSharp.Processing.ImageProcessingContext Contrast(System.Single amount)
+    method PictureSharp.Processing.ImageProcessingContext ConvertPixelType(PixelType target, System.Boolean dither = false)
     method PictureSharp.Processing.ImageProcessingContext ConvertToSrgb()
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Drawing.Rectangle rectangle)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 width, System.Int32 height, PictureSharp.Processing.AnchorPosition position = Center)
     method PictureSharp.Processing.ImageProcessingContext Crop(System.Int32 x, System.Int32 y, System.Int32 width, System.Int32 height)
-    method PictureSharp.Processing.ImageProcessingContext Curves(System.ReadOnlySpan<System.Drawing.PointF> points, PictureSharp.Processing.ColorChannels channels = Rgb)
+    method PictureSharp.Processing.ImageProcessingContext CurvesNormalized(System.ReadOnlySpan<System.Drawing.PointF> points, PictureSharp.Processing.ColorChannels channels = Rgb)
     method PictureSharp.Processing.ImageProcessingContext Denoise(System.Single strength, System.Int32 radius = 2)
     method PictureSharp.Processing.ImageProcessingContext DevelopNegative(PictureSharp.Processing.NegativeOptions? options = null)
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, PictureSharp.Processing.AnchorPosition position, PictureSharp.Processing.DrawImageOptions options)
@@ -881,8 +914,8 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext DrawImage(Image source, System.Drawing.Point location, System.Single opacity = 1)
     method PictureSharp.Processing.ImageProcessingContext Equalize()
     method PictureSharp.Processing.ImageProcessingContext Exposure(System.Single stops)
-    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color)
-    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba32 color, System.Drawing.Rectangle region)
+    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba64 color)
+    method PictureSharp.Processing.ImageProcessingContext Fill(Rgba64 color, System.Drawing.Rectangle region)
     method PictureSharp.Processing.ImageProcessingContext Flip(PictureSharp.Processing.FlipMode flipMode)
     method PictureSharp.Processing.ImageProcessingContext Gamma(System.Single gamma, PictureSharp.Processing.ColorChannels channels = Rgb)
     method PictureSharp.Processing.ImageProcessingContext GaussianBlur(System.Single sigma)
@@ -890,9 +923,9 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext Invert()
     method PictureSharp.Processing.ImageProcessingContext InvertNegative(PictureSharp.Processing.NegativeCalibration calibration, PictureSharp.Processing.NegativePrintOptions? print = null)
     method PictureSharp.Processing.ImageProcessingContext Levels(PictureSharp.Processing.LevelsOptions options)
-    method PictureSharp.Processing.ImageProcessingContext MakeTransparent(Rgba32 color)
+    method PictureSharp.Processing.ImageProcessingContext MakeTransparent(Rgba64 color)
     method PictureSharp.Processing.ImageProcessingContext Opacity(System.Single opacity)
-    method PictureSharp.Processing.ImageProcessingContext Pad(System.Int32 width, System.Int32 height, Rgba32 color = default, PictureSharp.Processing.AnchorPosition position = Center)
+    method PictureSharp.Processing.ImageProcessingContext Pad(System.Int32 width, System.Int32 height, Rgba64 color = default, PictureSharp.Processing.AnchorPosition position = Center)
     method PictureSharp.Processing.ImageProcessingContext ReduceColorNoise(System.Single strength = 1, System.Int32 radius = 0)
     method PictureSharp.Processing.ImageProcessingContext RemoveDust(System.Int32 size = 3, System.Single threshold = 0.1)
     method PictureSharp.Processing.ImageProcessingContext Resize(PictureSharp.Processing.ResizeOptions options)
@@ -901,30 +934,31 @@ readonly ref struct PictureSharp.Processing.ImageProcessingContext
     method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height, PictureSharp.Processing.ResamplingFilter filter)
     method PictureSharp.Processing.ImageProcessingContext Resize(System.Int32 width, System.Int32 height, PictureSharp.Processing.ResizeMode mode, PictureSharp.Processing.ResamplingFilter filter = Lanczos3)
     method PictureSharp.Processing.ImageProcessingContext Rotate(PictureSharp.Processing.RotateMode rotateMode)
-    method PictureSharp.Processing.ImageProcessingContext Rotate(System.Single degrees, PictureSharp.Processing.ResamplingFilter filter = Bicubic, Rgba32 background = default, System.Boolean expand = true)
+    method PictureSharp.Processing.ImageProcessingContext Rotate(System.Single degrees, PictureSharp.Processing.ResamplingFilter filter = Bicubic, Rgba64 background = default, System.Boolean expand = true)
     method PictureSharp.Processing.ImageProcessingContext RotateFlip(PictureSharp.Processing.RotateMode rotateMode, PictureSharp.Processing.FlipMode flipMode)
     method PictureSharp.Processing.ImageProcessingContext Saturate(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Sepia()
     method PictureSharp.Processing.ImageProcessingContext ShadowsHighlights(System.Single shadows, System.Single highlights, System.Single radius = 0)
     method PictureSharp.Processing.ImageProcessingContext Sharpen()
     method PictureSharp.Processing.ImageProcessingContext Thumbnail(System.Int32 maxWidth, System.Int32 maxHeight, PictureSharp.Processing.ResamplingFilter filter = Lanczos3)
-    method PictureSharp.Processing.ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Int32 threshold = 3)
+    method PictureSharp.Processing.ImageProcessingContext UnsharpMask(System.Single radius = 2, System.Int32 percent = 150, System.Single thresholdNormalized = 0.011764706)
     method PictureSharp.Processing.ImageProcessingContext Vibrance(System.Single amount)
     method PictureSharp.Processing.ImageProcessingContext Vignette(PictureSharp.Processing.VignetteOptions options)
     method PictureSharp.Processing.ImageProcessingContext Vignette(System.Single amount)
-    method PictureSharp.Processing.ImageProcessingContext WhiteBalance(Rgba32 neutral)
+    method PictureSharp.Processing.ImageProcessingContext WhiteBalance(Rgba64 neutral)
     method PictureSharp.Processing.ImageProcessingContext WhiteBalance(System.Single temperature, System.Single tint = 0)
+    property PixelType PixelType { get; }
     property System.Drawing.Size Size { get; }
     property System.Int32 FrameCount { get; }
     property System.Threading.CancellationToken CancellationToken { get; }
 sealed record PictureSharp.Processing.LevelsOptions : System.IEquatable<PictureSharp.Processing.LevelsOptions>
     ctor()
     property PictureSharp.Processing.ColorChannels Channels { get; init; }
-    property System.Byte InputBlack { get; init; }
-    property System.Byte InputWhite { get; init; }
-    property System.Byte OutputBlack { get; init; }
-    property System.Byte OutputWhite { get; init; }
     property System.Single Gamma { get; init; }
+    property System.Single InputBlackNormalized { get; init; }
+    property System.Single InputWhiteNormalized { get; init; }
+    property System.Single OutputBlackNormalized { get; init; }
+    property System.Single OutputWhiteNormalized { get; init; }
 enum PictureSharp.Processing.MaskChannel
     Alpha = 0
     Luminance = 1
@@ -997,7 +1031,7 @@ sealed record PictureSharp.Processing.ResizeOptions : System.IEquatable<PictureS
     property PictureSharp.Processing.AnchorPosition Position { get; init; }
     property PictureSharp.Processing.ResamplingFilter Filter { get; init; }
     property PictureSharp.Processing.ResizeMode Mode { get; init; }
-    property Rgba32 PadColor { get; init; }
+    property Rgba64 PadColor { get; init; }
     property System.Boolean AllowUpscale { get; init; }
     property System.Boolean LinearLight { get; init; }
     property required System.Drawing.Size Size { get; init; }
@@ -1008,6 +1042,7 @@ enum PictureSharp.Processing.RotateMode
     Rotate270 = 270
 sealed record PictureSharp.Processing.ToneMappingOptions : System.IEquatable<PictureSharp.Processing.ToneMappingOptions>
     ctor()
+    property PixelType PixelType { get; init; }
     property System.Single Exposure { get; init; }
     property System.Single? WhitePoint { get; init; }
     property static PictureSharp.Processing.ToneMappingOptions Default { get; }
@@ -1066,3 +1101,25 @@ struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpa
     property static Rgba32 Black { get; }
     property static Rgba32 Transparent { get; }
     property static Rgba32 White { get; }
+struct Rgba64 : System.IEquatable<Rgba64>
+    ctor(System.UInt16 r, System.UInt16 g, System.UInt16 b, System.UInt16 a = 65535)
+    field System.UInt16 A
+    field System.UInt16 B
+    field System.UInt16 G
+    field System.UInt16 R
+    method Rgba32 ToRgba32()
+    method System.Boolean Equals(Rgba64 other)
+    method System.Boolean Equals(System.Object? obj)
+    method System.Int32 GetHashCode()
+    method System.String ToString()
+    method System.Void Deconstruct(out System.UInt16 r, out System.UInt16 g, out System.UInt16 b, out System.UInt16 a)
+    method static Rgba32 op_Explicit(Rgba64 pixel)
+    method static Rgba64 FromRgba32(Rgba32 pixel)
+    method static Rgba64 op_Implicit(Rgba32 pixel)
+    method static Rgba64 op_Implicit(System.Drawing.Color color)
+    method static System.Boolean op_Equality(Rgba64 left, Rgba64 right)
+    method static System.Boolean op_Inequality(Rgba64 left, Rgba64 right)
+    property System.UInt64 PackedValue { get; set; }
+    property static Rgba64 Black { get; }
+    property static Rgba64 Transparent { get; }
+    property static Rgba64 White { get; }

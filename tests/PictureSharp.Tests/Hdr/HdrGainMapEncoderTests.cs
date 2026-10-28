@@ -27,7 +27,7 @@ public class HdrGainMapEncoderTests
         int worst = 0;
         for (int i = 0; i < a.Pixels.Length; i++)
         {
-            worst = Math.Max(worst, Math.Max(Math.Abs(a.Pixels[i].R - b.Pixels[i].R), Math.Max(Math.Abs(a.Pixels[i].G - b.Pixels[i].G), Math.Abs(a.Pixels[i].B - b.Pixels[i].B))));
+            worst = Math.Max(worst, Math.Max(Math.Abs(a.Pixels.Rgba32![i].R - b.Pixels.Rgba32![i].R), Math.Max(Math.Abs(a.Pixels.Rgba32![i].G - b.Pixels.Rgba32![i].G), Math.Abs(a.Pixels.Rgba32![i].B - b.Pixels.Rgba32![i].B))));
         }
 
         return (worst, a.Pixels.Length);
@@ -52,11 +52,11 @@ public class HdrGainMapEncoderTests
 
         // The base is the SDR encoding of the same pixels; the map is decoded identically (or oriented as the base).
         using Image sdr = Image.Load(image.ToJpeg());
-        await Assert.That(reloaded.GetPixelSpan().ToArray()).IsEquivalentTo(sdr.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(reloaded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(sdr.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         DecodedGainMap source = DecodeMap(image.AttachedGainMap!), written = DecodeMap(reloaded.AttachedGainMap!);
         if (image.AttachedGainMap!.AppliedOrientation is ExifOrientation.Unknown or ExifOrientation.TopLeft)
         {
-            await Assert.That(written.Pixels).IsEquivalentTo(source.Pixels, CollectionOrdering.Matching);
+            await Assert.That(written.Pixels.Rgba32!).IsEquivalentTo(source.Pixels.Rgba32!, CollectionOrdering.Matching);
         }
         else
         {
@@ -122,7 +122,7 @@ public class HdrGainMapEncoderTests
         await Assert.That((iso.GainMapMin[0], iso.Gamma[0], iso.BaseOffset[0], iso.AlternateOffset[0])).IsEqualTo((0f, 1f, 0f, 0f));
 
         using HdrImage expected = image.ToHdr();
-        image.GetPixelSpan().CopyTo(reloaded.GetPixelSpan());
+        image.GetPixelSpan<Rgba32>().CopyTo(reloaded.GetPixelSpan<Rgba32>());
         using HdrImage actual = reloaded.ToHdr();
         float[] components = HdrSynthetic.Components(expected);
         HdrUltraHdrOracleTests.Stats s = HdrUltraHdrOracleTests.Measure(actual.GetPixelSpan(), components, 0, 0);

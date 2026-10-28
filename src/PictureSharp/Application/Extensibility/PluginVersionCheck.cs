@@ -5,13 +5,13 @@ using PictureSharp.Formats;
 namespace PictureSharp.Application.Extensibility;
 
 /// <summary>
-/// Rejects format modules compiled against a PictureSharp older than the last SPI break (0.8.5: the new
-/// <see cref="ImageInfo"/>). NuGet lets such a plugin load with a newer core, where it would fail inside a decode with
-/// <see cref="MissingMethodException"/> or return an <see cref="ImageInfo"/> without its required members.
+/// Rejects format modules compiled against a PictureSharp older than the last SPI break (0.9.0: 16-bit pixels, typed
+/// <c>ReservePixels</c> and generic pixel access). NuGet lets such a plugin load with a newer core, where it would ignore
+/// <see cref="DecoderOptions.PreserveBitDepth"/> or fail inside a decode with <see cref="MissingMethodException"/>.
 /// </summary>
 internal static class PluginVersionCheck
 {
-    public static readonly Version MinimumVersion = new(0, 8, 5, 0);
+    public static readonly Version MinimumVersion = new(0, 9, 0, 0);
 
     public static void Check(IImageFormatModule module)
     {

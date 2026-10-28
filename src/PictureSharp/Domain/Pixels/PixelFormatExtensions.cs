@@ -10,12 +10,22 @@ public static class PixelFormatExtensions
         {
             PixelFormat.Rgb24 or PixelFormat.Bgr24 => 3,
             PixelFormat.Gray8 => 1,
+            PixelFormat.Gray16 => 2,
+            PixelFormat.Rgb48 => 6,
+            PixelFormat.Rgba64 or PixelFormat.Rgba64Premultiplied => 8,
             PixelFormat.Rgba32 or PixelFormat.Bgra32 or PixelFormat.Argb32
                 or PixelFormat.Rgba32Premultiplied or PixelFormat.Bgra32Premultiplied => 4,
             _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unknown pixel format."),
         };
 
         /// <summary>Whether the format carries an alpha channel.</summary>
-        public bool HasAlpha() => format is not (PixelFormat.Rgb24 or PixelFormat.Bgr24 or PixelFormat.Gray8);
+        public bool HasAlpha() => format is not (PixelFormat.Rgb24 or PixelFormat.Bgr24 or PixelFormat.Gray8 or PixelFormat.Rgb48 or PixelFormat.Gray16);
+
+        /// <summary>Bits per channel of the format: 8 or 16.</summary>
+        public int BitsPerChannel() => format switch
+        {
+            PixelFormat.Rgba64 or PixelFormat.Rgba64Premultiplied or PixelFormat.Rgb48 or PixelFormat.Gray16 => 16,
+            _ => format.BytesPerPixel() > 0 ? 8 : 0,
+        };
     }
 }

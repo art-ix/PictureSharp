@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Runtime.CompilerServices;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -18,6 +19,26 @@ internal static partial class TrimBounds
     public static Rectangle? Find(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options, CancellationToken cancellationToken,
         bool vectorize = true)
     {
+        PixelType pixelType = frames.FirstOrDefault()?.PixelType ?? PixelType.Rgba32;
+        var find = new FindOperation(frames, width, height, options, cancellationToken, vectorize);
+        return PixelDispatch.Run<FindOperation, Rectangle?>(pixelType, ref find);
+    }
+
+    private readonly struct FindOperation(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options,
+        CancellationToken cancellationToken, bool vectorize) : IPixelOperation<Rectangle?>
+    {
+        public Rectangle? Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel> =>
+            typeof(TPixel) == typeof(Rgba32)
+                ? FindRgba32(frames, width, height, options, cancellationToken, vectorize)
+                : FindRgba64(frames, width, height, options, cancellationToken, vectorize);
+    }
+
+    private static Rectangle? FindRgba32(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions autoCrop,
+        CancellationToken cancellationToken, bool vectorize)
+    {
+        var options = new Criteria(autoCrop.Mode == AutoCropMode.Alpha,
+            (byte)NormalizedLevel.Threshold(autoCrop.AlphaThresholdNormalized, byte.MaxValue),
+            (byte)NormalizedLevel.Threshold(autoCrop.ToleranceNormalized, byte.MaxValue));
         int left = width;
         int top = height;
         int right = -1;
@@ -28,14 +49,14 @@ internal static partial class TrimBounds
         {
             if (first)
             {
-                background = options.Background ?? frame.GetRowSpan(0)[0];
+                background = autoCrop.Background is { } color ? color.ToRgba32() : frame.PixelRow(0)[0];
                 first = false;
             }
 
             for (int y = 0; y < height; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ReadOnlySpan<Rgba32> row = frame.GetRowSpan(y);
+                ReadOnlySpan<Rgba32> row = frame.PixelRow(y);
                 int x0 = FirstContent(row, options, background, vectorize);
                 if (x0 < 0)
                 {
@@ -51,12 +72,19 @@ internal static partial class TrimBounds
             }
         }
 
+        return Bounds(left, top, right, bottom, width, height, autoCrop.Padding);
+    }
+
+    /// <summary>The 8-bit thresholds of <see cref="AutoCropOptions"/>: content lies above them.</summary>
+    private readonly record struct Criteria(bool AlphaMode, byte AlphaThreshold, byte Tolerance);
+
+    private static Rectangle? Bounds(int left, int top, int right, int bottom, int width, int height, int padding)
+    {
         if (right < 0)
         {
             return null;
         }
 
-        int padding = options.Padding;
         int x = Math.Max(0, left - padding);
         int yTop = Math.Max(0, top - padding);
         int xEnd = (int)Math.Min(width, (long)right + 1 + padding);
@@ -64,7 +92,7 @@ internal static partial class TrimBounds
         return new Rectangle(x, yTop, xEnd - x, yEnd - yTop);
     }
 
-    private static int FirstContent(ReadOnlySpan<Rgba32> row, AutoCropOptions options, Rgba32 background, bool vectorize)
+    private static int FirstContent(ReadOnlySpan<Rgba32> row, Criteria options, Rgba32 background, bool vectorize)
     {
         int start = 0;
         if (vectorize)
@@ -88,7 +116,7 @@ internal static partial class TrimBounds
     }
 
     /// <summary>The last content pixel at or after <paramref name="from"/>, or -1.</summary>
-    private static int LastContent(ReadOnlySpan<Rgba32> row, int from, AutoCropOptions options, Rgba32 background, bool vectorize)
+    private static int LastContent(ReadOnlySpan<Rgba32> row, int from, Criteria options, Rgba32 background, bool vectorize)
     {
         int end = row.Length;
         if (vectorize)
@@ -112,9 +140,9 @@ internal static partial class TrimBounds
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsContent(Rgba32 p, AutoCropOptions options, Rgba32 background)
+    private static bool IsContent(Rgba32 p, Criteria options, Rgba32 background)
     {
-        if (options.Mode == AutoCropMode.Alpha)
+        if (options.AlphaMode)
         {
             return p.A > options.AlphaThreshold;
         }

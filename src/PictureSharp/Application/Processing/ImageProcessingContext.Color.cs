@@ -1,8 +1,10 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Algorithms.Processing;
 using PictureSharp.Application.ColorManagement;
 using PictureSharp.Domain.Frames;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Parallelism;
 using PictureSharp.Processing;
 
@@ -18,7 +20,8 @@ public readonly ref partial struct ImageProcessingContext
     /// </summary>
     /// <remarks>
     /// RGB and Gray matrix/TRC profiles of ICC v2 and v4 are supported, with the relative colorimetric intent and
-    /// without black-point compensation; colors outside sRGB are clipped and alpha is kept.
+    /// without black-point compensation; colors outside sRGB are clipped and alpha is kept. A 16-bit image is converted
+    /// in floating point (curves, matrix and sRGB transfer function) and rounded once to 16 bits.
     /// </remarks>
     /// <exception cref="NotSupportedException">The profile is LUT-based, CMYK, Lab or otherwise not matrix/TRC.</exception>
     /// <exception cref="ImageFormatException">The ICC profile is malformed.</exception>
@@ -30,9 +33,8 @@ public readonly ref partial struct ImageProcessingContext
             // New buffers are committed together, so a canceled conversion leaves pixels and profile consistent.
             _state.ReplaceFrames(conversion, static (frame, conversion, token) =>
             {
-                Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(frame.Width * frame.Height);
-                ConvertBands(conversion, pixels.Length, frame.Pixels, pixels, token);
-                return new FrameReplacement(frame.Width, frame.Height, pixels);
+                var operation = new ConvertFrame(frame, conversion, InPlace: false, token);
+                return new FrameReplacement(frame.Width, frame.Height, PixelDispatch.Run<ConvertFrame, PixelBuffer>(frame.PixelType, ref operation));
             });
         }
 
@@ -52,7 +54,8 @@ public readonly ref partial struct ImageProcessingContext
         {
             foreach (ImageFrame frame in _state.WritableFrames)
             {
-                ConvertBands(conversion, frame.Width * frame.Height, frame.Pixels, frame.Pixels, _state.CancellationToken);
+                var operation = new ConvertFrame(frame, conversion, InPlace: true, _state.CancellationToken);
+                PixelDispatch.Run<ConvertFrame, PixelBuffer>(frame.PixelType, ref operation);
             }
         }
 
@@ -61,8 +64,31 @@ public readonly ref partial struct ImageProcessingContext
         return this;
     }
 
+    // The frame converted into a new buffer, or in place.
+    private readonly record struct ConvertFrame(ImageFrame Frame, SrgbConversion Conversion, bool InPlace, CancellationToken Token)
+        : IPixelOperation<PixelBuffer>
+    {
+        public PixelBuffer Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            TPixel[] source = Frame.Buffer.As<TPixel>();
+            TPixel[] target = InPlace ? source : GC.AllocateUninitializedArray<TPixel>(source.Length);
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                ConvertBands(Conversion, source.Length, Unsafe.As<Rgba32[]>(source), Unsafe.As<Rgba32[]>(target), Token);
+            }
+            else
+            {
+                Conversion.PrepareWide();
+                ConvertBands(Conversion, source.Length, Unsafe.As<Rgba64[]>(source), Unsafe.As<Rgba64[]>(target), Token);
+            }
+
+            return PixelBuffer.From(target);
+        }
+    }
+
     // Pixels convert independently, so bands of them may run on several threads (like Resize).
-    private static void ConvertBands(SrgbConversion conversion, int count, Rgba32[] source, Rgba32[] target, CancellationToken token)
+    private static void ConvertBands<TPixel>(SrgbConversion conversion, int count, TPixel[] source, TPixel[] target, CancellationToken token)
+        where TPixel : unmanaged
     {
         const int band = 1 << 16;
         int bands = (count + band - 1) / band;
@@ -82,27 +108,36 @@ public readonly ref partial struct ImageProcessingContext
         {
             token.ThrowIfCancellationRequested();
             int start = index * band, length = Math.Min(band, count - start);
-            conversion.Convert(source.AsSpan(start, length), target.AsSpan(start, length));
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                conversion.Convert(Unsafe.As<Rgba32[]>(source).AsSpan(start, length), Unsafe.As<Rgba32[]>(target).AsSpan(start, length));
+            }
+            else
+            {
+                conversion.Convert(Unsafe.As<Rgba64[]>(source).AsSpan(start, length), Unsafe.As<Rgba64[]>(target).AsSpan(start, length));
+            }
         }
     }
 
-    /// <summary>Converts to grayscale (BT.601 luma, as Pillow's "L" mode); alpha is kept.</summary>
-    public ImageProcessingContext Grayscale() => ForEachPixelSpan(ColorOps.Grayscale);
+    /// <summary>Converts to grayscale (BT.601 luma at the image's depth, as Pillow's "L" mode); alpha is kept.</summary>
+    public ImageProcessingContext Grayscale() => ForEachFrame(new ColorOps.GrayscaleKernel());
 
     /// <summary>Inverts the color channels; alpha is kept.</summary>
-    public ImageProcessingContext Invert() => ForEachPixelSpan(ColorOps.Invert);
+    public ImageProcessingContext Invert() => ForEachFrame(new ColorOps.InvertKernel());
 
-    /// <summary>Overwrites every pixel with <paramref name="color"/> (no blending).</summary>
-    public ImageProcessingContext Fill(Rgba32 color)
+    /// <summary>Overwrites every pixel with <paramref name="color"/> (no blending), rounded to 8 bits on an 8-bit image.</summary>
+    public ImageProcessingContext Fill(Rgba64 color)
     {
-        ForEachPixelSpan(color, static (pixels, value) => pixels.Fill(value));
-
-        Target.HasAlpha = color.A != 255;
+        Fill(color, Target.Bounds);
+        Target.HasAlpha = !PixelTypes.IsOpaque(color, Target.PixelType);
         return this;
     }
 
-    /// <summary>Overwrites the pixels inside <paramref name="region"/> with <paramref name="color"/> (no blending), clipped to the image.</summary>
-    public ImageProcessingContext Fill(Rgba32 color, Rectangle region)
+    /// <summary>
+    /// Overwrites the pixels inside <paramref name="region"/> with <paramref name="color"/> (no blending), clipped to the
+    /// image and rounded to 8 bits on an 8-bit image.
+    /// </summary>
+    public ImageProcessingContext Fill(Rgba64 color, Rectangle region)
     {
         region.Intersect(Target.Bounds);
         if (region.IsEmpty)
@@ -112,17 +147,21 @@ public readonly ref partial struct ImageProcessingContext
 
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            ColorOps.Fill(frame, region, color);
+            var operation = new ColorOps.FillFrame(frame, region, color);
+            PixelDispatch.Run<ColorOps.FillFrame, bool>(frame.PixelType, ref operation);
         }
 
-        Target.HasAlpha |= color.A != 255;
+        Target.HasAlpha |= !PixelTypes.IsOpaque(color, Target.PixelType);
         return this;
     }
 
-    /// <summary>Sets alpha to 0 on every pixel equal to <paramref name="color"/> (all four channels); their color channels are kept.</summary>
-    public ImageProcessingContext MakeTransparent(Rgba32 color)
+    /// <summary>
+    /// Sets alpha to 0 on every pixel equal to <paramref name="color"/> in all four channels at the image's depth (on an
+    /// 8-bit image the color is rounded to 8 bits first); their color channels are kept. There is no tolerance.
+    /// </summary>
+    public ImageProcessingContext MakeTransparent(Rgba64 color)
     {
-        ForEachPixelSpan(color, static (pixels, value) => ColorOps.MakeTransparent(pixels, value));
+        ForEachFrame(new ColorOps.MakeTransparentKernel(color));
 
         Target.HasAlpha = true;
         return this;
@@ -130,13 +169,18 @@ public readonly ref partial struct ImageProcessingContext
 
     /// <summary>
     /// Composites the image over <paramref name="color"/> (as Pillow's <c>Image.alpha_composite</c>), removing
-    /// transparency when the color is opaque.
+    /// transparency when the color is opaque. On an 8-bit image a color between 8-bit levels is blended unrounded and
+    /// each result is rounded once.
     /// </summary>
-    public ImageProcessingContext BackgroundColor(Rgba32 color)
+    public ImageProcessingContext BackgroundColor(Rgba64 color)
     {
-        ForEachPixelSpan(color, static (pixels, value) => ColorOps.BackgroundColor(pixels, value));
+        foreach (ImageFrame frame in _state.WritableFrames)
+        {
+            var operation = new ColorOps.BackgroundFrame(frame, color);
+            PixelDispatch.Run<ColorOps.BackgroundFrame, bool>(frame.PixelType, ref operation);
+        }
 
-        if (color.A == 255)
+        if (PixelTypes.IsOpaque(color, Target.PixelType))
         {
             Target.HasAlpha = false;
         }
@@ -153,7 +197,11 @@ public readonly ref partial struct ImageProcessingContext
             return this;
         }
 
-        ForEachPixelSpan(opacity, static (pixels, value) => ColorOps.Opacity(pixels, value));
+        foreach (ImageFrame frame in _state.WritableFrames)
+        {
+            var operation = new ColorOps.OpacityFrame(frame, opacity);
+            PixelDispatch.Run<ColorOps.OpacityFrame, bool>(frame.PixelType, ref operation);
+        }
 
         Target.HasAlpha = true;
         return this;

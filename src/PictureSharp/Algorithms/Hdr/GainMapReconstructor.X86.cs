@@ -13,7 +13,7 @@ internal sealed partial class GainMapReconstructor
         ReadOnlySpan<Rgba32> source = basePixels.AsSpan(y * _width, _width);
         ref float target = ref MemoryMarshal.GetReference(MemoryMarshal.Cast<Rgba128, float>(output.AsSpan(y * _width, _width)));
         ReadOnlySpan<float> linear = _linear;
-        ReadOnlySpan<Rgba32> map = _map.Pixels;
+        ReadOnlySpan<Rgba32> map = _map.Pixels.Rgba32;
         bool iso = _p.Kind == HdrGainMapKinds.Iso21496;
         bool scaled = IsScaled;
 

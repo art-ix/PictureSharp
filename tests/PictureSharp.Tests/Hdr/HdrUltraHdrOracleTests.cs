@@ -68,8 +68,8 @@ public class HdrUltraHdrOracleTests
                 foreach (float v in p.AlternateOffset) writer.Write(v);
                 writer.Write(float.Exp2(p.BaseHeadroom));
                 writer.Write(float.Exp2(p.AlternateHeadroom));
-                foreach (Rgba32 px in image.GetPixelSpan()) { writer.Write(px.R); writer.Write(px.G); writer.Write(px.B); }
-                foreach (Rgba32 px in map.Pixels)
+                foreach (Rgba32 px in image.GetPixelSpan<Rgba32>()) { writer.Write(px.R); writer.Write(px.G); writer.Write(px.B); }
+                foreach (Rgba32 px in map.Pixels.Rgba32!)
                 {
                     writer.Write(px.R);
                     if (p.ChannelCount == 3) { writer.Write(px.G); writer.Write(px.B); }

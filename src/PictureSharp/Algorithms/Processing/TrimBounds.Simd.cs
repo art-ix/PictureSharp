@@ -2,7 +2,6 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
 
@@ -12,7 +11,7 @@ internal static partial class TrimBounds
     /// The first content pixel among whole groups of four from the start of the row, or -1; <paramref name="scanned"/>
     /// is where the scalar scan continues.
     /// </summary>
-    private static int FirstContentSimd(ReadOnlySpan<Rgba32> row, AutoCropOptions options, Rgba32 background, out int scanned)
+    private static int FirstContentSimd(ReadOnlySpan<Rgba32> row, Criteria options, Rgba32 background, out int scanned)
     {
         scanned = 0;
         if (!Vector128.IsHardwareAccelerated || !BitConverter.IsLittleEndian)
@@ -39,7 +38,7 @@ internal static partial class TrimBounds
     /// The last content pixel among whole groups of four from the end of the row down to <paramref name="from"/>, or
     /// -1; the scalar scan continues below <paramref name="end"/>.
     /// </summary>
-    private static int LastContentSimd(ReadOnlySpan<Rgba32> row, int from, AutoCropOptions options, Rgba32 background, out int end)
+    private static int LastContentSimd(ReadOnlySpan<Rgba32> row, int from, Criteria options, Rgba32 background, out int end)
     {
         end = row.Length;
         if (!Vector128.IsHardwareAccelerated || !BitConverter.IsLittleEndian)
@@ -60,12 +59,12 @@ internal static partial class TrimBounds
         return -1;
     }
 
-    /// <summary>All-ones lanes for the pixels that <see cref="IsContent"/> accepts.</summary>
+    /// <summary>All-ones lanes for the pixels that <see cref="IsContent(Rgba32, Criteria, Rgba32)"/> accepts.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<uint> Content(Vector128<uint> p, AutoCropOptions options, Rgba32 background)
+    private static Vector128<uint> Content(Vector128<uint> p, Criteria options, Rgba32 background)
     {
         Vector128<uint> alpha = p >> 24;
-        if (options.Mode == AutoCropMode.Alpha)
+        if (options.AlphaMode)
         {
             return Vector128.GreaterThan(alpha, Vector128.Create((uint)options.AlphaThreshold));
         }

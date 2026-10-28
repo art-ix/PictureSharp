@@ -18,7 +18,7 @@ public class PngEncoderTests
         await Assert.That(actual.FrameCount).IsEqualTo(expected.FrameCount);
         for (int i = 0; i < expected.FrameCount; i++)
         {
-            await Assert.That(expected.Frames[i].GetPixelSpan().SequenceEqual(actual.Frames[i].GetPixelSpan())).IsTrue().Because($"frame {i} differs");
+            await Assert.That(expected.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(actual.Frames[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"frame {i} differs");
         }
     }
 
@@ -185,7 +185,7 @@ public class PngEncoderTests
                     using Image image = Load(file);
                     string name = $"out{n++}.png";
                     image.Save(Path.Combine(dir, name), new PngEncoderOptions { Interlace = interlace });
-                    expected[name] = Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan()));
+                    expected[name] = Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan<Rgba32>()));
                 }
             }
 

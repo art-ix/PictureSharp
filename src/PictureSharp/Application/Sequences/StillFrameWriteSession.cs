@@ -15,9 +15,12 @@ internal sealed class StillFrameWriteSession(Stream stream, FrameSequenceInfo in
         copy.Duration = duration;
         using var image = new Image([copy]) { Metadata = metadata };
         using var buffer = new PooledBufferStream();
-        encoder.Encode(image, buffer, options, cancellationToken);
+        Encoding.EncoderInput.Encode(encoder, image, buffer, options, cancellationToken);
         await buffer.WriteToAsync(Stream, cancellationToken).ConfigureAwait(false);
     }
+
+    // The still encoder applies the same fallback as Save.
+    protected override bool SupportsPixelType(PixelType pixelType) => true;
 
     protected override ValueTask CompleteCoreAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 }

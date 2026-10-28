@@ -32,8 +32,8 @@ public class JpegCmykStorageTests
         using Image byDefault = Image.Load(data);
         using Image inverted = Image.Load(data, new DecoderOptions { Jpeg = new JpegDecoderOptions { CmykStorage = JpegCmykStorage.AdobeInverted } });
         using Image plain = Image.Load(data, Plain);
-        await Assert.That(inverted.GetPixelSpan().SequenceEqual(byDefault.GetPixelSpan())).IsTrue();
-        await Assert.That(plain.GetPixelSpan().SequenceEqual(byDefault.GetPixelSpan())).IsFalse();
+        await Assert.That(inverted.GetPixelSpan<Rgba32>().SequenceEqual(byDefault.GetPixelSpan<Rgba32>())).IsTrue();
+        await Assert.That(plain.GetPixelSpan<Rgba32>().SequenceEqual(byDefault.GetPixelSpan<Rgba32>())).IsFalse();
     }
 
     [Test]
@@ -45,7 +45,7 @@ public class JpegCmykStorageTests
         byte[] data = Corpus.Read(file);
         using Image byDefault = Image.Load(data);
         using Image plain = Image.Load(data, Plain);
-        await Assert.That(plain.GetPixelSpan().SequenceEqual(byDefault.GetPixelSpan())).IsTrue();
+        await Assert.That(plain.GetPixelSpan<Rgba32>().SequenceEqual(byDefault.GetPixelSpan<Rgba32>())).IsTrue();
     }
 
     [Test]

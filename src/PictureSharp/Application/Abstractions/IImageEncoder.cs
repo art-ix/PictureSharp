@@ -8,6 +8,9 @@ internal interface IImageEncoder
 
     EncoderOptions CreateDefaultOptions();
 
+    /// <summary>Whether <see cref="Encode"/> stores images of <paramref name="pixelType"/>; others receive an 8-bit copy.</summary>
+    bool SupportsPixelType(PixelType pixelType) => pixelType == PixelType.Rgba32;
+
     void Encode(Image image, Stream output, EncoderOptions options, CancellationToken cancellationToken);
 }
 

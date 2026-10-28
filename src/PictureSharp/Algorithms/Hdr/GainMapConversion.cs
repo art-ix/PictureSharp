@@ -1,4 +1,5 @@
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Algorithms.Hdr;
 
@@ -15,7 +16,7 @@ internal static class GainMapConversion
     /// bounds 0 and log2 H, gamma 1 and no offsets by <c>2^(c′ · log2 H)</c>, with c′ interpolated from map pixel
     /// corners (libultrahdr). Each new code is therefore <c>log2(1 + (H − 1) · Rec709⁻¹(m)) / log2 H</c> with m sampled
     /// half a base pixel earlier, which aligns the two sampling grids. Below full headroom the two models weight the
-    /// map differently by design.
+    /// map differently by design. The new codes have the map's depth.
     /// </summary>
     public static (GainMapParameters Parameters, DecodedGainMap Map) AppleToIso(GainMapParameters apple, DecodedGainMap map, int baseWidth, int baseHeight)
     {
@@ -24,18 +25,8 @@ internal static class GainMapConversion
 
         // Apple samples the map at (x + 0.5) / s − 0.5 for base pixel x, ISO at x / s.
         float shiftX = (0.5f * map.Width / baseWidth) - 0.5f, shiftY = (0.5f * map.Height / baseHeight) - 0.5f;
-        Rgba32[] pixels = GC.AllocateUninitializedArray<Rgba32>(map.Pixels.Length);
-        for (int y = 0; y < map.Height; y++)
-        {
-            for (int x = 0; x < map.Width; x++)
-            {
-                // Apple maps are gray; the gray value is R.
-                float m = GainMapMath.SampleBilinear(map.Pixels, map.Width, map.Height, x + shiftX, y + shiftY, 0);
-                double factor = 1 + ((headroom - 1) * GainMapMath.Rec709ToLinear(m));
-                byte v = (byte)Math.Clamp(Math.Round(255 * Math.Log2(factor) / stops), 0, 255);
-                pixels[(y * map.Width) + x] = new Rgba32(v, v, v, 255);
-            }
-        }
+        var operation = new Remap(map, headroom, stops, shiftX, shiftY);
+        PixelBuffer pixels = PixelDispatch.Run<Remap, PixelBuffer>(map.PixelType, ref operation);
 
         float max = (float)stops;
         var parameters = new GainMapParameters
@@ -48,5 +39,31 @@ internal static class GainMapConversion
             UseBaseColorSpace = true,
         };
         return (parameters, map with { Pixels = pixels });
+    }
+
+    // The new codes at the map's depth, rounded once.
+    private readonly struct Remap(DecodedGainMap map, double headroom, double stops, float shiftX, float shiftY) : IPixelOperation<PixelBuffer>
+    {
+        public PixelBuffer Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
+        {
+            ReadOnlySpan<TPixel> source = map.Pixels.As<TPixel>();
+            TPixel[] pixels = GC.AllocateUninitializedArray<TPixel>(source.Length);
+            int max = TPixel.MaxValue;
+            for (int y = 0; y < map.Height; y++)
+            {
+                for (int x = 0; x < map.Width; x++)
+                {
+                    // Apple maps are gray; the gray value is R.
+                    float m = GainMapMath.SampleBilinear(source, map.Width, map.Height, x + shiftX, y + shiftY, 0);
+                    double factor = 1 + ((headroom - 1) * GainMapMath.Rec709ToLinear(m));
+                    int v = (int)Math.Clamp(Math.Round(max * Math.Log2(factor) / stops), 0, max);
+                    pixels[(y * map.Width) + x] = max == byte.MaxValue
+                        ? TPixel.FromRgba32(new Rgba32((byte)v, (byte)v, (byte)v, 255))
+                        : TPixel.FromRgba64(new Rgba64((ushort)v, (ushort)v, (ushort)v, ushort.MaxValue));
+                }
+            }
+
+            return PixelBuffer.From(pixels);
+        }
     }
 }

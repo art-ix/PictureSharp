@@ -7,8 +7,17 @@ public interface IImageFormatEncoder
     EncoderOptions CreateDefaultOptions();
 
     /// <summary>
+    /// Whether <see cref="Encode"/> accepts images that store <paramref name="pixelType"/>. For any other type the
+    /// library passes a <see cref="PixelType.Rgba32"/> copy rounded to 8 bits, so an encoder for 8-bit formats needs no
+    /// code for 16-bit images. Override it to store <see cref="PixelType.Rgba64"/> samples. Default: true only for
+    /// <see cref="PixelType.Rgba32"/>.
+    /// </summary>
+    bool SupportsPixelType(PixelType pixelType) => pixelType == PixelType.Rgba32;
+
+    /// <summary>
     /// Writes <paramref name="image"/> to <paramref name="output"/>; the image is borrowed and the stream stays open.
-    /// Long work should observe <paramref name="cancellationToken"/>.
+    /// Long work should observe <paramref name="cancellationToken"/>. The image's <see cref="Image.PixelType"/> is one
+    /// for which <see cref="SupportsPixelType"/> returns true.
     /// </summary>
     void Encode(Image image, Stream output, EncoderOptions options, CancellationToken cancellationToken);
 }

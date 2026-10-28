@@ -26,7 +26,7 @@ public class AnimationEncoderTests
         using Image image = Pattern(width, height, 5);
         image.LoopCount = 3;
         image.AnimationBackgroundColor = Color.FromArgb(99, 22, 33, 44);
-        Rgba32[][] before = image.Frames.Select(f => f.GetPixelSpan().ToArray()).ToArray();
+        Rgba32[][] before = image.Frames.Select(f => f.GetPixelSpan<Rgba32>().ToArray()).ToArray();
         var options = new WebPEncoderOptions { Lossless = lossless, Exact = true, Method = 0, AllowMixed = mixed, MinimizeSize = minimize };
         byte[] encoded = image.ToWebP(options);
         await Assert.That(image.Encode(options)).IsEquivalentTo(encoded, CollectionOrdering.Matching);
@@ -38,8 +38,8 @@ public class AnimationEncoderTests
         await Assert.That(decoded.Frames.Select(f => f.Duration)).IsEquivalentTo(image.Frames.Select(f => f.Duration), CollectionOrdering.Matching);
         for (int i = 0; i < image.FrameCount; i++)
         {
-            await Assert.That(image.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
-            Rgba32[] actual = decoded.Frames[i].GetPixelSpan().ToArray();
+            await Assert.That(image.Frames[i].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
+            Rgba32[] actual = decoded.Frames[i].GetPixelSpan<Rgba32>().ToArray();
             if (lossless && !mixed) await Assert.That(actual).IsEquivalentTo(before[i], CollectionOrdering.Matching);
             await Assert.That(actual.Select(p => p.A)).IsEquivalentTo(before[i].Select(p => p.A), CollectionOrdering.Matching);
         }
@@ -51,7 +51,7 @@ public class AnimationEncoderTests
         }
 
         using Image first = Image.Load(encoded.AsMemory(), new DecoderOptions { FirstFrameOnly = true });
-        await Assert.That(first.GetPixelSpan().ToArray()).IsEquivalentTo(decoded.Frames[0].GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(first.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(decoded.Frames[0].GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(Image.Identify(encoded.AsSpan()).FrameCount).IsEqualTo(image.FrameCount);
     }
 
@@ -83,7 +83,7 @@ public class AnimationEncoderTests
     public async Task IdenticalAndTransparentFrames_RetainTimingAndHiddenRgb()
     {
         using var image = new Image(7, 5);
-        image.GetPixelSpan().Fill(new Rgba32(20, 40, 60, 0));
+        image.GetPixelSpan<Rgba32>().Fill(new Rgba32(20, 40, 60, 0));
         image.Frames.Add(image.Frames.RootFrame.Clone());
         var third = new ImageFrame(7, 5); image.Frames.Add(third);
         image.Frames[0].Duration = TimeSpan.Zero;
@@ -101,7 +101,7 @@ public class AnimationEncoderTests
         using var image = new Image(96, 64, Color.CornflowerBlue);
         var second = new ImageFrame(96, 64);
         var random = new Random(55);
-        foreach (ref Rgba32 p in second.GetPixelSpan()) p = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
+        foreach (ref Rgba32 p in second.GetPixelSpan<Rgba32>()) p = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
         image.Frames.Add(second);
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { AllowMixed = true, MinimizeSize = true, Method = 0, Exact = true });
         WebPContainer container = WebPContainer.Parse(encoded);
@@ -209,7 +209,7 @@ public class AnimationEncoderTests
                 int left = random.Next(width), top = random.Next(height);
                 int right = random.Next(left + 1, width + 1), bottom = random.Next(top + 1, height + 1);
                 Rgba32 color = new((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
-                for (int y = top; y < bottom; y++) frame.GetRowSpan(y).Slice(left, right - left).Fill(color);
+                for (int y = top; y < bottom; y++) frame.GetRowSpan<Rgba32>(y).Slice(left, right - left).Fill(color);
                 image.Frames.Add(frame);
             }
             await AssertLosslessFrames(image, image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true, Method = trial % 2 == 0 ? 0 : 4, KeyframeMin = 2, KeyframeMax = 5 }));
@@ -368,7 +368,7 @@ public class AnimationEncoderTests
     {
         var image = new Image(33, 25);
         var random = new Random(808);
-        foreach (ref Rgba32 pixel in image.GetPixelSpan()) pixel = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
+        foreach (ref Rgba32 pixel in image.GetPixelSpan<Rgba32>()) pixel = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
         ImageFrame second = image.Frames.RootFrame.Clone(); second.Duration = TimeSpan.FromMilliseconds(17);
         second[1, 1] = Rgba32.Black; second[31, 23] = Rgba32.White;
         image.Frames.Add(second);
@@ -379,7 +379,7 @@ public class AnimationEncoderTests
     {
         using Image decoded = Image.Load(encoded.AsMemory());
         await Assert.That(decoded.FrameCount).IsEqualTo(source.FrameCount);
-        for (int i = 0; i < source.FrameCount; i++) await Assert.That(decoded.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(source.Frames[i].GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        for (int i = 0; i < source.FrameCount; i++) await Assert.That(decoded.Frames[i].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.Frames[i].GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     private static Image Pattern(int width, int height, int count)

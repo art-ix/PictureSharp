@@ -113,7 +113,7 @@ public class ResourceLimitTests
         // An understated length only sizes the first buffer: all bytes are read.
         using (Image image = Image.Load(new DeclaredLengthStream(data, 10)))
         {
-            await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(expected.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+            await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(expected.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         }
 
         // An overstated length is rejected up front when it exceeds the limit, before anything is read...

@@ -11,7 +11,7 @@ using PictureSharp.Processing;
 // picturesharp-cli: small front-end for the PictureSharp library.
 //   info <file>...
 //   convert <input> <output> [-q quality] [-m method] [-lossless] [-colors n] [-octree] [-dither]
-//           [-hdr base|tone-map|keep] [-exposure ev] [-white w]
+//           [--depth auto|8|16] [-hdr base|tone-map|keep] [-exposure ev] [-white w]
 //   resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min] [-filter nearest|bilinear|bicubic|lanczos3|box|hamming] [-q quality] [-hdr keep]
 //   thumbnail <input> <output> <width> <height> [-gap g] [-filter ...] [-q quality] [-hdr keep]
 //   trim <input> <output> [-mode alpha|background] [-color RRGGBB[AA]] [-threshold n] [-tolerance n] [-padding n] [-q quality]
@@ -129,6 +129,7 @@ try
                 int? method = null;
                 bool lossless = false;
                 bool toneMap = false, keep = false;
+                string depth = "8";
                 var toneMapping = new ToneMappingOptions();
                 var gif = new GifEncoderOptions();
                 var load = new DecoderOptions { ApplyExifOrientation = true };
@@ -139,6 +140,12 @@ try
                         case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                         case "-m": method = int.Parse(args[++i], CultureInfo.InvariantCulture); break;
                         case "-lossless": lossless = true; break;
+                        case "--depth":
+                            if (++i >= args.Length || args[i] is not ("auto" or "8" or "16"))
+                                throw new ArgumentException("--depth expects auto, 8 or 16.");
+                            depth = args[i];
+                            load = load with { PreserveBitDepth = depth != "8" };
+                            break;
                         case "-colors": gif = gif with { ColorCount = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                         case "-octree": gif = gif with { Quantizer = GifQuantizer.Octree }; break;
                         case "-dither": gif = gif with { Dither = GifDither.FloydSteinberg }; break;
@@ -182,10 +189,19 @@ try
                 }
 
                 using Image disposable = image;
+                if (depth == "16" && image.PixelType != PixelType.Rgba64)
+                    image.Mutate(x => x.ConvertPixelType(PixelType.Rgba64));
                 long decodeMs = sw.ElapsedMilliseconds;
                 sw.Restart();
                 ImageFormat target = ImageFormat.FromExtension(args[2]) ?? throw new ArgumentException("Unknown output extension.");
-                if (target == ImageFormat.Gif)
+                if (target == ImageFormat.Png)
+                {
+                    image.SaveAsPng(args[2], new() { BitDepth = depth switch
+                    {
+                        "16" => PngBitDepth.Sixteen, "8" => PngBitDepth.UpTo8, _ => PngBitDepth.Auto,
+                    } });
+                }
+                else if (target == ImageFormat.Gif)
                 {
                     image.SaveAsGif(args[2], gif);
                 }
@@ -312,8 +328,8 @@ try
                     {
                         case "-mode": options = options with { Mode = Enum.Parse<AutoCropMode>(args[++i], ignoreCase: true) }; break;
                         case "-color": options = options with { Mode = AutoCropMode.Background, Background = ParseColor(args[++i]) }; break;
-                        case "-threshold": options = options with { AlphaThreshold = byte.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
-                        case "-tolerance": options = options with { Tolerance = byte.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
+                        case "-threshold": options = options with { AlphaThresholdNormalized = byte.Parse(args[++i], CultureInfo.InvariantCulture) / 255f }; break;
+                        case "-tolerance": options = options with { ToleranceNormalized = byte.Parse(args[++i], CultureInfo.InvariantCulture) / 255f }; break;
                         case "-padding": options = options with { Padding = int.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                         case "-q": quality = float.Parse(args[++i], CultureInfo.InvariantCulture); break;
                         default: load = LoadOption(args, ref i, load); break;
@@ -527,6 +543,7 @@ static void PrintUsage() => Console.Error.WriteLine(
       picturesharp-cli decode <file> [iterations]
       picturesharp-cli icon <input> <output.ico> <sizes: 16,32,48,256> [-dib]
       picturesharp-cli convert <input> <output> [-q quality] [-m method] [-lossless]
+                              [--depth auto|8|16]                    (default: 8; PNG output depth)
                               [-colors n] [-octree] [-dither]          (GIF output)
                               [-hdr base|tone-map|keep] [-exposure ev] [-white w]  (JPEG with HDR gain map)
       picturesharp-cli resize <input> <output> <width> <height> [-mode stretch|max|crop|pad|min]

@@ -38,7 +38,7 @@ internal sealed partial class PngEncoder
         bool fitsPalette = true;
         foreach (ImageFrame frame in frames)
         {
-            ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
+            ReadOnlySpan<Rgba32> pixels = frame.Pixels.AsSpan();
             int i = 0;
             uint last = 0;
             for (; fitsPalette && i < pixels.Length; i++)

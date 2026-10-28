@@ -25,7 +25,7 @@ public class ProcessingTests
 
     public static TestCases<PixelFormat> AllFormats => new(Enum.GetValues<PixelFormat>());
 
-    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
+    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan<Rgba32>().ToArray();
 
     // ------------------------------------------------------------ geometry
 
@@ -366,7 +366,7 @@ public class ProcessingTests
         using Image img = ImageTests.Pattern(6, 4);
         Rgba32[] before = Pixels(img);
         img.Mutate(x => x.Invert());
-        await Assert.That(img.GetPixelSpan()[5]).IsEqualTo(new Rgba32((byte)(255 - before[5].R), (byte)(255 - before[5].G), (byte)(255 - before[5].B), before[5].A));
+        await Assert.That(img.GetPixelSpan<Rgba32>()[5]).IsEqualTo(new Rgba32((byte)(255 - before[5].R), (byte)(255 - before[5].G), (byte)(255 - before[5].B), before[5].A));
         img.Mutate(x => x.Invert());
         await Assert.That(Pixels(img)).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
@@ -473,7 +473,8 @@ public class ProcessingTests
         var first = new byte[stride * 7];
         img.CopyPixelDataTo(first, format, stride);
 
-        using var copy = new Image(13, 7);
+        // A 16-bit layout round-trips through 16-bit storage; 8-bit storage would round it.
+        using var copy = new Image(13, 7, format.BitsPerChannel() == 16 ? PixelType.Rgba64 : PixelType.Rgba32);
         copy.CopyPixelDataFrom(first, format, stride);
         var second = new byte[stride * 7];
         copy.CopyPixelDataTo(second, format, stride);

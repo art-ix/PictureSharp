@@ -43,7 +43,7 @@ public class LosslessEncoderOptionsTests
         var random = new Random(7331);
         var palette = new Rgba32[colors];
         for (int i = 0; i < colors; i++) palette[i] = new Rgba32((byte)i, (byte)(i >> 8), (byte)random.Next(256), (byte)(i % 3 == 0 ? 0 : 255));
-        Span<Rgba32> pixels = image.GetPixelSpan();
+        Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
         for (int i = 0; i < pixels.Length; i++) pixels[i] = palette[random.Next(colors)];
         foreach (int method in new[] { 0, 4, 6 })
             await AssertPixels(image, image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true, Method = method }));
@@ -54,7 +54,7 @@ public class LosslessEncoderOptionsTests
     public async Task LongRunsAndCacheHits_PreservePixels()
     {
         using var image = new Image(127, 129);
-        Span<Rgba32> pixels = image.GetPixelSpan();
+        Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
         for (int i = 0; i < pixels.Length; i++) pixels[i] = i < 9000 ? new Rgba32(1, 2, 3, 4) : new Rgba32((byte)(i % 23), (byte)(i % 29), (byte)(i % 7), 255);
         await AssertPixels(image, image.ToWebP(new WebPEncoderOptions { Lossless = true, Exact = true, Method = 6, Quality = 100 }));
     }
@@ -69,7 +69,7 @@ public class LosslessEncoderOptionsTests
         using Image image = Image.Load(Corpus.PathOf("src/odd_alpha.png"));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, Method = method });
         using Image decoded = Image.Load(encoded.AsMemory());
-        Rgba32[] source = image.GetPixelSpan().ToArray(), result = decoded.GetPixelSpan().ToArray();
+        Rgba32[] source = image.GetPixelSpan<Rgba32>().ToArray(), result = decoded.GetPixelSpan<Rgba32>().ToArray();
         for (int i = 0; i < source.Length; i++)
         {
             await Assert.That(result[i].A).IsEqualTo(source[i].A);
@@ -93,7 +93,7 @@ public class LosslessEncoderOptionsTests
         using Image image = Image.Load(Corpus.PathOf("src/photo_alpha.png"));
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Lossless = true, NearLossless = level, Exact = exact });
         using Image decoded = Image.Load(encoded.AsMemory());
-        Rgba32[] source = image.GetPixelSpan().ToArray(), result = decoded.GetPixelSpan().ToArray();
+        Rgba32[] source = image.GetPixelSpan<Rgba32>().ToArray(), result = decoded.GetPixelSpan<Rgba32>().ToArray();
         int limit = level == 100 ? 0 : (1 << (5 - level / 20)) - 1;
         for (int i = 0; i < source.Length; i++)
         {
@@ -123,7 +123,7 @@ public class LosslessEncoderOptionsTests
         await Sequence.AssertEqual(selection.HasFlag(MetadataKinds.Icc) ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
         await Sequence.AssertEqual(selection.HasFlag(MetadataKinds.Exif) ? image.Metadata.Exif : null, decoded.Metadata.Exif);
         await Sequence.AssertEqual(selection.HasFlag(MetadataKinds.Xmp) ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);
-        await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(decoded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -180,7 +180,7 @@ public class LosslessEncoderOptionsTests
         await Assert.That(decodedAnimation.FrameCount).IsEqualTo(2);
         foreach (var frame in decodedAnimation.Frames)
         {
-            await Assert.That(frame.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+            await Assert.That(frame.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         }
     }
 

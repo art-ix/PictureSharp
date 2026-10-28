@@ -61,7 +61,7 @@ public class PngDecoderTests
     {
         using Image image = Image.Load(Corpus.PathOf("png/apng_alpha.png"), new DecoderOptions { FirstFrameOnly = true });
         await Assert.That(image.FrameCount).IsEqualTo(1);
-        await Assert.That(Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsEqualTo(Corpus.References["png/apng_alpha.png"].Frames[0].Sha256);
+        await Assert.That(Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()))).IsEqualTo(Corpus.References["png/apng_alpha.png"].Frames[0].Sha256);
     }
 
     [Test]

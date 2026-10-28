@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using PictureSharp.Skia;
 using SkiaSharp;
 
@@ -127,7 +128,7 @@ public sealed class SkiaTests
         Rgba32[] original = TestImages.Pixels(image);
         SKBitmap bitmap = image.ToSKBitmap();
         SKImage skImage = image.ToSKImage();
-        image.GetPixelSpan().Fill(Rgba32.White);
+        image.GetPixelSpan<Rgba32>().Fill(Rgba32.White);
         image.Dispose();
         using (Image back = Image.FromSKBitmap(bitmap))
         using (Image backFromImage = Image.FromSKImage(skImage))
@@ -156,6 +157,155 @@ public sealed class SkiaTests
         await Assert.That(() => Image.FromSKBitmap(null!)).Throws<ArgumentNullException>();
         await Assert.That(() => Image.FromSKImage(null!)).Throws<ArgumentNullException>();
     }
+
+    [Test]
+    [MethodDataSource(nameof(Sizes))]
+    public async Task Rgba16161616_Unpremultiplied_CopiesSixteenBitSamplesExactly(int width, int height)
+    {
+        using Image image = TestImages.CreateWide(width, height);
+        byte[] expected = image.ToPixelData(PixelFormat.Rgba64);
+        await Assert.That(expected).IsEquivalentTo(image.GetPixelByteSpan().ToArray(), CollectionOrdering.Matching);
+
+        using SKBitmap bitmap = image.ToSKBitmap(SKColorType.Rgba16161616);
+        await Assert.That(bitmap.ColorType).IsEqualTo(SKColorType.Rgba16161616);
+        await Assert.That(bitmap.AlphaType).IsEqualTo(SKAlphaType.Unpremul);
+        await Assert.That(Rows(bitmap.GetPixelSpan(), bitmap.RowBytes, width * 8, height)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+
+        using SKImage skImage = image.ToSKImage(SKColorType.Rgba16161616);
+        using SKPixmap pixmap = skImage.PeekPixels();
+        await Assert.That(Rows(pixmap.GetPixelSpan(), pixmap.RowBytes, width * 8, height)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+
+        // RGB under zero alpha survives in both directions, as with 8-bit Unpremul.
+        foreach (Image back in new[] { Image.FromSKBitmap(bitmap, PixelType.Rgba64), Image.FromSKImage(skImage, PixelType.Rgba64), Image.FromSKPixmap(pixmap, PixelType.Rgba64) })
+        {
+            using (back)
+            {
+                await Assert.That(back.PixelType).IsEqualTo(PixelType.Rgba64);
+                await Assert.That(TestImages.WidePixels(back)).IsEquivalentTo(TestImages.WidePixels(image), CollectionOrdering.Matching);
+            }
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Sizes))]
+    public async Task Rgba16161616_Premultiplied_WritesPictureSharpBytes_AndReadsBackWithinOneCode(int width, int height)
+    {
+        using Image image = TestImages.CreateWide(width, height);
+        using SKBitmap bitmap = image.ToSKBitmap(SKColorType.Rgba16161616, SKAlphaType.Premul);
+        byte[] actual = Rows(bitmap.GetPixelSpan(), bitmap.RowBytes, width * 8, height);
+        await Assert.That(actual).IsEquivalentTo(image.ToPixelData(PixelFormat.Rgba64Premultiplied), CollectionOrdering.Matching);
+        using SKImage skImage = image.ToSKImage(SKColorType.Rgba16161616, SKAlphaType.Premul);
+        using (SKPixmap pixmap = skImage.PeekPixels())
+        {
+            await Assert.That(Rows(pixmap.GetPixelSpan(), pixmap.RowBytes, width * 8, height)).IsEquivalentTo(actual, CollectionOrdering.Matching);
+        }
+
+        // Skia un-premultiplies at 16 bits: alpha is exact, alpha 0 gives transparent black and color stays within
+        // one 16-bit code of PictureSharp's own premultiplied round trip.
+        using Image back = Image.FromSKBitmap(bitmap, PixelType.Rgba64);
+        using Image reference = Image.LoadPixelData(actual, width, height, PixelFormat.Rgba64Premultiplied, pixelType: PixelType.Rgba64);
+        Rgba64[] pixels = TestImages.WidePixels(back), expected = TestImages.WidePixels(reference), original = TestImages.WidePixels(image);
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            await Assert.That(pixels[i].A).IsEqualTo(original[i].A);
+            if (original[i].A == 0) await Assert.That(pixels[i]).IsEqualTo(Rgba64.Transparent);
+            else if (original[i].A == ushort.MaxValue) await Assert.That(pixels[i]).IsEqualTo(original[i]);
+            else await Assert.That(MaxDifference(pixels[i], expected[i])).IsLessThanOrEqualTo(1);
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Sizes))]
+    public async Task EightBitImage_WidensExactly_AndDefaultImportRoundsOnce(int width, int height)
+    {
+        using Image image = TestImages.Create(width, height);
+        Rgba64[] widened = [.. TestImages.Pixels(image).Select(Rgba64.FromRgba32)];
+        using SKBitmap bitmap = image.ToSKBitmap(SKColorType.Rgba16161616);
+        using (Image wide = Image.FromSKBitmap(bitmap, PixelType.Rgba64))
+        {
+            await Assert.That(TestImages.WidePixels(wide)).IsEquivalentTo(widened, CollectionOrdering.Matching);
+        }
+
+        // The default keeps 8-bit storage; an exactly widened 16-bit source comes back unchanged.
+        using (Image narrow = Image.FromSKBitmap(bitmap))
+        {
+            await Assert.That(narrow.PixelType).IsEqualTo(PixelType.Rgba32);
+            await Assert.That(TestImages.Pixels(narrow)).IsEquivalentTo(TestImages.Pixels(image), CollectionOrdering.Matching);
+        }
+
+        // An 8-bit source read as Rgba64 widens exactly through Skia as well.
+        using SKBitmap eight = image.ToSKBitmap();
+        using Image fromEight = Image.FromSKBitmap(eight, PixelType.Rgba64);
+        await Assert.That(TestImages.WidePixels(fromEight)).IsEquivalentTo(widened, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Sizes))]
+    public async Task SixteenBitImage_ToEightBitColorTypes_RoundsLikePictureSharp(int width, int height)
+    {
+        using Image image = TestImages.CreateWide(width, height);
+        using Image rounded = image.Clone(x => x.ConvertPixelType(PixelType.Rgba32));
+        foreach (SKColorType colorType in new[] { SKColorType.Rgba8888, SKColorType.Bgra8888 })
+        {
+            PixelFormat format = colorType == SKColorType.Rgba8888 ? PixelFormat.Rgba32 : PixelFormat.Bgra32;
+            using SKBitmap bitmap = image.ToSKBitmap(colorType);
+            await Assert.That(Rows(bitmap.GetPixelSpan(), bitmap.RowBytes, width * 4, height)).IsEquivalentTo(rounded.ToPixelData(format), CollectionOrdering.Matching);
+            using SKImage skImage = image.ToSKImage(colorType);
+            using SKPixmap pixmap = skImage.PeekPixels();
+            await Assert.That(Rows(pixmap.GetPixelSpan(), pixmap.RowBytes, width * 4, height)).IsEquivalentTo(rounded.ToPixelData(format), CollectionOrdering.Matching);
+        }
+
+        await Assert.That(TestImages.Pixels(rounded)).IsEquivalentTo(TestImages.Rounded(image), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task SixteenBitSources_ReadWithinOneCode_AndOpaqueGivesFullAlpha()
+    {
+        // A 16-bit Skia source read with the default rounds to 8 bits within one level of PictureSharp's rounding.
+        using Image image = TestImages.CreateWide(13, 4);
+        using SKBitmap bitmap = image.ToSKBitmap(SKColorType.Rgba16161616);
+        using (Image narrow = Image.FromSKBitmap(bitmap))
+        {
+            Rgba32[] pixels = TestImages.Pixels(narrow), expected = TestImages.Rounded(image);
+            for (int i = 0; i < pixels.Length; i++) await Assert.That(MaxDifference(pixels[i], expected[i])).IsLessThanOrEqualTo(1);
+        }
+
+        var info = new SKImageInfo(2, 1, SKColorType.Rgba16161616, SKAlphaType.Opaque);
+        using var opaque = new SKBitmap(info);
+        ((ReadOnlySpan<ushort>)[1000, 2000, 3000, 7, 40000, 50000, 60000, 0]).CopyTo(MemoryMarshal.Cast<byte, ushort>(opaque.GetPixelSpan()));
+        using Image fromOpaque = Image.FromSKBitmap(opaque, PixelType.Rgba64);
+        await Assert.That(TestImages.WidePixels(fromOpaque)).IsEquivalentTo([new Rgba64(1000, 2000, 3000), new Rgba64(40000, 50000, 60000)], CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task SixteenBitConversions_Copy_SoEitherSideCanBeChangedIndependently()
+    {
+        Image image = TestImages.CreateWide(4, 4);
+        Rgba64[] original = TestImages.WidePixels(image);
+        SKBitmap bitmap = image.ToSKBitmap(SKColorType.Rgba16161616);
+        SKImage skImage = image.ToSKImage(SKColorType.Rgba16161616);
+        image.GetPixelSpan<Rgba64>().Fill(Rgba64.White);
+        image.Dispose();
+        using (Image back = Image.FromSKBitmap(bitmap, PixelType.Rgba64))
+        using (Image backFromImage = Image.FromSKImage(skImage, PixelType.Rgba64))
+        {
+            await Assert.That(TestImages.WidePixels(back)).IsEquivalentTo(original, CollectionOrdering.Matching);
+            await Assert.That(TestImages.WidePixels(backFromImage)).IsEquivalentTo(original, CollectionOrdering.Matching);
+            bitmap.Erase(SKColors.Red);
+            await Assert.That(TestImages.WidePixels(back)).IsEquivalentTo(original, CollectionOrdering.Matching);
+        }
+
+        bitmap.Dispose();
+        skImage.Dispose();
+        using var source = new SKBitmap(new SKImageInfo(1, 1, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+        await Assert.That(() => Image.FromSKBitmap(source, (PixelType)7)).Throws<ArgumentOutOfRangeException>();
+        using Image wide = TestImages.CreateWide(2, 2);
+        await Assert.That(() => wide.ToSKBitmap(SKColorType.RgbaF16)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => wide.ToSKImage(SKColorType.Rgba16161616, SKAlphaType.Opaque)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    private static int MaxDifference(Rgba64 a, Rgba64 b) =>
+        Math.Max(Math.Max(Math.Abs(a.R - b.R), Math.Abs(a.G - b.G)), Math.Max(Math.Abs(a.B - b.B), Math.Abs(a.A - b.A)));
 
     private static byte[] Rows(ReadOnlySpan<byte> pixels, int rowBytes, int packedRowBytes, int height)
     {

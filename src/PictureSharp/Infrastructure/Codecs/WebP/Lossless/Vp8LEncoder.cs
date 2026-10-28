@@ -24,7 +24,7 @@ internal static class Vp8LEncoder
         uint[] argb = ArrayPool<uint>.Shared.Rent(size);
         try
         {
-            ReadOnlySpan<Rgba32> pixels = image.GetPixelSpan();
+            ReadOnlySpan<Rgba32> pixels = image.Pixels.AsSpan();
             bool alpha = false;
             for (int i = 0; i < size; i++)
             {

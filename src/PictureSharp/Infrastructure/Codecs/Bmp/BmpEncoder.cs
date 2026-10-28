@@ -16,7 +16,7 @@ internal sealed class BmpEncoder : IImageEncoder<BmpEncoderOptions>
     public void Encode(Image image, Stream output, BmpEncoderOptions options, CancellationToken cancellationToken)
     {
         ImageFrame frame = image.Frames.RootFrame;
-        ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
+        ReadOnlySpan<Rgba32> pixels = frame.Pixels.AsSpan();
         int width = frame.Width;
         int height = frame.Height;
 

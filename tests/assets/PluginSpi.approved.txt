@@ -20,6 +20,7 @@ sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property Sys
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean FirstFrameOnly { get; init; }
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean IgnoreMetadata { get; init; }
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean LoadGainMap { get; init; }
+sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Boolean PreserveBitDepth { get; init; }
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Collections.Generic.IReadOnlyList<PictureSharp.Formats.FormatDecoderOptions> FormatOptions { get; init; }
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Double TargetReducingGap { get; init; }
 sealed record DecoderOptions : System.IEquatable<DecoderOptions> :: property System.Drawing.Size? TargetSize { get; init; }
@@ -47,6 +48,7 @@ static class PictureSharp.Formats.GainMapExtensions
 static class PictureSharp.Formats.GainMapExtensions :: method [Extension] static PictureSharp.Formats.EncodableGainMap? GetGainMap(Image image, System.Boolean require = false)
 abstract class PictureSharp.Formats.GainMapImage
 abstract class PictureSharp.Formats.GainMapImage :: method Image Decode(System.Int32 maxDegreeOfParallelism, System.Threading.CancellationToken cancellationToken)
+abstract class PictureSharp.Formats.GainMapImage :: property PixelType PixelType { get; }
 abstract class PictureSharp.Formats.GainMapImage :: property System.Drawing.Size Size { get; }
 sealed class PictureSharp.Formats.GainMapMetadata
 sealed class PictureSharp.Formats.GainMapMetadata :: method GainMapInfo ToGainMapInfo(System.Drawing.Size mapSize)
@@ -64,6 +66,7 @@ interface PictureSharp.Formats.IImageFormatDecoder :: method ImageInfo Identify(
 interface PictureSharp.Formats.IImageFormatEncoder
 interface PictureSharp.Formats.IImageFormatEncoder :: method EncoderOptions CreateDefaultOptions()
 interface PictureSharp.Formats.IImageFormatEncoder :: method System.Void Encode(Image image, System.IO.Stream output, EncoderOptions options, System.Threading.CancellationToken cancellationToken)
+interface PictureSharp.Formats.IImageFormatEncoder :: method default System.Boolean SupportsPixelType(PixelType pixelType)
 interface PictureSharp.Formats.IImageFormatEncoder<TOptions> : PictureSharp.Formats.IImageFormatEncoder
 interface PictureSharp.Formats.IImageFormatEncoder<TOptions> : PictureSharp.Formats.IImageFormatEncoder :: method System.Void Encode(Image image, System.IO.Stream output, TOptions options, System.Threading.CancellationToken cancellationToken)
 interface PictureSharp.Formats.IImageFormatMetadataCodec
@@ -84,7 +87,7 @@ sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void Attac
 sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void AttachGainMap(PictureSharp.Formats.GainMapMetadata metadata, PictureSharp.Formats.GainMapImage map, HdrGainMapKinds detected)
 sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void DeclareGainMap(HdrGainMapKinds detected, System.String reason, System.Boolean corrupt = true)
 sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ReserveMetadata(System.Int64 bytes)
-sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ReservePixels(System.Int32 width, System.Int32 height, System.Int32 frames = 1)
+sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ReservePixels(System.Int32 width, System.Int32 height, PixelType pixelType, System.Int32 frames = 1)
 sealed class PictureSharp.Formats.ImageDecodeContext :: method System.Void ThrowIfCancellationRequested()
 sealed class PictureSharp.Formats.ImageDecodeContext :: property DecoderOptions Options { get; }
 sealed class PictureSharp.Formats.ImageDecodeContext :: property System.Threading.CancellationToken CancellationToken { get; }
@@ -106,28 +109,33 @@ enum HdrColorSpace :: LinearDisplayP3 = 1
 [Flags] enum HdrGainMapKinds :: UltraHdrXmp = 4
 sealed class Image : System.IDisposable
 sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height)
+sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, PixelType pixelType)
+sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, PixelType pixelType, Rgba64 background)
 sealed class Image : System.IDisposable :: ctor(System.Int32 width, System.Int32 height, Rgba32 background)
 sealed class Image : System.IDisposable :: method Image Clone()
 sealed class Image : System.IDisposable :: method System.Boolean IsOpaque()
 sealed class Image : System.IDisposable :: method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
-sealed class Image : System.IDisposable :: method System.Memory<Rgba32> GetPixelMemory()
-sealed class Image : System.IDisposable :: method System.Span<Rgba32> GetPixelSpan()
-sealed class Image : System.IDisposable :: method System.Span<Rgba32> GetRowSpan(System.Int32 y)
+sealed class Image : System.IDisposable :: method System.Memory<TPixel> GetPixelMemory<TPixel>()
 sealed class Image : System.IDisposable :: method System.Span<System.Byte> GetPixelByteSpan()
+sealed class Image : System.IDisposable :: method System.Span<TPixel> GetPixelSpan<TPixel>()
+sealed class Image : System.IDisposable :: method System.Span<TPixel> GetRowSpan<TPixel>(System.Int32 y)
 sealed class Image : System.IDisposable :: method System.String ToString()
-sealed class Image : System.IDisposable :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
 sealed class Image : System.IDisposable :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
-sealed class Image : System.IDisposable :: method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
+sealed class Image : System.IDisposable :: method System.Void CopyPixelDataFrom<TPixel>(System.ReadOnlySpan<TPixel> source)
 sealed class Image : System.IDisposable :: method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
+sealed class Image : System.IDisposable :: method System.Void CopyPixelDataTo<TPixel>(System.Span<TPixel> destination)
 sealed class Image : System.IDisposable :: method System.Void Dispose()
+sealed class Image : System.IDisposable :: method System.Void SetPixel<TPixel>(System.Int32 x, System.Int32 y, TPixel value)
+sealed class Image : System.IDisposable :: method TPixel GetPixel<TPixel>(System.Int32 x, System.Int32 y)
 sealed class Image : System.IDisposable :: method [OverloadPriority(1)] static Image CreateAnimation(System.TimeSpan frameDuration, params System.ReadOnlySpan<Image> frames)
 sealed class Image : System.IDisposable :: method static Image CreateAnimation(System.TimeSpan frameDuration, System.Collections.Generic.IEnumerable<Image> frames)
-sealed class Image : System.IDisposable :: method static Image LoadPixelData(System.ReadOnlySpan<Rgba32> pixels, System.Int32 width, System.Int32 height)
-sealed class Image : System.IDisposable :: method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0)
+sealed class Image : System.IDisposable :: method static Image LoadPixelData(System.ReadOnlySpan<System.Byte> pixels, System.Int32 width, System.Int32 height, PixelFormat format, System.Int32 stride = 0, PixelType pixelType = Rgba32)
+sealed class Image : System.IDisposable :: method static Image LoadPixelData<TPixel>(System.ReadOnlySpan<TPixel> pixels, System.Int32 width, System.Int32 height)
 sealed class Image : System.IDisposable :: property GainMapInfo? GainMap { get; }
 sealed class Image : System.IDisposable :: property ImageFormat? SourceFormat { get; }
 sealed class Image : System.IDisposable :: property ImageFrameCollection Frames { get; }
 sealed class Image : System.IDisposable :: property ImageMetadata Metadata { get; }
+sealed class Image : System.IDisposable :: property PixelType PixelType { get; }
 sealed class Image : System.IDisposable :: property Rgba32 AnimationBackgroundColor { get; set; }
 sealed class Image : System.IDisposable :: property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
 sealed class Image : System.IDisposable :: property System.Boolean HasAlpha { get; }
@@ -195,17 +203,21 @@ class ImageFormatException : System.FormatException, System.Runtime.Serializatio
 class ImageFormatException : System.FormatException, System.Runtime.Serialization.ISerializable :: property ImageFormat? Format { get; }
 sealed class ImageFrame
 sealed class ImageFrame :: ctor(System.Int32 width, System.Int32 height)
+sealed class ImageFrame :: ctor(System.Int32 width, System.Int32 height, PixelType pixelType)
 sealed class ImageFrame :: method ImageFrame Clone()
 sealed class ImageFrame :: method System.Boolean IsOpaque()
 sealed class ImageFrame :: method System.Byte[] ToPixelData(PixelFormat format = Rgba32)
-sealed class ImageFrame :: method System.Memory<Rgba32> GetPixelMemory()
-sealed class ImageFrame :: method System.Span<Rgba32> GetPixelSpan()
-sealed class ImageFrame :: method System.Span<Rgba32> GetRowSpan(System.Int32 y)
+sealed class ImageFrame :: method System.Memory<TPixel> GetPixelMemory<TPixel>()
 sealed class ImageFrame :: method System.Span<System.Byte> GetPixelByteSpan()
-sealed class ImageFrame :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<Rgba32> source)
+sealed class ImageFrame :: method System.Span<TPixel> GetPixelSpan<TPixel>()
+sealed class ImageFrame :: method System.Span<TPixel> GetRowSpan<TPixel>(System.Int32 y)
 sealed class ImageFrame :: method System.Void CopyPixelDataFrom(System.ReadOnlySpan<System.Byte> source, PixelFormat format, System.Int32 stride = 0)
-sealed class ImageFrame :: method System.Void CopyPixelDataTo(System.Span<Rgba32> destination)
+sealed class ImageFrame :: method System.Void CopyPixelDataFrom<TPixel>(System.ReadOnlySpan<TPixel> source)
 sealed class ImageFrame :: method System.Void CopyPixelDataTo(System.Span<System.Byte> destination, PixelFormat format, System.Int32 stride = 0)
+sealed class ImageFrame :: method System.Void CopyPixelDataTo<TPixel>(System.Span<TPixel> destination)
+sealed class ImageFrame :: method System.Void SetPixel<TPixel>(System.Int32 x, System.Int32 y, TPixel value)
+sealed class ImageFrame :: method TPixel GetPixel<TPixel>(System.Int32 x, System.Int32 y)
+sealed class ImageFrame :: property PixelType PixelType { get; }
 sealed class ImageFrame :: property Rgba32 this[System.Int32 x, System.Int32 y] { get; set; }
 sealed class ImageFrame :: property System.Drawing.Rectangle Bounds { get; }
 sealed class ImageFrame :: property System.Drawing.Size Size { get; }
@@ -280,6 +292,9 @@ enum ImageSampleFormat :: Other = 3
 [Flags] enum MetadataKinds :: Exif = 2
 [Flags] enum MetadataKinds :: Xmp = 4
 [Flags] enum MetadataKinds :: All = 7
+enum PixelType
+enum PixelType :: Rgba32 = 0
+enum PixelType :: Rgba64 = 1
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32>
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: ctor(System.Byte r, System.Byte g, System.Byte b, System.Byte a = 255)
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: field System.Byte A
@@ -311,3 +326,25 @@ struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpa
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: property static Rgba32 Black { get; }
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: property static Rgba32 Transparent { get; }
 struct Rgba32 : System.IEquatable<Rgba32>, System.IParsable<Rgba32>, System.ISpanParsable<Rgba32> :: property static Rgba32 White { get; }
+struct Rgba64 : System.IEquatable<Rgba64>
+struct Rgba64 : System.IEquatable<Rgba64> :: ctor(System.UInt16 r, System.UInt16 g, System.UInt16 b, System.UInt16 a = 65535)
+struct Rgba64 : System.IEquatable<Rgba64> :: field System.UInt16 A
+struct Rgba64 : System.IEquatable<Rgba64> :: field System.UInt16 B
+struct Rgba64 : System.IEquatable<Rgba64> :: field System.UInt16 G
+struct Rgba64 : System.IEquatable<Rgba64> :: field System.UInt16 R
+struct Rgba64 : System.IEquatable<Rgba64> :: method Rgba32 ToRgba32()
+struct Rgba64 : System.IEquatable<Rgba64> :: method System.Boolean Equals(Rgba64 other)
+struct Rgba64 : System.IEquatable<Rgba64> :: method System.Boolean Equals(System.Object? obj)
+struct Rgba64 : System.IEquatable<Rgba64> :: method System.Int32 GetHashCode()
+struct Rgba64 : System.IEquatable<Rgba64> :: method System.String ToString()
+struct Rgba64 : System.IEquatable<Rgba64> :: method System.Void Deconstruct(out System.UInt16 r, out System.UInt16 g, out System.UInt16 b, out System.UInt16 a)
+struct Rgba64 : System.IEquatable<Rgba64> :: method static Rgba32 op_Explicit(Rgba64 pixel)
+struct Rgba64 : System.IEquatable<Rgba64> :: method static Rgba64 FromRgba32(Rgba32 pixel)
+struct Rgba64 : System.IEquatable<Rgba64> :: method static Rgba64 op_Implicit(Rgba32 pixel)
+struct Rgba64 : System.IEquatable<Rgba64> :: method static Rgba64 op_Implicit(System.Drawing.Color color)
+struct Rgba64 : System.IEquatable<Rgba64> :: method static System.Boolean op_Equality(Rgba64 left, Rgba64 right)
+struct Rgba64 : System.IEquatable<Rgba64> :: method static System.Boolean op_Inequality(Rgba64 left, Rgba64 right)
+struct Rgba64 : System.IEquatable<Rgba64> :: property System.UInt64 PackedValue { get; set; }
+struct Rgba64 : System.IEquatable<Rgba64> :: property static Rgba64 Black { get; }
+struct Rgba64 : System.IEquatable<Rgba64> :: property static Rgba64 Transparent { get; }
+struct Rgba64 : System.IEquatable<Rgba64> :: property static Rgba64 White { get; }

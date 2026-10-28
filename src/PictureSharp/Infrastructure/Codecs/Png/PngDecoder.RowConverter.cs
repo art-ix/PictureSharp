@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace PictureSharp.Infrastructure.Codecs.Png;
@@ -50,6 +51,87 @@ internal sealed partial class PngDecoder
         }
 
         private static byte Scale16(int v) => (byte)((v + 128) / 257);
+
+        /// <summary>Converts a row to <typeparamref name="TPixel"/>; the 8-bit path is unchanged.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Convert<TPixel>(ReadOnlySpan<byte> row, Span<TPixel> dst) where TPixel : unmanaged
+        {
+            if (typeof(TPixel) == typeof(Rgba32))
+            {
+                Convert(row, MemoryMarshal.Cast<TPixel, Rgba32>(dst));
+            }
+            else
+            {
+                Convert(row, MemoryMarshal.Cast<TPixel, Rgba64>(dst));
+            }
+        }
+
+        /// <summary>
+        /// Converts a row to 16-bit pixels: 16-bit samples unchanged, lower depths scaled exactly so the maximum maps to
+        /// 65535. tRNS keys are compared at the source precision, as in the 8-bit path.
+        /// </summary>
+        public void Convert(ReadOnlySpan<byte> row, Span<Rgba64> dst)
+        {
+            int n = dst.Length;
+            switch (_color)
+            {
+                case PngColor.Gray when _depth == 16:
+                    for (int x = 0; x < n; x++)
+                    {
+                        int v = (row[2 * x] << 8) | row[(2 * x) + 1];
+                        ushort g = (ushort)v;
+                        dst[x] = new Rgba64(g, g, g, v == _trnsGray ? (ushort)0 : ushort.MaxValue);
+                    }
+
+                    break;
+                case PngColor.Rgb when _depth == 16:
+                    for (int x = 0, i = 0; x < n; x++, i += 6)
+                    {
+                        int r = (row[i] << 8) | row[i + 1];
+                        int g = (row[i + 2] << 8) | row[i + 3];
+                        int b = (row[i + 4] << 8) | row[i + 5];
+                        bool transparent = r == _trnsR && g == _trnsG && b == _trnsB;
+                        dst[x] = new Rgba64((ushort)r, (ushort)g, (ushort)b, transparent ? (ushort)0 : ushort.MaxValue);
+                    }
+
+                    break;
+                case PngColor.GrayAlpha when _depth == 16:
+                    for (int x = 0, i = 0; x < n; x++, i += 4)
+                    {
+                        ushort g = (ushort)((row[i] << 8) | row[i + 1]);
+                        dst[x] = new Rgba64(g, g, g, (ushort)((row[i + 2] << 8) | row[i + 3]));
+                    }
+
+                    break;
+                case PngColor.Rgba when _depth == 16:
+                    for (int x = 0, i = 0; x < n; x++, i += 8)
+                    {
+                        dst[x] = new Rgba64(
+                            (ushort)((row[i] << 8) | row[i + 1]),
+                            (ushort)((row[i + 2] << 8) | row[i + 3]),
+                            (ushort)((row[i + 4] << 8) | row[i + 5]),
+                            (ushort)((row[i + 6] << 8) | row[i + 7]));
+                    }
+
+                    break;
+                default:
+                    {
+                        // Depths up to 8 are exact in 8 bits; widening keeps them exact (v * 257).
+                        Rgba32[] narrow = System.Buffers.ArrayPool<Rgba32>.Shared.Rent(n);
+                        try
+                        {
+                            Convert(row, narrow.AsSpan(0, n));
+                            Domain.Pixels.PixelDepth.Widen(narrow.AsSpan(0, n), dst);
+                        }
+                        finally
+                        {
+                            System.Buffers.ArrayPool<Rgba32>.Shared.Return(narrow);
+                        }
+
+                        break;
+                    }
+            }
+        }
 
         public void Convert(ReadOnlySpan<byte> row, Span<Rgba32> dst)
         {

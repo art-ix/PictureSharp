@@ -5,17 +5,18 @@
 PictureSharp targets **.NET 10** (C# 14) and depends only on the base class library:
 
 ```bash
-dotnet add package PictureSharp --version 0.7.8
+dotnet add package PictureSharp --version 0.9.0
 ```
 
-Changes are listed in the [release notes](releases/); RasterSharp 0.5.0 code is covered by the
-[migration guide](migration-from-0.5.md).
+Upgrading from 0.8.5? Follow the [0.9.0 migration guide](migration-from-0.8.md) before rebuilding.
+For older RasterSharp 0.5.0 applications, see the [earlier migration guide](migration-from-0.5.md).
+Changes in each version are listed in the [release notes](releases/).
 
 ## Namespaces
 
 | Namespace | Contents |
 | --- | --- |
-| `PictureSharp` | `Image` and its members (`Load`, `Identify`, `Mutate`, `Clone`, `Save`, …), `Rgba32`, `DecoderOptions`, `ImageInfo`, `ImageMetadata`, `ImageConfiguration` |
+| `PictureSharp` | `Image` and its members (`Load`, `Identify`, `Mutate`, `Clone`, `Save`, …), `Rgba32`, `Rgba64`, `PixelType`, `DecoderOptions`, `ImageInfo`, `ImageMetadata`, `ImageConfiguration` |
 | `PictureSharp.Processing` | Processing modes and options: `ResizeMode`, `ResizeOptions`, `RotateMode`, `AnchorPosition`, … |
 | `PictureSharp.Formats.<Format>` | Encoder options and the `SaveAs*`/`To*` shortcuts, e.g. `PictureSharp.Formats.WebP` |
 | `PictureSharp.Formats` | The interfaces of format plugins |
@@ -77,7 +78,8 @@ the full image first. Operations apply to every frame; see [Image processing](im
 
 ## Pixels
 
-Pixels are 8-bit `Rgba32` with straight (not premultiplied) alpha; higher bit depths are converted when decoding.
+Pixels default to 8-bit `Rgba32` with straight (not premultiplied) alpha. `DecoderOptions.PreserveBitDepth` retains
+deeper sources as `Rgba64`; all processing operations preserve that storage. See [Migration to 0.9.0](migration-from-0.8.md).
 `System.Drawing.Color` converts to and from `Rgba32` implicitly:
 
 ```csharp

@@ -12,7 +12,7 @@ public class PcxEncoderTests
     private static Rgba32[] RoundTrip(Image image, PcxEncoderOptions? options = null)
     {
         using Image decoded = Load(image.ToPcx(options));
-        return decoded.GetPixelSpan().ToArray();
+        return decoded.GetPixelSpan<Rgba32>().ToArray();
     }
 
     [Test]
@@ -25,7 +25,7 @@ public class PcxEncoderTests
     public async Task RoundTrip_PreservesPixels(int bits)
     {
         using var image = new Image(5, 3);
-        Span<Rgba32> pixels = image.GetPixelSpan();
+        Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
         for (int i = 0; i < pixels.Length; i++)
         {
             pixels[i] = bits switch
@@ -79,7 +79,7 @@ public class PcxEncoderTests
         using var many = new Image(20, 20);
         for (int i = 0; i < 400; i++)
         {
-            many.GetPixelSpan()[i] = new Rgba32((byte)i, (byte)(i >> 4), 9);
+            many.GetPixelSpan<Rgba32>()[i] = new Rgba32((byte)i, (byte)(i >> 4), 9);
         }
 
         await Assert.That((int)(many.ToPcx()[65])).IsEqualTo(3);
@@ -95,7 +95,7 @@ public class PcxEncoderTests
         byte[] pcx = image.ToPcx(new() { BitsPerPixel = 4 });
         await Assert.That((int)(pcx[65])).IsEqualTo(4);
         await Assert.That((int)(pcx[66])).IsEqualTo(1);
-        await Assert.That(RoundTrip(image, new() { BitsPerPixel = 4 })).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(RoundTrip(image, new() { BitsPerPixel = 4 })).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -111,7 +111,7 @@ public class PcxEncoderTests
         await Assert.That((int)(pcx[68])).IsEqualTo(2);
         await Assert.That((int)(pcx[^769])).IsEqualTo(0x0C);
         await Assert.That(pcx.AsSpan()[^768..^762].ToArray()).IsEquivalentTo(new byte[] { 0, 0, 0, 1, 1, 1 }, CollectionOrdering.Matching);
-        await Assert.That(RoundTrip(gray)).IsEquivalentTo(gray.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(RoundTrip(gray)).IsEquivalentTo(gray.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -123,7 +123,7 @@ public class PcxEncoderTests
         await Assert.That((int)(image.ToPcx()[65])).IsEqualTo(4);
 
         using var many = new Image(258, 1);
-        Span<Rgba32> pixels = many.GetPixelSpan();
+        Span<Rgba32> pixels = many.GetPixelSpan<Rgba32>();
         for (int i = 0; i < 257; i++)
         {
             pixels[i] = new Rgba32((byte)i, (byte)(i >> 8), (byte)(i * 3));
@@ -152,7 +152,7 @@ public class PcxEncoderTests
         using var first = new Image(2, 1, new Rgba32(255, 0, 0));
         using var second = new Image(2, 1, new Rgba32(0, 0, 255));
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(40), first, second);
-        await Assert.That(RoundTrip(animation)).IsEquivalentTo(first.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(RoundTrip(animation)).IsEquivalentTo(first.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]

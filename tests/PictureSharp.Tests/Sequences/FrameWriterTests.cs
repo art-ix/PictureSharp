@@ -55,7 +55,7 @@ public class FrameWriterTests
             }
 
             using Image decoded = Image.Load(path);
-            await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+            await Assert.That(decoded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         }
         finally
         {
@@ -243,7 +243,7 @@ public class FrameWriterTests
         for (int i = 0; i < expected.FrameCount; i++)
         {
             await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
-            await Assert.That(actual.Frames[i].GetPixelSpan().SequenceEqual(expected.Frames[i].GetPixelSpan())).IsTrue().Because($"frame {i}");
+            await Assert.That(actual.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(expected.Frames[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"frame {i}");
         }
     }
 }

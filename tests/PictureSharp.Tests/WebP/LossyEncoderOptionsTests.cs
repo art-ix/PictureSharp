@@ -62,7 +62,7 @@ public class LossyEncoderOptionsTests
             await Assert.That(ReferenceTools.Run("cc", $"-I\"{reference}\" \"{source}\" \"{build}/libwebp.a\" \"{build}/libsharpyuv.a\" -lm -lpthread -o \"{oracle}\"", out string error) == 0).IsTrue().Because(error);
             using var image = new Image(65, 49);
             var random = new Random(7523);
-            foreach (ref Rgba32 pixel in image.GetPixelSpan()) pixel = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), 255);
+            foreach (ref Rgba32 pixel in image.GetPixelSpan<Rgba32>()) pixel = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), 255);
             File.WriteAllBytes(raw, image.ToPixelData(PixelFormat.Rgba32));
             foreach (int method in new[] { 0, 1, 2, 4, 6 })
                 foreach (int parts in Enumerable.Range(0, 4))
@@ -93,15 +93,15 @@ public class LossyEncoderOptionsTests
     {
         using var image = new Image(17, 19);
         var random = new Random(7261);
-        foreach (ref Rgba32 p in image.GetPixelSpan()) p = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
-        Rgba32[] before = image.GetPixelSpan().ToArray();
+        foreach (ref Rgba32 p in image.GetPixelSpan<Rgba32>()) p = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
+        Rgba32[] before = image.GetPixelSpan<Rgba32>().ToArray();
         foreach (int method in new[] { 0, 4, 6 })
             foreach (bool exact in new[] { false, true })
             {
                 byte[] encoded = image.ToWebP(new WebPEncoderOptions { Method = method, Exact = exact });
                 using var decoded = Image.Load(encoded.AsMemory());
-                await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
-                await Assert.That(decoded.GetPixelSpan().ToArray().Select(p => p.A)).IsEquivalentTo(before.Select(p => p.A), CollectionOrdering.Matching);
+                await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
+                await Assert.That(decoded.GetPixelSpan<Rgba32>().ToArray().Select(p => p.A)).IsEquivalentTo(before.Select(p => p.A), CollectionOrdering.Matching);
             }
     }
 
@@ -158,7 +158,7 @@ public class LossyEncoderOptionsTests
     public async Task MetadataAndAlpha_UseOrderedPaddedChunks(MetadataKinds selection)
     {
         using var image = new Image(3, 5);
-        image.GetPixelSpan().Fill(new Rgba32(50, 120, 200, 100));
+        image.GetPixelSpan<Rgba32>().Fill(new Rgba32(50, 120, 200, 100));
         image.Metadata.IccProfile = [1, 2, 3]; image.Metadata.Exif = [4, 5, 6, 7, 8]; image.Metadata.Xmp = [9, 10, 11];
         byte[] encoded = image.ToWebP(new WebPEncoderOptions { Metadata = selection });
         await Assert.That((int)BinaryPrimitives.ReadUInt32LittleEndian(encoded.AsSpan(4))).IsEqualTo(encoded.Length - 8);
@@ -166,7 +166,7 @@ public class LossyEncoderOptionsTests
         await Sequence.AssertEqual(selection.HasFlag(MetadataKinds.Icc) ? image.Metadata.IccProfile : null, decoded.Metadata.IccProfile);
         await Sequence.AssertEqual(selection.HasFlag(MetadataKinds.Exif) ? image.Metadata.Exif : null, decoded.Metadata.Exif);
         await Sequence.AssertEqual(selection.HasFlag(MetadataKinds.Xmp) ? image.Metadata.Xmp : null, decoded.Metadata.Xmp);
-        foreach (var p in decoded.GetPixelSpan().ToArray())
+        foreach (var p in decoded.GetPixelSpan<Rgba32>().ToArray())
         {
             await Assert.That((int)p.A).IsEqualTo(100);
         }

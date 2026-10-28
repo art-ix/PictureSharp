@@ -1,9 +1,13 @@
+using System.Numerics;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
 
-/// <summary>Per-channel 256-entry lookup tables for tonal operations; alpha is never changed.</summary>
-internal static class ToneLut
+/// <summary>
+/// Per-channel lookup tables for tonal operations, one entry per sample value: 256 bytes for 8-bit images,
+/// 65536 <see cref="ushort"/> values for 16-bit ones (<c>ToneLut.Wide.cs</c>). Alpha is never changed.
+/// </summary>
+internal static partial class ToneLut
 {
     /// <summary>Length of a table holding the red, green and blue maps back to back.</summary>
     public const int Length = 3 * 256;
@@ -33,20 +37,21 @@ internal static class ToneLut
     }
 
     /// <summary>
-    /// ob + (ow − ob) · clamp((x − ib) / (iw − ib), 0, 1)^(1 / γ) in double precision, rounded half up
-    /// (tests/assets/graphics_reference.py levels_lut).
+    /// ob + (ow − ob) · clamp((x − ib) / (iw − ib), 0, 1)^(1 / γ) in codes of 0–<paramref name="max"/>, in double
+    /// precision and rounded half up (tests/assets/graphics_reference.py levels_lut); <paramref name="map"/> has
+    /// max + 1 entries. A level migrated from 8 bits as v / 255f is exactly v at max 255 (<see cref="NormalizedLevel"/>).
     /// </summary>
-    public static void Levels(Span<byte> map, LevelsOptions options)
+    public static void Levels<T>(Span<T> map, LevelsOptions options, int max) where T : unmanaged, IBinaryInteger<T>
     {
-        double ib = options.InputBlack;
-        double range = options.InputWhite - options.InputBlack;
-        double ob = options.OutputBlack;
-        double span = options.OutputWhite - options.OutputBlack;
+        double ib = NormalizedLevel.ToCodes(options.InputBlackNormalized, max);
+        double range = NormalizedLevel.ToCodes(options.InputWhiteNormalized, max) - ib;
+        double ob = NormalizedLevel.ToCodes(options.OutputBlackNormalized, max);
+        double span = NormalizedLevel.ToCodes(options.OutputWhiteNormalized, max) - ob;
         double exponent = 1.0 / options.Gamma;
-        for (int x = 0; x < 256; x++)
+        for (int x = 0; x <= max; x++)
         {
             double t = Math.Clamp((x - ib) / range, 0.0, 1.0);
-            map[x] = (byte)(int)Math.Floor(ob + (span * Math.Pow(t, exponent)) + 0.5);
+            map[x] = T.CreateTruncating((int)Math.Floor(ob + (span * Math.Pow(t, exponent)) + 0.5));
         }
     }
 

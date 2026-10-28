@@ -38,7 +38,8 @@ internal sealed class IconService(IIcoCodec codec, IImageInput input, IImageOutp
     {
         options ??= DecoderOptions.Default;
         options.CheckColorConversion();
-        IcoImageCollection result = codec.LoadAll(data, new DecodeContext(options, cancellationToken));
+        bool reduce = ImageDecodeService.ReducesAfterConversion(options);
+        IcoImageCollection result = codec.LoadAll(data, new DecodeContext(reduce ? options with { PreserveBitDepth = true } : options, cancellationToken));
         try
         {
             if (options.ColorConversion == ColorConversionMode.ToSrgb)
@@ -46,6 +47,10 @@ internal sealed class IconService(IIcoCodec codec, IImageInput input, IImageOutp
                 foreach (Image image in result)
                 {
                     ImageProcessingService.Mutate(image, static x => x.ConvertToSrgb(), cancellationToken);
+                    if (reduce)
+                    {
+                        ImageDecodeService.ReduceToRgba32(image, cancellationToken);
+                    }
                 }
             }
 

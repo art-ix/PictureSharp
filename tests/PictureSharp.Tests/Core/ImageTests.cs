@@ -29,7 +29,7 @@ public class ImageTests
         await Assert.That(img.IsAnimated).IsFalse();
         Assert.Null(img.SourceFormat);
         await Assert.That(img.Bounds).IsEqualTo(new Rectangle(0, 0, 3, 2));
-        foreach (var p in img.GetPixelSpan().ToArray())
+        foreach (var p in img.GetPixelSpan<Rgba32>().ToArray())
         {
             await Assert.That(p).IsEqualTo(Rgba32.Transparent);
         }
@@ -111,7 +111,7 @@ public class ImageTests
     public async Task GetPixelMemory_SharesThePixels()
     {
         using Image img = Pattern(3, 2);
-        Memory<Rgba32> memory = img.GetPixelMemory();
+        Memory<Rgba32> memory = img.GetPixelMemory<Rgba32>();
         await Assert.That(memory.Length).IsEqualTo(6);
         memory.Span[4] = Rgba32.White;
         await Assert.That(img[1, 1]).IsEqualTo(Rgba32.White);

@@ -1,5 +1,6 @@
 using System.Drawing;
 using PictureSharp.Algorithms.Processing;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Application.Processing;
@@ -15,29 +16,40 @@ internal static class ImageAnalysisService
         Rectangle region = options.Region ?? new Rectangle(Point.Empty, image.Size);
         Image.CheckRectangle(region, image.Width, image.Height, nameof(options));
 
-        long[] counts = new long[Histogram.Length];
-        long pixels = 0;
-        bool exclude = options.Transparency == HistogramTransparency.Exclude;
-        int frames = options.AllFrames ? image.FrameCount : 1;
-        for (int f = 0; f < frames; f++)
+        var count = new HistogramCount(image, region, options, cancellationToken);
+        return PixelDispatch.Run<HistogramCount, ImageHistogram>(image.PixelType, ref count);
+    }
+
+    private readonly struct HistogramCount(Image image, Rectangle region, HistogramOptions options, CancellationToken cancellationToken)
+        : IPixelOperation<ImageHistogram>
+    {
+        public ImageHistogram Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel>
         {
-            ImageFrame frame = image.Frames[f];
-            if (region.Width == frame.Width)
+            int binCount = options.FullResolution ? TPixel.MaxValue + 1 : 256;
+            long[] counts = new long[Histogram.Channels * binCount];
+            long pixels = 0;
+            bool exclude = options.Transparency == HistogramTransparency.Exclude;
+            int frames = options.AllFrames ? image.FrameCount : 1;
+            for (int f = 0; f < frames; f++)
             {
-                ReadOnlySpan<Rgba32> pixelsInRegion = frame.GetPixelSpan().Slice(region.Y * frame.Width, region.Height * frame.Width);
-                pixels += Histogram.Accumulate(pixelsInRegion, counts, exclude, cancellationToken);
+                ImageFrame frame = image.Frames[f];
+                TPixel[] buffer = frame.Buffer.As<TPixel>();
+                if (region.Width == frame.Width)
+                {
+                    ReadOnlySpan<TPixel> pixelsInRegion = buffer.AsSpan(region.Y * frame.Width, region.Height * frame.Width);
+                    pixels += Histogram.Accumulate(pixelsInRegion, counts, binCount, exclude, cancellationToken);
+                    continue;
+                }
 
-                continue;
+                for (int y = region.Y; y < region.Bottom; y++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    pixels += Histogram.Accumulate(buffer.AsSpan((y * frame.Width) + region.X, region.Width), counts, binCount, exclude, cancellationToken);
+                }
             }
 
-            for (int y = region.Y; y < region.Bottom; y++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                pixels += Histogram.Accumulate(frame.GetRowSpan(y).Slice(region.X, region.Width), counts, exclude, cancellationToken);
-            }
+            return new ImageHistogram(counts, pixels, binCount);
         }
-
-        return new ImageHistogram(counts, pixels);
     }
 
     public static NegativeAnalysis AnalyzeNegative(Image image, NegativeOptions? options, CancellationToken cancellationToken)

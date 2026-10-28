@@ -65,13 +65,13 @@ sealed class RawaDecoder : IImageFormatDecoder
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         (int width, int height) = ReadSize(data.Span);
-        context.ReservePixels(width, height);                        // fails on MaxPixels before allocating
+        context.ReservePixels(width, height, PixelType.Rgba32);       // fails on MaxPixels before allocating
         ReadOnlySpan<Rgba32> pixels = MemoryMarshal.Cast<byte, Rgba32>(data.Span[12..]);
         var image = new Image(width, height);
         for (int y = 0; y < height; y++)
         {
             context.ThrowIfCancellationRequested();
-            pixels.Slice(y * width, width).CopyTo(image.GetRowSpan(y)); // truncated file: reported as corrupt
+            pixels.Slice(y * width, width).CopyTo(image.GetRowSpan<Rgba32>(y)); // truncated file: reported as corrupt
         }
 
         return image;
@@ -100,7 +100,7 @@ sealed class RawaEncoder : IImageFormatEncoder<RawaEncoderOptions>
         for (int y = 0; y < image.Height; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            image.GetRowSpan(y).CopyTo(row);
+            image.GetRowSpan<Rgba32>(y).CopyTo(row);
             if (options.Opaque)
             {
                 foreach (ref Rgba32 pixel in row.AsSpan()) pixel.A = 255;
@@ -191,8 +191,10 @@ The shortcuts save through `options.Configuration`, which defaults to `ImageConf
 
 **Decoding**
 
-- Call `context.ReservePixels` before allocating pixels and `context.ReserveMetadata` before copying decompressed
-  ICC, EXIF or XMP data.
+- Call `context.ReservePixels` with the pixel type of the image you will return before allocating pixels, and
+  `context.ReserveMetadata` before copying decompressed ICC, EXIF or XMP data. A source with more than 8 bits per
+  sample decodes to `PixelType.Rgba64` when `context.Options.PreserveBitDepth` is set, otherwise to `Rgba32`; scale
+  n-bit samples with `(v * 65535 + max / 2) / max`, `max = (1 << n) - 1`, so white maps to 65535.
 - Throw `ImageFormatException` for corrupt data and `NotSupportedException` for valid data using an unsupported
   feature. Index, argument, overflow, invalid-operation and cast errors are reported as `ImageFormatException`, so
   `data.Span[offset..]` on a truncated file needs no extra check.
@@ -213,6 +215,8 @@ The shortcuts save through `options.Configuration`, which defaults to `ImageConf
 
 - Encoder options derive from `EncoderOptions` and override `Format`. `IImageFormatEncoder<TOptions>` creates the
   defaults with `new TOptions()` and rejects options of another type with `ArgumentException`.
+- An encoder receives `Rgba32` images unless it overrides `SupportsPixelType` to accept `PixelType.Rgba64`; the
+  library then passes 16-bit images as they are, otherwise it passes an 8-bit copy rounded to the nearest value.
 
 ### Orientation and color
 
@@ -228,10 +232,11 @@ A container format decodes a whole embedded image with `context.DecodeEmbedded(d
 and options as the load.
 
 A format that stores one image as strips or tiles in another format (JPEG tiles in TIFF) reserves the image once and
-decodes each part with `context.DecodeEmbeddedPart`:
+decodes each part with `context.DecodeEmbeddedPart`. Reserve the parent first with its actual pixel type. Each part
+inherits the parent's maximum pixel type and weighted allowance, with a separate pixel-count ceiling:
 
 ```csharp
-context.ReservePixels(width, height);
+context.ReservePixels(width, height, PixelType.Rgba32);
 var image = new Image(width, height);
 foreach ((ReadOnlyMemory<byte> data, int x, int y) in tiles)
 {
@@ -241,7 +246,7 @@ foreach ((ReadOnlyMemory<byte> data, int x, int y) in tiles)
 ```
 
 - A part is not charged against the reserved image and is not a frame. It may decode to at most `width` x `height`
-  pixels, which must itself fit `MaxPixels`.
+  pixels, whose weighted cost must itself fit `MaxPixels` (a 16-bit pixel counts twice).
 - It is decoded as stored: without EXIF orientation, gain map, color conversion or metadata.
 - Dispose each part before decoding the next, so a load holds at most the image and one part.
 
@@ -368,13 +373,16 @@ if (context.Options.LoadGainMap)
 
 - `GainMapMetadata.ParseIso` reads an ISO 21496-1 payload, `ParseApple` the Apple model.
 - A `GainMapImage` owns its data, never uses the decode context and returns the map at its stored size.
+- A map with more than 8 bits per sample keeps them with `GainMapImage(size, PixelType.Rgba64)` (resolve it as for the
+  image, from the map's headers and `PreserveBitDepth`); `Decode` must then return an `Rgba64` image. The map is charged
+  with its declared type, and a decoded map of another type makes `ToHdr` throw `ImageFormatException`.
 - In `Identify`, report `ImageInfo.GainMap = metadata.ToGainMapInfo(mapSize)` when `LoadGainMap` is set.
 - When a file describes the map in several models (iPhones since iOS 18 store ISO 21496-1 and Apple metadata), pass
   them all, `metadata.Kind` included: `AttachGainMap(metadata, map, detected)` in `Decode` and
   `metadata.ToGainMapInfo(mapSize) with { Detected = detected }` in `Identify`. `Image.GainMap.Detected` then matches a JPEG
   (0.7.1).
 - Keep the base image's ICC profile or `Chromaticities`/`Gamma` when attaching a map, also with `IgnoreMetadata`.
-- Map pixels count toward `MaxPixels`. An oversized map, unparsable metadata or a base color other than sRGB or Display
+- Map pixels count toward `MaxPixels` (16-bit ones twice). An oversized map, unparsable metadata or a base color other than sRGB or Display
   P3 is reported through `Image.GainMap` and never fails the load.
 - The library carries the map through `TargetSize`, orientation, color conversion and geometric edits. Saving as JPEG
   writes it like an edited JPEG map, with metadata from `ToIso()` (0.8.0).
@@ -430,19 +438,20 @@ types and the rules, and how to choose the minimum PictureSharp version of a plu
 
 ## Custom frame processors
 
-`IFrameProcessor` (`PictureSharp.Processing`) produces a new pixel buffer for every frame and may change the canvas size.
-This one keeps the left half of the image:
+`IFrameProcessor<TPixel>` (`PictureSharp.Processing`) produces a new pixel buffer for every frame and may change the
+canvas size. `TPixel` is the image's storage type (`Rgba32`, or `Rgba64` for 16-bit images; see `Image.PixelType`). This
+one keeps the left half of an image of either depth:
 
 ```csharp
 using System.Drawing;
 using PictureSharp;
 using PictureSharp.Processing;
 
-public readonly struct LeftHalf : IFrameProcessor
+public readonly struct LeftHalf<TPixel> : IFrameProcessor<TPixel> where TPixel : unmanaged
 {
     public Size GetOutputSize(Size source) => new(Math.Max(1, source.Width / 2), source.Height);
 
-    public void Process(ReadOnlySpan<Rgba32> source, Size sourceSize, Span<Rgba32> destination, Size destinationSize,
+    public void Process(ReadOnlySpan<TPixel> source, Size sourceSize, Span<TPixel> destination, Size destinationSize,
         CancellationToken cancellationToken)
     {
         for (int y = 0; y < destinationSize.Height; y++)
@@ -454,7 +463,9 @@ public static class MyOperations
 {
     extension(ImageProcessingContext x)
     {
-        public ImageProcessingContext LeftHalf() => x.ApplyProcessor(new LeftHalf());
+        public ImageProcessingContext LeftHalf() => x.PixelType == PixelType.Rgba64
+            ? x.ApplyProcessor(new LeftHalf<Rgba64>())
+            : x.ApplyProcessor(new LeftHalf<Rgba32>());
     }
 }
 
@@ -465,7 +476,9 @@ image.Mutate(x => x.AutoOrient().LeftHalf().Resize(800, 0));
 - `Process` receives row-major straight-alpha pixels and a transparent black destination. Do not keep the spans.
 - All frames are prepared before any is published, so an exception or cancellation leaves the image unchanged. Within
   `Clone` the source is not copied.
-- A struct processor runs without boxing.
+- `ApplyProcessor` infers `TPixel` from the processor and throws `InvalidOperationException` when the image stores
+  another type; convert it with `ConvertPixelType` first, or implement the interface for both types. A processor is
+  boxed once per call, not per pixel or frame.
 
 For edits that keep the size, `Apply(Action<ImageFrame>)` is simpler; see
 [Image processing](image-processing.md#custom-operations).

@@ -1,3 +1,5 @@
+using PictureSharp.Algorithms.Processing;
+
 namespace PictureSharp.Processing;
 
 /// <summary>How <see cref="ImageProcessingContext.AutoCrop(AutoCropOptions?)"/> and <c>Image.FindTrimBounds</c> find the content.</summary>
@@ -14,23 +16,33 @@ public sealed record AutoCropOptions
     }
 
     /// <summary>
-    /// <see cref="AutoCropMode.Alpha"/>: pixels with alpha at or below this value count as margin, so 0 keeps every
-    /// visible pixel and higher values also drop faint halos and shadows. Default: 0.
+    /// <see cref="AutoCropMode.Alpha"/>: pixels with alpha at or below this normalized value (0–1; an 8-bit alpha a is
+    /// <c>a / 255f</c>) count as margin, so 0 keeps every visible pixel and higher values also drop faint halos and
+    /// shadows. Default: 0.
     /// </summary>
-    public byte AlphaThreshold { get; init; }
+    public float AlphaThresholdNormalized
+    {
+        get;
+        init => field = NormalizedLevel.Check(value, nameof(AlphaThresholdNormalized));
+    }
 
     /// <summary>
-    /// <see cref="AutoCropMode.Background"/>: the margin color; <see langword="null"/> takes the top-left pixel of the
-    /// first frame. Default: null.
+    /// <see cref="AutoCropMode.Background"/>: the margin color, stored at the image's depth (rounded to 8 bits on an
+    /// 8-bit image); <see langword="null"/> takes the top-left pixel of the first frame. Default: null.
     /// </summary>
-    public Rgba32? Background { get; init; }
+    public Rgba64? Background { get; init; }
 
     /// <summary>
-    /// <see cref="AutoCropMode.Background"/>: the largest difference in any channel (alpha included) for which a pixel
-    /// still counts as background; raise it for noisy or compressed photos. Fully transparent pixels always match a
-    /// fully transparent background. Default: 0 (exact match).
+    /// <see cref="AutoCropMode.Background"/>: the largest difference in any channel (alpha included), normalized to
+    /// 0–1 of the channel range (an 8-bit difference d is <c>d / 255f</c>), for which a pixel still counts as
+    /// background; raise it for noisy or compressed photos. Fully transparent pixels always match a fully transparent
+    /// background. Default: 0 (exact match).
     /// </summary>
-    public byte Tolerance { get; init; }
+    public float ToleranceNormalized
+    {
+        get;
+        init => field = NormalizedLevel.Check(value, nameof(ToleranceNormalized));
+    }
 
     /// <summary>Pixels of margin to keep around the content, limited by the canvas. Default: 0.</summary>
     public int Padding

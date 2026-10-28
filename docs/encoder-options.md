@@ -172,3 +172,10 @@ var anonymous = new JpegEncoderOptions { Quality = 85, Metadata = MetadataKinds.
 // Derive a variant.
 WebPEncoderOptions thumbnails = web with { Quality = 70 };
 ```
+
+## PNG sample depth (0.9.0)
+
+`PngEncoderOptions.BitDepth` is `PngBitDepth.Auto` by default: a 16-bit image is stored at 16 bits when any channel
+needs them; exactly widened 8-bit content can use 8 bits. `UpTo8` rounds and permits palette output; `Sixteen` forces
+16-bit gray, gray/alpha, RGB or RGBA and rejects explicit palette selection. PNG `sBIT` is retained as
+`PngSignificantBits` format metadata only when output depth and color type match. It does not change sample values.

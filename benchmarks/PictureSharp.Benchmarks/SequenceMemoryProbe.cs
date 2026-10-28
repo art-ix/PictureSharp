@@ -46,8 +46,8 @@ internal static class SequenceMemoryProbe
         await using var writer = Image.CreateFrameWriter(path, frame.Size, options);
         for (int i = 0; i < count; i++)
         {
-            frame.GetPixelSpan().Clear();
-            for (int y = 32; y < 96; y++) frame.GetRowSpan(y).Slice(i % 192, 64).Fill(new Rgba32(200, 50, 20));
+            frame.GetPixelSpan<Rgba32>().Clear();
+            for (int y = 32; y < 96; y++) frame.GetRowSpan<Rgba32>(y).Slice(i % 192, 64).Fill(new Rgba32(200, 50, 20));
             await writer.WriteAsync(frame);
             if (i % 10 == 0 || i == count - 1) sample();
         }

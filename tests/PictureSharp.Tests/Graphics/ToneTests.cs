@@ -33,17 +33,17 @@ public class ToneTests
         {
             image.Mutate(x => x.Levels(new LevelsOptions
             {
-                InputBlack = c.GetProperty("in_black").GetByte(),
-                InputWhite = c.GetProperty("in_white").GetByte(),
+                InputBlackNormalized = c.GetProperty("in_black").GetByte() / 255f,
+                InputWhiteNormalized = c.GetProperty("in_white").GetByte() / 255f,
                 Gamma = gamma,
-                OutputBlack = c.GetProperty("out_black").GetByte(),
-                OutputWhite = c.GetProperty("out_white").GetByte(),
+                OutputBlackNormalized = c.GetProperty("out_black").GetByte() / 255f,
+                OutputWhiteNormalized = c.GetProperty("out_white").GetByte() / 255f,
                 Channels = channels,
             }));
         }
 
         using Image expected = GraphicsReference.Load(c.GetProperty("reference").GetString()!);
-        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan(), expected.GetPixelSpan()))
+        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan<Rgba32>(), expected.GetPixelSpan<Rgba32>()))
             .IsLessThanOrEqualTo(GraphicsReference.Tolerance("tone_max_abs")).Because(name);
     }
 
@@ -55,7 +55,7 @@ public class ToneTests
         for (int i = 0; i < inputs.Length; i++) image[i, 0] = new Rgba32(inputs[i], inputs[i], inputs[i], (byte)(i * 60));
 
         // (x − 20) / 210 stretched to 0..255; 125 → 127.5 rounds half up to 128.
-        image.Mutate(x => x.Levels(new LevelsOptions { InputBlack = 20, InputWhite = 230 }));
+        image.Mutate(x => x.Levels(new LevelsOptions { InputBlackNormalized = 20 / 255f, InputWhiteNormalized = 230 / 255f }));
 
         byte[] expected = [0, 0, 128, 255, 255];
         for (int i = 0; i < expected.Length; i++)
@@ -72,8 +72,8 @@ public class ToneTests
         image[1, 0] = new Rgba32(128, 128, 128);
         image[2, 0] = new Rgba32(255, 255, 255);
 
-        using Image range = image.Clone(x => x.Levels(new LevelsOptions { OutputBlack = 50, OutputWhite = 150 }));
-        using Image inverted = image.Clone(x => x.Levels(new LevelsOptions { OutputBlack = 255, OutputWhite = 0 }));
+        using Image range = image.Clone(x => x.Levels(new LevelsOptions { OutputBlackNormalized = 50 / 255f, OutputWhiteNormalized = 150 / 255f }));
+        using Image inverted = image.Clone(x => x.Levels(new LevelsOptions { OutputBlackNormalized = 1f, OutputWhiteNormalized = 0f }));
 
         // 50 + 100 · 128/255 = 100.196 → 100; 255 − 255 · 128/255 = 127.
         await Assert.That(range[0, 0].R).IsEqualTo((byte)50);
@@ -115,7 +115,7 @@ public class ToneTests
         using var image = new Image(4, 4);
         image.Mutate(x => x.Fill(new Rgba32(10, 100, 200, 50)));
         using Image clone = image.Clone(x => x.Gamma(1f).Levels(new LevelsOptions()));
-        await Assert.That(clone.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(clone.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -128,8 +128,8 @@ public class ToneTests
         using Image result = image.Clone(x => x.Gamma(2f));
 
         await Assert.That(result.FrameCount).IsEqualTo(2);
-        await Assert.That(result.Frames[0].GetPixelSpan()[0]).IsEqualTo(new Rgba32(128, 128, 128));
-        await Assert.That(result.Frames[1].GetPixelSpan()[3]).IsEqualTo(new Rgba32(128, 128, 128));
+        await Assert.That(result.Frames[0].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(128, 128, 128));
+        await Assert.That(result.Frames[1].GetPixelSpan<Rgba32>()[3]).IsEqualTo(new Rgba32(128, 128, 128));
         await Assert.That(image[0, 0]).IsEqualTo(new Rgba32(64, 64, 64));
     }
 
@@ -137,8 +137,8 @@ public class ToneTests
     public async Task Levels_InvalidArguments_Throw()
     {
         using var image = new Image(1, 1);
-        Assert.ThrowsExactly<ArgumentException>(() => image.Mutate(x => x.Levels(new LevelsOptions { InputBlack = 100, InputWhite = 100 })));
-        Assert.ThrowsExactly<ArgumentException>(() => image.Mutate(x => x.Levels(new LevelsOptions { InputBlack = 200, InputWhite = 10 })));
+        Assert.ThrowsExactly<ArgumentException>(() => image.Mutate(x => x.Levels(new LevelsOptions { InputBlackNormalized = 100 / 255f, InputWhiteNormalized = 100 / 255f })));
+        Assert.ThrowsExactly<ArgumentException>(() => image.Mutate(x => x.Levels(new LevelsOptions { InputBlackNormalized = 200 / 255f, InputWhiteNormalized = 10 / 255f })));
         Assert.ThrowsExactly<ArgumentNullException>(() => image.Mutate(x => x.Levels(null!)));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => image.Mutate(x => x.Gamma(0f)));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => image.Mutate(x => x.Gamma(-1f)));

@@ -50,8 +50,9 @@ internal static partial class Affine
 
     /// <summary>Nearest-neighbour affine transform of straight-alpha pixels; pixels mapped from outside the source keep their value.</summary>
     // port: Pillow src/libImaging/Geometry.c ImagingTransformAffine (nearest: affine_fixed, else the floating point loop)
-    public static void TransformNearest(ReadOnlySpan<Rgba32> src, int srcWidth, int srcHeight, Span<Rgba32> dst, int width, int height, double[] a,
+    public static void TransformNearest<TPixel>(ReadOnlySpan<TPixel> src, int srcWidth, int srcHeight, Span<TPixel> dst, int width, int height, double[] a,
         CancellationToken cancellationToken = default)
+        where TPixel : unmanaged
     {
         if (CheckFixed(a, 0, 0) && CheckFixed(a, width, height) && CheckFixed(a, 0, height) && CheckFixed(a, width, 0))
         {
@@ -62,7 +63,7 @@ internal static partial class Affine
             for (int y = 0; y < height; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Span<Rgba32> row = dst.Slice(y * width, width);
+                Span<TPixel> row = dst.Slice(y * width, width);
                 int xx = a2, yy = a5;
                 for (int x = 0; x < width; x++)
                 {
@@ -92,7 +93,7 @@ internal static partial class Affine
         for (int y = 0; y < height; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Span<Rgba32> row = dst.Slice(y * width, width);
+            Span<TPixel> row = dst.Slice(y * width, width);
             double xx = xo, yy = yo;
             for (int x = 0; x < width; x++)
             {

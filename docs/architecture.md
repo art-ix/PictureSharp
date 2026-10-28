@@ -56,7 +56,7 @@ Plugins implement `IImageFormatModule`, `IImageFormatDecoder` and `IImageFormatE
 failures count as no match, results are checked against `MaxPixels` and `MaxFrames`, and `ImageDecodeContext` exposes
 the shared budget and nested decoding. A plugin gain map becomes the same internal attachment as a JPEG one, and
 `IImageFormatMetadataCodec` is adapted to the internal metadata port. Built-in codecs are not wrapped.
-`IFrameProcessor` operations run through `ProcessingState.ReplaceFrames` with zeroed destination buffers.
+`IFrameProcessor<TPixel>` operations run through `ProcessingState.ReplaceFrames` with zeroed destination buffers.
 
 ## Adapter packages
 

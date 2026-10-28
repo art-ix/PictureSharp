@@ -39,7 +39,7 @@ public class PcxOracleTests
             File.WriteAllBytes(path, pcx);
             using Image ours = Image.Load(pcx);
             byte[] pillow = await PillowRgbaBytes(path);
-            await Assert.That(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(ours.GetPixelSpan()))).IsFalse().Because("Pillow ignores a 1-bit PCX palette and should not match a colored bilevel image.");
+            await Assert.That(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(ours.GetPixelSpan<Rgba32>()))).IsFalse().Because("Pillow ignores a 1-bit PCX palette and should not match a colored bilevel image.");
         }
         finally
         {
@@ -77,7 +77,7 @@ public class PcxOracleTests
                     byte[] pcx = image.ToPcx(new() { BitsPerPixel = bits });
                     using (Image decoded = Image.Load(pcx))
                     {
-                        await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+                        await Assert.That(decoded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
                     }
 
                     // Pillow 10.2 skips RGB plane compaction at widths 1 and 3 (even stride).
@@ -129,7 +129,7 @@ public class PcxOracleTests
             File.WriteAllBytes(path, pcx);
             await Assert.That(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0).IsTrue().Because(error);
             using Image image = Image.Load(pcx);
-            await Assert.That(MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray()).IsEquivalentTo(File.ReadAllBytes(raw), CollectionOrdering.Matching);
+            await Assert.That(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()).ToArray()).IsEquivalentTo(File.ReadAllBytes(raw), CollectionOrdering.Matching);
         }
         finally
         {
@@ -159,7 +159,7 @@ public class PcxOracleTests
             string raw = Path.Combine(directory, "rgba.raw");
             File.WriteAllBytes(path, pcx);
             await Assert.That(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0).IsTrue().Because(error);
-            byte[] expected = MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray();
+            byte[] expected = MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()).ToArray();
             await Assert.That(File.ReadAllBytes(raw)).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
         finally
@@ -176,7 +176,7 @@ public class PcxOracleTests
         string raw = Path.Combine(directory, "image.rgba");
         File.WriteAllBytes(path, pcx);
         await Assert.That(ReferenceTools.Run("convert", $"\"{path}\" -depth 8 \"rgba:{raw}\"", out string error) == 0).IsTrue().Because(error);
-        await Assert.That(File.ReadAllBytes(raw)).IsEquivalentTo(MemoryMarshal.AsBytes(image.GetPixelSpan()).ToArray(), CollectionOrdering.Matching);
+        await Assert.That(File.ReadAllBytes(raw)).IsEquivalentTo(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()).ToArray(), CollectionOrdering.Matching);
     }
 
     private static async Task AssertSame(string directory, Image image, PcxEncoderOptions options)
@@ -187,7 +187,7 @@ public class PcxOracleTests
             string path = Path.Combine(directory, $"{options.BitsPerPixel}-{image.Width}.pcx");
             File.WriteAllBytes(path, pcx);
             byte[] pillow = await PillowRgbaBytes(path);
-            await Assert.That(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because(path);
+            await Assert.That(pillow.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()))).IsTrue().Because(path);
         }
     }
 
@@ -229,7 +229,7 @@ public class PcxOracleTests
         var image = new Image(5, 2);
         for (int i = 0; i < 10; i++)
         {
-            image.GetPixelSpan()[i] = new Rgba32((byte)(i * 25), (byte)(100 + i), (byte)(i * 13));
+            image.GetPixelSpan<Rgba32>()[i] = new Rgba32((byte)(i * 25), (byte)(100 + i), (byte)(i * 13));
         }
 
         return image;

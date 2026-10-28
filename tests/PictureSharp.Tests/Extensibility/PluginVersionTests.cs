@@ -7,19 +7,20 @@ using PictureSharp.Formats;
 namespace PictureSharp.Tests.Extensibility;
 
 /// <summary>
-/// 0.8.5 broke the plugin SPI once (the new <see cref="ImageInfo"/>), so a plugin built against an older PictureSharp
-/// must be rejected at registration instead of failing inside <c>Identify</c>.
+/// 0.9.0 broke the plugin SPI (16-bit pixels: typed <c>ReservePixels</c>, generic pixel access and
+/// <see cref="DecoderOptions.PreserveBitDepth"/>), so a plugin built against an older PictureSharp must be rejected at
+/// registration instead of ignoring the requested depth or failing inside a decode.
 /// </summary>
 public class PluginVersionTests
 {
     [Test]
     public async Task PluginBuiltAgainstOldCore_IsRejected_ByAddFormatAndReplaceFormat()
     {
-        IImageFormatModule module = LoadModuleBuiltAgainst("0.8.4.0");
+        IImageFormatModule module = LoadModuleBuiltAgainst("0.8.5.0");
         ImageConfigurationBuilder builder = ImageConfiguration.Default.ToBuilder();
 
         var added = Assert.ThrowsExactly<NotSupportedException>(() => builder.AddFormat(module));
-        await Assert.That(added.Message).Contains("OldPlugin").And.Contains("0.8.4").And.Contains("0.8.5");
+        await Assert.That(added.Message).Contains("OldPlugin").And.Contains("0.8.5").And.Contains("0.9.0");
         Assert.ThrowsExactly<NotSupportedException>(() => builder.ReplaceFormat(module));
         await Assert.That(builder.Formats.Count).IsEqualTo(ImageConfiguration.Default.Formats.Count);
     }
@@ -34,8 +35,9 @@ public class PluginVersionTests
     [Test]
     [Arguments(0, 8, 4, false)]
     [Arguments(0, 7, 10, false)]
-    [Arguments(0, 8, 5, true)]
+    [Arguments(0, 8, 5, false)]
     [Arguments(0, 9, 0, true)]
+    [Arguments(0, 9, 1, true)]
     [Arguments(1, 0, 0, true)]
     public async Task Check_ComparesWithMinimumVersion(int major, int minor, int patch, bool accepted)
     {

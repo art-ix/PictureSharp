@@ -243,7 +243,7 @@ public sealed class GainMapContainerFormat(bool editableMetadata = true) : IImag
                 else
                 {
                     using Image pixels = gainMap.Map.Decode(options.MaxDegreeOfParallelism, cancellationToken);
-                    bool gray = gainMap.Metadata.ChannelCount == 1 && pixels.GetPixelSpan().ToArray().All(p => p.R == p.G && p.G == p.B);
+                    bool gray = gainMap.Metadata.ChannelCount == 1 && pixels.GetPixelSpan<Rgba32>().ToArray().All(p => p.R == p.G && p.G == p.B);
                     map = pixels.ToJpeg(new JpegEncoderOptions
                     {
                         Quality = 95,

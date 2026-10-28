@@ -68,7 +68,7 @@ internal static partial class Compositor
         for (int y = y0; y < y1; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, n);
+            Span<Rgba32> dstRow = dst.PixelRow(y).Slice(x0, n);
             ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), n);
             int done = vectorize ? BlendRowSimd<TChannels, TMode>(dstRow, srcRow, opacity) : 0;
             for (int x = done; x < n; x++)

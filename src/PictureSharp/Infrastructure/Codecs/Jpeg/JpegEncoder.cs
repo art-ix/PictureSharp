@@ -25,7 +25,7 @@ internal sealed class JpegEncoder : IImageEncoder<JpegEncoderOptions>
             throw new ArgumentOutOfRangeException(nameof(image), "JPEG dimensions must not exceed 65535.");
         JpegMarkerWriter.ValidateMetadata(image.Metadata, options.Metadata);
         bool gray = options.ColorMode != JpegColorMode.Color;
-        foreach (Rgba32 pixel in options.ColorMode == JpegColorMode.Auto ? image.GetPixelSpan() : default)
+        foreach (Rgba32 pixel in options.ColorMode == JpegColorMode.Auto ? image.Pixels.AsSpan() : default)
         {
             Rgba32 p = JpegEncoderComponent.Composite(pixel, options.BackgroundColor);
             if (p.R != p.G || p.R != p.B) { gray = false; break; }

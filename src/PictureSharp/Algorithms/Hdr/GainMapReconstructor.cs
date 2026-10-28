@@ -1,6 +1,8 @@
 using System.Drawing;
+using System.Runtime.CompilerServices;
 using PictureSharp.Algorithms.ColorManagement;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Parallelism;
 
 namespace PictureSharp.Algorithms.Hdr;
@@ -9,13 +11,15 @@ namespace PictureSharp.Algorithms.Hdr;
 /// Rebuilds linear HDR pixels from base pixels and a decoded gain map: linearize the base, move to the multiplication
 /// primaries, apply the gain, move to the output primaries. Each output pixel samples the map at the position of its
 /// source pixel in the stored base image, through the applied orientation and thumbnail scale, so no enlarged map is
-/// allocated.
+/// allocated. 16-bit bases are linearized at every 16-bit code and 16-bit maps sampled at their precision, by the
+/// scalar code; 8-bit bases with 8-bit maps also have a vector path.
 /// </summary>
 internal sealed partial class GainMapReconstructor
 {
     private readonly GainMapParameters _p;
     private readonly DecodedGainMap _map;
     private readonly float[] _linear;      // 768 entries: R, G, B codes → linear
+    private readonly BaseTransfer? _transfer;
     private readonly HdrColorMatrix? _toMultiply; // 3×3, null for identity
     private readonly HdrColorMatrix? _toOutput;   // 3×3, null for identity
     private readonly float _weight;        // ISO weight of the alternate rendition
@@ -29,18 +33,19 @@ internal sealed partial class GainMapReconstructor
     /// <param name="parameters">Gain map model and values.</param>
     /// <param name="map">The decoded map.</param>
     /// <param name="baseSpace">Primaries of the base pixels.</param>
-    /// <param name="baseLinearization">768 linear values of the base codes, or null for sRGB.</param>
+    /// <param name="baseTransfer">The base's transfer function, or null for sRGB.</param>
     /// <param name="outputSpace">Primaries of the result.</param>
     /// <param name="targetHeadroom">Linear target headroom, or null for the source's maximum.</param>
     /// <param name="size">Size of the base pixels.</param>
     /// <param name="storedSize">Stored size of the base image (before thumbnail and orientation).</param>
     /// <param name="orientation">Orientation applied to the base pixels while loading.</param>
-    public GainMapReconstructor(GainMapParameters parameters, DecodedGainMap map, HdrColorSpace baseSpace, float[]? baseLinearization,
+    public GainMapReconstructor(GainMapParameters parameters, DecodedGainMap map, HdrColorSpace baseSpace, BaseTransfer? baseTransfer,
         HdrColorSpace outputSpace, float? targetHeadroom, Size size, Size storedSize, ExifOrientation orientation)
     {
         _p = parameters;
         _map = map;
-        _linear = baseLinearization ?? SrgbTables();
+        _transfer = baseTransfer;
+        _linear = baseTransfer?.Codes8 ?? SrgbTables();
         HdrColorSpace multiplySpace = parameters.MultiplicationSpace ?? baseSpace;
         _toMultiply = HdrColorMatrix.Between(baseSpace, multiplySpace);
         _toOutput = HdrColorMatrix.Between(multiplySpace, outputSpace);
@@ -90,18 +95,32 @@ internal sealed partial class GainMapReconstructor
     }
 
     /// <summary>Reconstructs all rows of <paramref name="basePixels"/> into <paramref name="output"/>.</summary>
-    public void Run(Rgba32[] basePixels, Rgba128[] output, int maxDegreeOfParallelism, CancellationToken cancellationToken)
+    public void Run(PixelBuffer basePixels, Rgba128[] output, int maxDegreeOfParallelism, CancellationToken cancellationToken)
+    {
+        if (basePixels.Rgba32 is { } narrow)
+        {
+            Rows(y => Row(narrow, output, y), maxDegreeOfParallelism, cancellationToken);
+            return;
+        }
+
+        // 16-bit codes: one table per channel of the base's curves, or the sRGB table for all three.
+        Rgba64[] wide = basePixels.Rgba64!;
+        (float[] linear, int stride) = _transfer is { } transfer ? (transfer.Codes16, ushort.MaxValue + 1) : (SrgbTransfer.DecodeTable16, 0);
+        Rows(y => RowScalar(wide, output, y, linear, stride), maxDegreeOfParallelism, cancellationToken);
+    }
+
+    private void Rows(Action<int> row, int maxDegreeOfParallelism, CancellationToken cancellationToken)
     {
         if (_height > 1 && Parallelism.IsWorthwhile(maxDegreeOfParallelism, (long)_width * _height, 1 << 16))
         {
-            Parallel.For(0, _height, Parallelism.Options(maxDegreeOfParallelism, cancellationToken), y => Row(basePixels, output, y));
+            Parallel.For(0, _height, Parallelism.Options(maxDegreeOfParallelism, cancellationToken), row);
         }
         else
         {
             for (int y = 0; y < _height; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Row(basePixels, output, y);
+                row(y);
             }
         }
     }
@@ -112,19 +131,37 @@ internal sealed partial class GainMapReconstructor
         RowScalar(basePixels, output, y, done);
     }
 
-    /// <summary>Reconstructs row <paramref name="y"/> from pixel <paramref name="start"/> on.</summary>
-    internal void RowScalar(Rgba32[] basePixels, Rgba128[] output, int y, int start)
+    /// <summary>Reconstructs row <paramref name="y"/> of 8-bit base pixels from pixel <paramref name="start"/> on.</summary>
+    internal void RowScalar(Rgba32[] basePixels, Rgba128[] output, int y, int start) => RowScalar(basePixels, output, y, _linear, 256, start);
+
+    /// <summary>Reconstructs row <paramref name="y"/> of 16-bit base pixels; <paramref name="linear"/> holds R, G and B at <paramref name="stride"/>.</summary>
+    internal void RowScalar(Rgba64[] basePixels, Rgba128[] output, int y, float[] linear, int stride) => RowScalar(basePixels, output, y, linear, stride, 0);
+
+    private void RowScalar<TBase>(TBase[] basePixels, Rgba128[] output, int y, float[] linear, int stride, int start)
+        where TBase : unmanaged, IPixelOps<TBase>
     {
-        ReadOnlySpan<Rgba32> source = basePixels.AsSpan(y * _width, _width);
+        if (_map.Pixels.Rgba32 is { } narrow)
+        {
+            RowScalar<TBase, Rgba32>(basePixels, output, y, linear, stride, start, narrow);
+        }
+        else
+        {
+            RowScalar<TBase, Rgba64>(basePixels, output, y, linear, stride, start, _map.Pixels.Rgba64!);
+        }
+    }
+
+    private void RowScalar<TBase, TMap>(TBase[] basePixels, Rgba128[] output, int y, float[] linear, int stride, int start, TMap[] mapPixels)
+        where TBase : unmanaged, IPixelOps<TBase> where TMap : unmanaged, IPixelOps<TMap>
+    {
+        ReadOnlySpan<TBase> source = basePixels.AsSpan(y * _width, _width);
         Span<Rgba128> target = output.AsSpan(y * _width, _width);
-        ReadOnlySpan<float> linear = _linear;
-        ReadOnlySpan<Rgba32> map = _map.Pixels;
+        ReadOnlySpan<TMap> map = mapPixels;
         bool iso = _p.Kind == HdrGainMapKinds.Iso21496;
         bool mono = _p.ChannelCount == 1;
+        float alphaScale = 1f / TBase.MaxValue;
         for (int x = start; x < source.Length; x++)
         {
-            Rgba32 p = source[x];
-            float r = linear[p.R], g = linear[256 + p.G], b = linear[512 + p.B];
+            (float r, float g, float b, int alpha) = Linear(source[x], linear, stride);
             if (_toMultiply is { } m)
             {
                 (r, g, b) = m.Transform(r, g, b);
@@ -163,8 +200,23 @@ internal sealed partial class GainMapReconstructor
                 (r, g, b) = o.Transform(r, g, b);
             }
 
-            target[x] = new Rgba128(r, g, b, p.A / 255f);
+            target[x] = new Rgba128(r, g, b, typeof(TBase) == typeof(Rgba32) ? alpha / 255f : alpha * alphaScale);
         }
+    }
+
+    // The linear color of a base pixel from its codes and its alpha code.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static (float R, float G, float B, int A) Linear<TBase>(TBase pixel, ReadOnlySpan<float> linear, int stride)
+        where TBase : unmanaged, IPixelOps<TBase>
+    {
+        if (typeof(TBase) == typeof(Rgba32))
+        {
+            Rgba32 p = Unsafe.As<TBase, Rgba32>(ref pixel);
+            return (linear[p.R], linear[256 + p.G], linear[512 + p.B], p.A);
+        }
+
+        Rgba64 w = TBase.ToRgba64(pixel);
+        return (linear[w.R], linear[stride + w.G], linear[(2 * stride) + w.B], w.A);
     }
 
     /// <summary>The position in the stored base image of the output pixel (x, y): undo the orientation, then the scale.</summary>

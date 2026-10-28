@@ -7,7 +7,7 @@ namespace PictureSharp.Algorithms.Processing;
 /// Brightness, contrast and saturation as Pillow's ImageEnhance: a blend between the image and a "degenerate"
 /// version of it (black, mean gray or grayscale) that keeps the alpha channel.
 /// </summary>
-internal static class Enhance
+internal static partial class Enhance
 {
     // port: Pillow src/PIL/ImageEnhance.py Brightness (degenerate: black with the image's alpha)
     public static void Brightness(Span<Rgba32> pixels, float factor)
