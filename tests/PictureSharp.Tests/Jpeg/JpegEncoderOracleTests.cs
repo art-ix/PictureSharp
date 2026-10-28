@@ -26,7 +26,7 @@ public class JpegEncoderOracleTests
             foreach ((int width, int height, bool gray) in new[] { (1, 1, false), (9, 17, false), (17, 9, false), (73, 51, false), (257, 129, true), (512, 257, false), (2048, 1033, true) })
             {
                 using var image = new Image(width, height);
-                foreach (ref Rgba32 p in image.GetPixelSpan())
+                foreach (ref Rgba32 p in image.GetPixelSpan<Rgba32>())
                 {
                     byte r = (byte)random.Next(256);
                     p = new Rgba32(r, gray ? r : (byte)random.Next(256), gray ? r : (byte)random.Next(256), 255);
@@ -34,7 +34,7 @@ public class JpegEncoderOracleTests
 
                 if (width == 2048)
                 {
-                    image.GetPixelSpan().Fill(new Rgba32(128, 128, 128, 255));
+                    image.GetPixelSpan<Rgba32>().Fill(new Rgba32(128, 128, 128, 255));
                     image[0, 0] = new Rgba32(0, 0, 0, 255);
                 }
 

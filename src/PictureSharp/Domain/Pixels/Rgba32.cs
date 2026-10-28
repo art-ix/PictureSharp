@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp;
 
@@ -12,7 +13,7 @@ namespace PictureSharp;
 /// can be passed wherever an <see cref="Rgba32"/> is expected.
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct Rgba32 : IEquatable<Rgba32>, ISpanParsable<Rgba32>
+public struct Rgba32 : IEquatable<Rgba32>, ISpanParsable<Rgba32>, IPixelOps<Rgba32>
 {
     /// <summary>Red channel.</summary>
     public byte R;
@@ -165,4 +166,19 @@ public struct Rgba32 : IEquatable<Rgba32>, ISpanParsable<Rgba32>
 
     /// <inheritdoc/>
     public override readonly string ToString() => $"Rgba32({R}, {G}, {B}, {A})";
+
+    static PixelType IPixelOps<Rgba32>.PixelType => PixelType.Rgba32;
+
+    static int IPixelOps<Rgba32>.MaxValue => byte.MaxValue;
+
+    static Rgba32 IPixelOps<Rgba32>.FromRgba64(Rgba64 pixel) => pixel.ToRgba32();
+
+    static Rgba64 IPixelOps<Rgba32>.ToRgba64(Rgba32 pixel) => Rgba64.FromRgba32(pixel);
+
+    static Rgba32 IPixelOps<Rgba32>.FromRgba32(Rgba32 pixel) => pixel;
+
+    static int IPixelOps<Rgba32>.Alpha(Rgba32 pixel) => pixel.A;
+
+    static int IPixelOps<Rgba32>.MaxChannelDifference(Rgba32 x, Rgba32 y) =>
+        Math.Max(Math.Max(Math.Abs(x.R - y.R), Math.Abs(x.G - y.G)), Math.Max(Math.Abs(x.B - y.B), Math.Abs(x.A - y.A)));
 }

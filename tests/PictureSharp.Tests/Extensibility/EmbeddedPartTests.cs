@@ -93,8 +93,8 @@ public class EmbeddedPartTests
         using Image stored = Image.Load(jpeg, new DecoderOptions { IgnoreMetadata = true });
         using Image converted = Image.Load(jpeg, options with { Configuration = ImageConfiguration.Default, ApplyExifOrientation = false });
         await Assert.That(image.Size).IsEqualTo(new System.Drawing.Size(16, 8));
-        await Assert.That(image.GetPixelSpan().SequenceEqual(stored.GetPixelSpan())).IsTrue();
-        await Assert.That(converted.GetPixelSpan().SequenceEqual(stored.GetPixelSpan())).IsFalse();
+        await Assert.That(image.GetPixelSpan<Rgba32>().SequenceEqual(stored.GetPixelSpan<Rgba32>())).IsTrue();
+        await Assert.That(converted.GetPixelSpan<Rgba32>().SequenceEqual(stored.GetPixelSpan<Rgba32>())).IsFalse();
         await Assert.That(image.Metadata.IccProfile).IsNull();
 
         // The outer load reduces the image; the tile itself is decoded at full size.
@@ -168,8 +168,8 @@ public class EmbeddedPartTests
 
         using Image image = Image.Load(data, options);
         using Image expected = Image.Load(jpeg, new DecoderOptions { Jpeg = plain });
-        await Assert.That(image.GetPixelSpan().SequenceEqual(expected.GetPixelSpan())).IsTrue();
-        await Assert.That(image.GetPixelSpan().SequenceEqual(stored.GetPixelSpan())).IsFalse();
+        await Assert.That(image.GetPixelSpan<Rgba32>().SequenceEqual(expected.GetPixelSpan<Rgba32>())).IsTrue();
+        await Assert.That(image.GetPixelSpan<Rgba32>().SequenceEqual(stored.GetPixelSpan<Rgba32>())).IsFalse();
     }
 
     [Test]
@@ -218,6 +218,7 @@ public class EmbeddedPartTests
                 Seen.Add(context.Options);
             }
 
+            context.ReservePixels(1, 1, PixelType.Rgba32);
             return new Image(1, 1, Color(0));
         }
     }
@@ -227,7 +228,7 @@ public class EmbeddedPartTests
         var image = new Image(width, height);
         for (int y = 0; y < height; y++)
         {
-            Span<Rgba32> row = image.GetRowSpan(y);
+            Span<Rgba32> row = image.GetRowSpan<Rgba32>(y);
             for (int x = 0; x < width; x++)
             {
                 row[x] = new Rgba32((byte)(x * 16), (byte)(y * 32), (byte)(128 + x * 4), 255);

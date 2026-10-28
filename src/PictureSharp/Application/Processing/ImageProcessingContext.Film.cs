@@ -116,7 +116,7 @@ public readonly ref partial struct ImageProcessingContext
         }
 
         ImageFrame pixels = image.Frames[0];
-        return NegativeCalibrator.Analyze(pixels.GetPixelSpan(), image.Width, image.Height, options, frame, cancellationToken);
+        return NegativeCalibrator.Analyze(pixels.Pixels.AsSpan(), image.Width, image.Height, options, frame, cancellationToken);
     }
 
     // The given frame, or a found one unless the options measure fixed regions.

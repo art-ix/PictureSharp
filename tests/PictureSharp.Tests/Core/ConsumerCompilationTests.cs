@@ -43,7 +43,7 @@ public class ConsumerCompilationTests
                 };
                 public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
                 {
-                    context.ReservePixels(1, 1);
+                    context.ReservePixels(1, 1, PixelType.Rgba32);
                     return new Image(1, 1);
                 }
             }
@@ -130,6 +130,83 @@ public class ConsumerCompilationTests
         await Assert.That(Parameter(model, tree, "x.AutoContrast(1f, 2f)", 1)).IsEqualTo("float");
         await Assert.That(Parameter(model, tree, "x.ApplyMask(b, new PictureSharp.Processing.MaskOptions { Invert = true })", 1))
             .IsEqualTo("PictureSharp.Processing.MaskOptions?");
+    }
+
+    [Test]
+    public async Task SixteenBitConsumer_CompilesTypedAccessAndColorArguments()
+    {
+        const string source = """
+            using System;
+            using System.Drawing;
+            using PictureSharp;
+            using PictureSharp.Formats.Png;
+            using PictureSharp.Processing;
+            public static class Consumer
+            {
+                public static void Run(byte[] bytes)
+                {
+                    using Image image = Image.Load(bytes, new DecoderOptions { PreserveBitDepth = true });
+                    if (image.PixelType == PixelType.Rgba64)
+                    {
+                        Span<Rgba64> row = image.GetRowSpan<Rgba64>(0);
+                        row[0] = Color.Red;
+                        row[1] = new Rgba32(1, 2, 3);
+                        row[2] = default;
+                        image.SetPixel(0, 0, Rgba64.White);
+                    }
+                    else
+                    {
+                        Span<Rgba32> row = image.GetRowSpan<Rgba32>(0);
+                        image[0, 0] = Color.Blue;
+                    }
+
+                    Rgba64[] pixels = [Color.Red, new Rgba32(1, 2, 3), new Rgba64(1, 2, 3, 4)];
+                    using Image wide = Image.LoadPixelData(pixels, 3, 1);
+                    using Image narrow = Image.LoadPixelData(new Rgba32[4], 2, 2);
+                    using Image raw = Image.LoadPixelData(new byte[12], 1, 1, PixelFormat.Rgba64, pixelType: PixelType.Rgba64);
+                    wide.Mutate(x => x.Pad(5, 5, Color.Red).Pad(6, 6, new Rgba32(1, 2, 3)).Pad(7, 7).ConvertPixelType(PixelType.Rgba32, dither: true));
+                    _ = (Rgba32)pixels[0];
+                    _ = wide.ToPng(new PngEncoderOptions { BitDepth = PngBitDepth.Sixteen });
+                    _ = PixelFormat.Gray16.BitsPerChannel();
+                }
+            }
+            """;
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
+        CSharpCompilation compilation = CSharpCompilation.Create("SixteenBitConsumer", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        using var output = new MemoryStream();
+        var result = compilation.Emit(output);
+        await Assert.That(result.Success).IsTrue().Because(string.Join(Environment.NewLine, result.Diagnostics));
+        SemanticModel model = compilation.GetSemanticModel(tree);
+        await Assert.That(FirstParameter(model, tree, "Image.LoadPixelData(pixels, 3, 1)")).IsEqualTo("System.ReadOnlySpan<PictureSharp.Rgba64>");
+    }
+
+    /// <summary>D13: the non-generic pixel accessors are gone, so every access names its pixel type.</summary>
+    [Test]
+    public async Task NonGenericPixelAccess_DoesNotCompile()
+    {
+        const string source = """
+            using System;
+            using PictureSharp;
+            public static class Consumer
+            {
+                public static void Run(Image image, ImageFrame frame)
+                {
+                    _ = image.GetPixelSpan();
+                    _ = image.GetRowSpan(0);
+                    _ = image.GetPixelMemory();
+                    _ = frame.GetPixelSpan();
+                    Rgba64 wide = image[0, 0];
+                    Rgba32 narrow = wide;
+                }
+            }
+            """;
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp14));
+        CSharpCompilation compilation = CSharpCompilation.Create("OldAccess", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        Diagnostic[] errors = [.. compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)];
+        // Four accessors without a type argument and one implicit 16 -> 8 conversion; widening the indexer value compiles.
+        await Assert.That(errors.Length).IsEqualTo(5).Because(string.Join(Environment.NewLine, errors.Select(e => e.ToString())));
     }
 
     [Test]

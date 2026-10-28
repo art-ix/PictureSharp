@@ -33,7 +33,7 @@ public class ProcessingDeterminismTests
             "rotate_noise_-12.5_bicubic_True" => source.Clone(x => x.Rotate(-12.5f, ResamplingFilter.Bicubic, expand: true)),
             _ => source.Clone(x => x.Rotate(45, ResamplingFilter.Bilinear, expand: false)),
         };
-        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan<Rgba32>()))).IsEqualTo(expected);
     }
 
     public static TestCases<string, string> PhotoAdjustCases() => new()
@@ -84,6 +84,6 @@ public class ProcessingDeterminismTests
             "develop_negative_strip" => x.DevelopNegative(new NegativeOptions { DustSize = 2 }),
             _ => x.Denoise(0.7f, 3),
         });
-        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan()))).IsEqualTo(expected);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(result.GetPixelSpan<Rgba32>()))).IsEqualTo(expected);
     }
 }

@@ -1,7 +1,12 @@
 
+using PictureSharp.Domain.Pixels;
+
 namespace PictureSharp.Application.Decoding;
 
-/// <summary>Monotonic totals for one operation, including nested codecs and streamed frames.</summary>
+/// <summary>
+/// Monotonic totals for one operation, including nested codecs and streamed frames. Pixels are weighted units: a
+/// 16-bit (<see cref="PixelType.Rgba64"/>) pixel counts twice against <see cref="DecoderOptions.MaxPixels"/>.
+/// </summary>
 internal sealed class DecodeBudget(DecoderOptions limits)
 {
     private long _pixels;
@@ -22,16 +27,17 @@ internal sealed class DecodeBudget(DecoderOptions limits)
     public long MetadataBytes => _metadata;
     public long RemainingMetadata => limits.MaxMetadataBytes - _metadata;
 
-    public void ReserveImage(ImageFormat format, long width, long height, int frames = 1)
+    public void ReserveImage(ImageFormat format, long width, long height, int frames = 1, PixelType pixelType = PixelType.Rgba32)
     {
-        limits.ValidateDimensions(format, width, height);
+        limits.ValidateDimensions(format, width, height, pixelType);
         if (frames < 1 || frames > limits.MaxFrames - _frames)
             throw new ImageFormatException(format, "Decoded frames exceed DecoderOptions.MaxFrames.");
         // Division avoids overflow even for caller-supplied long.MaxValue limits.
+        int weight = PixelTypes.Weight(pixelType);
         long available = limits.MaxPixels - _pixels;
-        if (width > available / height / frames)
-            throw new ImageFormatException(format, "Decoded pixels exceed DecoderOptions.MaxPixels.");
-        _pixels += width * height * frames;
+        if (width > available / height / frames / weight)
+            throw new ImageFormatException(format, DecodeLimits.PixelsExceeded("Decoded pixels exceed", pixelType));
+        _pixels += width * height * frames * weight;
         _frames += frames;
     }
 

@@ -48,7 +48,7 @@ internal sealed class ProcessingState(Image image, bool shared, CancellationToke
 
         for (int i = 0; i < Image.FrameCount; i++)
         {
-            Image.ReplaceFramePixels(i, (Rgba32[])Image.Frames[i].Pixels.Clone());
+            Image.ReplaceFramePixels(i, Image.Frames[i].Buffer.Clone());
         }
 
         _shared = false;

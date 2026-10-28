@@ -11,7 +11,7 @@ namespace PictureSharp.Tests.Core;
 
 public class EncodingAndIdentificationApiTests
 {
-    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
+    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan<Rgba32>().ToArray();
 
     public static TestCases<ImageFormat, EncoderOptions> Formats => new()
     {

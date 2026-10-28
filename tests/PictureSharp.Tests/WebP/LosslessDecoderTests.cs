@@ -16,7 +16,7 @@ public class LosslessDecoderTests
         await Assert.That(image.FrameCount).IsEqualTo(r.Frames.Count);
         for (int i = 0; i < r.Frames.Count; i++)
         {
-            string actual = Corpus.Sha256(MemoryMarshal.AsBytes(image.Frames[i].GetPixelSpan()));
+            string actual = Corpus.Sha256(MemoryMarshal.AsBytes(image.Frames[i].GetPixelSpan<Rgba32>()));
             await Assert.That(r.Frames[i].Sha256 == actual).IsTrue().Because($"{file}: frame {i} differs from the {r.Decoder} reference");
         }
     }

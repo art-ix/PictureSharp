@@ -89,7 +89,7 @@ public class HdrGainMapTests
         {
             using Image sdr = hdr.ToneMap(options);
             Rgba32[] expected = MemoryMarshal.Cast<byte, Rgba32>(System.IO.File.ReadAllBytes(File($"{name}.{variant}.rgba"))).ToArray();
-            (int worst, _) = ColorManagement.IccConversionTests.Difference(sdr.GetPixelSpan(), expected);
+            (int worst, _) = ColorManagement.IccConversionTests.Difference(sdr.GetPixelSpan<Rgba32>(), expected);
             await Assert.That(worst).IsLessThanOrEqualTo(levels).Because($"{name}/{variant}");
             await Assert.That(sdr.Metadata.IccProfile).IsNull();
             await Assert.That(sdr.HasHdr).IsFalse();
@@ -102,7 +102,7 @@ public class HdrGainMapTests
     {
         using Image plain = Image.Load(File(name + ".jpg"), new DecoderOptions { ApplyExifOrientation = true });
         using Image withMap = Image.Load(File(name + ".jpg"), Hdr);
-        await Assert.That(withMap.GetPixelSpan().ToArray()).IsEquivalentTo(plain.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(withMap.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(plain.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(plain.GainMap).IsNull();
         await Assert.That(plain.HasHdr).IsFalse();
         await Assert.That(Image.Identify(File(name + ".jpg")).GainMap).IsNull();
@@ -116,7 +116,7 @@ public class HdrGainMapTests
         string failure = Manifest.GetProperty("invalid").EnumerateArray().Single(c => c.GetProperty("name").GetString() == name).GetProperty("failure").GetString()!;
         using Image plain = Image.Load(File(name + ".jpg"));
         using Image image = Image.Load(File(name + ".jpg"), new DecoderOptions { LoadGainMap = true });
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(plain.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(plain.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(image.HasHdr).IsFalse();
         await Assert.That(image.GainMap).IsNotNull();
         await Assert.That(image.GainMap!.CanDecode).IsFalse();
@@ -200,7 +200,7 @@ public class HdrGainMapTests
         using Image image = Image.Load(File("iso_mono_srgb.jpg"), Hdr);
         using HdrImage hdr = image.ToHdr(new HdrOptions { TargetHeadroom = 1 });
         await Assert.That(hdr.Headroom).IsEqualTo(1f);
-        ReadOnlySpan<Rgba32> source = image.GetPixelSpan();
+        ReadOnlySpan<Rgba32> source = image.GetPixelSpan<Rgba32>();
         double worst = 0;
         for (int i = 0; i < source.Length; i++)
         {

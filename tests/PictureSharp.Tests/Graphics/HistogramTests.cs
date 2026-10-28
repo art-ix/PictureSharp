@@ -84,7 +84,7 @@ public class HistogramTests
     {
         using Image image = Sample();
         image.Frames.AddClone(image.Frames.RootFrame);
-        image.Frames[1].GetPixelSpan().Fill(new Rgba32(1, 2, 3, 4));
+        image.Frames[1].GetPixelSpan<Rgba32>().Fill(new Rgba32(1, 2, 3, 4));
 
         ImageHistogram row = image.GetHistogram(new HistogramOptions { Region = new Rectangle(0, 1, 2, 1) });
         ImageHistogram frames = image.GetHistogram(new HistogramOptions { AllFrames = true });
@@ -111,10 +111,10 @@ public class HistogramTests
     public async Task Histogram_IsReadOnlySnapshot()
     {
         using Image image = Sample();
-        Rgba32[] before = image.GetPixelSpan().ToArray();
+        Rgba32[] before = image.GetPixelSpan<Rgba32>().ToArray();
         ImageHistogram histogram = image.GetHistogram();
         image.Mutate(x => x.Fill(new Rgba32(0, 0, 0)));
-        await Assert.That(image.GetPixelSpan().ToArray().Length).IsEqualTo(before.Length);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray().Length).IsEqualTo(before.Length);
         await Assert.That(histogram.Red[10]).IsEqualTo(2L);
     }
 

@@ -17,6 +17,6 @@ public class DecodeRegressionTests
         using Image direct = Image.Load(jpeg, options);
         using Image embedded = Image.Load(bmp, options);
         await Assert.That(embedded.Size).IsEqualTo(direct.Size);
-        await Assert.That(embedded.GetPixelSpan().ToArray()).IsEquivalentTo(direct.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(embedded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(direct.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 }

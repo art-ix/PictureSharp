@@ -34,7 +34,7 @@ public class PluginSpiTests
 
         byte[] encoded = image.Encode(new PpmEncoderOptions { Configuration = withPpm });
         using Image decoded = Image.Load(encoded, new DecoderOptions { Configuration = withPpm });
-        await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(decoded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         using var stream = new MemoryStream();
         image.Save(stream, new PpmEncoderOptions { Configuration = withPpm });
@@ -76,7 +76,7 @@ public class PluginSpiTests
         using Image plugin = Image.Load(Container(name), Hdr(options));
         await Assert.That(plugin.HasHdr).IsTrue().Because(plugin.GainMap?.UnsupportedReason ?? "");
         await Assert.That(plugin.GainMap).IsEqualTo(jpeg.GainMap);
-        await Assert.That(plugin.GetPixelSpan().ToArray()).IsEquivalentTo(jpeg.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(plugin.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(jpeg.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         using HdrImage expected = jpeg.ToHdr();
         using HdrImage actual = plugin.ToHdr();

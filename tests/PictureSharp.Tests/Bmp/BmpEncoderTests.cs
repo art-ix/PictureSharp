@@ -13,7 +13,7 @@ public class BmpEncoderTests
 
     private static Image Opaque(Image image)
     {
-        foreach (ref Rgba32 p in image.GetPixelSpan())
+        foreach (ref Rgba32 p in image.GetPixelSpan<Rgba32>())
         {
             p.A = 255;
         }
@@ -25,7 +25,7 @@ public class BmpEncoderTests
     private static Image WithColors(int colors)
     {
         var image = new Image(37, 11);
-        Span<Rgba32> px = image.GetPixelSpan();
+        Span<Rgba32> px = image.GetPixelSpan<Rgba32>();
         for (int i = 0; i < px.Length; i++)
         {
             int c = i % colors;
@@ -45,7 +45,7 @@ public class BmpEncoderTests
         byte[] bmp = image.ToBmp();
         await Assert.That(Header(bmp)).IsEqualTo((40, expectedBits));
         using Image back = Image.Load(bmp);
-        await Assert.That(back.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(back.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(back.HasAlpha).IsFalse();
     }
 
@@ -57,7 +57,7 @@ public class BmpEncoderTests
         await Assert.That(Header(bmp)).IsEqualTo((124, 32));
         using Image back = Image.Load(bmp);
         await Assert.That(back.HasAlpha).IsTrue();
-        await Assert.That(back.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(back.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -72,7 +72,7 @@ public class BmpEncoderTests
         byte[] bmp = image.ToBmp(new BmpEncoderOptions { BitsPerPixel = bits });
         await Assert.That(Header(bmp).Bits).IsEqualTo(bits);
         using Image back = Image.Load(bmp);
-        await Assert.That(back.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(back.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -106,7 +106,7 @@ public class BmpEncoderTests
         await Assert.That(back.Metadata.IccProfile).IsEquivalentTo(image.Metadata.IccProfile, CollectionOrdering.Matching);
         await Assert.That(back.Metadata.HorizontalResolution).IsEqualTo(300f).Within(0.05f);
         await Assert.That(back.Metadata.VerticalResolution).IsEqualTo(72f).Within(0.05f);
-        await Assert.That(back.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(back.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         byte[] stripped = image.ToBmp(new BmpEncoderOptions { Metadata = MetadataKinds.None });
         await Assert.That(Header(stripped).HeaderSize).IsEqualTo(40);
@@ -118,7 +118,7 @@ public class BmpEncoderTests
     {
         using Image image = Image.Load(Corpus.PathOf(file));
         using Image back = Image.Load(image.ToBmp());
-        await Assert.That(back.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(back.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Property("Category", "Oracle")]
@@ -133,7 +133,7 @@ public class BmpEncoderTests
             void Add(string name, Image image, BmpEncoderOptions options)
             {
                 image.Save(Path.Combine(dir, name), options);
-                expected[name] = Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()));
+                expected[name] = Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()));
             }
 
             foreach (int bits in new[] { 1, 4, 8 })

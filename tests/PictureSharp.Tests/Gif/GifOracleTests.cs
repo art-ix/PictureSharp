@@ -58,7 +58,7 @@ public class GifOracleTests
                         string path = Path.Combine(directory, "out.gif");
                         File.WriteAllBytes(path, gif);
                         using Image ours = Image.Load(gif);
-                        byte[][] expected = ours.Frames.Select(f => MemoryMarshal.AsBytes(f.GetPixelSpan()).ToArray()).ToArray();
+                        byte[][] expected = ours.Frames.Select(f => MemoryMarshal.AsBytes(f.GetPixelSpan<Rgba32>()).ToArray()).ToArray();
 
                         List<byte[]>? dumped = ReferenceTools.AnimDump(path);
                         Assert.NotNull(dumped);
@@ -117,7 +117,7 @@ public class GifOracleTests
                 await Sequence.AssertEqual(expected.Metadata.Xmp, actual.Metadata.Xmp);
                 for (int i = 0; i < expected.FrameCount; i++)
                 {
-                    await Assert.That(expected.Frames[i].GetPixelSpan().SequenceEqual(actual.Frames[i].GetPixelSpan())).IsTrue().Because($"{key}: frame {i} differs");
+                    await Assert.That(expected.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(actual.Frames[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"{key}: frame {i} differs");
                     await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
                 }
 
@@ -134,7 +134,7 @@ public class GifOracleTests
                 await Assert.That(back.LoopCount).IsEqualTo(actual.LoopCount);
                 for (int i = 0; i < back.FrameCount; i++)
                 {
-                    await Assert.That(actual.Frames[i].GetPixelSpan().SequenceEqual(back.Frames[i].GetPixelSpan())).IsTrue().Because($"{key}: GIF frame {i} differs after WebP");
+                    await Assert.That(actual.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(back.Frames[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"{key}: GIF frame {i} differs after WebP");
                     await Assert.That(back.Frames[i].Duration).IsEqualTo(actual.Frames[i].Duration);
                 }
 
@@ -171,7 +171,7 @@ public class GifOracleTests
                 await Assert.That(webp.LoopCount).IsEqualTo(gif.LoopCount);
                 for (int i = 0; i < gif.FrameCount; i++)
                 {
-                    await Assert.That(gif.Frames[i].GetPixelSpan().SequenceEqual(webp.Frames[i].GetPixelSpan())).IsTrue().Because($"{file}: frame {i} differs");
+                    await Assert.That(gif.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(webp.Frames[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"{file}: frame {i} differs");
                 }
             }
         }

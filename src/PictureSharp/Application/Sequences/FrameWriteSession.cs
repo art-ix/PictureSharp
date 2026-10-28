@@ -18,6 +18,9 @@ internal abstract class FrameWriteSession(Stream output, FrameSequenceInfo info,
     protected abstract ValueTask WriteCoreAsync(ImageFrame frame, TimeSpan duration, CancellationToken cancellationToken);
     protected abstract ValueTask CompleteCoreAsync(CancellationToken cancellationToken);
 
+    /// <summary>Whether <see cref="WriteCoreAsync"/> accepts frames of <paramref name="pixelType"/>; others receive an 8-bit copy.</summary>
+    protected virtual bool SupportsPixelType(PixelType pixelType) => pixelType == PixelType.Rgba32;
+
     public ValueTask WriteAsync(ImageFrame frame, CancellationToken cancellationToken = default) =>
         WriteAsync(frame, frame?.Duration ?? TimeSpan.Zero, cancellationToken);
 
@@ -35,8 +38,9 @@ internal abstract class FrameWriteSession(Stream output, FrameSequenceInfo info,
                 throw new ArgumentException("Frame dimensions must match the sequence canvas.", nameof(frame));
             if (Info.FrameCount is { } declared && _count >= declared)
                 throw new ImageFormatException(Info.Format, "Too many frames for the declared sequence.");
-            Context.Budget.ReserveImage(Info.Format, frame.Width, frame.Height);
-            await WriteCoreAsync(frame, duration, token).ConfigureAwait(false);
+            Context.Budget.ReserveImage(Info.Format, frame.Width, frame.Height, 1, frame.PixelType);
+            ImageFrame accepted = SupportsPixelType(frame.PixelType) ? frame : Encoding.EncoderInput.ToRgba32(frame);
+            await WriteCoreAsync(accepted, duration, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             _count++;
         }

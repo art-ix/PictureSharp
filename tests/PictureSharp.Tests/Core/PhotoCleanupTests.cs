@@ -9,7 +9,7 @@ namespace PictureSharp.Tests.Core;
 /// </summary>
 public class PhotoCleanupTests
 {
-    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
+    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan<Rgba32>().ToArray();
 
     private static int Luma(Rgba32 p) => ((2126 * p.R) + (7152 * p.G) + (722 * p.B) + 5000) / 10000;
 
@@ -62,7 +62,7 @@ public class PhotoCleanupTests
     {
         using Image plate = FilmNegativeTests.Plate(240, 60);
         var img = new Image(280, 60);
-        img.GetPixelSpan().Fill(plate[0, 0]);
+        img.GetPixelSpan<Rgba32>().Fill(plate[0, 0]);
         Rgba32 bright = new(235, 225, 170, 255);
         for (int y = 0; y < 60; y++)
         {
@@ -222,13 +222,13 @@ public class PhotoCleanupTests
         static double Cast(Image image)
         {
             double r = 0, b = 0;
-            foreach (Rgba32 p in image.GetPixelSpan())
+            foreach (Rgba32 p in image.GetPixelSpan<Rgba32>())
             {
                 r += p.R;
                 b += p.B;
             }
 
-            return (r - b) / image.GetPixelSpan().Length;
+            return (r - b) / image.GetPixelSpan<Rgba32>().Length;
         }
 
         using Image full = img.Clone(x => x.AutoWhiteBalance());
@@ -242,7 +242,7 @@ public class PhotoCleanupTests
     public async Task AutoWhiteBalance_WithoutUsablePixels_KeepsTheImage()
     {
         using var img = new Image(8, 8);
-        img.GetPixelSpan().Fill(new Rgba32(255, 120, 0, 255));
+        img.GetPixelSpan<Rgba32>().Fill(new Rgba32(255, 120, 0, 255));
         Rgba32[] before = Pixels(img);
         img.Mutate(x => x.AutoWhiteBalance());
         await Assert.That(Pixels(img)).IsEquivalentTo(before, CollectionOrdering.Matching);
@@ -256,7 +256,7 @@ public class PhotoCleanupTests
         anim.Frames.Add(second, TimeSpan.FromMilliseconds(10));
         using Image together = anim.Clone(x => x.AutoWhiteBalance());
         using Image alone = second.Clone(x => x.AutoWhiteBalance());
-        await Assert.That(together.Frames[1].GetPixelSpan().SequenceEqual(alone.GetPixelSpan())).IsFalse();
+        await Assert.That(together.Frames[1].GetPixelSpan<Rgba32>().SequenceEqual(alone.GetPixelSpan<Rgba32>())).IsFalse();
     }
 
     [Test]
@@ -318,7 +318,7 @@ public class PhotoCleanupTests
         {
             double sum = 0, square = 0;
             int n = 0;
-            foreach (Rgba32 p in image.GetPixelSpan()[1..])
+            foreach (Rgba32 p in image.GetPixelSpan<Rgba32>()[1..])
             {
                 sum += p.R - p.B;
                 square += (p.R - p.B) * (double)(p.R - p.B);

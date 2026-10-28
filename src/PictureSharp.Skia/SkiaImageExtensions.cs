@@ -152,7 +152,7 @@ public static class SkiaImageExtensions
         {
             var info = new SKImageInfo(sourceInfo.Width, sourceInfo.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
             // Image pixels are always one managed array (GC.AllocateUninitializedArray).
-            if (!MemoryMarshal.TryGetArray<Rgba32>(image.GetPixelMemory(), out ArraySegment<Rgba32> pixels))
+            if (!MemoryMarshal.TryGetArray<Rgba32>(image.GetPixelMemory<Rgba32>(), out ArraySegment<Rgba32> pixels))
             {
                 throw new InvalidOperationException("The image pixels are not backed by an array.");
             }
@@ -177,7 +177,7 @@ public static class SkiaImageExtensions
             // Skia copies the undefined fourth byte of an opaque 8888 source unchanged.
             if (sourceInfo.AlphaType == SKAlphaType.Opaque)
             {
-                foreach (ref Rgba32 pixel in image.GetPixelSpan()) pixel.A = 255;
+                foreach (ref Rgba32 pixel in image.GetPixelSpan<Rgba32>()) pixel.A = 255;
             }
 
             return image;

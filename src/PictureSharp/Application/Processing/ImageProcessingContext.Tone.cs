@@ -129,7 +129,7 @@ public readonly ref partial struct ImageProcessingContext
         foreach (ImageFrame frame in Target.Frames)
         {
             _state.CancellationToken.ThrowIfCancellationRequested();
-            Histogram.Accumulate(frame.GetPixelSpan(), counts, excludeTransparent: false, _state.CancellationToken);
+            Histogram.Accumulate(frame.Pixels.AsSpan(), counts, excludeTransparent: false, _state.CancellationToken);
         }
 
         return counts;

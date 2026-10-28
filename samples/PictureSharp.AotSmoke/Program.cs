@@ -70,7 +70,7 @@ foreach (ImageFormat format in new[] { ImageFormat.Jpeg, ImageFormat.Png, ImageF
 }
 byte[] png = source.ToPng(new PngEncoderOptions());
 using Image copied = Image.Load(png, new DecoderOptions { Png = new() { StrictChecksums = true } });
-if (!copied.GetPixelSpan().SequenceEqual(source.GetPixelSpan())) throw new InvalidOperationException("PNG pixels changed.");
+if (!copied.GetPixelSpan<Rgba32>().SequenceEqual(source.GetPixelSpan<Rgba32>())) throw new InvalidOperationException("PNG pixels changed.");
 using Image processed = source.Clone(x => x.Flip(FlipMode.Horizontal));
 using var variants = new MemoryStream();
 IcoFile.Save([source, processed], variants);
@@ -165,7 +165,7 @@ ImageConfiguration.Default = builtIn.ToBuilder().AddFormat(new RawFormat()).Buil
 byte[] raw = source.Encode(RawFormat.Kind);
 using (Image rawCopy = Image.Load(raw))
 {
-    if (rawCopy.SourceFormat != RawFormat.Kind || !rawCopy.GetPixelSpan().SequenceEqual(source.GetPixelSpan()))
+    if (rawCopy.SourceFormat != RawFormat.Kind || !rawCopy.GetPixelSpan<Rgba32>().SequenceEqual(source.GetPixelSpan<Rgba32>()))
         throw new InvalidOperationException("Format plugin failed.");
 }
 ImageConfiguration.Default = builtIn;
@@ -218,7 +218,7 @@ if (transferred.Size != source.Size) throw new InvalidOperationException("Frame 
 {
     ImageConfiguration plugins = builtIn.ToBuilder().AddFormat(new RawFormat()).AddFormat(new HdrRawFormat()).Build();
     using Image rawCopy = Image.Load(source.Encode(new RawEncoderOptions { Configuration = plugins }), new DecoderOptions { Configuration = plugins });
-    if (!rawCopy.GetPixelSpan().SequenceEqual(source.GetPixelSpan())) throw new InvalidOperationException("Plugin encoder configuration failed.");
+    if (!rawCopy.GetPixelSpan<Rgba32>().SequenceEqual(source.GetPixelSpan<Rgba32>())) throw new InvalidOperationException("Plugin encoder configuration failed.");
     static byte[] U32(uint v) => [(byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v];
     byte[] iso = [0, 0, 0, 0, 0x40, .. U32(0), .. U32(1), .. U32(2), .. U32(1), .. U32(0), .. U32(1), .. U32(2), .. U32(1),
         .. U32(1), .. U32(1), .. U32(0), .. U32(1), .. U32(0), .. U32(1)];
@@ -314,13 +314,13 @@ sealed class RawFormat : IImageFormatModule, IImageFormatDecoder, IImageFormatEn
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         int width = data.Span[4], height = data.Span[5];
-        context.ReservePixels(width, height);
+        context.ReservePixels(width, height, PixelType.Rgba32);
         return Image.LoadPixelData(data.Span.Slice(6, width * height * 4), width, height, PixelFormat.Rgba32);
     }
     public void Encode(Image image, Stream output, RawEncoderOptions options, CancellationToken cancellationToken)
     {
         output.Write([.. "RAW1"u8, (byte)image.Width, (byte)image.Height]);
-        output.Write(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan()));
+        output.Write(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()));
     }
 }
 
@@ -339,8 +339,8 @@ sealed class HdrRawFormat : IImageFormatModule, IImageFormatDecoder, IImageForma
 
     public static byte[] Write(Image image, Image map, byte[] iso, byte[] xmp) =>
         [.. "RAW2"u8, (byte)image.Width, (byte)image.Height, (byte)map.Width, (byte)map.Height, (byte)iso.Length, (byte)xmp.Length,
-            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan()),
-            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(map.GetPixelSpan()), .. iso, .. xmp];
+            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()),
+            .. System.Runtime.InteropServices.MemoryMarshal.AsBytes(map.GetPixelSpan<Rgba32>()), .. iso, .. xmp];
 
     private static (int Base, int Map, int Iso, int Xmp) Layout(ReadOnlySpan<byte> data)
     {
@@ -361,7 +361,7 @@ sealed class HdrRawFormat : IImageFormatModule, IImageFormatDecoder, IImageForma
     {
         ReadOnlySpan<byte> span = data.Span;
         (int baseStart, int mapStart, int iso, _) = Layout(span);
-        context.ReservePixels(span[4], span[5]);
+        context.ReservePixels(span[4], span[5], PixelType.Rgba32);
         Image image = Image.LoadPixelData(span.Slice(baseStart, span[4] * span[5] * 4), span[4], span[5], PixelFormat.Rgba32);
         context.AttachGainMap(GainMapMetadata.ParseIso(span.Slice(iso, span[8]), 1),
             new RawMap(span.Slice(mapStart, span[6] * span[7] * 4).ToArray(), new(span[6], span[7])));
@@ -419,7 +419,7 @@ sealed class PagedRawFormat : IImageFormatModule, IImageFormatDecoder
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         (int offset, int width, int height, _) = Select(data.Span, context.Options);
-        context.ReservePixels(width, height);
+        context.ReservePixels(width, height, PixelType.Rgba32);
         return Image.LoadPixelData(data.Span.Slice(offset, width * height * 4), width, height, PixelFormat.Rgba32);
     }
 }
@@ -442,14 +442,14 @@ sealed class StripedRawFormat : IImageFormatModule, IImageFormatDecoder
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         int width = data.Span[4], stripHeight = data.Span[5], count = data.Span[6], offset = 7;
-        context.ReservePixels(width, stripHeight * count);
+        context.ReservePixels(width, stripHeight * count, PixelType.Rgba32);
         var image = new Image(width, stripHeight * count);
         for (int i = 0; i < count; i++)
         {
             int length = data.Span[offset] << 8 | data.Span[offset + 1];
             using Image strip = context.DecodeEmbeddedPart(data.Slice(offset + 2, length), width, stripHeight);
             if (strip.Width != width || strip.Height != stripHeight) throw new ImageFormatException(Kind, "The strip size is wrong.");
-            strip.GetPixelSpan().CopyTo(image.GetPixelSpan()[(i * width * stripHeight)..]);
+            strip.GetPixelSpan<Rgba32>().CopyTo(image.GetPixelSpan<Rgba32>()[(i * width * stripHeight)..]);
             offset += 2 + length;
         }
 

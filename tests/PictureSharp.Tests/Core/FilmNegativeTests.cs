@@ -72,7 +72,7 @@ public class FilmNegativeTests
     {
         using Image photo = Photo();
         using Image negative = Negative(photo, 1);
-        Rgba32[] before = negative.GetPixelSpan().ToArray();
+        Rgba32[] before = negative.GetPixelSpan<Rgba32>().ToArray();
         NegativeAnalysis analysis = negative.AnalyzeNegative(new NegativeOptions { Region = ImageArea(negative), FilmBaseRegion = RebateArea(negative) });
         ChannelValues filmBase = analysis.Calibration.FilmBase;
         for (int c = 0; c < 3; c++)
@@ -82,7 +82,7 @@ public class FilmNegativeTests
         }
 
         await Assert.That(analysis.Warnings).IsEqualTo(NegativeWarnings.None);
-        await Assert.That(negative.GetPixelSpan().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
+        await Assert.That(negative.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
         // The blue layer has the steepest gamma, so it spans the most density.
         ChannelValues range = analysis.Calibration.DensityRange;
         await Assert.That(range.Blue > range.Green && range.Green > range.Red).IsTrue().Because(range.ToString());
@@ -98,7 +98,7 @@ public class FilmNegativeTests
 
         using Image clipped = negative.Clone(x => x.Apply(f =>
         {
-            Span<Rgba32> pixels = f.GetPixelSpan();
+            Span<Rgba32> pixels = f.GetPixelSpan<Rgba32>();
             for (int i = 0; i < pixels.Length / 20; i++)
             {
                 pixels[i].B = 0;
@@ -110,7 +110,7 @@ public class FilmNegativeTests
             .Because(withClipping.ClippedFraction.ToString());
 
         using var thin = new Image(32, 32);
-        thin.GetPixelSpan().Fill(new Rgba32(200, 120, 80, 255));
+        thin.GetPixelSpan<Rgba32>().Fill(new Rgba32(200, 120, 80, 255));
         thin[3, 3] = new Rgba32(190, 112, 74, 255);
         await Assert.That(thin.AnalyzeNegative().Warnings.HasFlag(NegativeWarnings.LowDensityRange)).IsTrue();
     }
@@ -147,7 +147,7 @@ public class FilmNegativeTests
         };
         using Image developed = negative.Clone(x => x.DevelopNegative(options).Crop(ImageArea(negative)));
         double squared = 0;
-        ReadOnlySpan<Rgba32> a = photo.GetPixelSpan(), b = developed.GetPixelSpan();
+        ReadOnlySpan<Rgba32> a = photo.GetPixelSpan<Rgba32>(), b = developed.GetPixelSpan<Rgba32>();
         for (int i = 0; i < a.Length; i++)
         {
             squared += ((b[i].R - a[i].R) * (b[i].R - a[i].R)) + ((b[i].G - a[i].G) * (b[i].G - a[i].G)) + ((b[i].B - a[i].B) * (b[i].B - a[i].B));
@@ -198,7 +198,7 @@ public class FilmNegativeTests
         using Image photo = Photo();
         using Image negative = Negative(photo, 4);
         using Image developed = negative.Clone(x => x.DevelopNegative(new NegativeOptions { FilmType = FilmType.BlackAndWhiteNegative }));
-        Rgba32[] pixels = developed.GetPixelSpan().ToArray();
+        Rgba32[] pixels = developed.GetPixelSpan<Rgba32>().ToArray();
         await Assert.That(pixels.All(p => p.R == p.G && p.G == p.B)).IsTrue();
     }
 
@@ -212,12 +212,12 @@ public class FilmNegativeTests
         NegativeCalibration calibration = negative.AnalyzeNegative(options).Calibration;
         using Image direct = negative.Clone(x => x.DevelopNegative(options));
         using Image calibrated = negative.Clone(x => x.DevelopNegative(options with { Calibration = calibration }));
-        await Assert.That(calibrated.GetPixelSpan().SequenceEqual(direct.GetPixelSpan())).IsTrue();
+        await Assert.That(calibrated.GetPixelSpan<Rgba32>().SequenceEqual(direct.GetPixelSpan<Rgba32>())).IsTrue();
 
         negative.Metadata.IccProfile = profile;
         using Image withProfile = negative.Clone(x => x.DevelopNegative(options));
         await Assert.That(withProfile.Metadata.IccProfile).IsEquivalentTo(profile, CollectionOrdering.Matching);
-        await Assert.That(withProfile.GetPixelSpan().SequenceEqual(direct.GetPixelSpan())).IsTrue();
+        await Assert.That(withProfile.GetPixelSpan<Rgba32>().SequenceEqual(direct.GetPixelSpan<Rgba32>())).IsTrue();
     }
 
     [Test]
@@ -261,7 +261,7 @@ public class FilmNegativeTests
     internal static Image Plate(int width, int height)
     {
         var plate = new Image(width, height);
-        plate.GetPixelSpan().Fill(new Rgba32(45, 40, 38, 255));
+        plate.GetPixelSpan<Rgba32>().Fill(new Rgba32(45, 40, 38, 255));
         var bright = new Rgba32(235, 225, 170, 255);
         for (int y = 0; y < height; y++)
         {
@@ -294,7 +294,7 @@ public class FilmNegativeTests
         using Image developed = negative.Clone(x => x.DevelopNegative(options));
         using Image withoutDust = negative.Clone(x => x.DevelopNegative(options with { DustSize = 0 }));
         await Assert.That(new NegativeOptions().DustSize).IsEqualTo(0);
-        await Assert.That(developed.GetPixelSpan().SequenceEqual(withoutDust.GetPixelSpan())).IsTrue();
+        await Assert.That(developed.GetPixelSpan<Rgba32>().SequenceEqual(withoutDust.GetPixelSpan<Rgba32>())).IsTrue();
 
         int strokes = 0, kept = 0;
         for (int y = 0; y < positive.Height; y++)

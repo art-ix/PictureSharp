@@ -52,7 +52,7 @@ internal static class ImageProcessingService
         var frames = new List<ImageFrame>(image.FrameCount);
         foreach (ImageFrame frame in image.Frames)
         {
-            frames.Add(new ImageFrame(frame.Width, frame.Height, frame.Pixels) { Duration = frame.Duration });
+            frames.Add(new ImageFrame(frame.Width, frame.Height, frame.Buffer) { Duration = frame.Duration });
         }
 
         Image clone = image.CopyPropertiesTo(new Image(frames));

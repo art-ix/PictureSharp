@@ -22,7 +22,7 @@ public class IccConversionTests
         int maxAbs = tolerance.GetProperty(gray ? "gray_max_abs" : "rgb_max_abs").GetInt32();
         double maxFraction = tolerance.GetProperty("max_mismatch_fraction").GetDouble();
         await Assert.That(actual.Size).IsEqualTo(expected.Size);
-        (int worst, double fraction) = Difference(actual.Frames.RootFrame.GetPixelSpan(), expected.Frames.RootFrame.GetPixelSpan());
+        (int worst, double fraction) = Difference(actual.Frames.RootFrame.GetPixelSpan<Rgba32>(), expected.Frames.RootFrame.GetPixelSpan<Rgba32>());
         await Assert.That(worst).IsLessThanOrEqualTo(maxAbs).Because(because);
         await Assert.That(fraction).IsLessThanOrEqualTo(maxFraction).Because(because);
     }
@@ -52,7 +52,7 @@ public class IccConversionTests
         JsonElement entry = Manifest.GetProperty("profiles").GetProperty(name);
         IccColorModel model = IccProfileParser.Parse(File.ReadAllBytes(Color(entry.GetProperty("profile").GetString()!)));
         using Image image = Image.Load(Color(entry.GetProperty("input").GetString()!));
-        new SrgbConversion(model).Apply(image.Frames.RootFrame.GetPixelSpan());
+        new SrgbConversion(model).Apply(image.Frames.RootFrame.GetPixelSpan<Rgba32>());
         using Image expected = Image.Load(Color(entry.GetProperty("reference").GetString()!));
         await AssertWithinTolerance(image, expected, model.IsGray, name);
     }

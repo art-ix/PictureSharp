@@ -1,5 +1,6 @@
 using PictureSharp.Domain.Frames;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Application.Hdr;
 using PictureSharp.Application.Processing;
 using System.Drawing;
@@ -15,7 +16,10 @@ public readonly ref partial struct ImageProcessingContext
     {
         Image.CheckRectangle(rectangle, Target.Width, Target.Height, nameof(rectangle));
         _state.ReplaceFrames(rectangle, static (frame, rect, token) =>
-            new FrameReplacement(rect.Width, rect.Height, Geometry.Crop(frame, rect)), GainMapEdit.Crop(rectangle));
+        {
+            var crop = new Geometry.CropFrame(frame, rect);
+            return new FrameReplacement(rect.Width, rect.Height, PixelDispatch.Run<Geometry.CropFrame, PixelBuffer>(frame.PixelType, ref crop));
+        }, GainMapEdit.Crop(rectangle));
         Target.Metadata.PixelsMoved();
         return this;
     }
@@ -68,8 +72,9 @@ public readonly ref partial struct ImageProcessingContext
     /// <summary>
     /// Places the image on a <paramref name="width"/>×<paramref name="height"/> canvas filled with
     /// <paramref name="color"/>, at <paramref name="position"/>, without scaling. Parts outside the canvas are cut off.
+    /// The color keeps 16-bit precision on <see cref="PixelType.Rgba64"/> images and is rounded on 8-bit ones.
     /// </summary>
-    public ImageProcessingContext Pad(int width, int height, Rgba32 color = default, AnchorPosition position = AnchorPosition.Center)
+    public ImageProcessingContext Pad(int width, int height, Rgba64 color = default, AnchorPosition position = AnchorPosition.Center)
     {
         ImageFrame.ValidateSize(width, height);
         Image image = Target;
@@ -80,15 +85,13 @@ public readonly ref partial struct ImageProcessingContext
         }
 
         Point offset = Anchor.Place(new(width, height), image.Size, position);
-        _state.ReplaceFrames((width, height, color, offset, srcWidth, srcHeight), static (frame, state, token) =>
+        _state.ReplaceFrames((width, height, color, offset), static (frame, state, token) =>
         {
-            var canvas = GC.AllocateUninitializedArray<Rgba32>(state.width * state.height);
-            canvas.AsSpan().Fill(state.color);
-            Geometry.Place(frame.Pixels, state.srcWidth, state.srcHeight, canvas, state.width, state.height, state.offset.X, state.offset.Y);
-            return new FrameReplacement(state.width, state.height, canvas);
+            var pad = new Geometry.PadFrame(frame, state.width, state.height, state.offset, state.color);
+            return new FrameReplacement(state.width, state.height, PixelDispatch.Run<Geometry.PadFrame, PixelBuffer>(frame.PixelType, ref pad));
         });
         image.Metadata.PixelsMoved();
-        if (color.A != 255 && (width > srcWidth || height > srcHeight || offset.X > 0 || offset.Y > 0))
+        if (color.A != ushort.MaxValue && (width > srcWidth || height > srcHeight || offset.X > 0 || offset.Y > 0))
         {
             image.HasAlpha = true;
         }
@@ -107,8 +110,10 @@ public readonly ref partial struct ImageProcessingContext
         if (newBuffers)
         {
             _state.ReplaceFrames((turns, flipX), static (frame, state, token) =>
-                new FrameReplacement(frame.Height, frame.Width, Geometry.RotateQuarterPixels(frame.Pixels, frame.Width, frame.Height, state.turns, state.flipX, token)),
-                GainMapEdit.RotateFlip(turns, flipX));
+            {
+                var rotate = new Geometry.RotateQuarterFrame(frame, state.turns, state.flipX, token);
+                return new FrameReplacement(frame.Height, frame.Width, PixelDispatch.Run<Geometry.RotateQuarterFrame, PixelBuffer>(frame.PixelType, ref rotate));
+            }, GainMapEdit.RotateFlip(turns, flipX));
             ImageMetadata metadata = Target.Metadata;
             (metadata.HorizontalResolution, metadata.VerticalResolution) = (metadata.VerticalResolution, metadata.HorizontalResolution);
         }

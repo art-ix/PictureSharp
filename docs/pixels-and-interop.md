@@ -31,10 +31,10 @@ using PictureSharp;
 using var image = new Image(64, 32, Color.CornflowerBlue);
 image[0, 0] = Rgba32.Parse("#ff8800");                // indexer with bounds checks
 
-Span<Rgba32> row = image.GetRowSpan(1);               // one row
+Span<Rgba32> row = image.GetRowSpan<Rgba32>(1);               // one row
 row.Fill(new Rgba32(255, 255, 255, 128));
 
-Span<Rgba32> all = image.GetPixelSpan();              // all rows, no padding
+Span<Rgba32> all = image.GetPixelSpan<Rgba32>();              // all rows, no padding
 foreach (ref Rgba32 p in all)
 {
     p.A = (byte)(p.A / 2);
@@ -109,9 +109,9 @@ using SkiaSharp;
 // PictureSharp → SkiaSharp
 var info = new SKImageInfo(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
 using var bitmap = new SKBitmap(info);
-image.CopyPixelDataTo(bitmap.GetPixelSpan(), PixelFormat.Rgba32, bitmap.RowBytes);
+image.CopyPixelDataTo(bitmap.GetPixelSpan<Rgba32>(), PixelFormat.Rgba32, bitmap.RowBytes);
 
 // SkiaSharp (default Bgra8888, premultiplied) → PictureSharp
-using Image fromSkia = Image.LoadPixelData(skBitmap.GetPixelSpan(), skBitmap.Width, skBitmap.Height,
+using Image fromSkia = Image.LoadPixelData(skBitmap.GetPixelSpan<Rgba32>(), skBitmap.Width, skBitmap.Height,
     PixelFormat.Bgra32Premultiplied, skBitmap.RowBytes);
 ```

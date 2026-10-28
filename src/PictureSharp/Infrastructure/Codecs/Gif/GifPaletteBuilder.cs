@@ -45,7 +45,7 @@ internal sealed class GifPaletteBuilder
         _frames = frames;
         _options = options;
         int threshold = options.TransparencyThreshold;
-        HasTransparency = reserveTransparency || frames.Any(f => HasTransparentPixels(f.GetPixelSpan(), threshold));
+        HasTransparency = reserveTransparency || frames.Any(f => HasTransparentPixels(f.Pixels.AsSpan(), threshold));
         bool wantTransparent = HasTransparency || (frames.Count > 1 && options.OptimizeFrames);
 
         var unique = new Dictionary<uint, byte>();
@@ -53,7 +53,7 @@ internal sealed class GifPaletteBuilder
         bool fits = true;
         foreach (ImageFrame frame in frames)
         {
-            if (!CollectColors(frame.GetPixelSpan(), unique, colors, options.ColorCount))
+            if (!CollectColors(frame.Pixels.AsSpan(), unique, colors, options.ColorCount))
             {
                 fits = false;
                 break;
@@ -94,7 +94,7 @@ internal sealed class GifPaletteBuilder
     /// <summary>The canvas of a frame in local-palette mode: its pixels with alpha reduced to transparent or opaque.</summary>
     public Rgba32[] Binarize(int frameIndex)
     {
-        ReadOnlySpan<Rgba32> pixels = _frames[frameIndex].GetPixelSpan();
+        ReadOnlySpan<Rgba32> pixels = _frames[frameIndex].Pixels.AsSpan();
         int threshold = _options.TransparencyThreshold;
         var result = new Rgba32[pixels.Length];
         for (int i = 0; i < pixels.Length; i++)
@@ -176,7 +176,7 @@ internal sealed class GifPaletteBuilder
     public GifFramePalette Build(int frameIndex)
     {
         ImageFrame frame = _frames[frameIndex];
-        ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
+        ReadOnlySpan<Rgba32> pixels = frame.Pixels.AsSpan();
         int threshold = _options.TransparencyThreshold;
         var indices = new byte[pixels.Length];
         if (_exact is not null)
@@ -265,13 +265,13 @@ internal sealed class GifPaletteBuilder
     /// <summary>The opaque pixels of all frames, or an evenly spaced subset of them for long animations.</summary>
     private static List<uint> SampleOpaque(IReadOnlyList<ImageFrame> frames, int threshold)
     {
-        long total = frames.Sum(f => (long)f.GetPixelSpan().Length);
+        long total = frames.Sum(f => (long)f.Pixels.AsSpan().Length);
         long step = Math.Max(1, (total + MaxSamples - 1) / MaxSamples);
         var samples = new List<uint>((int)Math.Min(total, MaxSamples));
         long position = 0;
         foreach (ImageFrame frame in frames)
         {
-            ReadOnlySpan<Rgba32> pixels = frame.GetPixelSpan();
+            ReadOnlySpan<Rgba32> pixels = frame.Pixels.AsSpan();
             for (long i = (step - (position % step)) % step; i < pixels.Length; i += step)
             {
                 if (pixels[(int)i].A >= threshold)

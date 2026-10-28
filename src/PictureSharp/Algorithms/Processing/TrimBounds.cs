@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Runtime.CompilerServices;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Processing;
 
 namespace PictureSharp.Algorithms.Processing;
@@ -18,6 +19,74 @@ internal static partial class TrimBounds
     public static Rectangle? Find(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options, CancellationToken cancellationToken,
         bool vectorize = true)
     {
+        PixelType pixelType = frames.FirstOrDefault()?.PixelType ?? PixelType.Rgba32;
+        var find = new FindOperation(frames, width, height, options, cancellationToken, vectorize);
+        return PixelDispatch.Run<FindOperation, Rectangle?>(pixelType, ref find);
+    }
+
+    private readonly struct FindOperation(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options,
+        CancellationToken cancellationToken, bool vectorize) : IPixelOperation<Rectangle?>
+    {
+        public Rectangle? Run<TPixel>() where TPixel : unmanaged, IPixelOps<TPixel> =>
+            typeof(TPixel) == typeof(Rgba32)
+                ? FindRgba32(frames, width, height, options, cancellationToken, vectorize)
+                : FindScalar<TPixel>(frames, width, height, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// The scan at any depth. The 8-bit thresholds of <see cref="AutoCropOptions"/> are scaled exactly to the storage
+    /// depth (× 257 for 16 bits), so an exactly widened image has the same bounds as the 8-bit original.
+    /// </summary>
+    private static Rectangle? FindScalar<TPixel>(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options,
+        CancellationToken cancellationToken) where TPixel : unmanaged, IPixelOps<TPixel>
+    {
+        int scale = TPixel.MaxValue / byte.MaxValue;
+        int alphaThreshold = options.AlphaThreshold * scale;
+        int tolerance = options.Tolerance * scale;
+        bool alphaMode = options.Mode == AutoCropMode.Alpha;
+        int left = width;
+        int top = height;
+        int right = -1;
+        int bottom = -1;
+        TPixel background = default;
+        bool first = true;
+        foreach (ImageFrame frame in frames)
+        {
+            TPixel[] pixels = frame.Buffer.As<TPixel>();
+            if (first)
+            {
+                background = options.Background is { } color ? TPixel.FromRgba32(color) : pixels[0];
+                first = false;
+            }
+
+            bool transparentBackground = TPixel.Alpha(background) == 0;
+            for (int y = 0; y < height; y++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ReadOnlySpan<TPixel> row = pixels.AsSpan(y * width, width);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    TPixel p = row[x];
+                    bool content = alphaMode
+                        ? TPixel.Alpha(p) > alphaThreshold
+                        : !(transparentBackground && TPixel.Alpha(p) == 0) && TPixel.MaxChannelDifference(p, background) > tolerance;
+                    if (content)
+                    {
+                        left = Math.Min(left, x);
+                        right = Math.Max(right, x);
+                        top = Math.Min(top, y);
+                        bottom = Math.Max(bottom, y);
+                    }
+                }
+            }
+        }
+
+        return Bounds(left, top, right, bottom, width, height, options.Padding);
+    }
+
+    private static Rectangle? FindRgba32(IEnumerable<ImageFrame> frames, int width, int height, AutoCropOptions options,
+        CancellationToken cancellationToken, bool vectorize)
+    {
         int left = width;
         int top = height;
         int right = -1;
@@ -28,14 +97,14 @@ internal static partial class TrimBounds
         {
             if (first)
             {
-                background = options.Background ?? frame.GetRowSpan(0)[0];
+                background = options.Background ?? frame.PixelRow(0)[0];
                 first = false;
             }
 
             for (int y = 0; y < height; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ReadOnlySpan<Rgba32> row = frame.GetRowSpan(y);
+                ReadOnlySpan<Rgba32> row = frame.PixelRow(y);
                 int x0 = FirstContent(row, options, background, vectorize);
                 if (x0 < 0)
                 {
@@ -51,12 +120,16 @@ internal static partial class TrimBounds
             }
         }
 
+        return Bounds(left, top, right, bottom, width, height, options.Padding);
+    }
+
+    private static Rectangle? Bounds(int left, int top, int right, int bottom, int width, int height, int padding)
+    {
         if (right < 0)
         {
             return null;
         }
 
-        int padding = options.Padding;
         int x = Math.Max(0, left - padding);
         int yTop = Math.Max(0, top - padding);
         int xEnd = (int)Math.Min(width, (long)right + 1 + padding);

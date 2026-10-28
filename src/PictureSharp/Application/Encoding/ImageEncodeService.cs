@@ -12,7 +12,7 @@ internal sealed class ImageEncodeService(ICodecResolver codecs)
             ?? throw new NotSupportedException($"Saving images in {options.Format.Name} format is not supported.");
         try
         {
-            encoder.Encode(image, output, options, cancellationToken);
+            EncoderInput.Encode(encoder, image, output, options, cancellationToken);
         }
         catch (AggregateException ex) when (CodecErrors.Canceled(ex, cancellationToken))
         {

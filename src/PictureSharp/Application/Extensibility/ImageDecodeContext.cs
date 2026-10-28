@@ -2,6 +2,7 @@ using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Application.Extensibility;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 
 namespace PictureSharp.Formats;
 
@@ -34,12 +35,16 @@ public sealed class ImageDecodeContext
     public void ThrowIfCancellationRequested() => _context.CancellationToken.ThrowIfCancellationRequested();
 
     /// <summary>
-    /// Charges <paramref name="frames"/> full canvases of the given size against <see cref="DecoderOptions.MaxPixels"/>
-    /// and <see cref="DecoderOptions.MaxFrames"/>; call it before allocating pixels.
+    /// Charges <paramref name="frames"/> full canvases of the given size and storage against
+    /// <see cref="DecoderOptions.MaxPixels"/> (a <see cref="PixelType.Rgba64"/> pixel counts twice) and
+    /// <see cref="DecoderOptions.MaxFrames"/>. Call it before allocating the pixels of the returned image, with the
+    /// pixel type resolved from the headers and <see cref="DecoderOptions.PreserveBitDepth"/>; the library rejects a
+    /// returned image whose pixels were not charged by reservations or nested decodes.
     /// </summary>
     /// <exception cref="ImageFormatException">The dimensions are invalid or exceed the remaining limits.</exception>
-    public void ReservePixels(int width, int height, int frames = 1) =>
-        _context.Budget.ReserveImage(_format, width, height, frames);
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pixelType"/> is not defined.</exception>
+    public void ReservePixels(int width, int height, PixelType pixelType, int frames = 1) =>
+        _context.Budget.ReserveImage(_format, width, height, frames, PixelTypes.Check(pixelType));
 
     /// <summary>Charges decompressed ICC, EXIF or XMP bytes against <see cref="DecoderOptions.MaxMetadataBytes"/>.</summary>
     /// <exception cref="ImageFormatException">The metadata exceeds the remaining limit.</exception>

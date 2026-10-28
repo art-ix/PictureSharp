@@ -1,3 +1,4 @@
+using PictureSharp.Application.Encoding;
 using System.Buffers.Binary;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Formats.Ico;
@@ -27,7 +28,7 @@ internal sealed class IcoEncoder(IImageEncoder<PngEncoderOptions> png) : IImageE
                 throw new ArgumentException("ICO dimensions must be 1–256 pixels. Resize explicitly before saving.", nameof(images));
             }
 
-            _ = image.GetPixelSpan();
+            image.ThrowIfDisposed();
         }
 
         // Buffer payloads in pooled segments; the directory must precede them even on non-seekable outputs.
@@ -39,16 +40,19 @@ internal sealed class IcoEncoder(IImageEncoder<PngEncoderOptions> png) : IImageE
         for (int i = 0; i < images.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // Entries of 16-bit images are written with 8 bits per channel, like DIB entries.
             Image image = images[i];
+            using Image? narrowed = image.PixelType == PixelType.Rgba32 ? null : EncoderInput.ToRgba32(image, cancellationToken);
+            Image entryImage = narrowed ?? image;
             long start = buffer.Position;
             if (options.Encoding == IcoEncoding.Png)
             {
-                png.Encode(image, buffer, new PngEncoderOptions { ColorType = PngColorType.Rgba, SaveAnimation = false, Metadata = options.Metadata },
+                png.Encode(entryImage, buffer, new PngEncoderOptions { ColorType = PngColorType.Rgba, SaveAnimation = false, Metadata = options.Metadata },
                     cancellationToken);
             }
             else
             {
-                IcoDib.Encode(image, buffer);
+                IcoDib.Encode(entryImage, buffer);
             }
 
             Span<byte> entry = directory.AsSpan(6 + (16 * i), 16);

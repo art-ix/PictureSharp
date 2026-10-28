@@ -23,7 +23,7 @@ internal static class TestImages
         byte[] alphas = [0, 255, 1, 128, 254, 37];
         for (int y = 0; y < height; y++)
         {
-            Span<Rgba32> row = image.GetRowSpan(y);
+            Span<Rgba32> row = image.GetRowSpan<Rgba32>(y);
             for (int x = 0; x < width; x++)
             {
                 row[x] = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), alphas[((y * width) + x) % alphas.Length]);
@@ -37,7 +37,7 @@ internal static class TestImages
     public static Image CreateOpaque(int width, int height, int seed = 1)
     {
         Image image = Create(width, height, seed);
-        foreach (ref Rgba32 pixel in image.GetPixelSpan()) pixel.A = 255;
+        foreach (ref Rgba32 pixel in image.GetPixelSpan<Rgba32>()) pixel.A = 255;
         return image;
     }
 
@@ -45,8 +45,8 @@ internal static class TestImages
     public static Rgba32[] ThroughPremultiplied(Image image)
     {
         using Image back = Image.LoadPixelData(image.ToPixelData(PixelFormat.Rgba32Premultiplied), image.Width, image.Height, PixelFormat.Rgba32Premultiplied);
-        return back.GetPixelSpan().ToArray();
+        return back.GetPixelSpan<Rgba32>().ToArray();
     }
 
-    public static Rgba32[] Pixels(Image image) => image.GetPixelSpan().ToArray();
+    public static Rgba32[] Pixels(Image image) => image.GetPixelSpan<Rgba32>().ToArray();
 }

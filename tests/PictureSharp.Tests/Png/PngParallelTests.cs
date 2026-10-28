@@ -93,8 +93,8 @@ public class PngParallelTests
 
             using Image piped = Image.Load(sequential);
             using Image serial = Image.Load(sequential, new DecoderOptions { MaxDegreeOfParallelism = 1 });
-            await Assert.That(piped.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan())).IsTrue();
-            await Assert.That(serial.Frames[0].GetPixelSpan().SequenceEqual(image.Frames[0].GetPixelSpan())).IsTrue();
+            await Assert.That(piped.Frames[0].GetPixelSpan<Rgba32>().SequenceEqual(image.Frames[0].GetPixelSpan<Rgba32>())).IsTrue();
+            await Assert.That(serial.Frames[0].GetPixelSpan<Rgba32>().SequenceEqual(image.Frames[0].GetPixelSpan<Rgba32>())).IsTrue();
         }
     }
 
@@ -124,7 +124,7 @@ public class PngParallelTests
             {
                 using Image piped = Image.Load(damaged);
                 using Image serial = Image.Load(damaged, new DecoderOptions { MaxDegreeOfParallelism = 1 });
-                await Assert.That(piped.Frames[0].GetPixelSpan().SequenceEqual(serial.Frames[0].GetPixelSpan())).IsTrue();
+                await Assert.That(piped.Frames[0].GetPixelSpan<Rgba32>().SequenceEqual(serial.Frames[0].GetPixelSpan<Rgba32>())).IsTrue();
                 outcomes.Add("ok");
             }
             catch (ImageFormatException)

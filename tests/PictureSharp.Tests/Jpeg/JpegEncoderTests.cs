@@ -80,7 +80,7 @@ public class JpegEncoderTests
     {
         using var image = new Image(17, 9);
         var random = new Random(55);
-        foreach (ref Rgba32 p in image.GetPixelSpan())
+        foreach (ref Rgba32 p in image.GetPixelSpan<Rgba32>())
             p = new Rgba32((byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256));
         byte[] original = image.ToPixelData(PixelFormat.Rgba32);
         Color background = Color.FromArgb(17, 93, 201);
@@ -201,7 +201,7 @@ public class JpegEncoderTests
     {
         using Image source = Gradient(37, 21, gray: false);
         using Image luma = source.Clone();
-        Span<Rgba32> pixels = luma.GetPixelSpan();
+        Span<Rgba32> pixels = luma.GetPixelSpan<Rgba32>();
         foreach (ref Rgba32 p in pixels)
         {
             byte y = (byte)((19595 * p.R + 38470 * p.G + 7471 * p.B + 32768) >> 16);
@@ -236,7 +236,7 @@ public class JpegEncoderTests
     private static Image Gradient(int width, int height, bool gray)
     {
         var image = new Image(width, height);
-        Span<Rgba32> pixels = image.GetPixelSpan();
+        Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {

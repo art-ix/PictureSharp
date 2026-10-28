@@ -6,7 +6,7 @@ namespace PictureSharp.Tests.Core;
 /// <summary>Properties of the Pillow-derived filters; pixel exactness is checked by <see cref="ProcessingOracleTests"/>.</summary>
 public class FilterTests
 {
-    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
+    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan<Rgba32>().ToArray();
 
     [Test]
     public async Task NeutralAmounts_AreNoOps()
@@ -78,7 +78,7 @@ public class FilterTests
             await Assert.That((f.Width, f.Height)).IsEqualTo((anim.Width, anim.Height));
         }
 
-        await Assert.That(anim.Frames[1].GetPixelSpan().ToArray()).IsEquivalentTo(anim.Frames[0].GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(anim.Frames[1].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(anim.Frames[0].GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]

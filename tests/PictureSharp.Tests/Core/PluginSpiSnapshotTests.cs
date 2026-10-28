@@ -23,7 +23,7 @@ public class PluginSpiSnapshotTests
         typeof(ImageSampleFormat), typeof(ImageAlphaMode), typeof(ImageCompression), typeof(CicpColorDescription),
         typeof(ImageResolution),
         // Model.
-        typeof(Image), typeof(ImageFrame), typeof(ImageFrameCollection), typeof(Rgba32), typeof(ImageMetadata),
+        typeof(Image), typeof(ImageFrame), typeof(ImageFrameCollection), typeof(Rgba32), typeof(Rgba64), typeof(PixelType), typeof(ImageMetadata),
         typeof(MetadataKinds), typeof(GainMapInfo), typeof(HdrGainMapKinds), typeof(HdrColorSpace),
     ];
 

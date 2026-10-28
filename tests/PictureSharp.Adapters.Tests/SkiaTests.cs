@@ -127,7 +127,7 @@ public sealed class SkiaTests
         Rgba32[] original = TestImages.Pixels(image);
         SKBitmap bitmap = image.ToSKBitmap();
         SKImage skImage = image.ToSKImage();
-        image.GetPixelSpan().Fill(Rgba32.White);
+        image.GetPixelSpan<Rgba32>().Fill(Rgba32.White);
         image.Dispose();
         using (Image back = Image.FromSKBitmap(bitmap))
         using (Image backFromImage = Image.FromSKImage(skImage))

@@ -33,7 +33,7 @@ public sealed class TiledContainerFormat(bool charged = false, Action<int>? afte
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         Header header = Read(data.Span);
-        context.ReservePixels(header.Width, header.Height);
+        context.ReservePixels(header.Width, header.Height, PixelType.Rgba32);
         var image = new Image(header.Width, header.Height);
         int across = (header.Width + header.TileWidth - 1) / header.TileWidth;
         int down = (header.Height + header.TileHeight - 1) / header.TileHeight;
@@ -57,7 +57,7 @@ public sealed class TiledContainerFormat(bool charged = false, Action<int>? afte
 
                 for (int y = 0; y < height; y++)
                 {
-                    tile.GetRowSpan(y)[..width].CopyTo(image.GetRowSpan(y0 + y)[x0..]);
+                    tile.GetRowSpan<Rgba32>(y)[..width].CopyTo(image.GetRowSpan<Rgba32>(y0 + y)[x0..]);
                 }
             }
 

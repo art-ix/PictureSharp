@@ -49,7 +49,7 @@ public class FrameProcessorTests
     private static Image Numbered(int width, int height, byte offset = 0)
     {
         var image = new Image(width, height);
-        Span<Rgba32> pixels = image.GetPixelSpan();
+        Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
         for (int i = 0; i < pixels.Length; i++)
         {
             pixels[i] = new Rgba32((byte)(offset + i), (byte)i, 0);
@@ -65,7 +65,7 @@ public class FrameProcessorTests
         image.Mutate(x => x.Transpose());
         await Assert.That(image.Size).IsEqualTo(new Size(2, 3));
         // Source rows (0 1 2) and (3 4 5) become columns.
-        await Assert.That(image.GetPixelSpan().ToArray().Select(p => (int)p.R)).IsEquivalentTo([0, 3, 1, 4, 2, 5], CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray().Select(p => (int)p.R)).IsEquivalentTo([0, 3, 1, 4, 2, 5], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -83,8 +83,8 @@ public class FrameProcessorTests
         }
 
         // Transpose, horizontal flip and transpose again amount to a vertical flip.
-        await Assert.That(animation.Frames[0].GetPixelSpan().ToArray().Select(p => (int)p.R)).IsEquivalentTo([4, 5, 6, 7, 0, 1, 2, 3], CollectionOrdering.Matching);
-        await Assert.That((int)(animation.Frames[1].GetPixelSpan()[0].R)).IsEqualTo(104);
+        await Assert.That(animation.Frames[0].GetPixelSpan<Rgba32>().ToArray().Select(p => (int)p.R)).IsEquivalentTo([4, 5, 6, 7, 0, 1, 2, 3], CollectionOrdering.Matching);
+        await Assert.That((int)(animation.Frames[1].GetPixelSpan<Rgba32>()[0].R)).IsEqualTo(104);
     }
 
     [Test]
@@ -93,7 +93,7 @@ public class FrameProcessorTests
         using var image = new Image(2, 2, new Rgba32(9, 9, 9));
         image.Mutate(x => x.ApplyProcessor(new ScriptedProcessor(_ => new Size(3, 1))));
         await Assert.That(image.Size).IsEqualTo(new Size(3, 1));
-        foreach (var p in image.GetPixelSpan().ToArray())
+        foreach (var p in image.GetPixelSpan<Rgba32>().ToArray())
         {
             await Assert.That(p).IsEqualTo(default);
         }
@@ -105,7 +105,7 @@ public class FrameProcessorTests
         using Image first = Numbered(4, 2);
         using Image second = Numbered(4, 2, offset: 50);
         using Image animation = Image.CreateAnimation(TimeSpan.FromMilliseconds(40), first, second);
-        Rgba32[][] before = [.. animation.Frames.Select(f => f.GetPixelSpan().ToArray())];
+        Rgba32[][] before = [.. animation.Frames.Select(f => f.GetPixelSpan<Rgba32>().ToArray())];
 
         var failing = new ScriptedProcessor(s => new Size(1, 1), frame => { if (frame == 1) throw new InvalidDataException("boom"); });
         Assert.ThrowsExactly<InvalidDataException>(() => animation.Mutate(x => x.ApplyProcessor(failing)));
@@ -121,7 +121,7 @@ public class FrameProcessorTests
             await Assert.That(animation.Size).IsEqualTo(new Size(4, 2));
             for (int i = 0; i < before.Length; i++)
             {
-                await Assert.That(animation.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
+                await Assert.That(animation.Frames[i].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
             }
         }
     }

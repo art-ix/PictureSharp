@@ -57,7 +57,7 @@ internal sealed class AnimationCompositor(int width, int height)
         }
 
         // Decode the frame straight into its rectangle of the canvas.
-        ReadOnlySpan<uint> src = System.Runtime.InteropServices.MemoryMarshal.Cast<Rgba32, uint>(decoded.GetPixelSpan());
+        ReadOnlySpan<uint> src = System.Runtime.InteropServices.MemoryMarshal.Cast<Rgba32, uint>(decoded.Pixels.AsSpan());
         for (int y = 0; y < iter.Height; y++)
         {
             src.Slice(y * iter.Width, iter.Width).CopyTo(curr.Slice(((iter.Y + y) * width) + iter.X, iter.Width));

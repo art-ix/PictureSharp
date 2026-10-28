@@ -19,4 +19,12 @@ public enum PixelFormat
     Rgba32Premultiplied,
     /// <summary>4 bytes per pixel: B, G, R, A with color channels premultiplied by alpha. Matches Format32bppPArgb and WPF Pbgra32.</summary>
     Bgra32Premultiplied,
+    /// <summary>8 bytes per pixel: R, G, B, A as little-endian 16-bit values (straight alpha). Matches native <see cref="PictureSharp.Rgba64"/> on little-endian machines.</summary>
+    Rgba64,
+    /// <summary>8 bytes per pixel: R, G, B, A as little-endian 16-bit values with color channels premultiplied by alpha.</summary>
+    Rgba64Premultiplied,
+    /// <summary>6 bytes per pixel: R, G, B as little-endian 16-bit values.</summary>
+    Rgb48,
+    /// <summary>2 bytes per pixel: luminance (BT.601) as a little-endian 16-bit value.</summary>
+    Gray16,
 }

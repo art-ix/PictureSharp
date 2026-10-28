@@ -68,9 +68,9 @@ public class CancellationTests
     public async Task CanceledToken_StopsProcessingBeforeAnyChange()
     {
         using Image image = Pattern(16, 16);
-        Rgba32[] before = image.GetPixelSpan().ToArray();
+        Rgba32[] before = image.GetPixelSpan<Rgba32>().ToArray();
         Assert.ThrowsExactly<OperationCanceledException>(() => image.Mutate(x => x.Grayscale(), Canceled));
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
         Assert.ThrowsExactly<OperationCanceledException>(() => image.Clone(x => x.Resize(8, 8), Canceled));
         Assert.ThrowsExactly<OperationCanceledException>(() => IcoFile.LoadAll(image.ToIco(), null, Canceled));
     }
@@ -91,7 +91,7 @@ public class CancellationTests
 
         await Assert.That(reachedThird).IsTrue();
         await Assert.That(image.Size).IsEqualTo(new System.Drawing.Size(8, 8));
-        await Assert.That(image.GetPixelSpan()[1].G).IsNotEqualTo(image.GetPixelSpan()[1].R);
+        await Assert.That(image.GetPixelSpan<Rgba32>()[1].G).IsNotEqualTo(image.GetPixelSpan<Rgba32>()[1].R);
     }
 
     [Test]
@@ -110,7 +110,7 @@ public class CancellationTests
     public async Task Clone_DisposesThePartialCopyAndKeepsTheSource()
     {
         using Image image = Animated(8, 8, frames: 3);
-        Rgba32[] before = image.Frames[2].GetPixelSpan().ToArray();
+        Rgba32[] before = image.Frames[2].GetPixelSpan<Rgba32>().ToArray();
         using var source = new CancellationTokenSource();
         int frames = 0;
         Assert.ThrowsExactly<OperationCanceledException>(() => image.Clone(x => x.Apply(_ =>
@@ -121,7 +121,7 @@ public class CancellationTests
             }
         }).Invert(), source.Token));
         await Assert.That(frames).IsEqualTo(2);
-        await Assert.That(image.Frames[2].GetPixelSpan().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
+        await Assert.That(image.Frames[2].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
 
     internal static EncoderOptions Options(string format) => format switch

@@ -78,7 +78,7 @@ public class LossyDecoderTests
     {
         using Image image = Image.Load(Corpus.PathOf(file), new DecoderOptions { FirstFrameOnly = true });
         await Assert.That(image.FrameCount).IsEqualTo(1);
-        await Assert.That(Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan()))).IsEqualTo(Corpus.References[file].Frames[0].Sha256);
+        await Assert.That(Corpus.Sha256(System.Runtime.InteropServices.MemoryMarshal.AsBytes(image.Frames[0].GetPixelSpan<Rgba32>()))).IsEqualTo(Corpus.References[file].Frames[0].Sha256);
     }
 
     [Test]

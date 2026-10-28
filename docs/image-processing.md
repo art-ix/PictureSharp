@@ -486,7 +486,7 @@ using PictureSharp;
 
 image.Mutate(x => x.Apply(frame =>
 {
-    foreach (ref Rgba32 p in frame.GetPixelSpan())
+    foreach (ref Rgba32 p in frame.GetPixelSpan<Rgba32>())
     {
         p.B = 0;                                      // drop the blue channel
     }

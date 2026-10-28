@@ -211,7 +211,7 @@ public sealed class DocsExamplesTests : IDisposable
     public async Task Limits_AtomicClone()
     {
         using Image image = Image.Load(P("input.png"));
-        Rgba32[] before = image.GetPixelSpan().ToArray();
+        Rgba32[] before = image.GetPixelSpan<Rgba32>().ToArray();
         string path = P("canceled.png");
         using var source = new CancellationTokenSource();
         source.Cancel();
@@ -230,7 +230,7 @@ public sealed class DocsExamplesTests : IDisposable
 
         await Assert.That(canceled).IsTrue();
         await Assert.That(File.Exists(path)).IsFalse();
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before, CollectionOrdering.Matching);
     }
 
     // ------------------------------------------------------------ README.md
@@ -252,7 +252,7 @@ public sealed class DocsExamplesTests : IDisposable
         ImageInfo thumb = Image.Identify(P("thumbnail.png"));
         await Assert.That(Math.Max(thumb.Width, thumb.Height)).IsEqualTo(256);
         using Image png = Image.Load(P("thumbnail.png"));
-        await Assert.That(png.GetPixelSpan().ToArray()).IsEquivalentTo(thumbnail.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(png.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(thumbnail.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     // ------------------------------------------------------------ getting-started.md
@@ -301,7 +301,7 @@ public sealed class DocsExamplesTests : IDisposable
         using var fromBytes = Image.Load(bytes[16..]);
         using var fromSpan = Image.Load(bytes.AsSpan(16));
         using var fromAsync = await Image.LoadAsync(P("input.png"), cancellationToken);
-        await Assert.That(fromSpan.GetPixelSpan().ToArray()).IsEquivalentTo(fromAsync.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(fromSpan.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(fromAsync.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(fromBytes.Size).IsEqualTo(fromStream.Size);
 
         var options = new DecoderOptions
@@ -407,7 +407,7 @@ public sealed class DocsExamplesTests : IDisposable
         await Assert.That(Image.DetectFormat(P("rgb.pcx"))).IsEqualTo(ImageFormat.Pcx);
 
         using Image exactBack = Image.Load(P("exact.webp"));
-        await Assert.That(exactBack.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(exactBack.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         using Image few = new(4, 4, Color.Red);
         few.SaveAsPng(P("indexed.png"), new() { ColorType = PngColorType.Palette });
@@ -488,7 +488,7 @@ public sealed class DocsExamplesTests : IDisposable
             .DrawImage(watermark, new Point(20, 20))
             .Apply(frame =>
             {
-                foreach (ref Rgba32 p in frame.GetPixelSpan())
+                foreach (ref Rgba32 p in frame.GetPixelSpan<Rgba32>())
                 {
                     p.B = 0;                                      // drop the blue channel
                 }
@@ -669,9 +669,9 @@ public sealed class DocsExamplesTests : IDisposable
 
         using var image = new Image(64, 32, Color.CornflowerBlue);
         image[0, 0] = Rgba32.Parse("#ff8800");
-        Span<Rgba32> row = image.GetRowSpan(1);
+        Span<Rgba32> row = image.GetRowSpan<Rgba32>(1);
         row.Fill(new Rgba32(255, 255, 255, 128));
-        Span<Rgba32> all = image.GetPixelSpan();
+        Span<Rgba32> all = image.GetPixelSpan<Rgba32>();
         foreach (ref Rgba32 p in all)
         {
             p.A = (byte)(p.A / 2);
@@ -682,7 +682,7 @@ public sealed class DocsExamplesTests : IDisposable
 
         byte[] bgra = image.ToPixelData(PixelFormat.Bgra32);
         using Image copy = Image.LoadPixelData(bgra, image.Width, image.Height, PixelFormat.Bgra32);
-        await Assert.That(copy.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(copy.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         int stride = (image.Width * PixelFormat.Rgb24.BytesPerPixel()) + 4;
         var buffer = new byte[stride * image.Height];
@@ -690,9 +690,9 @@ public sealed class DocsExamplesTests : IDisposable
         image.CopyPixelDataFrom(buffer, PixelFormat.Rgb24, stride);
         await Assert.That((int)(image[0, 0].A)).IsEqualTo(255);
 
-        Rgba32[] rgbaPixels = image.GetPixelSpan().ToArray();
+        Rgba32[] rgbaPixels = image.GetPixelSpan<Rgba32>().ToArray();
         using Image fromStructs = Image.LoadPixelData(rgbaPixels, image.Width, image.Height);
-        await Assert.That(fromStructs.GetPixelSpan().ToArray()).IsEquivalentTo(rgbaPixels, CollectionOrdering.Matching);
+        await Assert.That(fromStructs.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(rgbaPixels, CollectionOrdering.Matching);
 
         // The PictureSharp side of the WPF and SkiaSharp recipes.
         byte[] pixels = image.ToPixelData(PixelFormat.Bgra32);
@@ -701,7 +701,7 @@ public sealed class DocsExamplesTests : IDisposable
         var skiaBuffer = new byte[rowBytes * image.Height];
         image.CopyPixelDataTo(skiaBuffer, PixelFormat.Rgba32, rowBytes);
         using Image fromSkia = Image.LoadPixelData(skiaBuffer, image.Width, image.Height, PixelFormat.Rgba32, rowBytes);
-        await Assert.That(fromSkia.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(fromSkia.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         // The format-independent image API and WebP converter.
         image.SaveAsWebP(P("image.webp"), new() { Lossless = true, Exact = true });
@@ -745,7 +745,7 @@ public sealed class DocsExamplesTests : IDisposable
         await Assert.That(actual.LoopCount).IsEqualTo(expected.LoopCount);
         for (int i = 0; i < count; i++)
         {
-            await Assert.That(actual.Frames[i].GetPixelSpan().SequenceEqual(expected.Frames[i].GetPixelSpan())).IsTrue();
+            await Assert.That(actual.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(expected.Frames[i].GetPixelSpan<Rgba32>())).IsTrue();
             await Assert.That(actual.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
         }
     }
@@ -803,7 +803,7 @@ public sealed class DocsExamplesTests : IDisposable
         using Image back = Image.Load(P("animation.webp"));
         await Assert.That(back.FrameCount).IsEqualTo(2);
         await Assert.That(back.Frames[1].Duration).IsEqualTo(TimeSpan.FromMilliseconds(150));
-        await Assert.That(back.GetPixelSpan().ToArray()).IsEquivalentTo(first.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(back.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(first.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         using Image thirdImage = first.Clone(x => x.Grayscale());
         built.Frames.Add(thirdImage, TimeSpan.FromMilliseconds(80));
@@ -842,7 +842,7 @@ public sealed class DocsExamplesTests : IDisposable
         using Image converted = Image.Load(P("animation.webp"));
         using Image gifBack = Image.Load(P("animation.gif"));
         await Assert.That(converted.FrameCount).IsEqualTo(gifBack.FrameCount);
-        await Assert.That(converted.GetPixelSpan().ToArray()).IsEquivalentTo(gifBack.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(converted.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(gifBack.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(Image.Identify(P("animated.gif")).FrameCount).IsEqualTo(Image.Identify(P("animated.webp")).FrameCount);
     }
 

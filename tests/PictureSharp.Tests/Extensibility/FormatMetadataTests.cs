@@ -202,9 +202,9 @@ public sealed class CursorFormat : IImageFormatModule, IImageFormatDecoder, IIma
     {
         ReadOnlySpan<byte> span = data.Span;
         int width = span[4], height = span[5];
-        context.ReservePixels(width, height);
+        context.ReservePixels(width, height, PixelType.Rgba32);
         var image = new Image(width, height);
-        Span<Rgba32> pixels = image.GetPixelSpan();
+        Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
         for (int i = 0; i < pixels.Length; i++)
         {
             ReadOnlySpan<byte> rgba = span.Slice(8 + i * 4, 4);
@@ -223,7 +223,7 @@ public sealed class CursorFormat : IImageFormatModule, IImageFormatDecoder, IIma
     {
         Point? hotspot = options.Hotspot ?? image.Metadata.GetFormatMetadata<CursorMetadata>()?.Hotspot;
         output.Write(Header(image.Width, image.Height, hotspot));
-        foreach (Rgba32 pixel in image.GetPixelSpan())
+        foreach (Rgba32 pixel in image.GetPixelSpan<Rgba32>())
         {
             output.Write([pixel.R, pixel.G, pixel.B, pixel.A]);
         }

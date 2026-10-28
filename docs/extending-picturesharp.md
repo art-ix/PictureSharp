@@ -65,13 +65,13 @@ sealed class RawaDecoder : IImageFormatDecoder
     public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
     {
         (int width, int height) = ReadSize(data.Span);
-        context.ReservePixels(width, height);                        // fails on MaxPixels before allocating
+        context.ReservePixels(width, height, PixelType.Rgba32);       // fails on MaxPixels before allocating
         ReadOnlySpan<Rgba32> pixels = MemoryMarshal.Cast<byte, Rgba32>(data.Span[12..]);
         var image = new Image(width, height);
         for (int y = 0; y < height; y++)
         {
             context.ThrowIfCancellationRequested();
-            pixels.Slice(y * width, width).CopyTo(image.GetRowSpan(y)); // truncated file: reported as corrupt
+            pixels.Slice(y * width, width).CopyTo(image.GetRowSpan<Rgba32>(y)); // truncated file: reported as corrupt
         }
 
         return image;
@@ -100,7 +100,7 @@ sealed class RawaEncoder : IImageFormatEncoder<RawaEncoderOptions>
         for (int y = 0; y < image.Height; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            image.GetRowSpan(y).CopyTo(row);
+            image.GetRowSpan<Rgba32>(y).CopyTo(row);
             if (options.Opaque)
             {
                 foreach (ref Rgba32 pixel in row.AsSpan()) pixel.A = 255;
@@ -191,8 +191,10 @@ The shortcuts save through `options.Configuration`, which defaults to `ImageConf
 
 **Decoding**
 
-- Call `context.ReservePixels` before allocating pixels and `context.ReserveMetadata` before copying decompressed
-  ICC, EXIF or XMP data.
+- Call `context.ReservePixels` with the pixel type of the image you will return before allocating pixels, and
+  `context.ReserveMetadata` before copying decompressed ICC, EXIF or XMP data. A source with more than 8 bits per
+  sample decodes to `PixelType.Rgba64` when `context.Options.PreserveBitDepth` is set, otherwise to `Rgba32`; scale
+  n-bit samples with `(v * 65535 + max / 2) / max`, `max = (1 << n) - 1`, so white maps to 65535.
 - Throw `ImageFormatException` for corrupt data and `NotSupportedException` for valid data using an unsupported
   feature. Index, argument, overflow, invalid-operation and cast errors are reported as `ImageFormatException`, so
   `data.Span[offset..]` on a truncated file needs no extra check.
@@ -213,6 +215,8 @@ The shortcuts save through `options.Configuration`, which defaults to `ImageConf
 
 - Encoder options derive from `EncoderOptions` and override `Format`. `IImageFormatEncoder<TOptions>` creates the
   defaults with `new TOptions()` and rejects options of another type with `ArgumentException`.
+- An encoder receives `Rgba32` images unless it overrides `SupportsPixelType` to accept `PixelType.Rgba64`; the
+  library then passes 16-bit images as they are, otherwise it passes an 8-bit copy rounded to the nearest value.
 
 ### Orientation and color
 
@@ -231,7 +235,7 @@ A format that stores one image as strips or tiles in another format (JPEG tiles 
 decodes each part with `context.DecodeEmbeddedPart`:
 
 ```csharp
-context.ReservePixels(width, height);
+context.ReservePixels(width, height, PixelType.Rgba32);
 var image = new Image(width, height);
 foreach ((ReadOnlyMemory<byte> data, int x, int y) in tiles)
 {

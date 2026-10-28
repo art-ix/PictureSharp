@@ -23,7 +23,7 @@ public class EndToEndTests
 
     private static double MeanDifference(Image a, Image b)
     {
-        ReadOnlySpan<Rgba32> x = a.GetPixelSpan(), y = b.GetPixelSpan();
+        ReadOnlySpan<Rgba32> x = a.GetPixelSpan<Rgba32>(), y = b.GetPixelSpan<Rgba32>();
         long total = 0;
         for (int i = 0; i < x.Length; i++)
         {
@@ -53,7 +53,7 @@ public class EndToEndTests
             await Assert.That(loaded.Count).IsEqualTo(sizes.Length);
             for (int i = 0; i < sizes.Length; i++)
             {
-                await Assert.That(loaded[i].GetPixelSpan().SequenceEqual(variants[i].GetPixelSpan())).IsTrue().Because($"variant {sizes[i]}");
+                await Assert.That(loaded[i].GetPixelSpan<Rgba32>().SequenceEqual(variants[i].GetPixelSpan<Rgba32>())).IsTrue().Because($"variant {sizes[i]}");
             }
 
             ImageInfo selected = IcoFile.IdentifySelected(ico);
@@ -139,7 +139,7 @@ public class EndToEndTests
         {
             await Assert.That(written.Frames[i].Duration).IsEqualTo(expected.Frames[i].Duration);
             // Lossless WebP may change the color of fully transparent pixels.
-            ReadOnlySpan<Rgba32> a = written.Frames[i].GetPixelSpan(), e = expected.Frames[i].GetPixelSpan();
+            ReadOnlySpan<Rgba32> a = written.Frames[i].GetPixelSpan<Rgba32>(), e = expected.Frames[i].GetPixelSpan<Rgba32>();
             for (int p = 0; p < a.Length; p++)
             {
                 if (a[p] != e[p] && (a[p].A != 0 || e[p].A != 0))
@@ -166,7 +166,7 @@ public class EndToEndTests
         });
 
         using Image before = Image.Load(input), after = Image.Load(edited);
-        await Assert.That(after.GetPixelSpan().SequenceEqual(before.GetPixelSpan())).IsTrue();
+        await Assert.That(after.GetPixelSpan<Rgba32>().SequenceEqual(before.GetPixelSpan<Rgba32>())).IsTrue();
         ImageMetadata metadata = Image.ReadMetadata(edited);
         await Assert.That(metadata.ExifProfile.TryGetValue(ExifTag.Model, out string? model) && model == "End-to-end").IsTrue();
         await Assert.That(metadata.ExifProfile.TryGetValue(ExifTag.GpsLatitudeRef, out _)).IsFalse();
@@ -194,7 +194,7 @@ public class EndToEndTests
         await Assert.That(constrained.FrameCount).IsEqualTo(unconstrained.FrameCount);
         for (int i = 0; i < constrained.FrameCount; i++)
         {
-            await Assert.That(constrained.Frames[i].GetPixelSpan().SequenceEqual(unconstrained.Frames[i].GetPixelSpan())).IsTrue();
+            await Assert.That(constrained.Frames[i].GetPixelSpan<Rgba32>().SequenceEqual(unconstrained.Frames[i].GetPixelSpan<Rgba32>())).IsTrue();
         }
 
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(input, tight with { MaxFrames = frameCount - 1 }));
@@ -226,7 +226,7 @@ public class EndToEndTests
         await Assert.That(sdrBase.HasHdr).IsFalse();
         using Image hdrSource = Image.Load(input, hdrOptions);
         await Assert.That(hdrSource.HasHdr).IsTrue();
-        await Assert.That(hdrSource.GetPixelSpan().SequenceEqual(sdrBase.GetPixelSpan())).IsTrue();
+        await Assert.That(hdrSource.GetPixelSpan<Rgba32>().SequenceEqual(sdrBase.GetPixelSpan<Rgba32>())).IsTrue();
 
         // Explicit conversion: reconstruct, tone map to SDR and save without HDR declarations.
         using HdrImage hdr = hdrSource.ToHdr();

@@ -5,12 +5,12 @@ namespace PictureSharp.Tests.Core;
 /// <summary>Properties of the photographic adjustments; pixel values are checked by <see cref="PhotoAdjustOracleTests"/>.</summary>
 public class PhotoAdjustTests
 {
-    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
+    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan<Rgba32>().ToArray();
 
     private static Image Solid(int w, int h, Rgba32 color)
     {
         var img = new Image(w, h);
-        img.GetPixelSpan().Fill(color);
+        img.GetPixelSpan<Rgba32>().Fill(color);
         return img;
     }
 
@@ -50,7 +50,7 @@ public class PhotoAdjustTests
         Rgba32[] after = Pixels(anim);
         await Assert.That(after.Select(p => p.A)).IsEquivalentTo(before.Select(p => p.A), CollectionOrdering.Matching);
         await Assert.That(after.SequenceEqual(before)).IsFalse();
-        await Assert.That(anim.Frames[1].GetPixelSpan().ToArray()).IsEquivalentTo(anim.Frames[0].GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(anim.Frames[1].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(anim.Frames[0].GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]

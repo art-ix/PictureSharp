@@ -55,7 +55,7 @@ public readonly ref partial struct ImageProcessingContext
     {
         foreach (ImageFrame frame in _state.WritableFrames)
         {
-            operation(frame.GetPixelSpan(), state);
+            operation(frame.Pixels.AsSpan(), state);
         }
 
         return this;

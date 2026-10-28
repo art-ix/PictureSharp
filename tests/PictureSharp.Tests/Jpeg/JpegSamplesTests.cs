@@ -57,7 +57,7 @@ public class JpegSamplesTests
         string expected = Reference.Value![name];
         await Assert.That(expected).IsNotEqualTo("error");
         using Image image = Image.Load(Path.Combine(Corpus.SamplesDir, name));
-        await Assert.That(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because($"{name} differs from Pillow");
+        await Assert.That(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()))).IsTrue().Because($"{name} differs from Pillow");
     }
 
     [Test]
@@ -73,7 +73,7 @@ public class JpegSamplesTests
         {
             string expected = ScaledReference(scale)![name];
             using Image image = JpegDecoder.DecodeScaled(File.ReadAllBytes(Path.Combine(Corpus.SamplesDir, name)), DecoderOptions.Default, scale);
-            await Assert.That(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsTrue().Because($"{name} at 1/{scale} differs from Pillow");
+            await Assert.That(expected == Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()))).IsTrue().Because($"{name} at 1/{scale} differs from Pillow");
         }
     }
 

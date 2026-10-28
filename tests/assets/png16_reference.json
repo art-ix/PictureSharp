@@ -1,0 +1,97 @@
+{
+  "files": {
+    "apng16.png": {
+      "frames": [
+        "b534ae9d5813a357a33bb9635b7cd2b583c37dafa46ac9ce0778a6cbce82813f",
+        "01ee9bdcea17f36fd9fb92e6161e47ee673c0c4d8bd3f01b52d37cd41832a4eb",
+        "5a010322f457a6cb0c80bbcc878ca04328cd6244755d881616f6358ca59b894d",
+        "d0a01013f5bb7056f2c5b755099684508ae9ed2b917713a62987694f4b0a7cb8"
+      ],
+      "height": 6,
+      "imagemagick": false,
+      "width": 8
+    },
+    "gray16.png": {
+      "frames": [
+        "89adca04ff82dbb1ba2cefbd697c04af23eb890d486106562b4cc925e5786457"
+      ],
+      "height": 7,
+      "imagemagick": true,
+      "width": 13
+    },
+    "gray16_adam7.png": {
+      "frames": [
+        "17b7327adeba56d4cfbc3fb39aad5afd6966fc88b1eb09a7c890205a2fa8ecc4"
+      ],
+      "height": 11,
+      "imagemagick": true,
+      "width": 17
+    },
+    "gray16_trns.png": {
+      "frames": [
+        "a5a18ceaaf6b1e9f8e08e98f286cfda283092f0615a6aed6041da643d9b9b1d9"
+      ],
+      "height": 5,
+      "imagemagick": true,
+      "width": 9
+    },
+    "graya16.png": {
+      "frames": [
+        "47c68e7aed41be7971388decb5c8093c6ab448e37a28e940009511f730608bfa"
+      ],
+      "height": 7,
+      "imagemagick": true,
+      "width": 13
+    },
+    "graya16_adam7.png": {
+      "frames": [
+        "324cb3fe5fea20b75ae1a07521f49bf06475d7e71b6be4203b26ed67fbd614fe"
+      ],
+      "height": 11,
+      "imagemagick": true,
+      "width": 17
+    },
+    "rgb16.png": {
+      "frames": [
+        "6a3256d2bde1dc29901702106ea544939187133781fded5ea3d394cea0d46a2a"
+      ],
+      "height": 7,
+      "imagemagick": true,
+      "width": 13
+    },
+    "rgb16_adam7.png": {
+      "frames": [
+        "84575f9df97a76ab169eed8f15c9128a2c57a9a69bbbbcb39ce0f71e2508987d"
+      ],
+      "height": 11,
+      "imagemagick": true,
+      "width": 17
+    },
+    "rgb16_trns.png": {
+      "frames": [
+        "06f01d21d92a324c8bb6e894d90416dfe7f83df5041000cfb4cab47388a04ff4"
+      ],
+      "height": 5,
+      "imagemagick": true,
+      "width": 9
+    },
+    "rgba16.png": {
+      "frames": [
+        "c5ec7d20a5723b1413390ab0167eee9b696928ba3547f28750e11e8a2838bd93"
+      ],
+      "height": 7,
+      "imagemagick": true,
+      "width": 13
+    },
+    "rgba16_adam7.png": {
+      "frames": [
+        "6f286e437f0da54a2882bc7a094230cc6d04d2e910a589845c56a643a2ec09ab"
+      ],
+      "height": 11,
+      "imagemagick": true,
+      "width": 17
+    }
+  },
+  "layout": "RGBA 16-bit little-endian, SHA-256 per frame",
+  "tool": "Version: ImageMagick 6.9.12-98 Q16 x86_64 18038 https://legacy.imagemagick.org"
+}

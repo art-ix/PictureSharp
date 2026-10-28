@@ -34,7 +34,7 @@ public class ProcessingOracleTests
     {
         var random = new Random(seed);
         var img = new Image(w, h);
-        Span<Rgba32> px = img.GetPixelSpan();
+        Span<Rgba32> px = img.GetPixelSpan<Rgba32>();
         for (int i = 0; i < px.Length; i++)
         {
             int a = random.Next(4) switch { 0 => 0, 1 => 255, _ => random.Next(256) };
@@ -288,7 +288,7 @@ public class ProcessingOracleTests
                 }
 
                 ReadOnlySpan<byte> theirs = file.AsSpan(newline + 1);
-                ReadOnlySpan<byte> mine = MemoryMarshal.AsBytes(ours.GetPixelSpan());
+                ReadOnlySpan<byte> mine = MemoryMarshal.AsBytes(ours.GetPixelSpan<Rgba32>());
                 int diffs = 0, maxDiff = 0;
                 for (int i = 0; i < mine.Length; i++)
                 {

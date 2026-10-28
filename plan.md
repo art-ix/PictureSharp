@@ -25,7 +25,8 @@ pracy: `progres.md` (bez commitowania).
 
 - `net10.0`, `LangVersion=14.0`, nullable, warnings as errors i XML docs. Publiczne API w `PictureSharp` (model, opcje, konfiguracja i rozszerzenia `Image`), `PictureSharp.Processing`, `PictureSharp.Formats` (SPI wtyczek) i `PictureSharp.Formats.<Format>`; implementacja jest `internal`.
 - Biblioteka używa wyłącznie BCL: bez `PackageReference`, P/Invoke, `unsafe` oraz `System.IO.Compression`. Deflate/inflate pochodzi z `Algorithms/Compression/`. `System.Drawing.Primitives` jest dozwolone. Wtyczki mogą używać `System.IO.Compression` do dekompresji (decyzja użytkownika 2026-10-17). Rdzeń zostaje przy własnym deflate/inflate (decyzja użytkownika 2026-10-18, zastępuje plan zniesienia zakazu z 2026-10-17): migracja na `ZLibStream`/`DeflateStream` została zmierzona i wycofana (domyślne kodowanie PNG do 6× wolniejsze, dekodowanie do 1,5× wolniejsze, rozmiary bez zmian); szczegóły w `docs/performance.md`, sekcja „Own deflate versus System.IO.Compression (0.7.2)”.
-- `Image` i `ImageFrame` przechowują `Rgba32` z prostą alfą. Bufory robocze z `ArrayPool<T>`, piksele z `GC.AllocateUninitializedArray`; gorące pętle bez alokacji.
+- `Image` i `ImageFrame` przechowują `Rgba32` z prostą alfą; od 0.9.0 alternatywnie `Rgba64` według `PixelType`
+  (wspólny dla wszystkich klatek), z zachowaniem 16-bitowej precyzji we wszystkich operacjach. Bufory robocze z `ArrayPool<T>`, piksele z `GC.AllocateUninitializedArray`; gorące pętle bez alokacji.
 - Zachowujemy dotychczasowe wyniki i domyślne zachowanie. Nowe przekształcenia obrazu wymagają jawnej opcji. Ewentualne nowe domyślne limity zasobów muszą być opisane jako zmiana zachowania.
 - Uszkodzone dane: `ImageFormatException`; poprawne, nieobsługiwane warianty: `NotSupportedException`. Anulowanie: `OperationCanceledException`. Błędy I/O zachowują właściwy typ. Żadne złośliwe wejście nie może powodować niekontrolowanych wyjątków indeksowania lub przepełnienia.
 - Nowe porty WebP bazują na read-only `reference/libwebp-1.6.0/`, z komentarzami źródłowymi i aktualizacją `THIRD-PARTY-NOTICES.txt`. Zachowujemy semantykę C, w tym kolejność operacji `float` i 23-bitowe koszty VP8L.
@@ -59,6 +60,7 @@ pracy: `progres.md` (bez commitowania).
 | 0.8.4 | Ikona paczek 128×128 (12 KB) zamiast 1254×1254; paczki adapterów z ~490 KB do ~30 KB | Wydanie 2026-10-26 |
 | 0.8.5 | `ImageInfo.Color` (model, kanały, typ próbek, alfa, ICC, CICP) i `Compression`; czyste `ImageInfo`; jednorazowe złamanie SPI z blokadą starych wtyczek | Wydanie 2026-10-26 |
 | 0.8.2 | Prośby wtyczek: limit zagnieżdżenia dekodowania, metadane specyficzne dla formatu (`FormatMetadata`), deklaracja stabilnego SPI; addytywnie | Wydana (2026-10-25; tag v0.8.2, NuGet 0.8.2, bez ARM64) |
+| 0.9.0 | 16 bitów na kanał w całym rdzeniu (`Rgba64`, `PixelType`, PNG 16-bit, wszystkie operacje) i konwersja kolorów we float na `Rgba64`; złamanie API i SPI z blokadą starych wtyczek | Zaplanowana; projekt w `docs/proposals/high-bit-depth.md` |
 
 Wtyczka `PictureSharp.Heif` ma osobne repozytorium i własne wersje (od 0.1.0); jej zależności od wydań rdzenia
 opisuje sekcja [Wtyczka HEIF](#wtyczka-heif--osobne-repozytorium).
@@ -1005,7 +1007,7 @@ Zależności od wydań rdzenia:
 ## Poza planem — kandydaci po 0.8.1
 
 Do decyzji użytkownika, bez zobowiązań:
-- przetwarzanie HDR w float;
+- przetwarzanie HDR w float (piksele `Rgba128` w `Image`; 0.9.0 zostawia na nie miejsce w `PixelType`);
 - CICP PQ/HLG;
 - AVIF (kontener wspólny z wtyczką HEIF).
 
@@ -1105,3 +1107,77 @@ bezstratność. Decyzje użytkownika (2026-10-26): czyste `ImageInfo` bez dublow
 - Wtyczki sprawdzone na lokalnej paczce 0.8.5: TIFF 3899/3899 (wydawany razem z rdzeniem), Formats.Extra 1188 + 31,
   HEIF (testy kolorów 10/10); ich wydania osobno.
 - Notatki: `docs/releases/release-0.8.5.md`; migracja w `docs/plugin-spi.md`.
+
+## 0.9.0 — 16 bitów na kanał i ścieżka dekodowania float (zaplanowana)
+
+Projekt: [docs/proposals/high-bit-depth.md](docs/proposals/high-bit-depth.md). Decyzja użytkownika (2026-10-28):
+pełna obsługa 16 bitów na kanał w rdzeniu, wolno złamać publiczne API i stabilne SPI. Zastępuje zapis z 2026-10-27,
+że pełne formaty wysokiej precyzji w `Image` (wariant B) nie są planowane. Wariant A (dekodery oddają rzędy `Rgba128`)
+odpada (D18): dekoder ze źródłem powyżej 8 bitów oddaje `Rgba64`, a `ConvertToSrgb` liczy na nim we float i kwantyzuje
+raz; przy `ToSrgb` z żądaniem `Rgba32` serwis dekoduje wewnętrznie z `PreserveBitDepth` i zmniejsza głębię po konwersji.
+Pierwotna motywacja (JPEG XL XYB+ICC) jest już załatwiona we wtyczce, która renderuje XYB do sRGB we float.
+
+Decyzje projektowe (2026-10-28, sekcja 11 propozycji):
+- D1: niegeneryczny `Image` z `PixelType` (`Rgba32`, `Rgba64`), nie `Image<TPixel>`.
+- D2: domyślnie dekodowanie do `Rgba32`; `DecoderOptions.PreserveBitDepth` (`bool`) na żądanie; bez opcji „zawsze
+  `Rgba64`” (to samo daje `PreserveBitDepth` + `ConvertPixelType`).
+- D3: indeksator `image[x, y]` rzuca `InvalidOperationException` na obrazie 16-bitowym; typowane
+  `GetPixel<TPixel>`/`SetPixel<TPixel>`.
+- D5: piksel 16-bitowy liczy się jako 2 w `MaxPixels`, bez nowego limitu.
+- D9: bez publicznego `IPixel<TPixel>`; typowane API ma ograniczenie `unmanaged` i sprawdza konkretny obsługiwany
+  typ, a kontrakty algorytmów pozostają wewnętrzne.
+- D10: dodawanie klatek automatycznie rozszerza 8→16; 16→8 wymaga wcześniejszej jawnej konwersji, również przy
+  dodawaniu kopii klatki.
+- D11: `MeanNormalized`/`PercentileNormalized` zastępują `Mean`/`Percentile`; nowe nazwy wymuszają świadomą
+  migrację do wyników w zakresie 0–1.
+- D12: `LevelsOptions` z polami `*Normalized` i `CurvesNormalized` (punkty 0–1) zastępują stare nazwy, z tego samego
+  powodu co D11 (stary kod kompilowałby się z nowymi jednostkami).
+- D13: tylko generyczny dostęp do pikseli (`GetRowSpan<TPixel>`, `GetPixelSpan<TPixel>`, `GetPixelMemory<TPixel>`,
+  `LoadPixelData<TPixel>`, a także `CopyPixelDataTo/From<TPixel>` — uzupełnienie z 2026-10-28); wersje niegeneryczne
+  usunięte, indeksator zostaje `Rgba32` (D3).
+- D14: PNG `Auto` zapisuje głębię 8 dla `Rgba64` z dokładną treścią 8-bitową (próbki będące wielokrotnością 257);
+  `Sixteen` wymusza 16.
+- D15: `sBIT` tylko jako metadane; nie skaluje próbek i nie wpływa na `PreserveBitDepth`, zapisywany przy zgodnej głębi.
+- D16: CLI `convert --depth auto|8|16`, domyślnie `8`.
+- D17: przy poślizgu po etapie 1 najwyżej prerelease `0.9.0-preview.N` dla autorów wtyczek; stabilne 0.9.0 tylko
+  z kompletem operacji.
+- D6: dithering 16→8 tylko w `ConvertPixelType(PixelType.Rgba32, dither: true)`; kodery zaokrąglają bez opcji.
+- D18: bez publicznego SPI rzędów float (wariant A); float `ConvertToSrgb` na `Rgba64`.
+- D19: bez `PixelFormat.Bgra64` i bez `RgbaF16` w adapterze Skia (brak odbiorców, F16 stratne).
+- D20: ICO zapisuje obrazy 16-bitowe jako 8-bitowe.
+- D21: histogram domyślnie ma 256 koszyków; `HistogramOptions.FullResolution` daje koszyk na każdą wartość próbki.
+- D22: `IImageFormatEncoder.SupportsPixelType(PixelType)` z domyślną implementacją zamiast enuma flag.
+- D23: `Rgba64` ma ten sam zestaw członków co `Rgba32` (stałe, `PackedValue`, `Deconstruct`, równość, `ToString`),
+  bez `ToVector4`, parsowania i hex.
+- D24: nowa właściwość `PngEncoderOptions.BitDepth` typu `PngBitDepth { Auto, UpTo8, Sixteen }`.
+- Przy rekomendacji, dopóki użytkownik nie zmieni: D4 (nieprzeniesione operacje rzucają `NotSupportedException`
+  w trakcie prac), D7 (System.Drawing tylko 32bpp), D8 (miejsce na `Rgba128` w `PixelType`, bez dodawania w 0.9.0).
+
+Etapy (1–4 wychodzą razem jako 0.9.0, bez stabilnego wydania z niepełnym zestawem operacji; wyjątek: prerelease z D17):
+
+| Etap | Zakres |
+| --- | --- |
+| 1 | `Rgba64`, `PixelType`, typowany dostęp do pikseli, nowe `PixelFormat` i konwersje; PNG 16-bit odczyt i zapis (z `tRNS` i APNG); geometria; zmniejszanie głębi w pozostałych koderach; `SupportsPixelType` w SPI, blokada wtyczek < 0.9.0; budżet `MaxPixels` |
+| 2 | Resize, Affine, rozmycia i wyostrzanie, kompozycja, `DrawImage`, premultiplikacja |
+| 3 | Operacje tonalne i kolorystyczne; `LevelsOptions` (`*Normalized`), `CurvesNormalized` i progi na 0–1, `ImageHistogram` z `FullResolution`, `IFrameProcessor<TPixel>` |
+| 4 | Negatywy, czyszczenie (kurz, szum), ICC i `ToSrgb` we float na `Rgba64` (D18), HDR i gain map z bazą `Rgba64` |
+| 5 | Adaptery (Skia `Rgba16161616`, System.Drawing 32bpp); wydania czterech wtyczek na 0.9.0 |
+
+Stan (2026-10-28): etap 1 zaimplementowany (szczegóły i pozostałości w `progres.md`): `Rgba64`, `PixelType`,
+generyczny dostęp do pikseli, nowe `PixelFormat`, `ConvertPixelType` z ditheringiem, zasady D10, `PreserveBitDepth`,
+ważony `MaxPixels`, `ReservePixels(…, PixelType, …)` z kontrolą zwróconego obrazu, `SupportsPixelType`, blokada wtyczek
+< 0.9.0, PNG 16-bit (odczyt wszystkich typów koloru z `tRNS`, Adam7, APNG, czytnik sekwencyjny; zapis z `PngBitDepth`),
+geometria przez wspólny dispatch, zaokrąglanie w pozostałych koderach (w tym ICO). Poza etapem 1 zostało m.in.: `sBIT`
+(D15), SIMD `TrimBounds` dla `ushort`, konwersja wierszami zamiast kopii całego obrazu w zapisie przez fallback.
+Etapy 2–4: nierozpoczęte (operacje rzucają `NotSupportedException` na `Rgba64`, D4). `VERSION` = 0.9.0.
+
+DoD:
+- Każda operacja i kodek wbudowany działa na obrazach `Rgba64` z 16-bitową precyzją (gradient 65536 poziomów nie
+  spada do 256); wynik po zaokrągleniu do 8 bitów zgodny z operacją na oryginale 8-bitowym w opisanej tolerancji.
+- 8→16→8 bez zmian; ścieżka 8-bitowa bitowo bez zmian (istniejące testy i `reference.json`), bez regresji czasu
+  w celowanych pomiarach.
+- Korpus 16-bitowych PNG wszystkich typów koloru, z `tRNS` i APNG; referencje z czytnika 16-bitowego (pypng + numpy lub
+  ImageMagick), bo Pillow zaokrągla RGB/RGBA 16-bit do 8 bitów.
+- Moduł zbudowany na rdzeniu 0.8.5 odrzucany przez `AddFormat`/`ReplaceFormat`.
+- Migawka API zatwierdzona, migracja opisana w `docs/plugin-spi.md` i nowym przewodniku; `verify-package-consumer.sh`
+  (trimming, Native AOT) zielone; wtyczki TIFF, HEIF, JPEG XL i Formats.Extra sprawdzone na lokalnej paczce.

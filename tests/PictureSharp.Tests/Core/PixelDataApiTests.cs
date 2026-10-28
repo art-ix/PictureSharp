@@ -51,7 +51,7 @@ public class PixelDataApiTests
 
         using var image = new Image(1, 2);
         image.CopyPixelDataFrom(buffer, format, stride);
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(copy.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(copy.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         byte[] imageBuffer = Enumerable.Repeat((byte)0xCD, buffer.Length).ToArray();
         image.CopyPixelDataTo(imageBuffer, format, stride);
         await Assert.That(imageBuffer).IsEquivalentTo(buffer, CollectionOrdering.Matching);
@@ -62,7 +62,7 @@ public class PixelDataApiTests
     public async Task Frame_RejectsShortBuffersAndInvalidStride_BeforeWriting(PixelFormat format, byte[] encoded, Rgba32 _)
     {
         var frame = new ImageFrame(1, 2);
-        frame.GetPixelSpan().Fill(Rgba32.White);
+        frame.GetPixelSpan<Rgba32>().Fill(Rgba32.White);
         byte[] shortBuffer = new byte[encoded.Length * 2 - 1];
         await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => frame.CopyPixelDataTo(shortBuffer, format)).ParamName).IsEqualTo("destination");
         await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => frame.CopyPixelDataFrom(shortBuffer, format)).ParamName).IsEqualTo("source");
@@ -91,7 +91,7 @@ public class PixelDataApiTests
         Rgba32[] destination = [default, default, new(9, 8, 7)];
         image.CopyPixelDataTo(destination);
         await Assert.That(destination).IsEquivalentTo(new Rgba32[] { Rgba32.White, Rgba32.Black, new(9, 8, 7) }, CollectionOrdering.Matching);
-        foreach (var pixel in second.GetPixelSpan().ToArray())
+        foreach (var pixel in second.GetPixelSpan<Rgba32>().ToArray())
         {
             await Assert.That(pixel).IsEqualTo(default);
         }
@@ -102,7 +102,7 @@ public class PixelDataApiTests
         Assert.ThrowsExactly<ArgumentException>(() => image.Frames.RootFrame.CopyPixelDataTo(new Rgba32[1]));
         await Assert.That(image[0, 0]).IsEqualTo(Rgba32.White);
         image.CopyPixelDataFrom(new byte[] { 1, 2, 3, 255, 4, 5, 6, 255 }, PixelFormat.Rgba32);
-        foreach (var pixel in second.GetPixelSpan().ToArray())
+        foreach (var pixel in second.GetPixelSpan<Rgba32>().ToArray())
         {
             await Assert.That(pixel).IsEqualTo(default);
         }
@@ -113,13 +113,13 @@ public class PixelDataApiTests
     {
         using var image = new Image(3, 3, new Rgba32(100, 50, 20, 128));
         ImageFrame frame = image.Frames.RootFrame;
-        Memory<Rgba32> memory = frame.GetPixelMemory();
+        Memory<Rgba32> memory = frame.GetPixelMemory<Rgba32>();
         Span<byte> bytes = image.GetPixelByteSpan();
         bytes[0] = 40;
         byte red = frame[0, 0].R;
-        image.GetPixelMemory().Span[0] = new(10, 20, 30, 40);
+        image.GetPixelMemory<Rgba32>().Span[0] = new(10, 20, 30, 40);
         byte[] written = frame.GetPixelByteSpan()[..4].ToArray();
-        (Rgba32 viaMemory, Rgba32 viaImage) = (memory.Span[0], image.GetPixelSpan()[0]);
+        (Rgba32 viaMemory, Rgba32 viaImage) = (memory.Span[0], image.GetPixelSpan<Rgba32>()[0]);
 
         image.Mutate(x => x.BoxBlur(1));
         Rgba32 filtered = frame[0, 0];

@@ -12,7 +12,7 @@ public class PcxDecoderTests
     private static Rgba32[] Pixels(byte[] pcx, DecoderOptions? options = null)
     {
         using Image image = Image.Load(pcx, options);
-        return image.GetPixelSpan().ToArray();
+        return image.GetPixelSpan<Rgba32>().ToArray();
     }
 
     [Test]
@@ -198,7 +198,7 @@ public class PcxDecoderTests
         }.Build();
         using Image image = Image.Load(pcx);
         await Assert.That(image.HasAlpha).IsTrue();
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo([new Rgba32(1, 3, 5, 7), new Rgba32(2, 4, 6, 8)], CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo([new Rgba32(1, 3, 5, 7), new Rgba32(2, 4, 6, 8)], CollectionOrdering.Matching);
         ImageInfo info = Image.Identify(pcx);
         await Assert.That(info.Color.HasAlpha).IsTrue();
         await Assert.That(info.Format).IsEqualTo(ImageFormat.Pcx);
@@ -218,7 +218,7 @@ public class PcxDecoderTests
         }.Build();
         using Image image = Image.Load(pcx);
         await Assert.That((image.Width, image.Height)).IsEqualTo((2, 2));
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo([Green, Blue, White, Red], CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo([Green, Blue, White, Red], CollectionOrdering.Matching);
     }
 
     [Test]

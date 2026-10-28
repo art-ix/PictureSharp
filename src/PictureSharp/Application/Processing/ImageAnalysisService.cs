@@ -24,7 +24,7 @@ internal static class ImageAnalysisService
             ImageFrame frame = image.Frames[f];
             if (region.Width == frame.Width)
             {
-                ReadOnlySpan<Rgba32> pixelsInRegion = frame.GetPixelSpan().Slice(region.Y * frame.Width, region.Height * frame.Width);
+                ReadOnlySpan<Rgba32> pixelsInRegion = frame.Pixels.AsSpan().Slice(region.Y * frame.Width, region.Height * frame.Width);
                 pixels += Histogram.Accumulate(pixelsInRegion, counts, exclude, cancellationToken);
 
                 continue;
@@ -33,7 +33,7 @@ internal static class ImageAnalysisService
             for (int y = region.Y; y < region.Bottom; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                pixels += Histogram.Accumulate(frame.GetRowSpan(y).Slice(region.X, region.Width), counts, exclude, cancellationToken);
+                pixels += Histogram.Accumulate(frame.PixelRow(y).Slice(region.X, region.Width), counts, exclude, cancellationToken);
             }
         }
 

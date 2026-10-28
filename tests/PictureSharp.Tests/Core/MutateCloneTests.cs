@@ -8,7 +8,7 @@ namespace PictureSharp.Tests.Core;
 
 public class MutateCloneTests
 {
-    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan().ToArray();
+    private static Rgba32[] Pixels(Image img) => img.GetPixelSpan<Rgba32>().ToArray();
 
     private static Image Animation()
     {
@@ -22,7 +22,7 @@ public class MutateCloneTests
     public async Task Clone_LeavesSourceUntouched_ForEveryKindOfOperation()
     {
         using Image source = Animation();
-        Rgba32[][] before = source.Frames.Select(f => f.GetPixelSpan().ToArray()).ToArray();
+        Rgba32[][] before = source.Frames.Select(f => f.GetPixelSpan<Rgba32>().ToArray()).ToArray();
         using Image badge = ImageTests.Pattern(2, 2);
         Action<ImageProcessingContext>[] operations =
         [
@@ -38,7 +38,7 @@ public class MutateCloneTests
             x => x.DrawImage(badge, new Point(1, 1)),
             x => x.Opacity(0.5f).BackgroundColor(Color.White),
             x => x.MakeTransparent(source[0, 0]),
-            x => x.Apply(f => f.GetPixelSpan().Clear()),
+            x => x.Apply(f => f.GetPixelSpan<Rgba32>().Clear()),
             x => x.Resize(4, 3).Grayscale(),
             x => x.ApplyProcessor(new Extensibility.TransposeProcessor()),
             x => { },
@@ -52,7 +52,7 @@ public class MutateCloneTests
             await Assert.That(source.FrameCount).IsEqualTo(before.Length);
             for (int i = 0; i < before.Length; i++)
             {
-                await Assert.That(source.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
+                await Assert.That(source.Frames[i].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(before[i], CollectionOrdering.Matching);
             }
 
             await Assert.That(clone.Frames[0]).IsNotSameReferenceAs(source.Frames[0]);
@@ -77,7 +77,7 @@ public class MutateCloneTests
         await Assert.That(cloned.Size).IsEqualTo(mutated.Size);
         for (int i = 0; i < 2; i++)
         {
-            await Assert.That(cloned.Frames[i].GetPixelSpan().ToArray()).IsEquivalentTo(mutated.Frames[i].GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+            await Assert.That(cloned.Frames[i].GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(mutated.Frames[i].GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         }
     }
 
@@ -286,7 +286,7 @@ internal static class CustomOperations
     {
         public ImageProcessingContext Posterize() => x.Apply(frame =>
         {
-            foreach (ref Rgba32 p in frame.GetPixelSpan())
+            foreach (ref Rgba32 p in frame.GetPixelSpan<Rgba32>())
             {
                 p = new Rgba32((byte)(p.R | 1), (byte)(p.G | 1), (byte)(p.B | 1), p.A);
             }

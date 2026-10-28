@@ -30,7 +30,7 @@ public class QuantizationTests
     {
         using Image image = name == "many_colors" ? ManyColors() : Image.Load(Path.Combine(Corpus.CorpusDir, "src", name + ".png"));
         (width, height) = (image.Width, image.Height);
-        pixels = image.GetPixelSpan().ToArray();
+        pixels = image.GetPixelSpan<Rgba32>().ToArray();
         var packed = new uint[pixels.Length];
         for (int i = 0; i < pixels.Length; i++)
         {

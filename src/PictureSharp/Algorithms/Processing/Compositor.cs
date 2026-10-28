@@ -33,7 +33,7 @@ internal static partial class Compositor
         for (int y = y0; y < y1; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, x1 - x0);
+            Span<Rgba32> dstRow = dst.PixelRow(y).Slice(x0, x1 - x0);
             ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), x1 - x0);
             int done = vectorize ? OverRowSimd(dstRow, srcRow, opacity) : 0;
             for (int x = done; x < dstRow.Length; x++)
@@ -64,7 +64,7 @@ internal static partial class Compositor
         for (int y = y0; y < y1; y++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Span<Rgba32> dstRow = dst.GetRowSpan(y).Slice(x0, n);
+            Span<Rgba32> dstRow = dst.PixelRow(y).Slice(x0, n);
             ReadOnlySpan<Rgba32> srcRow = src.Slice(((y - at.Y) * srcWidth) + (x0 - at.X), n);
             for (int x = 0; x < n; x++)
             {

@@ -47,7 +47,7 @@ public class MetadataContainerTests
         for (int i = 0; i < result.FrameCount; i++)
         {
             await Assert.That(result.Frames[i].Duration).IsEqualTo(source.Frames[i].Duration);
-            await Sequence.AssertEqual(source.Frames[i].GetPixelSpan().ToArray(), result.Frames[i].GetPixelSpan().ToArray());
+            await Sequence.AssertEqual(source.Frames[i].GetPixelSpan<Rgba32>().ToArray(), result.Frames[i].GetPixelSpan<Rgba32>().ToArray());
         }
         byte[] cleared = Image.EditMetadata(edited, m => m.Clear());
         await Assert.That(Image.ReadMetadata(cleared).IsEmpty).IsTrue();

@@ -120,7 +120,7 @@ public class HdrGainMapGeneratorOracleTests
         reader.ReadBytes(24);   // linear boosts, covered by the payload
         byte[] iso = reader.ReadBytes(reader.ReadInt32());
 
-        ReadOnlySpan<Rgba32> mine = map.GetPixelSpan();
+        ReadOnlySpan<Rgba32> mine = map.GetPixelSpan<Rgba32>();
         long identical = 0;
         int worst = 0;
         for (int i = 0; i < width * height; i++)

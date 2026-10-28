@@ -38,8 +38,8 @@ internal abstract class FrameReadSession(Stream input, FrameSequenceInfo info, D
     {
         if (Context.Budget.Frames >= Context.Options.MaxFrames)
             throw new ImageFormatException(Info.Format, "Decoded frames exceed DecoderOptions.MaxFrames.");
-        if (Info.Width > (Context.Options.MaxPixels - Context.Budget.Pixels) / Info.Height)
-            throw new ImageFormatException(Info.Format, "Decoded pixels exceed DecoderOptions.MaxPixels.");
+        if (Info.Width > (Context.Options.MaxPixels - Context.Budget.Pixels) / Info.Height / Domain.Pixels.PixelTypes.Weight(Info.PixelType))
+            throw new ImageFormatException(Info.Format, DecodeLimits.PixelsExceeded("Decoded pixels exceed", Info.PixelType));
     }
 
     public async ValueTask<bool> MoveNextAsync(CancellationToken cancellationToken = default)
@@ -69,11 +69,11 @@ internal abstract class FrameReadSession(Stream input, FrameSequenceInfo info, D
                 _complete = true;
                 return false;
             }
-            if (frame.IsOwned || frame.Width != Info.Width || frame.Height != Info.Height)
+            if (frame.IsOwned || frame.Width != Info.Width || frame.Height != Info.Height || frame.PixelType != Info.PixelType)
                 throw new ImageFormatException(Info.Format, "The reader returned an owned frame or inconsistent canvas.");
             if (Info.FrameCount is { } declared && _count >= declared)
                 throw new ImageFormatException(Info.Format, "The sequence contains extra frames.");
-            Context.Budget.ReserveImage(Info.Format, frame.Width, frame.Height);
+            Context.Budget.ReserveImage(Info.Format, frame.Width, frame.Height, 1, frame.PixelType);
             frame.Attach(Owner);
             _current = frame;
             _count++;

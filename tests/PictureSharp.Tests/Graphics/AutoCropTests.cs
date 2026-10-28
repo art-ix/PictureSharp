@@ -64,7 +64,7 @@ public class AutoCropTests
         Rectangle kept = expected ?? new Rectangle(Point.Empty, image.Size);
         await Assert.That(cropped.Size).IsEqualTo(kept.Size);
         using Image manual = image.Clone(x => x.Crop(kept));
-        await Assert.That(cropped.GetPixelSpan().ToArray()).IsEquivalentTo(manual.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(cropped.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(manual.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -125,8 +125,8 @@ public class AutoCropTests
         image[2, 2] = new Rgba32(255, 0, 0);
         image.Frames.RootFrame.Duration = TimeSpan.FromMilliseconds(40);
         ImageFrame second = image.Frames.AddClone(image.Frames.RootFrame);
-        second.GetPixelSpan().Clear();
-        second.GetPixelSpan()[(7 * 10) + 6] = new Rgba32(0, 255, 0);
+        second.GetPixelSpan<Rgba32>().Clear();
+        second.GetPixelSpan<Rgba32>()[(7 * 10) + 6] = new Rgba32(0, 255, 0);
         second.Duration = TimeSpan.FromMilliseconds(90);
 
         await Assert.That(image.FindTrimBounds()).IsEqualTo(new Rectangle(2, 2, 5, 6));
@@ -134,8 +134,8 @@ public class AutoCropTests
 
         await Assert.That(image.Size).IsEqualTo(new Size(5, 6));
         await Assert.That(image.FrameCount).IsEqualTo(2);
-        await Assert.That(image.Frames[0].GetPixelSpan()[0]).IsEqualTo(new Rgba32(255, 0, 0));
-        await Assert.That(image.Frames[1].GetPixelSpan()[(5 * 5) + 4]).IsEqualTo(new Rgba32(0, 255, 0));
+        await Assert.That(image.Frames[0].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(255, 0, 0));
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>()[(5 * 5) + 4]).IsEqualTo(new Rgba32(0, 255, 0));
         await Assert.That(image.Frames[0].Duration).IsEqualTo(TimeSpan.FromMilliseconds(40));
         await Assert.That(image.Frames[1].Duration).IsEqualTo(TimeSpan.FromMilliseconds(90));
     }

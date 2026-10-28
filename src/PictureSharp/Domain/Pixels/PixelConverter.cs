@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 namespace PictureSharp.Domain.Pixels;
 
 /// <summary>Row-wise conversions between <see cref="Rgba32"/> and the external <see cref="PixelFormat"/> layouts.</summary>
-internal static class PixelConverter
+internal static partial class PixelConverter
 {
     /// <summary>BT.601 luma in 16.16 fixed point (weights sum to 65536).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

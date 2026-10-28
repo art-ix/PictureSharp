@@ -79,12 +79,12 @@ internal sealed class WebPFrameReader : FrameReadSession
         ImageFrame decoded = WebPDecoder.DecodeFrame(_parser.FrameData.Memory, frame, Context.Options, cancellationToken);
         if (_compositor is null)
         {
-            decoded.GetPixelSpan().CopyTo(_output.GetPixelSpan());
+            decoded.Pixels.AsSpan().CopyTo(_output.Pixels.AsSpan());
             _output.Duration = TimeSpan.Zero;
         }
         else
         {
-            _compositor.Compose(frame, decoded, MemoryMarshal.Cast<Rgba32, uint>(_output.GetPixelSpan()));
+            _compositor.Compose(frame, decoded, MemoryMarshal.Cast<Rgba32, uint>(_output.Pixels.AsSpan()));
             _output.Duration = TimeSpan.FromMilliseconds(frame.Duration);
         }
 

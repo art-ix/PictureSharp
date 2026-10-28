@@ -131,7 +131,7 @@ public class FormatOptionsTests
         using Image expected = Image.Load(encoded, plain);
         using Image actual = Image.Load(encoded, withOptions);
 
-        await Assert.That(actual.GetPixelSpan().ToArray()).IsEquivalentTo(expected.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(actual.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(expected.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(Image.Identify(encoded, withOptions)).IsEqualTo(Image.Identify(encoded, plain));
     }
 

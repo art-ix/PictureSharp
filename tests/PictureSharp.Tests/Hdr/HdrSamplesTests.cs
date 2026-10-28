@@ -107,7 +107,7 @@ public class HdrSamplesTests
         using HdrImage expected = apple.ToHdr();
         using Image reloaded = Image.Load(apple.ToJpeg(new JpegEncoderOptions { Quality = 95, GainMap = JpegGainMapMode.Preserve }), new DecoderOptions { LoadGainMap = true });
         await Assert.That(reloaded.GainMap!.Selected).IsEqualTo(HdrGainMapKinds.Iso21496);
-        apple.GetPixelSpan().CopyTo(reloaded.GetPixelSpan());
+        apple.GetPixelSpan<Rgba32>().CopyTo(reloaded.GetPixelSpan<Rgba32>());
         using HdrImage actual = reloaded.ToHdr();
         (double median, double p99) = Errors(actual.GetPixelSpan(), expected.GetPixelSpan());
         System.Text.Json.JsonElement budget = HdrGainMapGeneratorTests.Budget;

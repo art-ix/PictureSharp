@@ -123,7 +123,7 @@ public class HdrGainMapGeneratorTests
         float[] expected = HdrSynthetic.Components(hdr);
         using Image image = hdr.ToGainMapImage();
         using Image toneMapped = hdr.ToneMap();
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(toneMapped.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(toneMapped.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(image.HasHdr).IsTrue();
         GainMapInfo info = image.GainMap!;
         await Assert.That((info.Detected, info.Selected, info.GainMapSize, info.Headroom)).IsEqualTo((HdrGainMapKinds.Iso21496, HdrGainMapKinds.Iso21496, hdr.Size, (float?)hdr.Headroom));
@@ -163,7 +163,7 @@ public class HdrGainMapGeneratorTests
         using Image image = hdr.ToGainMapImage(source);
         await Assert.That(source.AttachedGainMap).IsSameReferenceAs(before);
         await Assert.That(image.GainMap!.GainMapSize).IsEqualTo(hdr.Size);
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         GainMapAttachment attachment = image.AttachedGainMap!;
         await Assert.That((attachment.BaseSpace, attachment.Parameters!.UseBaseColorSpace, attachment.Parameters.MultiplicationSpace))
             .IsEqualTo((HdrColorSpace.LinearDisplayP3, true, (HdrColorSpace?)HdrColorSpace.LinearDisplayP3));
@@ -248,7 +248,7 @@ public class HdrGainMapGeneratorTests
         await Assert.That((gainMap.Metadata.Kind, gainMap.Metadata.ChannelCount, gainMap.Map.Size)).IsEqualTo((HdrGainMapKinds.Iso21496, 3, new System.Drawing.Size(48, 32)));
         await Assert.That(gainMap.Metadata.ToIso().Length).IsGreaterThan(0);
         using Image map = gainMap.Map.Decode(-1, default);
-        await Assert.That(map.GetPixelSpan().ToArray()).IsEquivalentTo(image.AttachedGainMap!.EditedMap!.Value.Pixels, CollectionOrdering.Matching);
+        await Assert.That(map.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.AttachedGainMap!.EditedMap!.Value.Pixels, CollectionOrdering.Matching);
         image.Mutate(x => x.Grayscale());
         await Assert.That(image.HasHdr).IsFalse();
     }

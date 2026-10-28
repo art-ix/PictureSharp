@@ -20,7 +20,7 @@ public class DomainRulesTests
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new Image(width, height));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ImageFrame(width, height));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ImageFrame(width, height, []));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ImageFrame(width, height, new Rgba32[0]));
     }
 
     [Test]
@@ -28,8 +28,8 @@ public class DomainRulesTests
     {
         Assert.ThrowsExactly<ArgumentException>(() => new ImageFrame(2, 2, new Rgba32[3]));
         Assert.ThrowsExactly<ArgumentException>(() => new ImageFrame(2, 2, new Rgba32[5]));
-        Assert.ThrowsExactly<ArgumentNullException>(() => new ImageFrame(2, 2, null!));
-        Assert.ThrowsExactly<ArgumentException>(() => default(ImageDimensions).ValidateBuffer([]));
+        Assert.ThrowsExactly<ArgumentNullException>(() => new ImageFrame(2, 2, (Rgba32[])null!));
+        Assert.ThrowsExactly<ArgumentException>(() => default(ImageDimensions).ValidateBuffer(new Rgba32[0]));
         await Assert.That(new ImageDimensions(2, 3).PixelCount).IsEqualTo(6);
     }
 
@@ -157,7 +157,7 @@ public class DomainRulesTests
             () => _ = image.Metadata, () => _ = image.FrameCount, () => _ = image.IsAnimated,
             () => _ = image.LoopCount, () => image.LoopCount = 1, () => _ = image.AnimationBackgroundColor,
             () => image.AnimationBackgroundColor = default, () => _ = image.Frames, () => image.Clone(),
-            () => image.IsOpaque(), () => image.GetPixelMemory(), () => image.GetPixelByteSpan(),
+            () => image.IsOpaque(), () => image.GetPixelMemory<Rgba32>(), () => image.GetPixelByteSpan(),
             () => _ = image[0, 0], () => image[0, 0] = default, () => image.ToPixelData(),
             () => image.CopyPixelDataFrom(new Rgba32[1]), () => image.Mutate(x => x.Invert()), () => _ = frames.Count,
             () => _ = frames[0], () => frames.GetEnumerator(), () => frames.Add(new ImageFrame(1, 1)),

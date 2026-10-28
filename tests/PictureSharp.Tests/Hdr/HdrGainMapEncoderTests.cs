@@ -52,7 +52,7 @@ public class HdrGainMapEncoderTests
 
         // The base is the SDR encoding of the same pixels; the map is decoded identically (or oriented as the base).
         using Image sdr = Image.Load(image.ToJpeg());
-        await Assert.That(reloaded.GetPixelSpan().ToArray()).IsEquivalentTo(sdr.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(reloaded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(sdr.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         DecodedGainMap source = DecodeMap(image.AttachedGainMap!), written = DecodeMap(reloaded.AttachedGainMap!);
         if (image.AttachedGainMap!.AppliedOrientation is ExifOrientation.Unknown or ExifOrientation.TopLeft)
         {
@@ -122,7 +122,7 @@ public class HdrGainMapEncoderTests
         await Assert.That((iso.GainMapMin[0], iso.Gamma[0], iso.BaseOffset[0], iso.AlternateOffset[0])).IsEqualTo((0f, 1f, 0f, 0f));
 
         using HdrImage expected = image.ToHdr();
-        image.GetPixelSpan().CopyTo(reloaded.GetPixelSpan());
+        image.GetPixelSpan<Rgba32>().CopyTo(reloaded.GetPixelSpan<Rgba32>());
         using HdrImage actual = reloaded.ToHdr();
         float[] components = HdrSynthetic.Components(expected);
         HdrUltraHdrOracleTests.Stats s = HdrUltraHdrOracleTests.Measure(actual.GetPixelSpan(), components, 0, 0);

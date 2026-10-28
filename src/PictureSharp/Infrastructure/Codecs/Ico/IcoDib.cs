@@ -149,7 +149,7 @@ internal static class IcoDib
             Span<byte> rowBytes = rented.AsSpan(0, stride);
             for (int y = height - 1; y >= 0; y--)
             {
-                ReadOnlySpan<Rgba32> row = image.GetRowSpan(y);
+                ReadOnlySpan<Rgba32> row = image.PixelRow(y);
                 for (int x = 0; x < width; x++)
                 {
                     Rgba32 p = row[x];
@@ -166,7 +166,7 @@ internal static class IcoDib
             for (int y = height - 1; y >= 0; y--)
             {
                 mask.Clear();
-                ReadOnlySpan<Rgba32> row = image.GetRowSpan(y);
+                ReadOnlySpan<Rgba32> row = image.PixelRow(y);
                 for (int x = 0; x < width; x++)
                 {
                     if (row[x].A == 0)

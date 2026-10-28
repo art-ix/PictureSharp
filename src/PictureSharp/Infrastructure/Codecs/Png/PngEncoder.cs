@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using PictureSharp.Algorithms.Compression;
 using PictureSharp.Application.Abstractions;
+using PictureSharp.Application.Encoding;
 using PictureSharp.Domain.Metadata;
 using PictureSharp.Domain.Pixels;
 using PictureSharp.Formats.Png;
@@ -18,13 +19,22 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
 
     public ImageFormat Format => ImageFormat.Png;
 
+    public bool SupportsPixelType(PixelType pixelType) => pixelType is PixelType.Rgba32 or PixelType.Rgba64;
+
     public void Encode(Image image, Stream output, PngEncoderOptions options, CancellationToken cancellationToken)
     {
         List<ImageFrame> frames = image.IsAnimated && options.SaveAnimation
             ? [.. image.Frames]
             : [image.Frames.RootFrame];
 
-        Layout layout = ChooseLayout(frames, options.ColorType);
+        bool sixteen = UsesSixteenBits(frames, image.PixelType, options);
+        if (!sixteen && image.PixelType == PixelType.Rgba64)
+        {
+            // Exact 8-bit content (Auto) or an explicit reduction (UpTo8): the 8-bit layout selection applies.
+            frames = frames.ConvertAll(EncoderInput.ToRgba32);
+        }
+
+        Layout layout = sixteen ? ChooseLayout16(frames, options.ColorType) : ChooseLayout(frames, options.ColorType);
         int width = image.Width;
         int height = image.Height;
 
@@ -303,7 +313,9 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
         int pad = Math.Max(1, pass.Bpp / 8);
         int padded = pad + rowBytes;
         byte[] buffers = ArrayPool<byte>.Shared.Rent(2 * padded);
-        Rgba32[]? gathered = pass.Dx != 1 || pass.X0 != 0 ? ArrayPool<Rgba32>.Shared.Rent(pass.Width) : null;
+        bool sixteen = pass.Layout.BitDepth == 16;
+        Rgba32[]? gathered = !sixteen && (pass.Dx != 1 || pass.X0 != 0) ? ArrayPool<Rgba32>.Shared.Rent(pass.Width) : null;
+        Rgba64[]? wide = sixteen ? ArrayPool<Rgba64>.Shared.Rent(pass.Width) : null;
         try
         {
             Span<byte> prev = buffers.AsSpan(0, padded);
@@ -314,6 +326,10 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
             {
                 prev.Clear();
             }
+            else if (sixteen)
+            {
+                PackRow16(pass, first - 1, wide!, prev[pad..]);
+            }
             else
             {
                 PackRow(pass, first - 1, gathered, prev[pad..]);
@@ -322,7 +338,15 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
             for (int j = first; j < end; j++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                PackRow(pass, j, gathered, cur[pad..]);
+                if (sixteen)
+                {
+                    PackRow16(pass, j, wide!, cur[pad..]);
+                }
+                else
+                {
+                    PackRow(pass, j, gathered, cur[pad..]);
+                }
+
                 int filter = pass.Strategy switch
                 {
                     PngFilterStrategy.None => 0,
@@ -344,12 +368,17 @@ internal sealed partial class PngEncoder : IImageEncoder<PngEncoderOptions>, ISe
             {
                 ArrayPool<Rgba32>.Shared.Return(gathered);
             }
+
+            if (wide is not null)
+            {
+                ArrayPool<Rgba64>.Shared.Return(wide);
+            }
         }
     }
 
     private static void PackRow(Pass pass, int j, Rgba32[]? gathered, Span<byte> dst)
     {
-        Span<Rgba32> source = pass.Frame.GetRowSpan(pass.Y0 + (j * pass.Dy));
+        Span<Rgba32> source = pass.Frame.GetRowSpan<Rgba32>(pass.Y0 + (j * pass.Dy));
         ReadOnlySpan<Rgba32> pixels;
         if (gathered is null)
         {

@@ -2,6 +2,7 @@ using PictureSharp.Algorithms.Hdr;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Application.Decoding;
 using PictureSharp.Domain.Hdr;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Formats;
 
 namespace PictureSharp.Application.Extensibility;
@@ -34,6 +35,7 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
     public DecodedImage Decode(ReadOnlyMemory<byte> data, DecodeContext context)
     {
         var moduleContext = new ImageDecodeContext(context, codecs, format);
+        long charged = context.Budget.Pixels;
         Image image = decoder.Decode(data, moduleContext)
             ?? throw new InvalidOperationException($"The {format.Name} decoder returned no image.");
         GainMapAttachment? gainMap;
@@ -44,7 +46,16 @@ internal sealed class ModuleDecoder(ImageFormat format, IImageFormatDecoder deco
                 throw new ImageFormatException(format, "Decoded frames exceed DecoderOptions.MaxFrames.");
             }
 
-            context.Options.ValidateFrames(format, image.Width, image.Height, image.FrameCount);
+            context.Options.ValidateFrames(format, image.Width, image.Height, image.FrameCount, image.PixelType);
+            // The returned pixels must have been charged, by ReservePixels or by the nested decodes that produced them.
+            long required = (long)image.Width * image.Height * image.FrameCount * PixelTypes.Weight(image.PixelType);
+            if (context.Budget.Pixels - charged < required)
+            {
+                throw new InvalidOperationException(
+                    $"The {format.Name} decoder returned {image.FrameCount} frame(s) of {image.Width}x{image.Height} {image.PixelType} "
+                    + "pixels without reserving them; call ImageDecodeContext.ReservePixels with the resolved pixel type before allocating.");
+            }
+
             image.SourceFormat = format;
             gainMap = WithBaseColor(moduleContext.GainMap, image);
         }
@@ -95,6 +106,8 @@ internal sealed class ModuleEncoder(ImageFormat format, IImageFormatEncoder enco
     public ImageFormat Format => format;
 
     public EncoderOptions CreateDefaultOptions() => encoder.CreateDefaultOptions();
+
+    public bool SupportsPixelType(PixelType pixelType) => encoder.SupportsPixelType(pixelType);
 
     public void Encode(Image image, Stream output, EncoderOptions options, CancellationToken cancellationToken) =>
         encoder.Encode(image, output, options, cancellationToken);

@@ -12,12 +12,12 @@ internal sealed partial class PngDecoder
     /// Inflates on this thread while another one unfilters and converts each row as soon as it is complete.
     /// The rows are processed in order, exactly as in the sequential path.
     /// </summary>
-    private static Rgba32[] DecodePipelined(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected, RowConverter rowConverter,
-        CancellationToken cancellationToken)
+    private static TPixel[] DecodePipelined<TPixel>(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected,
+        RowConverter rowConverter, CancellationToken cancellationToken) where TPixel : unmanaged
     {
         int rowBytes = (int)PngConstants.RowBytes(width, bpp);
         int stride = rowBytes + 1;
-        var pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
+        var pixels = GC.AllocateUninitializedArray<TPixel>(width * height);
         var gate = new Parallelism.RowGate();
         byte[]? current = null;  // the inflater's latest buffer; written before each publish
 

@@ -43,13 +43,13 @@ public sealed class PpmFormat(bool reservePixels = true) : IImageFormatModule
             (int width, int height, int offset) = ReadHeader(data.Span);
             if (reservePixels)
             {
-                context.ReservePixels(width, height);
+                context.ReservePixels(width, height, PixelType.Rgba32);
             }
 
             // Slicing past the end throws ArgumentOutOfRangeException, which the library reports as corrupt data.
             ReadOnlySpan<byte> rgb = data.Span.Slice(offset, checked(width * height * 3));
             var image = new Image(width, height);
-            Span<Rgba32> pixels = image.GetPixelSpan();
+            Span<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
             for (int i = 0; i < pixels.Length; i++)
             {
                 context.ThrowIfCancellationRequested();
@@ -104,7 +104,7 @@ public sealed class PpmFormat(bool reservePixels = true) : IImageFormatModule
         {
             string comment = options.Comment is null ? "" : $"# {options.Comment}\n";
             output.Write(Encoding.ASCII.GetBytes($"P6\n{comment}{image.Width} {image.Height}\n255\n"));
-            ReadOnlySpan<Rgba32> pixels = image.GetPixelSpan();
+            ReadOnlySpan<Rgba32> pixels = image.GetPixelSpan<Rgba32>();
             byte[] rgb = new byte[pixels.Length * 3];
             for (int i = 0; i < pixels.Length; i++)
             {
@@ -176,7 +176,11 @@ public sealed class StubFormat(ImageFormat format, int headerSize = 4, bool deco
     public ImageInfo Identify(ReadOnlyMemory<byte> data, DecoderOptions options) =>
         new() { Format = format, Width = 1, Height = 1, Color = TestColor.Rgb8, Compression = ImageCompression.Lossless };
 
-    public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context) => new(1, 1, new Rgba32(255, 0, 0));
+    public Image Decode(ReadOnlyMemory<byte> data, ImageDecodeContext context)
+    {
+        context.ReservePixels(1, 1, PixelType.Rgba32);
+        return new(1, 1, new Rgba32(255, 0, 0));
+    }
 }
 
 /// <summary>The shortcut pattern a plugin package offers for its format.</summary>

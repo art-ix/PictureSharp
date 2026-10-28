@@ -43,7 +43,7 @@ public class ToneTests
         }
 
         using Image expected = GraphicsReference.Load(c.GetProperty("reference").GetString()!);
-        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan(), expected.GetPixelSpan()))
+        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan<Rgba32>(), expected.GetPixelSpan<Rgba32>()))
             .IsLessThanOrEqualTo(GraphicsReference.Tolerance("tone_max_abs")).Because(name);
     }
 
@@ -115,7 +115,7 @@ public class ToneTests
         using var image = new Image(4, 4);
         image.Mutate(x => x.Fill(new Rgba32(10, 100, 200, 50)));
         using Image clone = image.Clone(x => x.Gamma(1f).Levels(new LevelsOptions()));
-        await Assert.That(clone.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(clone.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -128,8 +128,8 @@ public class ToneTests
         using Image result = image.Clone(x => x.Gamma(2f));
 
         await Assert.That(result.FrameCount).IsEqualTo(2);
-        await Assert.That(result.Frames[0].GetPixelSpan()[0]).IsEqualTo(new Rgba32(128, 128, 128));
-        await Assert.That(result.Frames[1].GetPixelSpan()[3]).IsEqualTo(new Rgba32(128, 128, 128));
+        await Assert.That(result.Frames[0].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(128, 128, 128));
+        await Assert.That(result.Frames[1].GetPixelSpan<Rgba32>()[3]).IsEqualTo(new Rgba32(128, 128, 128));
         await Assert.That(image[0, 0]).IsEqualTo(new Rgba32(64, 64, 64));
     }
 

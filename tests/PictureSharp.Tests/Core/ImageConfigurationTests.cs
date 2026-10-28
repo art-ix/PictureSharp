@@ -106,7 +106,7 @@ public class ImageConfigurationTests
 
         Assert.ThrowsExactly<NotSupportedException>(() => Image.Load(bmp, new DecoderOptions { Configuration = withoutPng }));
         using Image decoded = Image.Load(bmp);
-        await Assert.That(decoded.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(decoded.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -166,7 +166,7 @@ public class ImageConfigurationDefaultTests
         ImageConfiguration narrowed = original.ToBuilder().KeepOnly(ImageFormat.Png, ImageFormat.Bmp).Build();
         byte[] png = Corpus.Read("png/odd_rgba.png");
         using Image expected = Image.Load(png);
-        Rgba32[] expectedPixels = expected.GetPixelSpan().ToArray();
+        Rgba32[] expectedPixels = expected.GetPixelSpan<Rgba32>().ToArray();
         using var stop = new CancellationTokenSource();
         Task swapper = Task.Run(() =>
         {
@@ -181,7 +181,7 @@ public class ImageConfigurationDefaultTests
             Parallel.For(0, 200, _ =>
             {
                 using Image image = Image.Load(png);
-                if (!image.GetPixelSpan().SequenceEqual(expectedPixels))
+                if (!image.GetPixelSpan<Rgba32>().SequenceEqual(expectedPixels))
                 {
                     Interlocked.Increment(ref mismatches);
                 }

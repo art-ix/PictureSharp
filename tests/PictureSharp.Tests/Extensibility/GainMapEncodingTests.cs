@@ -19,7 +19,7 @@ public class GainMapEncodingTests
     private static Rgba32[] Pixels(GainMapImage map)
     {
         using Image image = map.Decode(-1, default);
-        return image.GetPixelSpan().ToArray();
+        return image.GetPixelSpan<Rgba32>().ToArray();
     }
 
     [Test]
@@ -77,8 +77,8 @@ public class GainMapEncodingTests
 
         using Image first = map.Decode(1, default);
         Rgba32[] expected = image.AttachedGainMap!.EditedMap!.Value.Pixels;
-        await Assert.That(first.GetPixelSpan().ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
-        first.GetPixelSpan()[0] = new Rgba32(1, 2, 3, 4);
+        await Assert.That(first.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        first.GetPixelSpan<Rgba32>()[0] = new Rgba32(1, 2, 3, 4);
         await Assert.That(Pixels(map)).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
@@ -121,7 +121,7 @@ public class GainMapEncodingTests
         await Assert.That((double)gainMap.Metadata.Headroom).IsEqualTo(image.GainMap.Headroom!.Value).Within(1e-4);
         await Assert.That(gainMap.Metadata.ToIso().Length).IsGreaterThan(0);
         using Image map = gainMap.Map.Decode(-1, default);
-        await Assert.That(map.GetPixelSpan().ToArray().All(p => p.R == p.G && p.G == p.B)).IsTrue();
+        await Assert.That(map.GetPixelSpan<Rgba32>().ToArray().All(p => p.R == p.G && p.G == p.B)).IsTrue();
         await Assert.That(image.AttachedGainMap!.Parameters!.Kind).IsEqualTo(HdrGainMapKinds.Apple);   // the image keeps its own map
     }
 

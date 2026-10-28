@@ -15,7 +15,7 @@ public class BmpDecoderTests
     private static Rgba32[] Pixels(byte[] bmp, DecoderOptions? options = null)
     {
         using Image image = Image.Load(bmp, options);
-        return image.GetPixelSpan().ToArray();
+        return image.GetPixelSpan<Rgba32>().ToArray();
     }
 
     [Test]
@@ -154,7 +154,7 @@ public class BmpDecoderTests
         }.Build();
         using Image image = Image.Load(bmp);
         await Assert.That(image.HasAlpha).IsTrue();
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo([new Rgba32(10, 20, 30, 40), new Rgba32(50, 60, 70, 255)], CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo([new Rgba32(10, 20, 30, 40), new Rgba32(50, 60, 70, 255)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -305,7 +305,7 @@ public class BmpDecoderTests
         using Image image = Image.Load(bmp);
         await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Bmp);
         await Assert.That(image.HasAlpha).IsTrue();
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(source.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(source.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
         await Assert.That(Image.Identify(bmp).Color.HasAlpha).IsTrue();
     }
 
@@ -317,7 +317,7 @@ public class BmpDecoderTests
         using Image image = Image.Load(bmp);
         using Image direct = Image.Load(jpeg);
         await Assert.That(image.SourceFormat).IsEqualTo(ImageFormat.Bmp);
-        await Assert.That(image.GetPixelSpan().ToArray()).IsEquivalentTo(direct.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(image.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(direct.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
 
         byte[] broken = new BmpBuilder { Width = 1, Height = 1, Bits = 0, Compression = 4, Data = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0] }.Build();
         Assert.ThrowsExactly<ImageFormatException>(() => Image.Load(broken));

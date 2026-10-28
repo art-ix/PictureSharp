@@ -116,7 +116,7 @@ public class PublicApiTests
 
         if (!t.IsEnum)
         {
-            parts.AddRange(t.GetInterfaces().Select(Name).Order(StringComparer.Ordinal));
+            parts.AddRange(t.GetInterfaces().Where(i => i.IsVisible).Select(Name).Order(StringComparer.Ordinal));
         }
 
         return parts.Count == 0 ? "" : " : " + string.Join(", ", parts);

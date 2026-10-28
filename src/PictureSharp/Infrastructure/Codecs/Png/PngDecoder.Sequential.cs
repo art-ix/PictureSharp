@@ -26,14 +26,14 @@ internal sealed partial class PngDecoder : ISequentialImageDecoder
     {
         private readonly ChunkParser _parser;
         private readonly ImageFrame _output;
-        private ApngCanvas? _canvas;
+        private object? _canvas;   // ApngCanvas<TPixel> of the sequence's pixel type
         private ApngFrame? _shown;
 
         private FrameReader(Stream input, FrameSequenceInfo info, DecodeContext context, bool leaveOpen, ChunkParser parser)
             : base(input, info, context, leaveOpen)
         {
             _parser = parser;
-            _output = new ImageFrame(info.Width, info.Height);
+            _output = new ImageFrame(info.Width, info.Height, info.PixelType);
             ApplyMetadata();
         }
 
@@ -48,7 +48,9 @@ internal sealed partial class PngDecoder : ISequentialImageDecoder
                 PngFile png = parser.Png;
                 if (context.Options.FirstFrameOnly) parser.IsStatic = true;
                 context.Options.ValidateDimensions(ImageFormat.Png, png.Width, png.Height);
-                var info = new FrameSequenceInfo(ImageFormat.Png, png.Width, png.Height, null, context.Options.FirstFrameOnly ? 0 : png.Animation?.NumPlays ?? 0);
+                // IHDR declares one depth for every frame, so the type is known before the first frame.
+                var info = new FrameSequenceInfo(ImageFormat.Png, png.Width, png.Height, null, context.Options.FirstFrameOnly ? 0 : png.Animation?.NumPlays ?? 0,
+                    pixelType: context.Options.PixelTypeFor(png.BitDepth));
                 return new FrameReader(input, info, context, leaveOpen, parser);
             }
             catch
@@ -98,23 +100,15 @@ internal sealed partial class PngDecoder : ISequentialImageDecoder
             }
 
             ValidateNextFrame();
-            _canvas ??= new ApngCanvas(Png.Width, Png.Height);
-            _canvas.Validate(frame);
-            if (frame.Parts.Count == 0)
+            if (Info.PixelType == PixelType.Rgba64)
             {
-                throw Error("APNG frame has no image data.");
+                ComposeFrame<Rgba64>(frame, parser, cancellationToken);
+            }
+            else
+            {
+                ComposeFrame<Rgba32>(frame, parser, cancellationToken);
             }
 
-            PooledByteBuffer data = frame.IsDefaultImage ? parser.StaticData : parser.FrameData;
-            Rgba32[] pixels = DecodeCompressed(data.Array, data.Length, Png, frame.Width, frame.Height, Context.Options.MaxDegreeOfParallelism,
-                cancellationToken);
-            if (_shown is not null)
-            {
-                _canvas.ApplyDisposal(_shown, FramesRead - 1);
-            }
-
-            _canvas.Draw(frame, pixels, FramesRead);
-            _canvas.Pixels.CopyTo(_output.Pixels, 0);
             _output.Duration = Duration(frame);
             _shown = frame;
             parser.FrameShown();
@@ -131,12 +125,46 @@ internal sealed partial class PngDecoder : ISequentialImageDecoder
             }
 
             ValidateNextFrame();
-            PooledByteBuffer data = _parser.StaticData;
-            Rgba32[] pixels = DecodeCompressed(data.Array, data.Length, Png, Png.Width, Png.Height, Context.Options.MaxDegreeOfParallelism,
-                cancellationToken);
-            pixels.CopyTo(_output.Pixels, 0);
+            if (Info.PixelType == PixelType.Rgba64)
+            {
+                DecodeStatic<Rgba64>(cancellationToken);
+            }
+            else
+            {
+                DecodeStatic<Rgba32>(cancellationToken);
+            }
+
             _output.Duration = TimeSpan.Zero;
             return _output;
+        }
+
+        private void DecodeStatic<TPixel>(CancellationToken cancellationToken) where TPixel : unmanaged
+        {
+            PooledByteBuffer data = _parser.StaticData;
+            TPixel[] pixels = DecodeCompressed<TPixel>(data.Array, data.Length, Png, Png.Width, Png.Height, Context.Options.MaxDegreeOfParallelism,
+                cancellationToken);
+            pixels.CopyTo(_output.GetPixelSpan<TPixel>());
+        }
+
+        private void ComposeFrame<TPixel>(ApngFrame frame, ChunkParser parser, CancellationToken cancellationToken) where TPixel : unmanaged
+        {
+            var canvas = (ApngCanvas<TPixel>)(_canvas ??= new ApngCanvas<TPixel>(Png.Width, Png.Height));
+            canvas.Validate(frame);
+            if (frame.Parts.Count == 0)
+            {
+                throw Error("APNG frame has no image data.");
+            }
+
+            PooledByteBuffer data = frame.IsDefaultImage ? parser.StaticData : parser.FrameData;
+            TPixel[] pixels = DecodeCompressed<TPixel>(data.Array, data.Length, Png, frame.Width, frame.Height, Context.Options.MaxDegreeOfParallelism,
+                cancellationToken);
+            if (_shown is not null)
+            {
+                canvas.ApplyDisposal(_shown, FramesRead - 1);
+            }
+
+            canvas.Draw(frame, pixels, FramesRead);
+            canvas.Pixels.CopyTo(_output.GetPixelSpan<TPixel>());
         }
 
         private void ApplyMetadata()

@@ -139,7 +139,7 @@ internal sealed partial class WebPDecoder : IImageDecoder, ISequentialImageDecod
             try
             {
                 ImageFrame frame = ImageFrame.CreateUninitialized(width, height);
-                ArgbToRgba(argb.AsSpan(0, width * height), frame.GetPixelSpan());
+                ArgbToRgba(argb.AsSpan(0, width * height), frame.Pixels.AsSpan());
                 return frame;
             }
             finally
@@ -152,7 +152,7 @@ internal sealed partial class WebPDecoder : IImageDecoder, ISequentialImageDecod
             Yuv420Frame yuv = Vp8Decoder.Decode(array, offset + info.Image.Offset, info.Image.Length, options.WebP.BypassFiltering,
                 options.MaxDegreeOfParallelism, cancellationToken);
             ImageFrame frame = ImageFrame.CreateUninitialized(yuv.Width, yuv.Height);
-            Span<Rgba32> pixels = frame.GetPixelSpan();
+            Span<Rgba32> pixels = frame.Pixels.AsSpan();
             try
             {
                 YuvToRgb.Convert(yuv, frame.Pixels, options.WebP.FancyUpsampling, options.MaxDegreeOfParallelism, cancellationToken: cancellationToken);

@@ -1,8 +1,8 @@
 # Stable plugin SPI
 
-From PictureSharp 0.8.5 the types plugins build on are stable: until 2.0 they only grow. A plugin built against 0.8.5
-keeps compiling and running on every later 0.x and 1.x release, so a plugin can make its own 1.0 promise on top of it.
-0.8.5 itself broke the promise made in 0.8.2 once, for `ImageInfo` (see [0.8.5: one-time change](#085-one-time-change)).
+From PictureSharp 0.9.0 the types plugins build on only grow until 2.0. Before 1.0 a change that gives a clearly
+better design may still break them, with a raised minimum version and a migration note: 0.8.5 did so for `ImageInfo`
+(see [0.8.5](#085-one-time-change)) and 0.9.0 for 16-bit pixels (see [0.9.0](#090-16-bit-pixels)).
 [Extending PictureSharp](extending-picturesharp.md) shows how the types are used.
 
 ## What is stable
@@ -19,7 +19,7 @@ The plugin contracts:
 | HDR gain maps | `GainMapMetadata`, `GainMapImage`, `EncodableGainMap`, `GainMapExtensions.GetGainMap`, `GainMapInfo`, `HdrGainMapKinds`, `HdrColorSpace` |
 | Errors | `ImageFormatException`; the exception rules below |
 
-The model plugins create and fill: `Image`, `ImageFrame`, `ImageFrameCollection` and `Rgba32`.
+The model plugins create and fill: `Image`, `ImageFrame`, `ImageFrameCollection`, `Rgba32`, `Rgba64` and `PixelType`.
 
 Every public member of these types is covered. Types that appear only in their signatures, such as
 `JpegDecoderOptions` in `EmbeddedPartOptions` or `ResamplingFilter` in `DecoderOptions`, stay as long as a stable
@@ -51,10 +51,23 @@ notes.
 
 ## Minimum PictureSharp version
 
-A plugin depends on the lowest PictureSharp version whose API it uses (`PictureSharp >= 0.8.5` in its package) and
-raises it only when it starts using something newer. 0.8.5 is the first version a plugin can build on: `AddFormat` and
+A plugin depends on the lowest PictureSharp version whose API it uses (`PictureSharp >= 0.9.0` in its package) and
+raises it only when it starts using something newer. 0.9.0 is the first version a plugin can build on: `AddFormat` and
 `ReplaceFormat` throw `NotSupportedException` for a module whose assembly was built against an older PictureSharp,
-because it would fail inside `Identify` or report an `ImageInfo` without its required members.
+because it would ignore `DecoderOptions.PreserveBitDepth` or fail inside a decode with `MissingMethodException`.
+
+## 0.9.0: 16-bit pixels
+
+An `Image` stores `Rgba32` or, for 16 bits per channel, `Rgba64` pixels, chosen by `Image.PixelType` and shared by all
+frames (design: [docs/proposals/high-bit-depth.md](proposals/high-bit-depth.md)). Plugins need a new build against
+0.9.0:
+
+| 0.8.5 | 0.9.0 |
+| --- | --- |
+| `ReservePixels(width, height, frames)` | `ReservePixels(width, height, pixelType, frames)`; a 16-bit pixel counts twice against `MaxPixels`, and the returned image must have been reserved with its pixel type (or come from nested decodes) |
+| `GetPixelSpan()`, `GetRowSpan(y)`, `GetPixelMemory()`, `CopyPixelDataTo/From(Span<Rgba32>)`, `LoadPixelData(ReadOnlySpan<Rgba32>, …)` | generic forms with the type argument: `GetPixelSpan<Rgba32>()`, `LoadPixelData<TPixel>(…)`; a mismatched type throws `InvalidOperationException` |
+| — | `DecoderOptions.PreserveBitDepth`: decode sources with more than 8 bits per sample to `new Image(width, height, PixelType.Rgba64)` or `LoadPixelData<Rgba64>` |
+| — | `IImageFormatEncoder.SupportsPixelType(PixelType)`, default `Rgba32` only: other images reach the encoder as an 8-bit copy rounded to the nearest value |
 
 ## 0.8.5: one-time change
 

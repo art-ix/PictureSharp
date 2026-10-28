@@ -28,7 +28,7 @@ public class PcxCorpusTests
         await Assert.That((image.Width, image.Height)).IsEqualTo((reference.Width, reference.Height));
         await Assert.That(image.HasAlpha).IsEqualTo(reference.HasAlpha);
         await Assert.That(image.FrameCount).IsEqualTo(reference.Frames.Count);
-        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan()))).IsEqualTo(reference.Frames[0].Sha256);
+        await Assert.That(Corpus.Sha256(MemoryMarshal.AsBytes(image.GetPixelSpan<Rgba32>()))).IsEqualTo(reference.Frames[0].Sha256);
         if (reference.Dpi is { } dpi)
         {
             await Assert.That(image.Metadata.HorizontalResolution).IsEqualTo(dpi[0]);

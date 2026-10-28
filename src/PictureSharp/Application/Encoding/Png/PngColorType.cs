@@ -5,13 +5,13 @@ public enum PngColorType
 {
     /// <summary>Choose the smallest lossless representation (palette, grayscale, RGB or RGBA).</summary>
     Auto = 0,
-    /// <summary>8-bit grayscale (color is converted to luminance).</summary>
+    /// <summary>Grayscale (color is converted to luminance), 8 or 16 bits per sample.</summary>
     Grayscale,
-    /// <summary>8-bit grayscale with alpha.</summary>
+    /// <summary>Grayscale with alpha, 8 or 16 bits per sample.</summary>
     GrayscaleAlpha,
-    /// <summary>24-bit RGB (alpha is dropped).</summary>
+    /// <summary>RGB, 8 or 16 bits per sample (alpha is dropped).</summary>
     Rgb,
-    /// <summary>32-bit RGBA.</summary>
+    /// <summary>RGBA, 8 or 16 bits per sample.</summary>
     Rgba,
     /// <summary>Indexed color; fails if the image has more than 256 distinct colors.</summary>
     Palette,

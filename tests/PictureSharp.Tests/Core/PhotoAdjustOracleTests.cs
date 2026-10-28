@@ -151,7 +151,7 @@ public class PhotoAdjustOracleTests
                 int newline = Array.IndexOf(file, (byte)'\n');
                 ReadOnlySpan<byte> theirs = file.AsSpan(newline + 1);
                 using Image ours = make();
-                ReadOnlySpan<byte> mine = MemoryMarshal.AsBytes(ours.GetPixelSpan());
+                ReadOnlySpan<byte> mine = MemoryMarshal.AsBytes(ours.GetPixelSpan<Rgba32>());
                 int diffs = 0, maxDiff = 0;
                 for (int i = 0; i < mine.Length; i++)
                 {

@@ -102,7 +102,7 @@ public class FilmFrameTests
     {
         byte limit = Encode(Lamp[1] * FilmNegativeTests.Base[1] * MathF.Pow(10f, -0.15f));
         int bright = 0;
-        foreach (Rgba32 p in image.GetPixelSpan())
+        foreach (Rgba32 p in image.GetPixelSpan<Rgba32>())
         {
             bright += p.G > limit ? 1 : 0;
         }
@@ -215,7 +215,7 @@ public class FilmFrameTests
         await Assert.That(developed.Size).IsEqualTo(frame.Bounds.Size);
         // The base prints black: none of it is left at the edges.
         int dark = 0;
-        foreach (Rgba32 p in developed.GetPixelSpan())
+        foreach (Rgba32 p in developed.GetPixelSpan<Rgba32>())
         {
             dark += p.R + p.G + p.B < 30 ? 1 : 0;
         }
@@ -231,7 +231,7 @@ public class FilmFrameTests
             Frame = frame, Calibration = calibration, CorrectIllumination = false, ColorNoiseReduction = 0,
         }));
         using Image stepwise = strip.Clone(x => x.Rotate(frame.Angle).Crop(frame.Bounds).InvertNegative(calibration));
-        await Assert.That(direct.GetPixelSpan().ToArray()).IsEquivalentTo(stepwise.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(direct.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(stepwise.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]

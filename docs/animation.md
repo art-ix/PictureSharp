@@ -28,7 +28,7 @@ third.SaveAsPng("frame-3.png");
 | `image.LoopCount` | Number of plays; 0 means forever. GIF's repeat count is converted as `gif2webp` does (no extension = 1 play, *n* repeats = *n* + 1 plays). |
 | `image.AnimationBackgroundColor` | Background hint stored in the container. |
 | `frame.Duration` | Display time of a frame. |
-| `frame[x, y]`, `frame.GetRowSpan(y)`, `frame.GetPixelSpan()`, `frame.GetPixelByteSpan()` | Pixel access per frame. |
+| `frame[x, y]`, `frame.GetRowSpan<Rgba32>(y)`, `frame.GetPixelSpan<Rgba32>()`, `frame.GetPixelByteSpan()` | Pixel access per frame. |
 
 Pixel members on `Image` itself work on the first frame. `DecoderOptions.FirstFrameOnly` skips the rest.
 

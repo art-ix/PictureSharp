@@ -32,7 +32,7 @@ internal static class ColorOps
     {
         for (int y = rect.Top; y < rect.Bottom; y++)
         {
-            frame.GetRowSpan(y).Slice(rect.X, rect.Width).Fill(value);
+            frame.PixelRow(y).Slice(rect.X, rect.Width).Fill(value);
         }
     }
 

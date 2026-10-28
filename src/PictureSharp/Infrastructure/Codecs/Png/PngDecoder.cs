@@ -6,6 +6,7 @@ using System.Runtime.Intrinsics;
 using PictureSharp.Algorithms.Compression;
 using PictureSharp.Application.Abstractions;
 using PictureSharp.Domain.Metadata;
+using PictureSharp.Domain.Pixels;
 using PictureSharp.Primitives.Numerics;
 using PictureSharp.Primitives.Parallelism;
 
@@ -71,25 +72,13 @@ internal sealed partial class PngDecoder : IImageDecoder
         PngFile png = PngFile.Parse(span, options, metadataOnly: false);
         context.Budget.ReserveMetadata(ImageFormat.Png, (long)(png.Icc?.Length ?? 0) + (png.Exif?.Length ?? 0) + (png.Xmp?.Length ?? 0));
         bool animated = png.Animation is { Frames.Count: > 0 } && !options.FirstFrameOnly;
-        context.Budget.ReserveImage(ImageFormat.Png, png.Width, png.Height, animated ? png.Animation!.Frames.Count : 1);
+        PixelType pixelType = options.PixelTypeFor(png.BitDepth);
+        context.Budget.ReserveImage(ImageFormat.Png, png.Width, png.Height, animated ? png.Animation!.Frames.Count : 1, pixelType);
 
-        List<ImageFrame> frames;
-        int loopCount = 0;
-        if (animated && png.Animation is { } anim)
-        {
-            frames = DecodeAnimation(span, png, anim, options.MaxDegreeOfParallelism, cancellationToken);
-            loopCount = anim.NumPlays;
-        }
-        else
-        {
-            if (png.Idat.Count == 0)
-            {
-                throw Error("Missing IDAT chunk.");
-            }
-
-            var frame = new ImageFrame(png.Width, png.Height, DecodeImage(span, png, png.Idat, 0, png.Width, png.Height, options.MaxDegreeOfParallelism, cancellationToken));
-            frames = [frame];
-        }
+        List<ImageFrame> frames = pixelType == PixelType.Rgba64
+            ? DecodeFrames<Rgba64>(span, png, animated, options, cancellationToken)
+            : DecodeFrames<Rgba32>(span, png, animated, options, cancellationToken);
+        int loopCount = animated ? png.Animation!.NumPlays : 0;
 
         var image = new Image(frames)
         {
@@ -114,11 +103,28 @@ internal sealed partial class PngDecoder : IImageDecoder
         return image;
     }
 
+    private static List<ImageFrame> DecodeFrames<TPixel>(ReadOnlySpan<byte> span, PngFile png, bool animated, DecoderOptions options,
+        CancellationToken cancellationToken) where TPixel : unmanaged
+    {
+        if (animated && png.Animation is { } anim)
+        {
+            return DecodeAnimation<TPixel>(span, png, anim, options.MaxDegreeOfParallelism, cancellationToken);
+        }
+
+        if (png.Idat.Count == 0)
+        {
+            throw Error("Missing IDAT chunk.");
+        }
+
+        TPixel[] pixels = DecodeImage<TPixel>(span, png, png.Idat, 0, png.Width, png.Height, options.MaxDegreeOfParallelism, cancellationToken);
+        return [new ImageFrame(png.Width, png.Height, PixelBuffer.From(pixels))];
+    }
+
     // ------------------------------------------------------------------ pixel data
 
     /// <summary>Inflates, unfilters and converts one image (or APNG frame) to RGBA.</summary>
-    private static Rgba32[] DecodeImage(ReadOnlySpan<byte> file, PngFile png, List<(int Offset, int Length)> parts, int skip, int width, int height,
-        int maxDegreeOfParallelism, CancellationToken cancellationToken)
+    private static TPixel[] DecodeImage<TPixel>(ReadOnlySpan<byte> file, PngFile png, List<(int Offset, int Length)> parts, int skip, int width, int height,
+        int maxDegreeOfParallelism, CancellationToken cancellationToken) where TPixel : unmanaged
     {
         // Concatenate the compressed data (fdAT payloads start with a 4-byte sequence number).
         int total = 0;
@@ -138,7 +144,7 @@ internal sealed partial class PngDecoder : IImageDecoder
                 pos += length - skip;
             }
 
-            return DecodeCompressed(compressed, total, png, width, height, maxDegreeOfParallelism, cancellationToken);
+            return DecodeCompressed<TPixel>(compressed, total, png, width, height, maxDegreeOfParallelism, cancellationToken);
         }
         finally
         {
@@ -147,8 +153,8 @@ internal sealed partial class PngDecoder : IImageDecoder
     }
 
     /// <summary>Inflates, unfilters and converts the concatenated zlib data of one image (or APNG frame) to RGBA.</summary>
-    private static Rgba32[] DecodeCompressed(byte[] compressed, int total, PngFile png, int width, int height,
-        int maxDegreeOfParallelism, CancellationToken cancellationToken)
+    private static TPixel[] DecodeCompressed<TPixel>(byte[] compressed, int total, PngFile png, int width, int height,
+        int maxDegreeOfParallelism, CancellationToken cancellationToken) where TPixel : unmanaged
     {
         int bpp = PngConstants.Channels(png.Color) * png.BitDepth;
         long expected = 0;
@@ -176,12 +182,12 @@ internal sealed partial class PngDecoder : IImageDecoder
 
         var rowConverter = new RowConverter(png);
         return !png.Interlaced && Parallelism.IsWorthwhile(maxDegreeOfParallelism, expected, PipelineMinimumBytes)
-            ? DecodePipelined(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken)
-            : DecodeSequential(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken);
+            ? DecodePipelined<TPixel>(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken)
+            : DecodeSequential<TPixel>(compressed, total, png, width, height, bpp, (int)expected, rowConverter, cancellationToken);
     }
 
-    private static Rgba32[] DecodeSequential(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected,
-        RowConverter rowConverter, CancellationToken cancellationToken)
+    private static TPixel[] DecodeSequential<TPixel>(byte[] compressed, int compressedLength, PngFile png, int width, int height, int bpp, int expected,
+        RowConverter rowConverter, CancellationToken cancellationToken) where TPixel : unmanaged
     {
         Inflater.PooledOutput inflated;
         try
@@ -202,7 +208,7 @@ internal sealed partial class PngDecoder : IImageDecoder
             }
 
             byte[] raw = inflated.Data;
-            var pixels = GC.AllocateUninitializedArray<Rgba32>(width * height);
+            var pixels = GC.AllocateUninitializedArray<TPixel>(width * height);
             if (!png.Interlaced)
             {
                 Unfilter(raw, 0, width, height, bpp);
@@ -217,7 +223,7 @@ internal sealed partial class PngDecoder : IImageDecoder
             }
 
             int offset = 0;
-            var tmp = new Rgba32[width];
+            var tmp = new TPixel[width];
             for (int pass = 0; pass < 7; pass++)
             {
                 int pw = PngConstants.PassWidth(width, pass);

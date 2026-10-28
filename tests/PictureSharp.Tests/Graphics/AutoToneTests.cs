@@ -26,7 +26,7 @@ public class AutoToneTests
         }
 
         using Image expected = GraphicsReference.Load(c.GetProperty("reference").GetString()!);
-        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan(), expected.GetPixelSpan()))
+        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan<Rgba32>(), expected.GetPixelSpan<Rgba32>()))
             .IsLessThanOrEqualTo(GraphicsReference.Tolerance("tone_max_abs")).Because(name);
     }
 
@@ -75,13 +75,13 @@ public class AutoToneTests
         using var image = new Image(1, 1);
         image[0, 0] = new Rgba32(100, 100, 100);
         image.Frames.AddClone(image.Frames.RootFrame);
-        image.Frames[1].GetPixelSpan()[0] = new Rgba32(200, 200, 200);
+        image.Frames[1].GetPixelSpan<Rgba32>()[0] = new Rgba32(200, 200, 200);
 
         image.Mutate(x => x.AutoContrast());
 
         // As Pillow: 200 · 2.55 − 100 · 2.55 = 254.99… truncates to 254.
-        await Assert.That(image.Frames[0].GetPixelSpan()[0]).IsEqualTo(new Rgba32(0, 0, 0));
-        await Assert.That(image.Frames[1].GetPixelSpan()[0]).IsEqualTo(new Rgba32(254, 254, 254));
+        await Assert.That(image.Frames[0].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(0, 0, 0));
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>()[0]).IsEqualTo(new Rgba32(254, 254, 254));
     }
 
     [Test]
@@ -90,7 +90,7 @@ public class AutoToneTests
         using var image = new Image(3, 3);
         image.Mutate(x => x.Fill(new Rgba32(40, 80, 120, 90)));
         using Image result = image.Clone(x => x.AutoContrast(2).Equalize());
-        await Assert.That(result.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(result.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]

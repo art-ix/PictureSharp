@@ -53,9 +53,9 @@ internal sealed partial class WebPEncoder
                 WebPMuxer.WriteAnimationHeader(_buffer, Info.Background, Info.LoopCount);
             }
 
-            foreach (Rgba32 pixel in frame.GetPixelSpan()) _hasAlpha |= pixel.A != 255;
+            foreach (Rgba32 pixel in frame.Pixels.AsSpan()) _hasAlpha |= pixel.A != 255;
             Rgba32[] canvas = ArrayPool<Rgba32>.Shared.Rent(Info.Width * Info.Height);
-            frame.GetPixelSpan().CopyTo(canvas);
+            frame.Pixels.AsSpan().CopyTo(canvas);
             // Add takes ownership before doing any encoding, including failure paths.
             _encoder.Add(canvas, duration, cancellationToken);
             _encoder.TakeFinished(_finished);

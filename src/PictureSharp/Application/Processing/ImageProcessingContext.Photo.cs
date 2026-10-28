@@ -86,7 +86,7 @@ public readonly ref partial struct ImageProcessingContext
         Span<long> luma = stackalloc long[GrayWorld.LumaLength];
         foreach (ImageFrame frame in Target.Frames)
         {
-            GrayWorld.CountLuma(frame.GetPixelSpan(), luma, token);
+            GrayWorld.CountLuma(frame.Pixels.AsSpan(), luma, token);
         }
 
         if (GrayWorld.MidtoneRange(luma) is not { } range)
@@ -97,7 +97,7 @@ public readonly ref partial struct ImageProcessingContext
         long[] counts = new long[GrayWorld.ChannelLength];
         foreach (ImageFrame frame in Target.Frames)
         {
-            GrayWorld.CountChannels(frame.GetPixelSpan(), range, counts, token);
+            GrayWorld.CountChannels(frame.Pixels.AsSpan(), range, counts, token);
         }
 
         byte[] lut = new byte[ToneLut.Length];

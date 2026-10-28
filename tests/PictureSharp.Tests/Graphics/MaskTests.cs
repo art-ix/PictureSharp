@@ -26,7 +26,7 @@ public class MaskTests
         image.Mutate(x => x.ApplyMask(mask, new Point(c.GetProperty("x").GetInt32(), c.GetProperty("y").GetInt32()), options));
 
         using Image expected = GraphicsReference.Load(c.GetProperty("reference").GetString()!);
-        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan(), expected.GetPixelSpan()))
+        await Assert.That(GraphicsReference.MaxDifference(image.GetPixelSpan<Rgba32>(), expected.GetPixelSpan<Rgba32>()))
             .IsLessThanOrEqualTo(GraphicsReference.Tolerance("mask_max_abs")).Because(name);
     }
 
@@ -93,7 +93,7 @@ public class MaskTests
         await Assert.That(clear[3, 3].A).IsEqualTo((byte)0);
         await Assert.That(anchored[0, 0].A).IsEqualTo((byte)255);
         await Assert.That(anchored[3, 3].A).IsEqualTo((byte)0);
-        await Assert.That(away.GetPixelSpan().ToArray()).IsEquivalentTo(image.GetPixelSpan().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(away.GetPixelSpan<Rgba32>().ToArray()).IsEquivalentTo(image.GetPixelSpan<Rgba32>().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -103,20 +103,20 @@ public class MaskTests
         image[0, 0] = new Rgba32(9, 9, 9, 128);
         image[1, 0] = new Rgba32(9, 9, 9, 255);
         image.Frames.AddClone(image.Frames.RootFrame);
-        image.Frames[1].GetPixelSpan().Fill(new Rgba32(1, 1, 1, 200));
+        image.Frames[1].GetPixelSpan<Rgba32>().Fill(new Rgba32(1, 1, 1, 200));
         using var mask = new Image(2, 1);
         mask[1, 0] = new Rgba32(0, 0, 0, 255);
 
         using Image masked = image.Clone(x => x.ApplyMask(mask));
-        await Assert.That(masked.Frames[0].GetPixelSpan()[0].A).IsEqualTo((byte)0);
-        await Assert.That(masked.Frames[1].GetPixelSpan()[0].A).IsEqualTo((byte)0);
-        await Assert.That(masked.Frames[1].GetPixelSpan()[1].A).IsEqualTo((byte)200);
+        await Assert.That(masked.Frames[0].GetPixelSpan<Rgba32>()[0].A).IsEqualTo((byte)0);
+        await Assert.That(masked.Frames[1].GetPixelSpan<Rgba32>()[0].A).IsEqualTo((byte)0);
+        await Assert.That(masked.Frames[1].GetPixelSpan<Rgba32>()[1].A).IsEqualTo((byte)200);
 
         // The first frame masks every frame, also when the image masks itself: 128² / 255 = 64.25 → 64.
         image.Mutate(x => x.ApplyMask(image));
-        await Assert.That(image.Frames[0].GetPixelSpan()[0].A).IsEqualTo((byte)64);
-        await Assert.That(image.Frames[1].GetPixelSpan()[0].A).IsEqualTo((byte)100);
-        await Assert.That(image.Frames[1].GetPixelSpan()[1].A).IsEqualTo((byte)200);
+        await Assert.That(image.Frames[0].GetPixelSpan<Rgba32>()[0].A).IsEqualTo((byte)64);
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>()[0].A).IsEqualTo((byte)100);
+        await Assert.That(image.Frames[1].GetPixelSpan<Rgba32>()[1].A).IsEqualTo((byte)200);
     }
 
     [Test]
